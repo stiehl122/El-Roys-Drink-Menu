@@ -395,10 +395,10 @@ let syncInterval = null;
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const CATEGORY_DEFS = [
   { id:'beer',    icon:'🍺', iconClass:'icon-beer',    title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
+  { id:'canned',  icon:'🍻', iconClass:'icon-canned',  title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
   { id:'tequila', icon:'🌶️', iconClass:'icon-tequila', title:'Infused Tequila', sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
   { id:'frozen',  icon:'🧊', iconClass:'icon-frozen',  title:'Frozen Marg',     sub:'Current frozen margarita flavor', placeholder:'e.g. Strawberry Basil...' },
   { id:'special', icon:'⭐', iconClass:'icon-special', title:'Monthly Specials', sub:'Featured cocktails & promos',    placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
-  { id:'canned',  icon:'🍻', iconClass:'icon-canned',  title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
 ];
 
 // In-memory menu state — loaded from JSONBin on init
@@ -766,6 +766,7 @@ async function saveMenu() {
   localStorage.setItem('hf_last_updated_ts', ts.toString());
   await persistState();
   updateLastUpdatedLabel();
+  await persistState();
   showToast('✅ Menu saved!', 'success');
 }
 
