@@ -378,7 +378,7 @@ let isOwnerMode = false;
 let BOT_ID      = localStorage.getItem('hf_bot_id') || '';
 let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
 let FB_SECRET   = localStorage.getItem('hf_fb_secret') || ''; // Firebase Database Secret (write credential)
-let FB_URL      = localStorage.getItem('hf_fb_url')    || ''; // Firebase Realtime DB URL
+let FB_URL      = localStorage.getItem('hf_fb_url')    || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com'; // Firebase Realtime DB URL
 
 let isFirstSetup = !FB_SECRET || !FB_URL; // Both Firebase URL and Secret are required
 let isManagerMode = false;
