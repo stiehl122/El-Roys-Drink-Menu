@@ -457,7 +457,8 @@ async function init() {
         if (data[c.id]) menuState[c.id] = data[c.id];
       });
       if (data._meta) {
-        if (data._meta.lastSentTs) localStorage.setItem('hf_last_sent_ts', data._meta.lastSentTs);
+        const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
+        if (savedTs) localStorage.setItem('hf_last_updated_ts', savedTs);
       }
       if (data._config) {
         if (data._config.pin)     { MANAGER_PIN = data._config.pin;     localStorage.setItem('hf_pin', MANAGER_PIN); }
@@ -504,8 +505,9 @@ function startPolling() {
       const data = await fbRead();
       if (!data || typeof data !== 'object') return;
       CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
-      if (data._meta && data._meta.lastSentTs) {
-        localStorage.setItem('hf_last_sent_ts', data._meta.lastSentTs);
+      if (data._meta) {
+        const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
+        if (savedTs) { menuState._meta = data._meta; localStorage.setItem('hf_last_updated_ts', savedTs); }
       }
       renderPublicView();
       updateLastUpdatedLabel();
@@ -518,7 +520,7 @@ function stopPolling() {
 }
 
 function updateLastUpdatedLabel() {
-  const ts = localStorage.getItem('hf_last_sent_ts');
+  const ts = (menuState._meta && menuState._meta.lastUpdatedTs) || localStorage.getItem('hf_last_updated_ts') || localStorage.getItem('hf_last_sent_ts');
   const el = document.getElementById('last-updated-label');
   if (ts) {
     const d = new Date(parseInt(ts));
@@ -759,6 +761,11 @@ async function persistState() {
   }
 }
 async function saveMenu() {
+  const ts = Date.now();
+  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
+  localStorage.setItem('hf_last_updated_ts', ts.toString());
+  await persistState();
+  updateLastUpdatedLabel();
   await persistState();
   showToast('✅ Menu saved!', 'success');
 }
@@ -937,8 +944,8 @@ async function sendUpdate() {
       CATEGORY_DEFS.forEach(cat => {
         menuState[cat.id].lastSent = menuState[cat.id].items.map(i => ({...i}));
       });
-      menuState._meta = { lastSentTs: ts.toString() };
-      localStorage.setItem('hf_last_sent_ts', ts.toString());
+      menuState._meta = { lastUpdatedTs: ts.toString() };
+      localStorage.setItem('hf_last_updated_ts', ts.toString());
       await persistState();
       updateLastUpdatedLabel();
       renderManagerCategories();
