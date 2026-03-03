@@ -378,11 +378,12 @@ let isOwnerMode = false;
 let BOT_ID      = localStorage.getItem('hf_bot_id') || '';
 let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
 let FB_SECRET   = localStorage.getItem('hf_fb_secret') || ''; // Firebase Database Secret (write credential)
-let FB_URL      = localStorage.getItem('hf_fb_url')    || ''; // Firebase Realtime DB URL
+let FB_URL      = localStorage.getItem('hf_fb_url')    || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com'; // Firebase Realtime DB URL
 
 let isFirstSetup = !FB_SECRET || !FB_URL; // Both Firebase URL and Secret are required
 let isManagerMode = false;
 let pinEntry = '';
+let syncInterval = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const CATEGORY_DEFS = [
@@ -471,6 +472,7 @@ function showPublicView() {
   document.getElementById('public-view').style.display = 'block';
   updateLastUpdatedLabel();
   renderPublicView();
+  startPolling();
 }
 
 function showPublicViewWithError(msg) {
@@ -480,6 +482,31 @@ function showPublicViewWithError(msg) {
   el.textContent = msg;
   el.classList.add('visible');
   renderPublicView();
+}
+
+// ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
+// Re-reads Firebase every 60 s while in public view so changes pushed by a
+// manager on another device appear without a manual page reload.
+function startPolling() {
+  stopPolling();
+  if (!FB_URL) return;
+  syncInterval = setInterval(async () => {
+    if (isManagerMode) return;
+    try {
+      const data = await fbRead();
+      if (!data || typeof data !== 'object') return;
+      CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
+      if (data._meta && data._meta.lastSentTs) {
+        localStorage.setItem('hf_last_sent_ts', data._meta.lastSentTs);
+      }
+      renderPublicView();
+      updateLastUpdatedLabel();
+    } catch(e) { /* silently ignore transient poll failures */ }
+  }, 60000);
+}
+
+function stopPolling() {
+  if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
 }
 
 function updateLastUpdatedLabel() {
@@ -576,6 +603,7 @@ function checkPin() {
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
   isManagerMode = true;
+  stopPolling();
   document.body.classList.add('manager-mode');
   document.getElementById('public-view').style.display = 'none';
   document.getElementById('loading-view').style.display = 'none';
