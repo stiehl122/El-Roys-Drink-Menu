@@ -156,7 +156,10 @@
   .add-item-btn:hover { border-color: var(--fire); border-style: solid; color: var(--fire); }
 
   /* ── SEND BTN ── */
-  .send-btn { width: 100%; background: linear-gradient(135deg, var(--terra), var(--terra-dk)); border: none; border-radius: 12px; color: white; font-family: 'Lilita One', cursive; font-size: 20px; letter-spacing: 2px; padding: 16px; cursor: pointer; margin-top: 6px; transition: transform 0.14s, box-shadow 0.14s; box-shadow: 0 4px 18px rgba(190,67,48,0.35); }
+  .btn-row { display:flex; gap:10px; margin-top:18px; }
+  .save-btn { flex:0 0 auto; padding:14px 22px; border-radius:12px; border:none; cursor:pointer; font-family:'Lilita One',cursive; font-size:15px; letter-spacing:1px; background:var(--surface); color:var(--text); transition:opacity .15s; box-shadow:0 2px 8px rgba(0,0,0,0.12); }
+  .save-btn:hover { opacity:0.8; }
+  .send-btn { flex:1; background: linear-gradient(135deg, var(--terra), var(--terra-dk)); border: none; border-radius: 12px; color: white; font-family: 'Lilita One', cursive; font-size: 20px; letter-spacing: 2px; padding: 16px; cursor: pointer; transition: transform 0.14s, box-shadow 0.14s; box-shadow: 0 4px 18px rgba(190,67,48,0.35); }
   .send-btn:hover { transform: translateY(-1px); box-shadow: 0 7px 26px rgba(190,67,48,0.5); }
   .send-btn:active { transform: translateY(0); }
   .send-btn:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; transform: none; }
@@ -273,7 +276,10 @@
     <div class="tab-panel active" id="tab-panel-manager">
       <div class="section-label">Edit Menu</div>
       <div id="manager-categories"></div>
-      <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 PREVIEW &amp; SEND UPDATE</button>
+      <div class="btn-row">
+        <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
+        <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
+      </div>
     </div>
 
     <!-- ADMIN PANEL: Configuration -->
@@ -752,6 +758,10 @@ async function persistState() {
     showToast('⚠️ Cloud save failed — check Firebase config in Admin settings.', 'error');
   }
 }
+async function saveMenu() {
+  await persistState();
+  showToast('✅ Menu saved!', 'success');
+}
 
 function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
@@ -815,10 +825,10 @@ function updateDraftIndicator() {
   const diff = computeDiff();
   const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
   if (total > 0) {
-    btn.innerHTML = `🔥 PREVIEW &amp; SEND UPDATE <span style="font-size:13px;opacity:0.85;">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
+    btn.innerHTML = `🔥 SEND UPDATE <span style="font-size:13px;opacity:0.85;">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
     btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
   } else {
-    btn.innerHTML = '🔥 PREVIEW &amp; SEND UPDATE';
+    btn.innerHTML = '🔥 SEND UPDATE';
     btn.style.boxShadow = '';
   }
 }
