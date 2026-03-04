@@ -1,6 +1,6 @@
 # El Roy's Drink Menu
 
-A live, single-page drink menu for El Roy's — built as a zero-dependency HTML file that runs anywhere. Staff can update the menu in real time using a manager PIN, save changes to the database, and push a formatted update to a GroupMe group. The public-facing view updates instantly via Firebase.
+A live, single-page drink menu for El Roy's — built with zero external dependencies and no build step. Staff can update the menu in real time using a manager PIN, save changes to the database, and push a formatted update to a GroupMe group. The public-facing view updates instantly via Firebase.
 
 ---
 
@@ -16,7 +16,7 @@ A live, single-page drink menu for El Roy's — built as a zero-dependency HTML 
 - **GroupMe integration** — sends a formatted patch-notes message to a GroupMe group via a bot
 - **Firebase cloud sync** — menu state and config sync across devices in real time via Firebase Realtime Database
 - **Offline-capable** — falls back to localStorage if Firebase is unavailable
-- **Zero dependencies** — single `index.html` file, no build step, no server required
+- **Zero dependencies** — no build step, no server, no package manager required
 
 ---
 
@@ -63,7 +63,7 @@ A live, single-page drink menu for El Roy's — built as a zero-dependency HTML 
 
 ### 4. Hosting (Optional)
 
-Host the single `index.html` file anywhere static files are served:
+Host all three files (`index.html`, `app.js`, `style.css`) from the same directory anywhere static files are served:
 - GitHub Pages
 - Netlify / Vercel (drag and drop)
 - Any web server
@@ -117,7 +117,10 @@ Open the page URL in any browser. The menu loads automatically from Firebase and
 
 ```
 El-Roys-Drink-Menu/
-└── index.html   # Entire app — HTML, CSS, and JavaScript in one file
+├── index.html   # HTML structure and markup
+├── app.js       # All JavaScript logic
+├── style.css    # All CSS styles
+└── README.md    # Setup and usage documentation
 ```
 
 All configuration is stored in the browser's `localStorage` and synced to Firebase. No build tools or package managers needed.
