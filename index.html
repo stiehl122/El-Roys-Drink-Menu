@@ -148,7 +148,12 @@
   .del-item { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 3px; border-radius: 4px; transition: all 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.4; }
   .del-item:hover { color: var(--red); opacity: 1; }
   .empty-state { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0 2px; opacity: 0.5; }
-  .add-item-area { display: flex; gap: 7px; margin-top: 9px; }
+  .add-item-wrap { position: relative; margin-top: 9px; }
+  .add-item-area { display: flex; gap: 7px; }
+  .autocomplete-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 100; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .autocomplete-list.open { display: block; }
+  .autocomplete-item { padding: 8px 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); }
+  .autocomplete-item:hover, .autocomplete-item.ac-selected { background: var(--surface); color: var(--fire); }
   .add-item-input { flex: 1; background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 12px; outline: none; transition: all 0.2s; }
   .add-item-input:focus { border-color: var(--fire); border-style: solid; }
   .add-item-input::placeholder { color: var(--muted); opacity: 0.4; }
@@ -407,7 +412,7 @@ let menuState = {};
 
 function defaultState() {
   const s = {};
-  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[] }; });
+  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[], removed:[] }; });
   return s;
 }
 
@@ -455,6 +460,7 @@ async function init() {
     if (data && typeof data === 'object') {
       CATEGORY_DEFS.forEach(c => {
         if (data[c.id]) menuState[c.id] = data[c.id];
+        if (!menuState[c.id].removed) menuState[c.id].removed = [];
       });
       if (data._meta) {
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
@@ -705,10 +711,15 @@ function renderManagerCategories() {
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
         <div class="current-items" id="mgr-items-${cat.id}"></div>
-        <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${cat.placeholder}"
-            onkeydown="if(event.key==='Enter')addItem('${cat.id}')"/>
-          <button class="add-item-btn" onclick="addItem('${cat.id}')">+</button>
+        <div class="add-item-wrap">
+          <div class="add-item-area">
+            <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${cat.placeholder}"
+              oninput="showAutocomplete('${cat.id}')"
+              onblur="setTimeout(()=>hideAutocomplete('${cat.id}'),150)"
+              onkeydown="handleAddItemKeydown(event,'${cat.id}')"/>
+            <button class="add-item-btn" onclick="addItem('${cat.id}')">+</button>
+          </div>
+          <div class="autocomplete-list" id="ac-${cat.id}"></div>
         </div>
       </div>`;
     container.appendChild(card);
@@ -774,11 +785,65 @@ function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
   const name = input.value.trim();
   if (!name) return;
-  menuState[catId].items.push({ id: uid(), name, desc: '', eightySixed: false });
+  const stored = (menuState[catId].removed || []).find(r => r.name.toLowerCase() === name.toLowerCase());
+  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', eightySixed: false });
   input.value = '';
+  hideAutocomplete(catId);
   renderManagerItems(catId);
   input.focus();
   updateDraftIndicator();
+}
+
+// ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
+let _acIdx = -1;
+
+function showAutocomplete(catId) {
+  const val = document.getElementById('new-input-' + catId).value.trim();
+  const list = document.getElementById('ac-' + catId);
+  _acIdx = -1;
+  if (!val) { hideAutocomplete(catId); return; }
+  const matches = (menuState[catId].removed || []).filter(r => r.name.toLowerCase().startsWith(val.toLowerCase()));
+  if (!matches.length) { hideAutocomplete(catId); return; }
+  list.innerHTML = matches.map(r =>
+    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
+  ).join('');
+  list.classList.add('open');
+}
+
+function hideAutocomplete(catId) {
+  const list = document.getElementById('ac-' + catId);
+  if (list) { list.classList.remove('open'); list.innerHTML = ''; }
+  _acIdx = -1;
+}
+
+function selectAutocomplete(event, catId, name) {
+  event.preventDefault();
+  document.getElementById('new-input-' + catId).value = name;
+  hideAutocomplete(catId);
+  addItem(catId);
+}
+
+function handleAddItemKeydown(event, catId) {
+  const list = document.getElementById('ac-' + catId);
+  const items = list ? list.querySelectorAll('.autocomplete-item') : [];
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    _acIdx = Math.min(_acIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('ac-selected', i === _acIdx));
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    _acIdx = Math.max(_acIdx - 1, -1);
+    items.forEach((el, i) => el.classList.toggle('ac-selected', i === _acIdx));
+  } else if (event.key === 'Enter') {
+    if (_acIdx >= 0 && items[_acIdx]) {
+      event.preventDefault();
+      items[_acIdx].dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    } else {
+      addItem(catId);
+    }
+  } else if (event.key === 'Escape') {
+    hideAutocomplete(catId);
+  }
 }
 
 // ─── 86 TOGGLE ────────────────────────────────────────────────────────────────
@@ -813,6 +878,12 @@ async function saveDesc(catId, itemId, val) {
 }
 
 function removeItem(catId, itemId) {
+  const item = menuState[catId].items.find(i => i.id === itemId);
+  if (item) {
+    const existing = menuState[catId].removed.find(r => r.name.toLowerCase() === item.name.toLowerCase());
+    if (existing) existing.desc = item.desc;
+    else menuState[catId].removed.push({ name: item.name, desc: item.desc });
+  }
   menuState[catId].items = menuState[catId].items.filter(i => i.id !== itemId);
   renderManagerItems(catId);
   updateDraftIndicator();
