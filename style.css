@@ -216,8 +216,17 @@
   .recipe-btn.has-recipe { color: var(--teal); opacity: 1; }
   .recipe-row { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px 11px 10px; margin-top: -4px; display: none; }
   .recipe-row.open { display: block; }
-  .recipe-input { width: 100%; background: none; border: none; outline: none; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 12px; resize: none; min-height: 52px; line-height: 1.5; }
-  .recipe-input::placeholder { color: var(--muted); opacity: 0.4; }
+  .recipe-ingredient-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+  .ingredient-row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; animation: fadeSlide 0.12s ease; }
+  .ingredient-text { flex: 1; font-size: 12px; color: var(--text); }
+  .del-ingredient { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 2px; line-height: 1; opacity: 0.4; flex-shrink: 0; transition: all 0.14s; }
+  .del-ingredient:hover { color: var(--red); opacity: 1; }
+  .add-ingredient-area { display: flex; gap: 6px; }
+  .add-ingredient-input { flex: 1; background: none; border: none; border-bottom: 1px dashed var(--border); outline: none; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 12px; padding: 4px 2px; transition: border-color 0.2s; }
+  .add-ingredient-input:focus { border-color: var(--teal); }
+  .add-ingredient-input::placeholder { color: var(--muted); opacity: 0.4; }
+  .add-ingredient-btn { background: none; border: 1px dashed var(--border); border-radius: 5px; color: var(--muted); font-size: 14px; width: 24px; height: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.14s; }
+  .add-ingredient-btn:hover { border-color: var(--teal); color: var(--teal); border-style: solid; }
 
   /* ── PUBLIC ITEM STRUCTURE ── */
   .item-main-row { display: flex; align-items: center; gap: 10px; }
