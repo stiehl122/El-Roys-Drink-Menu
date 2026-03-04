@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-A zero-dependency, single-file web app (`index.html`) that powers the live drink menu for El Roy's. Staff update the menu through a PIN-protected manager interface; changes sync to Firebase Realtime Database and can be pushed to a GroupMe group as a formatted update.
+A zero-dependency web app that powers the live drink menu for El Roy's. Staff update the menu through a PIN-protected manager interface; changes sync to Firebase Realtime Database and can be pushed to a GroupMe group as a formatted update.
 
 ## Architecture
 
-- **Single file:** The entire app lives in `index.html` — HTML structure, CSS styles, and JavaScript logic are all inline. There is no build step, no bundler, and no package manager.
+- **Three files:** `index.html` (HTML structure), `style.css` (styles), `app.js` (logic). No build step, no bundler, and no package manager.
 - **Firebase Realtime Database** — cloud sync for menu state and configuration across devices.
 - **localStorage fallback** — used when Firebase is unavailable (offline-capable).
 - **GroupMe Bot API** — sends formatted patch-note messages to a group chat.
@@ -41,8 +41,8 @@ Default manager PIN on first setup: `1234`. Set an Owner PIN during setup to loc
 
 ## Development Guidelines
 
-- **Do not introduce external dependencies.** The app must remain a single, self-contained `index.html`.
-- **No build tools.** Changes are made directly to `index.html`.
+- **Do not introduce external dependencies.** The app must remain self-contained with no external libraries or package manager.
+- **No build tools.** Changes are made directly to `index.html`, `style.css`, or `app.js` as appropriate.
 - **Firebase config is entered at runtime** (stored in localStorage/Firebase), not hardcoded.
 - **Test in-browser** — open `index.html` directly in a browser or serve it with any static file server (e.g., `npx serve .`).
 - Keep the manager and owner PIN flows intact when modifying authentication logic.
@@ -56,7 +56,9 @@ The file can be hosted on GitHub Pages, Netlify, Vercel, or any static host. No 
 
 ```
 El-Roys-Drink-Menu/
-├── index.html   # Entire application
+├── index.html   # HTML structure and markup
+├── app.js       # All JavaScript logic
+├── style.css    # All CSS styles
 ├── README.md    # Setup and usage documentation
 └── CLAUDE.md    # This file
 ```
