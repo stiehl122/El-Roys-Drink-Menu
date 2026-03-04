@@ -165,16 +165,17 @@ function renderPublicView() {
       ? state.items.map(i => {
           const is86      = !!i.eightySixed;
           const hasDesc   = !!(i.desc && i.desc.trim());
-          const hasRecipe = !!(i.recipe && i.recipe.trim());
+          const recipeIngredients = recipeArray(i.recipe);
+          const hasRecipe = recipeIngredients.length > 0;
           const hasDetail = hasDesc || hasRecipe;
           const classes   = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
           const onClick   = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
           const detailHtml = hasDetail ? `<div class="item-detail-panel">
               ${hasDesc && hasRecipe
-                ? `<div class="detail-section"><div class="detail-label">Description</div><div class="item-desc-text">${escHtml(i.desc)}</div></div><div class="detail-section detail-section--bordered"><div class="detail-label">Recipe</div><div class="item-desc-text">${escHtml(i.recipe)}</div></div>`
+                ? `<div class="detail-section"><div class="detail-label">Description</div><div class="item-desc-text">${escHtml(i.desc)}</div></div><div class="detail-section detail-section--bordered"><div class="detail-label">Recipe</div><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`
                 : hasDesc
                   ? `<div class="detail-section"><div class="item-desc-text">${escHtml(i.desc)}</div></div>`
-                  : `<div class="detail-section"><div class="item-desc-text">${escHtml(i.recipe)}</div></div>`}
+                  : `<div class="detail-section"><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`}
             </div>` : '';
           return `<div class="${classes}" ${onClick}>
             <div class="item-main-row">
@@ -363,7 +364,7 @@ function renderManagerItems(catId) {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
     const hasDesc   = !!(item.desc && item.desc.trim());
-    const hasRecipe = !!(item.recipe && item.recipe.trim());
+    const hasRecipe = recipeArray(item.recipe).length > 0;
     const wrapper  = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
@@ -385,10 +386,16 @@ function renderManagerItems(catId) {
           onblur="saveDesc('${catId}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
       </div>
       <div class="recipe-row" id="recipe-row-${item.id}">
-        <textarea class="recipe-input" placeholder="Ingredients, steps, garnish..."
-          onblur="saveRecipe('${catId}','${item.id}',this.value)">${escHtml(item.recipe || '')}</textarea>
+        <div class="recipe-ingredient-list" id="recipe-list-${item.id}"></div>
+        <div class="add-ingredient-area">
+          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text"
+            placeholder="Add ingredient..."
+            onkeydown="handleIngredientKeydown(event,'${catId}','${item.id}')"/>
+          <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${item.id}')">+</button>
+        </div>
       </div>`;
     listEl.appendChild(wrapper);
+    renderRecipeIngredients(catId, item.id);
   });
 }
 
@@ -418,7 +425,7 @@ function addItem(catId) {
   const name = input.value.trim();
   if (!name) return;
   const stored = (menuState[catId].removed || []).find(r => r.name.toLowerCase() === name.toLowerCase());
-  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', recipe: stored ? (stored.recipe || '') : '', eightySixed: false });
+  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', recipe: stored ? (stored.recipe || []) : [], eightySixed: false });
   input.value = '';
   hideAutocomplete(catId);
   renderManagerItems(catId);
@@ -502,24 +509,62 @@ function toggleItemDesc(itemId) {
 }
 
 // ─── RECIPE ───────────────────────────────────────────────────────────────────
+function recipeArray(recipe) {
+  if (Array.isArray(recipe)) return recipe.filter(Boolean);
+  if (typeof recipe === 'string' && recipe.trim()) return [recipe.trim()];
+  return [];
+}
+
 function toggleItemRecipe(itemId) {
   const row = document.getElementById('recipe-row-' + itemId);
   if (!row) return;
   const opening = !row.classList.contains('open');
   row.classList.toggle('open', opening);
-  if (opening) row.querySelector('textarea').focus();
+  if (opening) document.getElementById('ingredient-input-' + itemId)?.focus();
 }
 
-async function saveRecipe(catId, itemId, val) {
+function renderRecipeIngredients(catId, itemId) {
   const item = menuState[catId].items.find(i => i.id === itemId);
   if (!item) return;
-  const recipe = val.trim();
-  if (item.recipe !== recipe) {
-    item.recipe = recipe;
-    const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
-    if (btn) btn.classList.toggle('has-recipe', !!recipe);
-    await persistState();
-  }
+  const list = document.getElementById('recipe-list-' + itemId);
+  if (!list) return;
+  const ingredients = recipeArray(item.recipe);
+  list.innerHTML = ingredients.map((ing, idx) =>
+    `<div class="ingredient-row">
+      <span class="ingredient-text">${escHtml(ing)}</span>
+      <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})">×</button>
+    </div>`
+  ).join('');
+}
+
+async function addIngredient(catId, itemId) {
+  const input = document.getElementById('ingredient-input-' + itemId);
+  const val = input.value.trim();
+  if (!val) return;
+  const item = menuState[catId].items.find(i => i.id === itemId);
+  if (!item) return;
+  if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
+  item.recipe.push(val);
+  input.value = '';
+  renderRecipeIngredients(catId, itemId);
+  const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
+  if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
+  input.focus();
+  await persistState();
+}
+
+async function removeIngredient(catId, itemId, idx) {
+  const item = menuState[catId].items.find(i => i.id === itemId);
+  if (!item || !Array.isArray(item.recipe)) return;
+  item.recipe.splice(idx, 1);
+  renderRecipeIngredients(catId, itemId);
+  const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
+  if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
+  await persistState();
+}
+
+function handleIngredientKeydown(event, catId, itemId) {
+  if (event.key === 'Enter') { event.preventDefault(); addIngredient(catId, itemId); }
 }
 
 async function saveDesc(catId, itemId, val) {
@@ -538,8 +583,8 @@ function removeItem(catId, itemId) {
   const item = menuState[catId].items.find(i => i.id === itemId);
   if (item) {
     const existing = menuState[catId].removed.find(r => r.name.toLowerCase() === item.name.toLowerCase());
-    if (existing) { existing.desc = item.desc; existing.recipe = item.recipe || ''; }
-    else menuState[catId].removed.push({ name: item.name, desc: item.desc, recipe: item.recipe || '' });
+    if (existing) { existing.desc = item.desc; existing.recipe = recipeArray(item.recipe); }
+    else menuState[catId].removed.push({ name: item.name, desc: item.desc, recipe: recipeArray(item.recipe) });
   }
   menuState[catId].items = menuState[catId].items.filter(i => i.id !== itemId);
   renderManagerItems(catId);
