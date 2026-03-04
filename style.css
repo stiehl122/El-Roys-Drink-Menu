@@ -210,14 +210,30 @@
   .desc-input { width: 100%; background: none; border: none; outline: none; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 12px; resize: none; min-height: 52px; line-height: 1.5; }
   .desc-input::placeholder { color: var(--muted); opacity: 0.4; }
 
+  /* ── RECIPE — MANAGER ── */
+  .recipe-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 4px; transition: color 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.45; }
+  .recipe-btn:hover { opacity: 1; }
+  .recipe-btn.has-recipe { color: var(--teal); opacity: 1; }
+  .recipe-row { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; padding: 8px 11px 10px; margin-top: -4px; display: none; }
+  .recipe-row.open { display: block; }
+  .recipe-input { width: 100%; background: none; border: none; outline: none; color: var(--muted); font-family: 'DM Sans', sans-serif; font-size: 12px; resize: none; min-height: 52px; line-height: 1.5; }
+  .recipe-input::placeholder { color: var(--muted); opacity: 0.4; }
+
   /* ── PUBLIC ITEM STRUCTURE ── */
   .item-main-row { display: flex; align-items: center; gap: 10px; }
   .item-name-text { flex: 1; }
-  .menu-item.has-desc { cursor: pointer; }
+  .menu-item.has-desc,
+  .menu-item.has-detail { cursor: pointer; }
   .item-expand-icon { font-size: 16px; color: var(--teal); margin-left: auto; flex-shrink: 0; transition: transform 0.18s; line-height: 1; opacity: 0.65; }
-  .menu-item.has-desc.expanded .item-expand-icon { transform: rotate(90deg); }
-  .item-desc-text { font-size: 12px; color: var(--muted); padding: 7px 0 2px 15px; line-height: 1.6; display: none; }
+  .menu-item.has-desc.expanded .item-expand-icon,
+  .menu-item.has-detail.expanded .item-expand-icon { transform: rotate(90deg); }
+  .item-desc-text { font-size: 12px; color: var(--muted); padding: 2px 0; line-height: 1.6; }
   .menu-item.has-desc.expanded .item-desc-text { display: block; }
+  .item-detail-panel { display: none; padding: 5px 0 2px; }
+  .menu-item.has-detail.expanded .item-detail-panel { display: block; }
+  .detail-section { padding: 3px 0 3px 15px; }
+  .detail-section--bordered { border-top: 1px solid var(--border); margin-top: 5px; padding-top: 7px; }
+  .detail-label { font-size: 10px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--teal); margin-bottom: 2px; opacity: 0.7; }
 
   /* ── 86'D — PUBLIC ── */
   .menu-item.is-eighty-sixed .item-name-text { text-decoration: line-through; color: var(--muted); }

@@ -163,18 +163,27 @@ function renderPublicView() {
     section.className = 'menu-section';
     const itemsHtml = state.items.length
       ? state.items.map(i => {
-          const is86     = !!i.eightySixed;
-          const hasDesc  = !!(i.desc && i.desc.trim());
-          const classes  = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDesc ? 'has-desc' : ''].filter(Boolean).join(' ');
-          const onClick  = hasDesc ? `onclick="togglePublicDesc(this)"` : '';
+          const is86      = !!i.eightySixed;
+          const hasDesc   = !!(i.desc && i.desc.trim());
+          const hasRecipe = !!(i.recipe && i.recipe.trim());
+          const hasDetail = hasDesc || hasRecipe;
+          const classes   = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
+          const onClick   = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
+          const detailHtml = hasDetail ? `<div class="item-detail-panel">
+              ${hasDesc && hasRecipe
+                ? `<div class="detail-section"><div class="detail-label">Description</div><div class="item-desc-text">${escHtml(i.desc)}</div></div><div class="detail-section detail-section--bordered"><div class="detail-label">Recipe</div><div class="item-desc-text">${escHtml(i.recipe)}</div></div>`
+                : hasDesc
+                  ? `<div class="detail-section"><div class="item-desc-text">${escHtml(i.desc)}</div></div>`
+                  : `<div class="detail-section"><div class="item-desc-text">${escHtml(i.recipe)}</div></div>`}
+            </div>` : '';
           return `<div class="${classes}" ${onClick}>
             <div class="item-main-row">
               <div class="dot"></div>
               <span class="item-name-text">${escHtml(i.name)}</span>
               ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
-              ${hasDesc ? `<span class="item-expand-icon">›</span>` : ''}
+              ${hasDetail ? `<span class="item-expand-icon">›</span>` : ''}
             </div>
-            ${hasDesc ? `<div class="item-desc-text">${escHtml(i.desc)}</div>` : ''}
+            ${detailHtml}
           </div>`;
         }).join('')
       : `<div class="empty-menu">Nothing listed yet.</div>`;
@@ -353,7 +362,8 @@ function renderManagerItems(catId) {
   state.items.forEach(item => {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
-    const hasDesc  = !!(item.desc && item.desc.trim());
+    const hasDesc   = !!(item.desc && item.desc.trim());
+    const hasRecipe = !!(item.recipe && item.recipe.trim());
     const wrapper  = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
@@ -366,12 +376,17 @@ function renderManagerItems(catId) {
           onblur="renameItem('${catId}','${item.id}',this.value)"
           onkeydown="if(event.key==='Enter')this.blur()"/></div>
         <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
+        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')">×</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
         <textarea class="desc-input" placeholder="Ingredients, description, how to sell it..."
           onblur="saveDesc('${catId}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
+      </div>
+      <div class="recipe-row" id="recipe-row-${item.id}">
+        <textarea class="recipe-input" placeholder="Ingredients, steps, garnish..."
+          onblur="saveRecipe('${catId}','${item.id}',this.value)">${escHtml(item.recipe || '')}</textarea>
       </div>`;
     listEl.appendChild(wrapper);
   });
@@ -403,7 +418,7 @@ function addItem(catId) {
   const name = input.value.trim();
   if (!name) return;
   const stored = (menuState[catId].removed || []).find(r => r.name.toLowerCase() === name.toLowerCase());
-  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', eightySixed: false });
+  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', recipe: stored ? (stored.recipe || '') : '', eightySixed: false });
   input.value = '';
   hideAutocomplete(catId);
   renderManagerItems(catId);
@@ -486,6 +501,27 @@ function toggleItemDesc(itemId) {
   if (opening) row.querySelector('textarea').focus();
 }
 
+// ─── RECIPE ───────────────────────────────────────────────────────────────────
+function toggleItemRecipe(itemId) {
+  const row = document.getElementById('recipe-row-' + itemId);
+  if (!row) return;
+  const opening = !row.classList.contains('open');
+  row.classList.toggle('open', opening);
+  if (opening) row.querySelector('textarea').focus();
+}
+
+async function saveRecipe(catId, itemId, val) {
+  const item = menuState[catId].items.find(i => i.id === itemId);
+  if (!item) return;
+  const recipe = val.trim();
+  if (item.recipe !== recipe) {
+    item.recipe = recipe;
+    const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
+    if (btn) btn.classList.toggle('has-recipe', !!recipe);
+    await persistState();
+  }
+}
+
 async function saveDesc(catId, itemId, val) {
   const item = menuState[catId].items.find(i => i.id === itemId);
   if (!item) return;
@@ -502,8 +538,8 @@ function removeItem(catId, itemId) {
   const item = menuState[catId].items.find(i => i.id === itemId);
   if (item) {
     const existing = menuState[catId].removed.find(r => r.name.toLowerCase() === item.name.toLowerCase());
-    if (existing) existing.desc = item.desc;
-    else menuState[catId].removed.push({ name: item.name, desc: item.desc });
+    if (existing) { existing.desc = item.desc; existing.recipe = item.recipe || ''; }
+    else menuState[catId].removed.push({ name: item.name, desc: item.desc, recipe: item.recipe || '' });
   }
   menuState[catId].items = menuState[catId].items.filter(i => i.id !== itemId);
   renderManagerItems(catId);
