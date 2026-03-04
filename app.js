@@ -749,11 +749,56 @@ document.getElementById('modal-bg').addEventListener('click', e => {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['manager','admin'].forEach(t => {
+  ['manager','admin','database'].forEach(t => {
     document.getElementById('tab-btn-' + t).classList.toggle('active', t === name);
     document.getElementById('tab-panel-' + t).classList.toggle('active', t === name);
   });
+  if (name === 'database') renderDatabaseTab();
 }
+
+function renderDatabaseTab() {
+  const query = (document.getElementById('db-search').value || '').toLowerCase().trim();
+  const rows = [];
+  CATS.forEach(cat => {
+    [
+      ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
+      ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
+    ].forEach(item => {
+      const recipe = recipeArray(item.recipe);
+      if (!recipe.length) return;
+      rows.push({ name: item.name, category: cat.label, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
+    });
+  });
+
+  const filtered = query
+    ? rows.filter(r =>
+        r.name.toLowerCase().includes(query) ||
+        r.category.toLowerCase().includes(query) ||
+        r.recipe.some(ing => ing.toLowerCase().includes(query))
+      )
+    : rows;
+  filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+  const wrap = document.getElementById('db-table-wrap');
+  if (!filtered.length) {
+    wrap.innerHTML = '<p class="db-empty">No recipes found.</p>';
+    return;
+  }
+  wrap.innerHTML = `
+    <table class="db-table">
+      <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
+      <tbody>${filtered.map(r => `
+        <tr>
+          <td class="db-name">${escHtml(r.name)}</td>
+          <td class="db-cat">${escHtml(r.category)}</td>
+          <td class="db-recipe">${r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('')}</td>
+          <td class="db-status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function filterDatabase() { renderDatabaseTab(); }
 
 // ─── NATIVE MOBILE KEYPAD SUPPORT ────────────────────────────────────────────
 (function() {
