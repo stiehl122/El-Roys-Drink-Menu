@@ -759,14 +759,14 @@ function switchTab(name) {
 function renderDatabaseTab() {
   const query = (document.getElementById('db-search').value || '').toLowerCase().trim();
   const rows = [];
-  CATS.forEach(cat => {
+  CATEGORY_DEFS.forEach(cat => {
     [
       ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
       ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
     ].forEach(item => {
       const recipe = recipeArray(item.recipe);
       if (!recipe.length) return;
-      rows.push({ name: item.name, category: cat.label, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
+      rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
     });
   });
 
