@@ -757,45 +757,56 @@ function switchTab(name) {
 }
 
 function renderDatabaseTab() {
-  const query = (document.getElementById('db-search').value || '').toLowerCase().trim();
-  const rows = [];
-  CATEGORY_DEFS.forEach(cat => {
-    [
-      ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
-      ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
-    ].forEach(item => {
-      const recipe = recipeArray(item.recipe);
-      if (!recipe.length) return;
-      rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
-    });
-  });
-
-  const filtered = query
-    ? rows.filter(r =>
-        r.name.toLowerCase().includes(query) ||
-        r.category.toLowerCase().includes(query) ||
-        r.recipe.some(ing => ing.toLowerCase().includes(query))
-      )
-    : rows;
-  filtered.sort((a, b) => a.name.localeCompare(b.name));
-
   const wrap = document.getElementById('db-table-wrap');
-  if (!filtered.length) {
-    wrap.innerHTML = '<p class="db-empty">No recipes found.</p>';
-    return;
+  try {
+    const query = (document.getElementById('db-search').value || '').toLowerCase().trim();
+    const rows = [];
+    let totalItems = 0;
+
+    CATEGORY_DEFS.forEach(cat => {
+      const all = [
+        ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
+        ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
+      ];
+      totalItems += all.length;
+      all.forEach(item => {
+        const recipe = recipeArray(item.recipe);
+        if (!recipe.length) return;
+        rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
+      });
+    });
+
+    const filtered = query
+      ? rows.filter(r =>
+          r.name.toLowerCase().includes(query) ||
+          r.category.toLowerCase().includes(query) ||
+          r.recipe.some(ing => ing.toLowerCase().includes(query))
+        )
+      : rows;
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+    if (!filtered.length) {
+      wrap.innerHTML = totalItems === 0
+        ? '<p class="db-empty">No menu items loaded. Check your Firebase connection in the Admin tab.</p>'
+        : `<p class="db-empty">${totalItems} item${totalItems !== 1 ? 's' : ''} found — none have recipes yet. Add ingredients via the 🧪 button in the Manager tab, then save.</p>`;
+      return;
+    }
+
+    wrap.innerHTML = `
+      <table class="db-table">
+        <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
+        <tbody>${filtered.map(r => `
+          <tr>
+            <td class="db-name">${escHtml(r.name)}</td>
+            <td class="db-cat">${escHtml(r.category)}</td>
+            <td class="db-recipe">${r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('')}</td>
+            <td class="db-status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    wrap.innerHTML = `<p class="db-empty db-error">Error rendering database: ${escHtml(String(e))}</p>`;
   }
-  wrap.innerHTML = `
-    <table class="db-table">
-      <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
-      <tbody>${filtered.map(r => `
-        <tr>
-          <td class="db-name">${escHtml(r.name)}</td>
-          <td class="db-cat">${escHtml(r.category)}</td>
-          <td class="db-recipe">${r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('')}</td>
-          <td class="db-status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
 }
 
 function filterDatabase() { renderDatabaseTab(); }
