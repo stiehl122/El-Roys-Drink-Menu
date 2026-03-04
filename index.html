@@ -150,7 +150,7 @@
   .empty-state { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0 2px; opacity: 0.5; }
   .add-item-wrap { position: relative; margin-top: 9px; }
   .add-item-area { display: flex; gap: 7px; }
-  .autocomplete-list { position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 100; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .autocomplete-list { position: fixed; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
   .autocomplete-list.open { display: block; }
   .autocomplete-item { padding: 8px 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; color: var(--text); }
   .autocomplete-item:hover, .autocomplete-item.ac-selected { background: var(--surface); color: var(--fire); }
@@ -807,6 +807,10 @@ function showAutocomplete(catId) {
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
   ).join('');
+  const rect = document.getElementById('new-input-' + catId).getBoundingClientRect();
+  list.style.top   = (rect.bottom + 2) + 'px';
+  list.style.left  = rect.left + 'px';
+  list.style.width = rect.width + 'px';
   list.classList.add('open');
 }
 
