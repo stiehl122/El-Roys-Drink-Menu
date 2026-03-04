@@ -255,3 +255,21 @@
   .tab-btn.active { background: var(--card); border-color: var(--border); color: var(--text); box-shadow: 0 1px 5px rgba(0,0,0,0.18); }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+
+  /* ── DATABASE TAB ── */
+  .db-search-row { padding: 12px 0 8px; }
+  .db-search-row input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid #444; background: #1a1a1a; color: #eee; font-size: 0.95rem; }
+  .db-search-row input::placeholder { color: #666; }
+  .db-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 4px; }
+  .db-table th { text-align: left; padding: 7px 10px; background: #1e1e1e; color: #aaa; border-bottom: 1px solid #333; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: .75rem; }
+  .db-table td { padding: 8px 10px; border-bottom: 1px solid #2a2a2a; vertical-align: top; }
+  .db-table tr:last-child td { border-bottom: none; }
+  .db-name { color: #eee; font-weight: 500; white-space: nowrap; }
+  .db-cat { color: #888; white-space: nowrap; }
+  .db-recipe { display: flex; flex-wrap: wrap; gap: 4px; }
+  .db-ing { background: #2a2a2a; color: #ccc; border-radius: 4px; padding: 2px 7px; font-size: .82rem; border: 1px solid #3a3a3a; }
+  .db-badge { display: inline-block; border-radius: 4px; padding: 2px 8px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+  .db-badge--on  { background: #1a3a1a; color: #6f6; }
+  .db-badge--off { background: #2a2a2a; color: #888; }
+  .db-badge--86  { background: #3a1a1a; color: #f66; }
+  .db-empty { color: #666; padding: 24px 0; text-align: center; }
