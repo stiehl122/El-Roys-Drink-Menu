@@ -42,6 +42,7 @@
     <div class="tab-bar">
       <button class="tab-btn active" id="tab-btn-manager" onclick="switchTab('manager')">MANAGER</button>
       <button class="tab-btn" id="tab-btn-admin" onclick="switchTab('admin')">ADMIN</button>
+      <button class="tab-btn" id="tab-btn-database" onclick="switchTab('database')">DATABASE</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
@@ -104,6 +105,15 @@
         </div>
         <div class="hint">Only the owner PIN can access admin settings. If not set, any manager PIN can access admin.</div>
       </div>
+    </div>
+
+    <!-- DATABASE PANEL: Recipe Spreadsheet -->
+    <div class="tab-panel" id="tab-panel-database">
+      <div class="section-label">Recipe Database</div>
+      <div class="db-search-row">
+        <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
+      </div>
+      <div id="db-table-wrap"></div>
     </div>
 
     <button class="logout-link" onclick="exitManager()">← Back to menu view</button>
