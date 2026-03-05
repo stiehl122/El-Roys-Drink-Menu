@@ -72,10 +72,19 @@
   .icon-tequila { background: rgba(18,133,120,0.15); }
   .icon-frozen { background: rgba(100,180,255,0.18); }
   .icon-special { background: rgba(190,67,48,0.12); }
-  .icon-canned  { background: rgba(140,200,120,0.18); }
+  .icon-canned    { background: rgba(140,200,120,0.18); }
+  .icon-cocktails { background: rgba(255,160,80,0.18); }
   .menu-section-title { font-family: 'Lilita One', cursive; font-size: 18px; letter-spacing: 1px; line-height: 1; color: var(--teal); }
   .menu-section-sub { font-family: 'Permanent Marker', cursive; font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .menu-items { display: flex; flex-direction: column; gap: 5px; }
+  .menu-items { display: flex; flex-direction: column; gap: 5px; overflow: hidden; max-height: 2000px; opacity: 1; transition: max-height 0.28s ease, opacity 0.2s ease; }
+  .is-collapsed .menu-items { max-height: 0; opacity: 0; }
+
+  /* ── SECTION COLLAPSE ── */
+  .section-collapse-btn { cursor: pointer; user-select: none; }
+  .section-chevron { font-size: 18px; margin-left: auto; flex-shrink: 0; opacity: 0.55; line-height: 1; transition: transform 0.2s ease, opacity 0.2s ease; transform: rotate(90deg); }
+  .section-collapse-btn:hover .section-chevron { opacity: 1; }
+  .is-collapsed .section-chevron { transform: rotate(0deg); }
+
   .menu-item { display: flex; flex-direction: column; align-items: stretch; padding: 8px 12px; background: var(--surface); border-radius: 8px; font-size: 14px; border: 1px solid transparent; }
   .menu-item .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
   .empty-menu { color: var(--muted); font-size: 13px; font-style: italic; padding: 4px 0; opacity: 0.65; }
@@ -126,7 +135,8 @@
   .cat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
   .cat-title { font-family: 'Lilita One', cursive; font-size: 18px; letter-spacing: 1px; line-height: 1; color: var(--text); }
   .cat-sub { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'Permanent Marker', cursive; }
-  .current-section { padding: 0 20px 18px; }
+  .current-section { padding: 0 20px 18px; overflow: hidden; max-height: 3000px; opacity: 1; transition: max-height 0.28s ease, opacity 0.2s ease; }
+  .is-collapsed .current-section { max-height: 0; opacity: 0; }
   .current-label { font-size: 10px; font-weight: 500; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 9px; }
   .current-items { display: flex; flex-direction: column; gap: 5px; }
   .current-item { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; animation: fadeSlide 0.16s ease; }
