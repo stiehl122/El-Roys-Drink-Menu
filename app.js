@@ -416,7 +416,6 @@ async function saveMenu() {
   localStorage.setItem('hf_last_updated_ts', ts.toString());
   await persistState();
   updateLastUpdatedLabel();
-  await persistState();
   showToast('✅ Menu saved!', 'success');
 }
 
@@ -749,13 +748,12 @@ document.getElementById('modal-bg').addEventListener('click', e => {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['manager','admin'].forEach(t => {
+  ['manager','admin','database'].forEach(t => {
     document.getElementById('tab-btn-' + t).classList.toggle('active', t === name);
     document.getElementById('tab-panel-' + t).classList.toggle('active', t === name);
   });
 }
 
-<<<<<<< HEAD
 function renderDatabaseTab() {
   const wrap = document.getElementById('db-table-wrap');
   try {
@@ -811,8 +809,6 @@ function renderDatabaseTab() {
 
 function filterDatabase() { renderDatabaseTab(); }
 
-=======
->>>>>>> parent of 2fbd7fb (Merge pull request #16 from stiehl122/claude/add-database-tab-h0Avc)
 // ─── NATIVE MOBILE KEYPAD SUPPORT ────────────────────────────────────────────
 (function() {
   const hi = document.getElementById('pin-hidden-input');
