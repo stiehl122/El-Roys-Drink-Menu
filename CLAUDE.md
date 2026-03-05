@@ -13,13 +13,13 @@ A zero-dependency web app that powers the live drink menu for El Roy's. Staff up
 
 ## Menu Categories
 
-| Key | Icon | Label | Subtitle |
-|---|---|---|---|
-| `beer` | 🍺 | Beers on Tap | Current draft offerings |
-| `canned` | 🍻 | Canned & Bottled | Canned & bottled offerings |
-| `tequila` | 🌶️ | Infused Tequila | Rotating infused marg tequila |
-| `frozen` | 🧊 | Frozen Marg | Current frozen margarita flavor |
-| `special` | ⭐ | Monthly Specials | Featured cocktails & promos |
+| Key | Label |
+|---|---|
+| `beers` | Beers on Tap |
+| `infusedTequila` | Infused Tequila |
+| `frozenMarg` | Frozen Marg |
+| `monthlySpecials` | Monthly Specials |
+| `cannedBottled` | Canned & Bottled |
 
 ## Access Levels
 
@@ -31,74 +31,13 @@ A zero-dependency web app that powers the live drink menu for El Roy's. Staff up
 
 Default manager PIN on first setup: `1234`. Set an Owner PIN during setup to lock admin settings.
 
-> If no Owner PIN is set, any manager PIN holder can also access the Admin tab (backward-compatible behavior).
-
 ## Key Behaviors to Preserve
 
 - **Save vs. Send Update:** `Save` persists to Firebase silently. `Send Update` saves *and* fires a GroupMe message + updates the "Last Updated" header timestamp.
 - **Draft indicators:** A green dot on an item means it has been added/changed but not yet announced via Send Update.
 - **86'd items:** Remain visible on the public menu with a strikethrough and "86'D" badge; toggled per item in manager mode.
 - **Item descriptions:** Optional, expandable via a `›` icon on the public view; editable via `📝` in manager mode.
-- **Item recipes/ingredients:** Optional ingredient list per item, editable via `🧪` in manager mode; displayed in the public expandable panel and in the Database tab.
 - **Change count badge:** The Send Update button displays the number of unsent changes.
-- **Autocomplete on add:** When typing a new item name, previously removed items matching the prefix appear as suggestions; selecting one restores its description and recipe.
-
-## Manager Interface Tabs
-
-The manager overlay has three tabs:
-
-| Tab | Access | Purpose |
-|---|---|---|
-| **Manager** | Manager + Owner | Add/remove/edit items per category |
-| **Admin** | Owner only (or any manager if no Owner PIN set) | Firebase credentials, Bot ID, Menu URL, PINs |
-| **Database** | Manager + Owner | Searchable, sortable table of all items that have recipes |
-
-### Database Tab Details
-- Shows only items that have at least one ingredient in their recipe.
-- Columns: Drink · Category · Recipe · Status
-- Sortable alphabetically by drink name.
-- Real-time search filters by drink name, category, or ingredient.
-- Status badges: **On Menu** (green), **Off Menu** (gray), **86'd** (red).
-
-## GroupMe Message Format
-
-```
-🔥 DRINK MENU UPDATES — Sun, Mar 4 at 2:30 PM
-
-🍺 BEERS ON TAP
-  ✅ + New Draft Beer Name
-  ❌ - Old Draft Beer Name
-  🚫 86'd: Item Name
-  ↩ Back on Tap: Restored Item
-
-📋 Full menu: [MENU_URL]
-```
-
-- Restore label is context-aware: "Back on Tap" for beer, "Back in Stock" for all other categories.
-- A preview modal is shown before sending so staff can review changes.
-
-## Firebase Data Structure
-
-Data is written to `/menu.json` on the configured Realtime Database:
-
-```json
-{
-  "beer":   { "items": [...], "lastSent": [...], "removed": [...] },
-  "canned": { "items": [...], "lastSent": [...], "removed": [...] },
-  "tequila":{ "items": [...], "lastSent": [...], "removed": [...] },
-  "frozen": { "items": [...], "lastSent": [...], "removed": [...] },
-  "special":{ "items": [...], "lastSent": [...], "removed": [...] },
-  "_meta":  { "lastUpdatedTs": "1234567890" },
-  "_config":{ "pin": "...", "ownerPin": "...", "botId": "...", "menuUrl": "...", "fbSecret": "...", "fbUrl": "..." }
-}
-```
-
-Per-item fields: `id`, `name`, `desc`, `recipe` (array of strings), `eightySixed` (boolean).
-
-- **Reads** are public (no auth).
-- **Writes** use `?auth={FB_SECRET}` query param.
-- The public view auto-refreshes from Firebase every 60 seconds.
-- Polling stops when entering manager mode.
 
 ## Development Guidelines
 
@@ -111,7 +50,7 @@ Per-item fields: `id`, `name`, `desc`, `recipe` (array of strings), `eightySixed
 
 ## Hosting
 
-The files can be hosted on GitHub Pages, Netlify, Vercel, or any static host. No backend or server-side logic is required.
+The file can be hosted on GitHub Pages, Netlify, Vercel, or any static host. No backend or server-side logic is required.
 
 ## Repository Structure
 
