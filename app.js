@@ -31,7 +31,7 @@ let menuState = {};
 
 function defaultState() {
   const s = {};
-  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[] }; });
+  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[], removed:[] }; });
   return s;
 }
 
@@ -79,17 +79,7 @@ async function init() {
     if (data && typeof data === 'object') {
       CATEGORY_DEFS.forEach(c => {
         if (data[c.id]) menuState[c.id] = data[c.id];
-        // Ensure every item has onMenu flag (old data won't have it)
-        menuState[c.id].items.forEach(i => { if (i.onMenu === undefined) i.onMenu = true; });
-        // Migrate legacy removed[] into items[] with onMenu:false
-        if (Array.isArray(menuState[c.id].removed)) {
-          menuState[c.id].removed.forEach(r => {
-            if (!menuState[c.id].items.some(i => i.name.toLowerCase() === r.name.toLowerCase())) {
-              menuState[c.id].items.push({ id: uid(), name: r.name, desc: r.desc || '', recipe: r.recipe || [], eightySixed: false, onMenu: false });
-            }
-          });
-          delete menuState[c.id].removed;
-        }
+        if (!menuState[c.id].removed) menuState[c.id].removed = [];
       });
       if (data._meta) {
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
@@ -179,10 +169,15 @@ function renderPublicView() {
       ? state.items.map(i => {
 =======
     section.className = 'menu-section';
+<<<<<<< HEAD
     const visibleItems = state.items.filter(i => i.onMenu !== false);
     const itemsHtml = visibleItems.length
       ? visibleItems.map(i => {
 >>>>>>> main
+=======
+    const itemsHtml = state.items.length
+      ? state.items.map(i => {
+>>>>>>> parent of 00e778d (Merge pull request #19 from stiehl122/claude/store-removed-menu-items-6azDA)
           const is86      = !!i.eightySixed;
           const hasDesc   = !!(i.desc && i.desc.trim());
           const recipeIngredients = recipeArray(i.recipe);
@@ -394,9 +389,8 @@ function renderManagerItems(catId) {
   const lastSentNames = new Set(state.lastSent.map(i => i.name.trim().toLowerCase()));
   const listEl = document.getElementById('mgr-items-' + catId);
   listEl.innerHTML = '';
-  const onMenuItems = state.items.filter(i => i.onMenu !== false);
-  if (!onMenuItems.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
-  onMenuItems.forEach(item => {
+  if (!state.items.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
+  state.items.forEach(item => {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
     const hasDesc   = !!(item.desc && item.desc.trim());
@@ -460,18 +454,8 @@ function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
   const name = input.value.trim();
   if (!name) return;
-  // Block duplicates among on-menu items
-  if (menuState[catId].items.some(i => i.onMenu !== false && i.name.toLowerCase() === name.toLowerCase())) {
-    showToast(`"${name}" is already on the menu.`, 'error'); return;
-  }
-  // Re-add archived item if one exists with same name
-  const archived = menuState[catId].items.find(i => i.onMenu === false && i.name.toLowerCase() === name.toLowerCase());
-  if (archived) {
-    archived.onMenu = true;
-    archived.eightySixed = false;
-  } else {
-    menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
-  }
+  const stored = (menuState[catId].removed || []).find(r => r.name.toLowerCase() === name.toLowerCase());
+  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', recipe: stored ? (stored.recipe || []) : [], eightySixed: false });
   input.value = '';
   hideAutocomplete(catId);
   renderManagerItems(catId);
@@ -487,7 +471,7 @@ function showAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
-  const matches = menuState[catId].items.filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
+  const matches = (menuState[catId].removed || []).filter(r => r.name.toLowerCase().startsWith(val.toLowerCase()));
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
@@ -627,7 +611,12 @@ async function saveDesc(catId, itemId, val) {
 
 function removeItem(catId, itemId) {
   const item = menuState[catId].items.find(i => i.id === itemId);
-  if (item) item.onMenu = false;
+  if (item) {
+    const existing = menuState[catId].removed.find(r => r.name.toLowerCase() === item.name.toLowerCase());
+    if (existing) { existing.desc = item.desc; existing.recipe = recipeArray(item.recipe); }
+    else menuState[catId].removed.push({ name: item.name, desc: item.desc, recipe: recipeArray(item.recipe) });
+  }
+  menuState[catId].items = menuState[catId].items.filter(i => i.id !== itemId);
   renderManagerItems(catId);
   updateDraftIndicator();
 }
@@ -668,7 +657,7 @@ function computeDiff() {
     const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
     const eightySixed = [], restored = [];
     const eightySixedNames = new Set(), restoredNames = new Set();
-    state.items.filter(i => i.onMenu !== false).forEach(item => {
+    state.items.forEach(item => {
       const nameLow = item.name.trim().toLowerCase();
       const prev = lastByName.get(nameLow);
       if (prev) {
@@ -678,7 +667,7 @@ function computeDiff() {
     });
 
     // Add/remove: only count items that aren't just changing 86 state
-    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
+    const currentNames = state.items.filter(i => !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const lastNames    = state.lastSent.filter(i => !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
     const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
@@ -756,7 +745,7 @@ async function sendUpdate() {
       // Commit lastSent in memory + cloud
       const ts = Date.now();
       CATEGORY_DEFS.forEach(cat => {
-        menuState[cat.id].lastSent = menuState[cat.id].items.filter(i => i.onMenu !== false).map(i => ({...i}));
+        menuState[cat.id].lastSent = menuState[cat.id].items.map(i => ({...i}));
       });
       menuState._meta = { lastUpdatedTs: ts.toString() };
       localStorage.setItem('hf_last_updated_ts', ts.toString());
@@ -805,7 +794,10 @@ function renderDatabaseTab() {
     let totalItems = 0;
 
     CATEGORY_DEFS.forEach(cat => {
-      const all = menuState[cat.id]?.items || [];
+      const all = [
+        ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
+        ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
+      ];
       totalItems += all.length;
       all.forEach(item => {
         const recipe = recipeArray(item.recipe);
