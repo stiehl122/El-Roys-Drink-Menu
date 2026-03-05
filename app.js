@@ -13,12 +13,14 @@ let isFirstSetup = !FB_SECRET || !FB_URL; // Both Firebase URL and Secret are re
 let isManagerMode = false;
 let pinEntry = '';
 let syncInterval = null;
+const collapsedSections = new Set(); // category ids currently collapsed
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const CATEGORY_DEFS = [
-  { id:'beer',    icon:'🍺', iconClass:'icon-beer',    title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
-  { id:'canned',  icon:'🍻', iconClass:'icon-canned',  title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
-  { id:'tequila', icon:'🌶️', iconClass:'icon-tequila', title:'Infused Tequila', sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
+  { id:'beer',      icon:'🍺', iconClass:'icon-beer',      title:'Beers on Tap',     sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
+  { id:'canned',    icon:'🍻', iconClass:'icon-canned',    title:'Canned & Bottled', sub:'Canned & bottled offerings',       placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
+  { id:'cocktails', icon:'🍹', iconClass:'icon-cocktails', title:'Cocktails',         sub:'Featured house cocktails',         placeholder:'e.g. Paloma, Ranch Water...' },
+  { id:'tequila',   icon:'🌶️', iconClass:'icon-tequila',   title:'Infused Tequila',  sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
   { id:'frozen',  icon:'🧊', iconClass:'icon-frozen',  title:'Frozen Marg',     sub:'Current frozen margarita flavor', placeholder:'e.g. Strawberry Basil...' },
   { id:'special', icon:'⭐', iconClass:'icon-special', title:'Monthly Specials', sub:'Featured cocktails & promos',    placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
 ];
@@ -170,10 +172,17 @@ function renderPublicView() {
   CATEGORY_DEFS.forEach(cat => {
     const state = menuState[cat.id];
     const section = document.createElement('div');
+<<<<<<< claude/update-documentation-x74Np
+    section.className = 'menu-section' + (collapsedSections.has(cat.id) ? ' is-collapsed' : '');
+    section.id = 'pub-section-' + cat.id;
+    const itemsHtml = state.items.length
+      ? state.items.map(i => {
+=======
     section.className = 'menu-section';
     const visibleItems = state.items.filter(i => i.onMenu !== false);
     const itemsHtml = visibleItems.length
       ? visibleItems.map(i => {
+>>>>>>> main
           const is86      = !!i.eightySixed;
           const hasDesc   = !!(i.desc && i.desc.trim());
           const recipeIngredients = recipeArray(i.recipe);
@@ -200,9 +209,10 @@ function renderPublicView() {
         }).join('')
       : `<div class="empty-menu">Nothing listed yet.</div>`;
     section.innerHTML = `
-      <div class="menu-section-header">
+      <div class="menu-section-header section-collapse-btn" onclick="toggleSection('${cat.id}')">
         <div class="menu-icon ${cat.iconClass}">${cat.icon}</div>
         <div><div class="menu-section-title">${cat.title}</div><div class="menu-section-sub">${cat.sub}</div></div>
+        <span class="section-chevron">›</span>
       </div>
       <div class="menu-items">${itemsHtml}</div>`;
     container.appendChild(section);
@@ -211,6 +221,18 @@ function renderPublicView() {
 
 function togglePublicDesc(el) {
   el.classList.toggle('expanded');
+}
+
+function toggleSection(catId) {
+  if (collapsedSections.has(catId)) {
+    collapsedSections.delete(catId);
+  } else {
+    collapsedSections.add(catId);
+  }
+  const pubEl = document.getElementById('pub-section-' + catId);
+  const mgrEl = document.getElementById('mgr-section-' + catId);
+  if (pubEl) pubEl.classList.toggle('is-collapsed', collapsedSections.has(catId));
+  if (mgrEl) mgrEl.classList.toggle('is-collapsed', collapsedSections.has(catId));
 }
 
 // ─── PIN ──────────────────────────────────────────────────────────────────────
@@ -340,11 +362,13 @@ function renderManagerCategories() {
   container.innerHTML = '';
   CATEGORY_DEFS.forEach(cat => {
     const card = document.createElement('div');
-    card.className = 'cat-card';
+    card.id = 'mgr-section-' + cat.id;
+    card.className = 'cat-card' + (collapsedSections.has(cat.id) ? ' is-collapsed' : '');
     card.innerHTML = `
-      <div class="cat-header">
+      <div class="cat-header section-collapse-btn" onclick="toggleSection('${cat.id}')">
         <div class="cat-icon ${cat.iconClass}">${cat.icon}</div>
         <div><div class="cat-title">${cat.title}</div><div class="cat-sub">${cat.sub}</div></div>
+        <span class="section-chevron">›</span>
       </div>
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
