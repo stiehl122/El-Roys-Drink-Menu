@@ -791,8 +791,8 @@ function renderDatabaseTab() {
     if (dbFilters.recipe === 'no')  filtered = filtered.filter(r => r.recipe.length === 0);
 
     // Status filter
-    if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu && !r.eightySixed);
-    if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu || r.eightySixed);
+    if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu);
+    if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu);
 
     // Search query filter
     if (query) {
