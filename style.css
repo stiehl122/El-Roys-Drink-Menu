@@ -274,3 +274,9 @@
   .db-badge--86  { background: #3a1a1a; color: #f66; }
   .db-empty { color: #999; padding: 24px 0; text-align: center; font-size: 0.9rem; }
   .db-error { color: #f66 !important; }
+  .db-no-recipe { color: #555; }
+  .db-filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 6px 0 10px; }
+  .db-filter-label { font-size: 0.75rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.05em; }
+  .db-filter-group { display: flex; gap: 4px; }
+  .db-filter-btn { padding: 3px 10px; border-radius: 999px; border: 1px solid #444; background: transparent; font-size: 0.78rem; cursor: pointer; color: #ccc; transition: background 0.15s, color 0.15s; }
+  .db-filter-btn.active { background: #c0392b; color: #fff; border-color: #c0392b; }
