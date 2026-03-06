@@ -113,6 +113,20 @@
       <div class="db-search-row">
         <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
       </div>
+      <div class="db-filter-row">
+        <span class="db-filter-label">Recipe:</span>
+        <div class="db-filter-group" id="db-filter-recipe">
+          <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('recipe','all')">All</button>
+          <button class="db-filter-btn"        data-value="yes"  onclick="setDbFilter('recipe','yes')">With Recipe</button>
+          <button class="db-filter-btn"        data-value="no"   onclick="setDbFilter('recipe','no')">No Recipe</button>
+        </div>
+        <span class="db-filter-label">Status:</span>
+        <div class="db-filter-group" id="db-filter-status">
+          <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('status','all')">All</button>
+          <button class="db-filter-btn"        data-value="on"   onclick="setDbFilter('status','on')">On Menu</button>
+          <button class="db-filter-btn"        data-value="off"  onclick="setDbFilter('status','off')">Off Menu</button>
+        </div>
+      </div>
       <div id="db-table-wrap"></div>
     </div>
 

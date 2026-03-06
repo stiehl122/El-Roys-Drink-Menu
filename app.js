@@ -752,6 +752,17 @@ function switchTab(name) {
     document.getElementById('tab-btn-' + t).classList.toggle('active', t === name);
     document.getElementById('tab-panel-' + t).classList.toggle('active', t === name);
   });
+  if (name === 'database') renderDatabaseTab();
+}
+
+const dbFilters = { recipe: 'all', status: 'all' };
+
+function setDbFilter(key, value) {
+  dbFilters[key] = value;
+  document.querySelectorAll(`#db-filter-${key} .db-filter-btn`).forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === value);
+  });
+  renderDatabaseTab();
 }
 
 function renderDatabaseTab() {
@@ -769,24 +780,35 @@ function renderDatabaseTab() {
       totalItems += all.length;
       all.forEach(item => {
         const recipe = recipeArray(item.recipe);
-        if (!recipe.length) return;
         rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
       });
     });
 
-    const filtered = query
-      ? rows.filter(r =>
-          r.name.toLowerCase().includes(query) ||
-          r.category.toLowerCase().includes(query) ||
-          r.recipe.some(ing => ing.toLowerCase().includes(query))
-        )
-      : rows;
+    let filtered = rows;
+
+    // Recipe filter
+    if (dbFilters.recipe === 'yes') filtered = filtered.filter(r => r.recipe.length > 0);
+    if (dbFilters.recipe === 'no')  filtered = filtered.filter(r => r.recipe.length === 0);
+
+    // Status filter
+    if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu && !r.eightySixed);
+    if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu || r.eightySixed);
+
+    // Search query filter
+    if (query) {
+      filtered = filtered.filter(r =>
+        r.name.toLowerCase().includes(query) ||
+        r.category.toLowerCase().includes(query) ||
+        r.recipe.some(ing => ing.toLowerCase().includes(query))
+      );
+    }
+
     filtered.sort((a, b) => a.name.localeCompare(b.name));
 
     if (!filtered.length) {
       wrap.innerHTML = totalItems === 0
         ? '<p class="db-empty">No menu items loaded. Check your Firebase connection in the Admin tab.</p>'
-        : `<p class="db-empty">${totalItems} item${totalItems !== 1 ? 's' : ''} found — none have recipes yet. Add ingredients via the 🧪 button in the Manager tab, then save.</p>`;
+        : '<p class="db-empty">No items match the current filters.</p>';
       return;
     }
 
@@ -797,7 +819,7 @@ function renderDatabaseTab() {
           <tr>
             <td class="db-name">${escHtml(r.name)}</td>
             <td class="db-cat">${escHtml(r.category)}</td>
-            <td class="db-recipe">${r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('')}</td>
+            <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
             <td class="db-status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
           </tr>`).join('')}
         </tbody>
