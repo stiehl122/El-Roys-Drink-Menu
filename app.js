@@ -261,6 +261,8 @@ function enterManager() {
   document.getElementById('menu-url-input').value   = MENU_URL  || '';
   // Show/hide Admin tab based on access level (owner PIN required when set)
   document.getElementById('tab-btn-admin').style.display = (OWNER_PIN === '' || isOwnerMode) ? '' : 'none';
+  // Show/hide Prune section (owner-only)
+  document.getElementById('prune-section').style.display = isOwnerMode ? '' : 'none';
   // Default to manager tab on entry
   switchTab('manager');
   updateDraftIndicator();
@@ -590,6 +592,15 @@ function removeItem(catId, itemId) {
   updateDraftIndicator();
 }
 
+async function pruneRemoved(catId) {
+  if (!isOwnerMode) return;
+  const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
+  cats.forEach(id => { if (menuState[id]) menuState[id].removed = []; });
+  await persistState();
+  renderDatabaseTab();
+  showToast('✅ Removed-item history pruned.', 'success');
+}
+
 function renameItem(catId, itemId, newName) {
   const name = newName.trim();
   if (!name) { removeItem(catId, itemId); return; }
@@ -744,6 +755,14 @@ function showToast(msg, type='info') {
 
 document.getElementById('modal-bg').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-bg')) closeModal();
+});
+
+document.getElementById('prune-removed-btn').addEventListener('click', () => {
+  const cat = document.getElementById('prune-cat-select').value;
+  const catDef = CATEGORY_DEFS.find(c => c.id === cat);
+  const label = catDef ? catDef.title : 'all categories';
+  if (!confirm(`Permanently delete removed-item history for ${label}? This cannot be undone.`)) return;
+  pruneRemoved(cat);
 });
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
