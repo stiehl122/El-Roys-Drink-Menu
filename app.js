@@ -592,13 +592,44 @@ function removeItem(catId, itemId) {
   updateDraftIndicator();
 }
 
+function renderPruneSection() {
+  if (!isOwnerMode) return;
+  const wrap = document.getElementById('prune-items-wrap');
+  const allRemoved = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.removed || []).forEach(item => {
+      allRemoved.push({ catId: cat.id, catTitle: cat.title, name: item.name });
+    });
+  });
+  allRemoved.sort((a, b) => a.name.localeCompare(b.name));
+  if (!allRemoved.length) {
+    wrap.innerHTML = '<p class="prune-empty">No removed items in history.</p>';
+    return;
+  }
+  wrap.innerHTML = allRemoved.map(({ catId, catTitle, name }) => `
+    <div class="prune-item">
+      <span class="prune-item-name">${escHtml(name)}</span>
+      <span class="prune-item-cat">${escHtml(catTitle)}</span>
+      <button class="btn-small btn-danger prune-del-btn" onclick="pruneSingleItem(${escHtml(JSON.stringify(catId))},${escHtml(JSON.stringify(name))})">×</button>
+    </div>`).join('');
+}
+
+async function pruneSingleItem(catId, itemName) {
+  if (!isOwnerMode) return;
+  if (!menuState[catId]) return;
+  menuState[catId].removed = menuState[catId].removed.filter(r => r.name !== itemName);
+  await persistState();
+  renderPruneSection();
+  showToast(`✅ "${itemName}" removed from history.`, 'success');
+}
+
 async function pruneRemoved(catId) {
   if (!isOwnerMode) return;
   const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
   cats.forEach(id => { if (menuState[id]) menuState[id].removed = []; });
   await persistState();
-  renderDatabaseTab();
-  showToast('✅ Removed-item history pruned.', 'success');
+  renderPruneSection();
+  showToast('✅ Removed-item history cleared.', 'success');
 }
 
 function renameItem(catId, itemId, newName) {
@@ -757,12 +788,9 @@ document.getElementById('modal-bg').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-bg')) closeModal();
 });
 
-document.getElementById('prune-removed-btn').addEventListener('click', () => {
-  const cat = document.getElementById('prune-cat-select').value;
-  const catDef = CATEGORY_DEFS.find(c => c.id === cat);
-  const label = catDef ? catDef.title : 'all categories';
-  if (!confirm(`Permanently delete removed-item history for ${label}? This cannot be undone.`)) return;
-  pruneRemoved(cat);
+document.getElementById('prune-all-btn').addEventListener('click', () => {
+  if (!confirm('Permanently delete ALL removed-item history? This cannot be undone.')) return;
+  pruneRemoved('all');
 });
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
@@ -771,7 +799,7 @@ function switchTab(name) {
     document.getElementById('tab-btn-' + t).classList.toggle('active', t === name);
     document.getElementById('tab-panel-' + t).classList.toggle('active', t === name);
   });
-  if (name === 'database') renderDatabaseTab();
+  if (name === 'database') { renderDatabaseTab(); renderPruneSection(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
