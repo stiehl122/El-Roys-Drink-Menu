@@ -280,6 +280,7 @@
   .db-filter-group { display: flex; gap: 4px; }
   .db-filter-btn { padding: 3px 10px; border-radius: 999px; border: 1px solid #444; background: transparent; font-size: 0.78rem; cursor: pointer; color: #ccc; transition: background 0.15s, color 0.15s; }
   .db-filter-btn.active { background: #c0392b; color: #fff; border-color: #c0392b; }
+<<<<<<< HEAD
 
   /* ── PRUNE SECTION (owner-only) ── */
   .prune-section { margin-top: 1.5rem; padding: 1rem; border: 1px solid rgba(192,57,43,0.3); border-radius: 8px; background: #2c1a1a; }
@@ -293,3 +294,5 @@
   .prune-empty { color: #666; font-size: .88rem; padding: .5rem 0 .25rem; margin: 0; }
   .btn-danger { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
   .btn-danger:hover { background: #e74c3c !important; border-color: #e74c3c !important; }
+=======
+>>>>>>> parent of 73c8087 (Merge pull request #25 from stiehl122/claude/add-database-prune-option-GX0M8)
