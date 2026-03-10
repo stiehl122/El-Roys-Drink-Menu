@@ -131,20 +131,12 @@
 
       <!-- PRUNE SECTION: Owner-only database cleanup -->
       <div id="prune-section" class="prune-section" style="display:none;">
-        <div class="section-label prune-section-label">Prune Database</div>
-        <p class="hint">Permanently removes data from Firebase. This cannot be undone.</p>
-        <div class="prune-group">
-          <span class="prune-label">Clear removed-item history (autocomplete trash)</span>
-          <select id="prune-cat-select" class="prune-select">
-            <option value="all">All Categories</option>
-            <option value="beer">Beers on Tap</option>
-            <option value="canned">Canned &amp; Bottled</option>
-            <option value="tequila">Infused Tequila</option>
-            <option value="frozenMarg">Frozen Marg</option>
-            <option value="monthlySpecials">Monthly Specials</option>
-          </select>
-          <button id="prune-removed-btn" class="btn-small btn-danger">Prune Removed Items</button>
+        <div class="prune-section-header">
+          <div class="section-label prune-section-label">Prune Database</div>
+          <button id="prune-all-btn" class="btn-small btn-danger">Clear All</button>
         </div>
+        <p class="hint">Permanently removes items from Firebase's removed-item history (autocomplete trash). Live menu items are unaffected.</p>
+        <div id="prune-items-wrap"></div>
       </div>
     </div>
 
