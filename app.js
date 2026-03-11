@@ -591,6 +591,8 @@ function removeItem(catId, itemId) {
 }
 
 function renderPruneSection() {
+  const section = document.getElementById('prune-section');
+  section.style.display = isOwnerMode ? '' : 'none';
   if (!isOwnerMode) return;
   const wrap = document.getElementById('prune-items-wrap');
   const allRemoved = [];
@@ -608,7 +610,7 @@ function renderPruneSection() {
     <div class="prune-item">
       <span class="prune-item-name">${escHtml(name)}</span>
       <span class="prune-item-cat">${escHtml(catTitle)}</span>
-      <button class="btn-small btn-danger prune-del-btn" onclick="pruneSingleItem(${escHtml(JSON.stringify(catId))},${escHtml(JSON.stringify(name))})">×</button>
+      <button class="btn-small btn-danger prune-del-btn" data-catid="${escHtml(catId)}" data-name="${escHtml(name)}">×</button>
     </div>`).join('');
 }
 
@@ -789,6 +791,12 @@ document.getElementById('modal-bg').addEventListener('click', e => {
 document.getElementById('prune-all-btn').addEventListener('click', () => {
   if (!confirm('Permanently delete ALL removed-item history? This cannot be undone.')) return;
   pruneRemoved('all');
+});
+
+document.getElementById('prune-items-wrap').addEventListener('click', e => {
+  const btn = e.target.closest('.prune-del-btn');
+  if (!btn) return;
+  pruneSingleItem(btn.dataset.catid, btn.dataset.name);
 });
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
