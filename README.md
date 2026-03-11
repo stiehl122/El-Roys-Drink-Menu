@@ -120,7 +120,8 @@ El-Roys-Drink-Menu/
 ├── index.html   # HTML structure and markup
 ├── app.js       # All JavaScript logic
 ├── style.css    # All CSS styles
-└── README.md    # Setup and usage documentation
+├── README.md    # Setup and usage documentation
+└── CLAUDE.md    # AI assistant instructions and project context
 ```
 
 All configuration is stored in the browser's `localStorage` and synced to Firebase. No build tools or package managers needed.
