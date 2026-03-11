@@ -41,6 +41,7 @@ Default manager PIN on first setup: `1234`. Set an Owner PIN during setup to loc
 
 ## Development Guidelines
 
+- **Always ask clarifying questions** before making changes if the request is ambiguous or could be interpreted in multiple ways.
 - **Do not introduce external dependencies.** The app must remain self-contained with no external libraries or package manager.
 - **No build tools.** Changes are made directly to `index.html`, `style.css`, or `app.js` as appropriate.
 - **Firebase config is entered at runtime** (stored in localStorage/Firebase), not hardcoded.
