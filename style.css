@@ -72,7 +72,8 @@
   .icon-tequila { background: rgba(18,133,120,0.15); }
   .icon-frozen { background: rgba(100,180,255,0.18); }
   .icon-special { background: rgba(190,67,48,0.12); }
-  .icon-canned  { background: rgba(140,200,120,0.18); }
+  .icon-canned    { background: rgba(140,200,120,0.18); }
+  .icon-cocktails { background: rgba(180,100,220,0.15); }
   .menu-section-title { font-family: 'Lilita One', cursive; font-size: 18px; letter-spacing: 1px; line-height: 1; color: var(--teal); }
   .menu-section-sub { font-family: 'Permanent Marker', cursive; font-size: 11px; color: var(--muted); margin-top: 2px; }
   .menu-items { display: flex; flex-direction: column; gap: 5px; }
@@ -293,3 +294,13 @@
   .prune-empty { color: #666; font-size: .88rem; padding: .5rem 0 .25rem; margin: 0; }
   .btn-danger { background: #c0392b !important; color: #fff !important; border-color: #c0392b !important; }
   .btn-danger:hover { background: #e74c3c !important; border-color: #e74c3c !important; }
+
+  /* ── COLLAPSIBLE CATEGORIES ── */
+  .collapsible-header { cursor: pointer; user-select: none; }
+  .collapsible-header:hover { opacity: 0.85; }
+  .category-chevron { font-size: 18px; color: var(--muted); margin-left: auto; flex-shrink: 0; transition: transform 0.2s; line-height: 1; opacity: 0.5; }
+  .menu-section:not(.collapsed) .category-chevron,
+  .cat-card:not(.collapsed) .category-chevron { transform: rotate(90deg); }
+  .menu-section.collapsed .menu-section-header { margin-bottom: 0; }
+  .menu-section.collapsed .menu-items { display: none; }
+  .cat-card.collapsed .current-section { display: none; }
