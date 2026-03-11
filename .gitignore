@@ -1,0 +1,5 @@
+# Local notification config — contains API keys/secrets, never commit
+.github/lib/config/notifications.json
+
+# macOS
+.DS_Store

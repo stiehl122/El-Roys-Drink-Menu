@@ -75,10 +75,30 @@ async function fbWrite(state) {
   if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
 }
 
+// ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
+// Fetches .github/lib/config/notifications.json for API keys that should never
+// be stored in Firebase. If the file is absent (404) or unreachable, falls back
+// silently to whatever is already in localStorage.
+async function loadLocalConfig() {
+  try {
+    const res = await fetch('.github/lib/config/notifications.json');
+    if (!res.ok) return; // 404 on production deploys — use localStorage fallback
+    const cfg = await res.json();
+    if (cfg.groupme && typeof cfg.groupme.botId === 'string' && cfg.groupme.botId.trim()) {
+      BOT_ID = cfg.groupme.botId.trim();
+      lsSet('hf_bot_id', BOT_ID);
+    }
+  } catch(e) {
+    // Network error or malformed JSON — silently continue with localStorage value
+  }
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
+
+  await loadLocalConfig();
 
   if (!FB_URL) {
     // No Firebase URL configured — show empty public view
@@ -116,7 +136,6 @@ async function init() {
       }
       if (data._config) {
         if (data._config.pin)     { MANAGER_PIN = data._config.pin;     lsSet('hf_pin', MANAGER_PIN); }
-        if (data._config.botId)   { BOT_ID      = data._config.botId;   lsSet('hf_bot_id', BOT_ID); }
         if (data._config.menuUrl) { MENU_URL     = data._config.menuUrl; lsSet('hf_menu_url', MENU_URL); }
         if (data._config.fbSecret) { FB_SECRET = data._config.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
         if (data._config.fbUrl)    { FB_URL    = data._config.fbUrl;    lsSet('hf_fb_url', FB_URL); }
@@ -371,13 +390,12 @@ async function saveFirebaseConfig() {
   await persistState(); // sync all config to Firebase so other devices pick it up
   showToast('✅ Firebase config saved!', 'success');
 }
-async function saveBotId() {
+function saveBotId() {
   const val = document.getElementById('bot-id-input').value.trim();
   if (!val || val.startsWith('•')) { showToast('No changes made.', 'info'); return; }
   BOT_ID = val; lsSet('hf_bot_id', BOT_ID);
   document.getElementById('bot-id-input').value = '••••••••••••••••';
-  await persistState();
-  showToast('✅ Bot ID saved!', 'success');
+  showToast('✅ Bot ID saved locally!', 'success');
 }
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
@@ -487,7 +505,7 @@ async function persistState() {
   if (!FB_SECRET || !FB_URL) return;
   try {
     // Always bundle current config so all devices stay in sync
-    menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, botId: BOT_ID, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
+    menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
     await fbWrite(menuState);
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
