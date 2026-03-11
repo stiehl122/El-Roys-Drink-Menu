@@ -29,7 +29,7 @@ let menuState = {};
 
 function defaultState() {
   const s = {};
-  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[], removed:[] }; });
+  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[] }; });
   return s;
 }
 
@@ -77,7 +77,20 @@ async function init() {
     if (data && typeof data === 'object') {
       CATEGORY_DEFS.forEach(c => {
         if (data[c.id]) menuState[c.id] = data[c.id];
-        if (!menuState[c.id].removed) menuState[c.id].removed = [];
+        // Ensure items array exists
+        if (!menuState[c.id].items) menuState[c.id].items = [];
+        // Default onMenu:true for any existing items that lack the field
+        menuState[c.id].items = menuState[c.id].items.map(i => ({ onMenu: true, ...i }));
+        // Migrate legacy removed[] entries to onMenu:false items
+        (menuState[c.id].removed || []).forEach(r => {
+          const alreadyExists = menuState[c.id].items.some(
+            i => i.name.trim().toLowerCase() === r.name.trim().toLowerCase()
+          );
+          if (!alreadyExists) {
+            menuState[c.id].items.push({ id: uid(), name: r.name, desc: r.desc || '', recipe: r.recipe || [], eightySixed: false, onMenu: false });
+          }
+        });
+        delete menuState[c.id].removed;
       });
       if (data._meta) {
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
@@ -161,8 +174,9 @@ function renderPublicView() {
     const state = menuState[cat.id];
     const section = document.createElement('div');
     section.className = 'menu-section';
-    const itemsHtml = state.items.length
-      ? state.items.map(i => {
+    const onMenuItems = state.items.filter(i => i.onMenu !== false);
+    const itemsHtml = onMenuItems.length
+      ? onMenuItems.map(i => {
           const is86      = !!i.eightySixed;
           const hasDesc   = !!(i.desc && i.desc.trim());
           const recipeIngredients = recipeArray(i.recipe);
@@ -356,11 +370,12 @@ function renderManagerCategories() {
 
 function renderManagerItems(catId) {
   const state = menuState[catId];
-  const lastSentNames = new Set(state.lastSent.map(i => i.name.trim().toLowerCase()));
+  const lastSentNames = new Set(state.lastSent.filter(i => i.onMenu !== false).map(i => i.name.trim().toLowerCase()));
+  const visibleItems = state.items.filter(i => i.onMenu !== false);
   const listEl = document.getElementById('mgr-items-' + catId);
   listEl.innerHTML = '';
-  if (!state.items.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
-  state.items.forEach(item => {
+  if (!visibleItems.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
+  visibleItems.forEach(item => {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
     const hasDesc   = !!(item.desc && item.desc.trim());
@@ -423,8 +438,22 @@ function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
   const name = input.value.trim();
   if (!name) return;
-  const stored = (menuState[catId].removed || []).find(r => r.name.toLowerCase() === name.toLowerCase());
-  menuState[catId].items.push({ id: uid(), name, desc: stored ? stored.desc : '', recipe: stored ? (stored.recipe || []) : [], eightySixed: false });
+  const nameLower = name.toLowerCase();
+  // Prevent duplicate visible items
+  const alreadyOnMenu = (menuState[catId].items || []).find(
+    i => i.onMenu !== false && i.name.toLowerCase() === nameLower
+  );
+  if (!alreadyOnMenu) {
+    // Re-add a previously removed item (flip onMenu instead of creating a new entry)
+    const offMenu = (menuState[catId].items || []).find(
+      i => i.onMenu === false && i.name.toLowerCase() === nameLower
+    );
+    if (offMenu) {
+      offMenu.onMenu = true;
+    } else {
+      menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
+    }
+  }
   input.value = '';
   hideAutocomplete(catId);
   renderManagerItems(catId);
@@ -440,7 +469,7 @@ function showAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
-  const matches = (menuState[catId].removed || []).filter(r => r.name.toLowerCase().startsWith(val.toLowerCase()));
+  const matches = (menuState[catId].items || []).filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
@@ -580,54 +609,53 @@ async function saveDesc(catId, itemId, val) {
 
 function removeItem(catId, itemId) {
   const item = menuState[catId].items.find(i => i.id === itemId);
-  if (item) {
-    const existing = menuState[catId].removed.find(r => r.name.toLowerCase() === item.name.toLowerCase());
-    if (existing) { existing.desc = item.desc; existing.recipe = recipeArray(item.recipe); }
-    else menuState[catId].removed.push({ name: item.name, desc: item.desc, recipe: recipeArray(item.recipe) });
-  }
-  menuState[catId].items = menuState[catId].items.filter(i => i.id !== itemId);
+  if (item) item.onMenu = false;
   renderManagerItems(catId);
   updateDraftIndicator();
 }
 
 function renderPruneSection() {
+  const section = document.getElementById('prune-section');
+  section.style.display = isOwnerMode ? '' : 'none';
   if (!isOwnerMode) return;
   const wrap = document.getElementById('prune-items-wrap');
-  const allRemoved = [];
+  const allOffMenu = [];
   CATEGORY_DEFS.forEach(cat => {
-    (menuState[cat.id]?.removed || []).forEach(item => {
-      allRemoved.push({ catId: cat.id, catTitle: cat.title, name: item.name });
+    (menuState[cat.id]?.items || []).filter(i => i.onMenu === false).forEach(item => {
+      allOffMenu.push({ catId: cat.id, catTitle: cat.title, name: item.name });
     });
   });
-  allRemoved.sort((a, b) => a.name.localeCompare(b.name));
-  if (!allRemoved.length) {
-    wrap.innerHTML = '<p class="prune-empty">No removed items in history.</p>';
+  allOffMenu.sort((a, b) => a.name.localeCompare(b.name));
+  if (!allOffMenu.length) {
+    wrap.innerHTML = '<p class="prune-empty">No off-menu items to remove.</p>';
     return;
   }
-  wrap.innerHTML = allRemoved.map(({ catId, catTitle, name }) => `
+  wrap.innerHTML = allOffMenu.map(({ catId, catTitle, name }) => `
     <div class="prune-item">
       <span class="prune-item-name">${escHtml(name)}</span>
       <span class="prune-item-cat">${escHtml(catTitle)}</span>
-      <button class="btn-small btn-danger prune-del-btn" onclick="pruneSingleItem(${escHtml(JSON.stringify(catId))},${escHtml(JSON.stringify(name))})">×</button>
+      <button class="btn-small btn-danger prune-del-btn" data-catid="${escHtml(catId)}" data-name="${escHtml(name)}">×</button>
     </div>`).join('');
 }
 
 async function pruneSingleItem(catId, itemName) {
   if (!isOwnerMode) return;
   if (!menuState[catId]) return;
-  menuState[catId].removed = menuState[catId].removed.filter(r => r.name !== itemName);
+  menuState[catId].items = menuState[catId].items.filter(
+    i => !(i.onMenu === false && i.name === itemName)
+  );
   await persistState();
   renderPruneSection();
-  showToast(`✅ "${itemName}" removed from history.`, 'success');
+  showToast(`✅ "${itemName}" permanently deleted.`, 'success');
 }
 
 async function pruneRemoved(catId) {
   if (!isOwnerMode) return;
   const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
-  cats.forEach(id => { if (menuState[id]) menuState[id].removed = []; });
+  cats.forEach(id => { if (menuState[id]) menuState[id].items = menuState[id].items.filter(i => i.onMenu !== false); });
   await persistState();
   renderPruneSection();
-  showToast('✅ Removed-item history cleared.', 'success');
+  showToast('✅ Off-menu items permanently deleted.', 'success');
 }
 
 function renameItem(catId, itemId, newName) {
@@ -663,21 +691,22 @@ function computeDiff() {
     const state = menuState[cat.id];
 
     // Compute 86/restored FIRST so we can exclude those names from add/remove
+    // Only consider items that are onMenu in both current and lastSent
     const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
     const eightySixed = [], restored = [];
     const eightySixedNames = new Set(), restoredNames = new Set();
-    state.items.forEach(item => {
+    state.items.filter(i => i.onMenu !== false).forEach(item => {
       const nameLow = item.name.trim().toLowerCase();
       const prev = lastByName.get(nameLow);
-      if (prev) {
+      if (prev && prev.onMenu !== false) {
         if (!prev.eightySixed &&  item.eightySixed) { eightySixed.push(item.name.trim()); eightySixedNames.add(nameLow); }
         if ( prev.eightySixed && !item.eightySixed) { restored.push(item.name.trim());    restoredNames.add(nameLow); }
       }
     });
 
-    // Add/remove: only count items that aren't just changing 86 state
-    const currentNames = state.items.filter(i => !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
-    const lastNames    = state.lastSent.filter(i => !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
+    // Add/remove: only count onMenu items that aren't just changing 86 state
+    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
+    const lastNames    = state.lastSent.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
     const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
     const added   = currentNames.filter(n => !lastSet.has(n.toLowerCase())   && !restoredNames.has(n.toLowerCase()));
@@ -787,8 +816,14 @@ document.getElementById('modal-bg').addEventListener('click', e => {
 });
 
 document.getElementById('prune-all-btn').addEventListener('click', () => {
-  if (!confirm('Permanently delete ALL removed-item history? This cannot be undone.')) return;
+  if (!confirm('Permanently delete ALL off-menu items? This cannot be undone.')) return;
   pruneRemoved('all');
+});
+
+document.getElementById('prune-items-wrap').addEventListener('click', e => {
+  const btn = e.target.closest('.prune-del-btn');
+  if (!btn) return;
+  pruneSingleItem(btn.dataset.catid, btn.dataset.name);
 });
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
@@ -818,10 +853,7 @@ function renderDatabaseTab() {
     let totalItems = 0;
 
     CATEGORY_DEFS.forEach(cat => {
-      const all = [
-        ...(menuState[cat.id]?.items   || []).map(i => ({...i, onMenu: true})),
-        ...(menuState[cat.id]?.removed || []).map(i => ({...i, onMenu: false}))
-      ];
+      const all = (menuState[cat.id]?.items || []);
       totalItems += all.length;
       all.forEach(item => {
         const recipe = recipeArray(item.recipe);
