@@ -13,6 +13,8 @@ let isFirstSetup = !FB_SECRET || !FB_URL; // Both Firebase URL and Secret are re
 let isManagerMode = false;
 let pinEntry = '';
 let syncInterval = null;
+let _pinFailCount = 0;
+let _pinLockedUntil = 0;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const CATEGORY_DEFS = [
@@ -36,6 +38,20 @@ function defaultState() {
 
 function uid() { return Math.random().toString(36).slice(2,9); }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function lsSet(key, val) {
+  try { localStorage.setItem(key, val); }
+  catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
+}
+function findItem(catId, itemId) {
+  return menuState[catId]?.items.find(i => i.id === itemId) ?? null;
+}
+let _diffCache = null;
+let _diffDirty = true;
+function invalidateDiff() { _diffDirty = true; }
+function getCachedDiff() {
+  if (_diffDirty) { _diffCache = computeDiff(); _diffDirty = false; }
+  return _diffCache;
+}
 
 // ─── FIREBASE REALTIME DATABASE API ───────────────────────────────────────────
 // Firebase stores the entire menuState object at /menu.json.
@@ -96,15 +112,15 @@ async function init() {
       if (data._meta) {
         menuState._meta = data._meta;
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
-        if (savedTs) localStorage.setItem('hf_last_updated_ts', savedTs);
+        if (savedTs) lsSet('hf_last_updated_ts', savedTs);
       }
       if (data._config) {
-        if (data._config.pin)     { MANAGER_PIN = data._config.pin;     localStorage.setItem('hf_pin', MANAGER_PIN); }
-        if (data._config.botId)   { BOT_ID      = data._config.botId;   localStorage.setItem('hf_bot_id', BOT_ID); }
-        if (data._config.menuUrl) { MENU_URL     = data._config.menuUrl; localStorage.setItem('hf_menu_url', MENU_URL); }
-        if (data._config.fbSecret) { FB_SECRET = data._config.fbSecret; localStorage.setItem('hf_fb_secret', FB_SECRET); }
-        if (data._config.fbUrl)    { FB_URL    = data._config.fbUrl;    localStorage.setItem('hf_fb_url', FB_URL); }
-        if (data._config.ownerPin) { OWNER_PIN = data._config.ownerPin; localStorage.setItem('hf_owner_pin', OWNER_PIN); }
+        if (data._config.pin)     { MANAGER_PIN = data._config.pin;     lsSet('hf_pin', MANAGER_PIN); }
+        if (data._config.botId)   { BOT_ID      = data._config.botId;   lsSet('hf_bot_id', BOT_ID); }
+        if (data._config.menuUrl) { MENU_URL     = data._config.menuUrl; lsSet('hf_menu_url', MENU_URL); }
+        if (data._config.fbSecret) { FB_SECRET = data._config.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
+        if (data._config.fbUrl)    { FB_URL    = data._config.fbUrl;    lsSet('hf_fb_url', FB_URL); }
+        if (data._config.ownerPin) { OWNER_PIN = data._config.ownerPin; lsSet('hf_owner_pin', OWNER_PIN); }
       }
     }
     showPublicView();
@@ -142,13 +158,17 @@ function startPolling() {
     try {
       const data = await fbRead();
       if (!data || typeof data !== 'object') return;
+      const before = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
-      if (data._meta) {
-        const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
-        if (savedTs) { menuState._meta = data._meta; localStorage.setItem('hf_last_updated_ts', savedTs); }
+      const after = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
+      const newTs = data._meta && (data._meta.lastUpdatedTs || data._meta.lastSentTs);
+      const oldTs = menuState._meta && (menuState._meta.lastUpdatedTs || menuState._meta.lastSentTs);
+      const metaChanged = newTs && newTs !== oldTs;
+      if (after !== before || metaChanged) {
+        if (data._meta) { menuState._meta = data._meta; lsSet('hf_last_updated_ts', newTs || ''); }
+        renderPublicView();
+        updateLastUpdatedLabel();
       }
-      renderPublicView();
-      updateLastUpdatedLabel();
     } catch(e) { /* silently ignore transient poll failures */ }
   }, 60000);
 }
@@ -252,6 +272,12 @@ function onManagerBtnClick() {
 }
 function openPinOverlay() {
   document.getElementById('pin-overlay').classList.add('open');
+  const remaining = Math.ceil((_pinLockedUntil - Date.now()) / 1000);
+  if (remaining > 0) {
+    const errEl = document.getElementById('pin-error');
+    errEl.textContent = `Too many attempts. Try again in ${remaining}s.`;
+    errEl.classList.add('visible');
+  }
   // Focus synchronously — must stay in same user-gesture tick for iOS keyboard to pop up
   const hi = document.getElementById('pin-hidden-input');
   hi.value = '';
@@ -264,6 +290,7 @@ function closePinOverlay() {
   const hi = document.getElementById('pin-hidden-input'); hi.value = ''; hi.blur();
 }
 function pinPress(d) {
+  if (Date.now() < _pinLockedUntil) return;
   if (pinEntry.length >= 4) return;
   pinEntry += d; updateDots();
   if (pinEntry.length === 4) setTimeout(checkPin, 100);
@@ -277,12 +304,22 @@ function updateDots() {
   }
 }
 function checkPin() {
-  if (OWNER_PIN !== '' && pinEntry === OWNER_PIN) { isOwnerMode = true; closePinOverlay(); enterManager(); }
-  else if (pinEntry === MANAGER_PIN) { isOwnerMode = false; closePinOverlay(); enterManager(); }
+  if (Date.now() < _pinLockedUntil) return;
+  if (OWNER_PIN !== '' && pinEntry === OWNER_PIN) { _pinFailCount = 0; isOwnerMode = true; closePinOverlay(); enterManager(); }
+  else if (pinEntry === MANAGER_PIN) { _pinFailCount = 0; isOwnerMode = false; closePinOverlay(); enterManager(); }
   else {
+    _pinFailCount++;
     for (let i=0;i<4;i++) document.getElementById('d'+i).classList.add('error');
-    document.getElementById('pin-error').classList.add('visible');
-    setTimeout(() => { pinEntry=''; updateDots(); document.getElementById('pin-error').classList.remove('visible'); }, 1200);
+    const errEl = document.getElementById('pin-error');
+    if (_pinFailCount >= 5) {
+      _pinLockedUntil = Date.now() + 30000;
+      _pinFailCount = 0;
+      errEl.textContent = 'Too many attempts. Try again in 30s.';
+    } else {
+      errEl.textContent = 'Incorrect PIN';
+    }
+    errEl.classList.add('visible');
+    setTimeout(() => { pinEntry=''; updateDots(); errEl.classList.remove('visible'); errEl.textContent = 'Incorrect PIN'; }, 1200);
   }
 }
 
@@ -325,8 +362,8 @@ async function saveFirebaseConfig() {
   const urlVal = document.getElementById('fb-url-input').value.trim().replace(/\/+$/, '');
   const secVal = document.getElementById('fb-secret-input').value.trim();
   let changed = false;
-  if (urlVal) { FB_URL = urlVal; localStorage.setItem('hf_fb_url', FB_URL); changed = true; }
-  if (secVal && !secVal.startsWith('•')) { FB_SECRET = secVal; localStorage.setItem('hf_fb_secret', FB_SECRET); changed = true; }
+  if (urlVal) { FB_URL = urlVal; lsSet('hf_fb_url', FB_URL); changed = true; }
+  if (secVal && !secVal.startsWith('•')) { FB_SECRET = secVal; lsSet('hf_fb_secret', FB_SECRET); changed = true; }
   if (!changed) { showToast('No changes made.', 'info'); return; }
   if (FB_SECRET) document.getElementById('fb-secret-input').value = '••••••••••••••••';
   document.getElementById('setup-banner').style.display = 'none';
@@ -337,7 +374,7 @@ async function saveFirebaseConfig() {
 async function saveBotId() {
   const val = document.getElementById('bot-id-input').value.trim();
   if (!val || val.startsWith('•')) { showToast('No changes made.', 'info'); return; }
-  BOT_ID = val; localStorage.setItem('hf_bot_id', BOT_ID);
+  BOT_ID = val; lsSet('hf_bot_id', BOT_ID);
   document.getElementById('bot-id-input').value = '••••••••••••••••';
   await persistState();
   showToast('✅ Bot ID saved!', 'success');
@@ -345,26 +382,21 @@ async function saveBotId() {
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
   if (!val) { showToast('Enter a URL first.', 'info'); return; }
-  MENU_URL = val; localStorage.setItem('hf_menu_url', MENU_URL);
+  MENU_URL = val; lsSet('hf_menu_url', MENU_URL);
   await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
-async function savePin() {
-  const val = document.getElementById('new-pin-input').value.trim();
-  if (!/^\d{4}$/.test(val)) { showToast('PIN must be exactly 4 digits.', 'error'); return; }
-  MANAGER_PIN = val; localStorage.setItem('hf_pin', MANAGER_PIN);
-  document.getElementById('new-pin-input').value = '';
+async function _savePinField(inputId, isOwner) {
+  const val = document.getElementById(inputId).value.trim();
+  if (!/^\d{4}$/.test(val)) { showToast(`${isOwner ? 'Owner ' : ''}PIN must be exactly 4 digits.`, 'error'); return; }
+  if (isOwner) { OWNER_PIN = val; lsSet('hf_owner_pin', OWNER_PIN); }
+  else         { MANAGER_PIN = val; lsSet('hf_pin', MANAGER_PIN); }
+  document.getElementById(inputId).value = '';
   await persistState();
-  showToast('✅ PIN updated!', 'success');
+  showToast(`✅ ${isOwner ? 'Owner ' : ''}PIN updated!`, 'success');
 }
-async function saveOwnerPin() {
-  const val = document.getElementById('owner-pin-input').value.trim();
-  if (!/^\d{4}$/.test(val)) { showToast('Owner PIN must be exactly 4 digits.', 'error'); return; }
-  OWNER_PIN = val; localStorage.setItem('hf_owner_pin', OWNER_PIN);
-  document.getElementById('owner-pin-input').value = '';
-  await persistState();
-  showToast('✅ Owner PIN updated!', 'success');
-}
+async function savePin()      { await _savePinField('new-pin-input', false); }
+async function saveOwnerPin() { await _savePinField('owner-pin-input', true); }
 
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
 function renderManagerCategories() {
@@ -457,14 +489,18 @@ async function persistState() {
     // Always bundle current config so all devices stay in sync
     menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, botId: BOT_ID, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
     await fbWrite(menuState);
+    const syncEl = document.getElementById('sync-status');
+    if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
   } catch(e) {
+    const syncEl = document.getElementById('sync-status');
+    if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
     showToast('⚠️ Cloud save failed — check Firebase config in Admin settings.', 'error');
   }
 }
 async function saveMenu() {
   const ts = Date.now();
   menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-  localStorage.setItem('hf_last_updated_ts', ts.toString());
+  lsSet('hf_last_updated_ts', ts.toString());
   await persistState();
   updateLastUpdatedLabel();
   showToast('✅ Menu saved!', 'success');
@@ -492,6 +528,7 @@ function addItem(catId) {
   }
   input.value = '';
   hideAutocomplete(catId);
+  invalidateDiff();
   renderManagerItems(catId);
   input.focus();
   updateDraftIndicator();
@@ -555,9 +592,10 @@ function handleAddItemKeydown(event, catId) {
 
 // ─── 86 TOGGLE ────────────────────────────────────────────────────────────────
 function toggle86(catId, itemId) {
-  const item = menuState[catId].items.find(i => i.id === itemId);
+  const item = findItem(catId, itemId);
   if (!item) return;
   item.eightySixed = !item.eightySixed;
+  invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
@@ -588,7 +626,7 @@ function toggleItemRecipe(itemId) {
 }
 
 function renderRecipeIngredients(catId, itemId) {
-  const item = menuState[catId].items.find(i => i.id === itemId);
+  const item = findItem(catId, itemId);
   if (!item) return;
   const list = document.getElementById('recipe-list-' + itemId);
   if (!list) return;
@@ -605,7 +643,7 @@ async function addIngredient(catId, itemId) {
   const input = document.getElementById('ingredient-input-' + itemId);
   const val = input.value.trim();
   if (!val) return;
-  const item = menuState[catId].items.find(i => i.id === itemId);
+  const item = findItem(catId, itemId);
   if (!item) return;
   if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
   item.recipe.push(val);
@@ -618,7 +656,7 @@ async function addIngredient(catId, itemId) {
 }
 
 async function removeIngredient(catId, itemId, idx) {
-  const item = menuState[catId].items.find(i => i.id === itemId);
+  const item = findItem(catId, itemId);
   if (!item || !Array.isArray(item.recipe)) return;
   item.recipe.splice(idx, 1);
   renderRecipeIngredients(catId, itemId);
@@ -632,7 +670,7 @@ function handleIngredientKeydown(event, catId, itemId) {
 }
 
 async function saveDesc(catId, itemId, val) {
-  const item = menuState[catId].items.find(i => i.id === itemId);
+  const item = findItem(catId, itemId);
   if (!item) return;
   const desc = val.trim();
   if (item.desc !== desc) {
@@ -644,8 +682,11 @@ async function saveDesc(catId, itemId, val) {
 }
 
 function removeItem(catId, itemId) {
-  const item = menuState[catId].items.find(i => i.id === itemId);
-  if (item) item.onMenu = false;
+  const item = findItem(catId, itemId);
+  if (!item) return;
+  if (!confirm(`Remove "${item.name}" from the menu?`)) return;
+  item.onMenu = false;
+  invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
 }
@@ -697,15 +738,15 @@ async function pruneRemoved(catId) {
 function renameItem(catId, itemId, newName) {
   const name = newName.trim();
   if (!name) { removeItem(catId, itemId); return; }
-  const item = menuState[catId].items.find(i => i.id === itemId);
-  if (item && item.name !== name) { item.name = name; renderManagerItems(catId); updateDraftIndicator(); }
+  const item = findItem(catId, itemId);
+  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); updateDraftIndicator(); }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
-  const diff = computeDiff();
+  const diff = getCachedDiff();
   const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
   if (total > 0) {
     btn.innerHTML = `🔥 SEND UPDATE <span style="font-size:13px;opacity:0.85;">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
@@ -757,7 +798,7 @@ function computeDiff() {
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
 function openPreview() {
-  const diff = computeDiff();
+  const diff = getCachedDiff();
   const content = document.getElementById('preview-content');
   const confirmBtn = document.getElementById('confirm-btn');
   content.innerHTML = '';
@@ -785,7 +826,7 @@ function closeModal() { document.getElementById('modal-bg').classList.remove('op
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
 async function sendUpdate() {
   if (!BOT_ID) { closeModal(); showToast('⚠️ Set your GroupMe Bot ID first!', 'error'); return; }
-  const diff = computeDiff();
+  const diff = getCachedDiff();
   if (!diff.length) { closeModal(); return; }
 
   const now = new Date();
@@ -793,13 +834,14 @@ async function sendUpdate() {
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
 
   // Single update message — all changes grouped by category, with menu link at bottom
+  const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
   let lines = [`🔥 DRINK MENU UPDATES — ${dateStr} ${timeStr}`, ''];
   diff.forEach(s => {
     lines.push(`${s.icon} ${s.label.toUpperCase()}`);
-    s.added.forEach(n       => lines.push(`  ✅ + ${n}`));
-    s.removed.forEach(n     => lines.push(`  ❌ - ${n}`));
-    s.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${n}`));
-    s.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(s.id)}: ${n}`));
+    s.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));
+    s.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
+    s.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
+    s.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(s.id)}: ${cleanName(n)}`));
     lines.push('');
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
@@ -822,7 +864,8 @@ async function sendUpdate() {
         menuState[cat.id].lastSent = menuState[cat.id].items.map(i => ({...i}));
       });
       menuState._meta = { lastUpdatedTs: ts.toString(), lastSentCategories: diff.map(d => d.id) };
-      localStorage.setItem('hf_last_updated_ts', ts.toString());
+      lsSet('hf_last_updated_ts', ts.toString());
+      invalidateDiff();
       await persistState();
       updateLastUpdatedLabel();
       renderManagerCategories();
