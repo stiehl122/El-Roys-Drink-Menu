@@ -217,6 +217,7 @@ function renderPublicView() {
       <div class="menu-items">${itemsHtml}</div>`;
     container.appendChild(section);
   });
+  updateCollapseAllBtn();
 }
 
 function togglePublicDesc(el) {
@@ -226,6 +227,22 @@ function togglePublicDesc(el) {
 function togglePublicCategory(catId) {
   const section = document.getElementById('pub-section-' + catId);
   if (section) section.classList.toggle('collapsed');
+  updateCollapseAllBtn();
+}
+
+function toggleAllCategories() {
+  const sections = document.querySelectorAll('#public-categories .menu-section');
+  const anyExpanded = Array.from(sections).some(s => !s.classList.contains('collapsed'));
+  sections.forEach(s => s.classList.toggle('collapsed', anyExpanded));
+  updateCollapseAllBtn();
+}
+
+function updateCollapseAllBtn() {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+  const sections = document.querySelectorAll('#public-categories .menu-section');
+  const allCollapsed = Array.from(sections).every(s => s.classList.contains('collapsed'));
+  btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
 }
 
 // ─── PIN ──────────────────────────────────────────────────────────────────────
