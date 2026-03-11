@@ -590,7 +590,6 @@ function removeItem(catId, itemId) {
   updateDraftIndicator();
 }
 
-<<<<<<< HEAD
 function renderPruneSection() {
   if (!isOwnerMode) return;
   const wrap = document.getElementById('prune-items-wrap');
@@ -631,8 +630,6 @@ async function pruneRemoved(catId) {
   showToast('✅ Removed-item history cleared.', 'success');
 }
 
-=======
->>>>>>> parent of 73c8087 (Merge pull request #25 from stiehl122/claude/add-database-prune-option-GX0M8)
 function renameItem(catId, itemId, newName) {
   const name = newName.trim();
   if (!name) { removeItem(catId, itemId); return; }
@@ -789,14 +786,11 @@ document.getElementById('modal-bg').addEventListener('click', e => {
   if (e.target === document.getElementById('modal-bg')) closeModal();
 });
 
-<<<<<<< HEAD
 document.getElementById('prune-all-btn').addEventListener('click', () => {
   if (!confirm('Permanently delete ALL removed-item history? This cannot be undone.')) return;
   pruneRemoved('all');
 });
 
-=======
->>>>>>> parent of 73c8087 (Merge pull request #25 from stiehl122/claude/add-database-prune-option-GX0M8)
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchTab(name) {
   ['manager','admin','database'].forEach(t => {
