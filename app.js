@@ -17,8 +17,9 @@ let syncInterval = null;
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const CATEGORY_DEFS = [
   { id:'beer',    icon:'🍺', iconClass:'icon-beer',    title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
-  { id:'canned',  icon:'🍻', iconClass:'icon-canned',  title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
-  { id:'tequila', icon:'🌶️', iconClass:'icon-tequila', title:'Infused Tequila', sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
+  { id:'canned',    icon:'🍻', iconClass:'icon-canned',    title:'Canned & Bottled', sub:'Canned & bottled offerings',      placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
+  { id:'cocktails', icon:'🍹', iconClass:'icon-cocktails', title:'Cocktails',        sub:'Craft cocktail offerings',        placeholder:'e.g. Paloma, Spicy Margarita...' },
+  { id:'tequila',   icon:'🌶️', iconClass:'icon-tequila',   title:'Infused Tequila',  sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
   { id:'frozen',  icon:'🧊', iconClass:'icon-frozen',  title:'Frozen Marg',     sub:'Current frozen margarita flavor', placeholder:'e.g. Strawberry Basil...' },
   { id:'special', icon:'⭐', iconClass:'icon-special', title:'Monthly Specials', sub:'Featured cocktails & promos',    placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
 ];
@@ -93,6 +94,7 @@ async function init() {
         delete menuState[c.id].removed;
       });
       if (data._meta) {
+        menuState._meta = data._meta;
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
         if (savedTs) localStorage.setItem('hf_last_updated_ts', savedTs);
       }
@@ -170,10 +172,14 @@ function updateLastUpdatedLabel() {
 function renderPublicView() {
   const container = document.getElementById('public-categories');
   container.innerHTML = '';
+  const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
   CATEGORY_DEFS.forEach(cat => {
     const state = menuState[cat.id];
     const section = document.createElement('div');
-    section.className = 'menu-section';
+    section.id = 'pub-section-' + cat.id;
+    // If a prior send exists, expand only categories that were in it; otherwise expand all
+    const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
+    section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
     const onMenuItems = state.items.filter(i => i.onMenu !== false);
     const itemsHtml = onMenuItems.length
       ? onMenuItems.map(i => {
@@ -203,17 +209,40 @@ function renderPublicView() {
         }).join('')
       : `<div class="empty-menu">Nothing listed yet.</div>`;
     section.innerHTML = `
-      <div class="menu-section-header">
+      <div class="menu-section-header collapsible-header" onclick="togglePublicCategory('${cat.id}')">
         <div class="menu-icon ${cat.iconClass}">${cat.icon}</div>
         <div><div class="menu-section-title">${cat.title}</div><div class="menu-section-sub">${cat.sub}</div></div>
+        <span class="category-chevron">›</span>
       </div>
       <div class="menu-items">${itemsHtml}</div>`;
     container.appendChild(section);
   });
+  updateCollapseAllBtn();
 }
 
 function togglePublicDesc(el) {
   el.classList.toggle('expanded');
+}
+
+function togglePublicCategory(catId) {
+  const section = document.getElementById('pub-section-' + catId);
+  if (section) section.classList.toggle('collapsed');
+  updateCollapseAllBtn();
+}
+
+function toggleAllCategories() {
+  const sections = document.querySelectorAll('#public-categories .menu-section');
+  const anyExpanded = Array.from(sections).some(s => !s.classList.contains('collapsed'));
+  sections.forEach(s => s.classList.toggle('collapsed', anyExpanded));
+  updateCollapseAllBtn();
+}
+
+function updateCollapseAllBtn() {
+  const btn = document.getElementById('collapse-all-btn');
+  if (!btn) return;
+  const sections = document.querySelectorAll('#public-categories .menu-section');
+  const allCollapsed = Array.from(sections).every(s => s.classList.contains('collapsed'));
+  btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
 }
 
 // ─── PIN ──────────────────────────────────────────────────────────────────────
@@ -344,10 +373,12 @@ function renderManagerCategories() {
   CATEGORY_DEFS.forEach(cat => {
     const card = document.createElement('div');
     card.className = 'cat-card';
+    card.id = 'mgr-card-' + cat.id;
     card.innerHTML = `
-      <div class="cat-header">
+      <div class="cat-header collapsible-header" onclick="toggleManagerCategory('${cat.id}')">
         <div class="cat-icon ${cat.iconClass}">${cat.icon}</div>
         <div><div class="cat-title">${cat.title}</div><div class="cat-sub">${cat.sub}</div></div>
+        <span class="category-chevron">›</span>
       </div>
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
@@ -366,6 +397,11 @@ function renderManagerCategories() {
     container.appendChild(card);
     renderManagerItems(cat.id);
   });
+}
+
+function toggleManagerCategory(catId) {
+  const card = document.getElementById('mgr-card-' + catId);
+  if (card) card.classList.toggle('collapsed');
 }
 
 function renderManagerItems(catId) {
@@ -785,7 +821,7 @@ async function sendUpdate() {
       CATEGORY_DEFS.forEach(cat => {
         menuState[cat.id].lastSent = menuState[cat.id].items.map(i => ({...i}));
       });
-      menuState._meta = { lastUpdatedTs: ts.toString() };
+      menuState._meta = { lastUpdatedTs: ts.toString(), lastSentCategories: diff.map(d => d.id) };
       localStorage.setItem('hf_last_updated_ts', ts.toString());
       await persistState();
       updateLastUpdatedLabel();
