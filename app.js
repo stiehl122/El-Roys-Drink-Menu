@@ -76,12 +76,12 @@ async function fbWrite(state) {
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
-// Fetches .github/lib/config/notifications.json for API keys that should never
+// Fetches lib/config/notifications.json for API keys that should never
 // be stored in Firebase or localStorage. If the file is absent (404) or
 // unreachable, BOT_ID stays empty until set via the admin UI.
 async function loadLocalConfig() {
   try {
-    const res = await fetch('.github/lib/config/notifications.json');
+    const res = await fetch('lib/config/notifications.json');
     if (!res.ok) return; // 404 on production deploys — BOT_ID stays empty
     const cfg = await res.json();
     if (cfg.groupme && typeof cfg.groupme.botId === 'string' && cfg.groupme.botId.trim()) {

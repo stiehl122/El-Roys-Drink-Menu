@@ -83,7 +83,7 @@
           <input type="password" id="bot-id-input" placeholder="Paste your Bot ID here..."/>
           <button class="btn-small" onclick="saveBotId()">Save</button>
         </div>
-        <div class="hint">Not stored in Firebase or localStorage. Saving shows the updated <code>notifications.json</code> to copy into <code>.github/lib/config/</code> (gitignored).</div>
+        <div class="hint">Not stored in Firebase or localStorage. Saving shows the updated <code>notifications.json</code> to copy into <code>lib/config/</code> (gitignored).</div>
       </div>
 
       <div class="config-card">
@@ -175,7 +175,7 @@
 <div class="modal-bg" id="config-modal-bg">
   <div class="modal">
     <h2>UPDATE CONFIG FILE</h2>
-    <div class="modal-sub">Copy this into <code>.github/lib/config/notifications.json</code> and reload the page.</div>
+    <div class="modal-sub">Copy this into <code>lib/config/notifications.json</code> and reload the page.</div>
     <textarea id="config-json-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
