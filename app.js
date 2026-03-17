@@ -4,7 +4,7 @@
 let MANAGER_PIN = localStorage.getItem('hf_pin') || '1234';
 let OWNER_PIN   = localStorage.getItem('hf_owner_pin') || '';
 let isOwnerMode = false;
-let BOT_ID      = localStorage.getItem('hf_bot_id') || '';
+let BOT_ID      = '';
 let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
 let FB_SECRET   = localStorage.getItem('hf_fb_secret') || ''; // Firebase Database Secret (write credential)
 let FB_URL      = localStorage.getItem('hf_fb_url')    || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com'; // Firebase Realtime DB URL
@@ -75,10 +75,42 @@ async function fbWrite(state) {
   if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
 }
 
+// ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
+// Fetches lib/config/notifications.json for API keys that should never
+// be stored in Firebase or localStorage. If the file is absent (404) or
+// unreachable, BOT_ID stays empty until set via the admin UI.
+async function loadLocalConfig() {
+  try {
+    const res = await fetch('lib/config/notifications.json');
+    if (!res.ok) return; // 404 on production deploys — BOT_ID stays empty
+    const cfg = await res.json();
+    if (cfg.groupme && typeof cfg.groupme.botId === 'string' && cfg.groupme.botId.trim()) {
+      BOT_ID = cfg.groupme.botId.trim();
+    }
+  } catch(e) {
+    // Network error or malformed JSON — BOT_ID stays empty
+  }
+}
+
+function showConfigModal() {
+  const json = JSON.stringify({ groupme: { botId: BOT_ID } }, null, 2);
+  document.getElementById('config-json-output').value = json;
+  document.getElementById('config-modal-bg').classList.add('open');
+}
+function closeConfigModal() {
+  document.getElementById('config-modal-bg').classList.remove('open');
+}
+async function copyConfigJson() {
+  await navigator.clipboard.writeText(document.getElementById('config-json-output').value);
+  showToast('Copied!', 'success');
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
+
+  await loadLocalConfig();
 
   if (!FB_URL) {
     // No Firebase URL configured — show empty public view
@@ -116,7 +148,6 @@ async function init() {
       }
       if (data._config) {
         if (data._config.pin)     { MANAGER_PIN = data._config.pin;     lsSet('hf_pin', MANAGER_PIN); }
-        if (data._config.botId)   { BOT_ID      = data._config.botId;   lsSet('hf_bot_id', BOT_ID); }
         if (data._config.menuUrl) { MENU_URL     = data._config.menuUrl; lsSet('hf_menu_url', MENU_URL); }
         if (data._config.fbSecret) { FB_SECRET = data._config.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
         if (data._config.fbUrl)    { FB_URL    = data._config.fbUrl;    lsSet('hf_fb_url', FB_URL); }
@@ -371,13 +402,12 @@ async function saveFirebaseConfig() {
   await persistState(); // sync all config to Firebase so other devices pick it up
   showToast('✅ Firebase config saved!', 'success');
 }
-async function saveBotId() {
+function saveBotId() {
   const val = document.getElementById('bot-id-input').value.trim();
   if (!val || val.startsWith('•')) { showToast('No changes made.', 'info'); return; }
-  BOT_ID = val; lsSet('hf_bot_id', BOT_ID);
+  BOT_ID = val;
   document.getElementById('bot-id-input').value = '••••••••••••••••';
-  await persistState();
-  showToast('✅ Bot ID saved!', 'success');
+  showConfigModal();
 }
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
@@ -487,7 +517,7 @@ async function persistState() {
   if (!FB_SECRET || !FB_URL) return;
   try {
     // Always bundle current config so all devices stay in sync
-    menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, botId: BOT_ID, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
+    menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
     await fbWrite(menuState);
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
