@@ -1,4 +1,8 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
+const APP_VERSION = 'v0.4';
+const IS_PREVIEW = window.location.hostname.includes('vercel.app') &&
+  !/^el-roys[^-]/.test(window.location.hostname);
+
 let BOT_ID    = '';
 let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
 let FB_SECRET = '';
@@ -653,15 +657,35 @@ function stopPolling() {
   if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
 }
 
+function getLastUpdatedTs() {
+  return (menuState._meta && menuState._meta.lastUpdatedTs) ||
+    localStorage.getItem('hf_last_updated_ts') ||
+    localStorage.getItem('hf_last_sent_ts');
+}
+
+function formatUpdatedAt(ts, prefix) {
+  const d = new Date(parseInt(ts));
+  return prefix +
+    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+    ' at ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 function updateLastUpdatedLabel() {
-  const ts = (menuState._meta && menuState._meta.lastUpdatedTs) || localStorage.getItem('hf_last_updated_ts') || localStorage.getItem('hf_last_sent_ts');
+  const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
-  if (ts) {
-    const d = new Date(parseInt(ts));
-    el.textContent = 'Last Updated: ' + d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' at ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  } else {
-    el.textContent = 'Last Updated: —';
-  }
+  el.textContent = ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+  renderFooter();
+}
+
+function renderFooter() {
+  const vEl = document.getElementById('footer-version');
+  const tsEl = document.getElementById('footer-last-updated');
+  if (!vEl || !tsEl) return;
+  vEl.innerHTML = APP_VERSION +
+    (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
+  const ts = getLastUpdatedTs();
+  tsEl.textContent = ts ? formatUpdatedAt(ts, 'Updated ') : '';
 }
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
