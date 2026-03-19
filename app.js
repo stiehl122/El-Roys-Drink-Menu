@@ -262,7 +262,25 @@ function onFontSelectChange(selectId) {
 function updateColorLabel(inputId) {
   const input = document.getElementById(inputId);
   const label = document.getElementById(inputId + '-label');
-  if (input && label) label.textContent = input.value;
+  if (input && label) label.value = input.value;
+}
+
+function syncHexInput(colorInputId) {
+  const hexInput = document.getElementById(colorInputId + '-label');
+  const colorInput = document.getElementById(colorInputId);
+  if (!hexInput || !colorInput) return;
+  const val = hexInput.value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+    colorInput.value = val;
+    // Live preview: apply immediately without saving
+    const d = {
+      ...currentDesign,
+      primaryColor: document.getElementById('design-primary-color')?.value || currentDesign.primaryColor,
+      accentColor:  document.getElementById('design-accent-color')?.value  || currentDesign.accentColor,
+      bgColor:      document.getElementById('design-bg-color')?.value      || currentDesign.bgColor,
+    };
+    applyDesign(d);
+  }
 }
 
 function handleLogoUpload(event) {
