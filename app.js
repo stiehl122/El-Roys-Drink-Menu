@@ -4,8 +4,8 @@ let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
 let FB_SECRET = localStorage.getItem('hf_fb_secret') || '';
 let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
-let SUPABASE_URL      = localStorage.getItem('hf_supabase_url') || '';
-let SUPABASE_ANON_KEY = localStorage.getItem('hf_supabase_anon_key') || '';
+let SUPABASE_URL      = '';
+let SUPABASE_ANON_KEY = '';
 let currentUser = null; // { uid, email, accessToken, refreshToken, role, expiresAt }
 
 let isFirstSetup  = !FB_SECRET || !FB_URL;
@@ -473,11 +473,21 @@ async function confirmAddCategory() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+async function loadSupabaseConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (cfg.supabaseUrl)     SUPABASE_URL      = cfg.supabaseUrl;
+    if (cfg.supabaseAnonKey) SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+  } catch(e) {}
+}
+
 async function init() {
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
 
-  await loadLocalConfig();
+  await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
 
   if (!FB_URL) {
     applyDesign(currentDesign);
@@ -904,8 +914,6 @@ function enterManager() {
   document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
   document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
-  document.getElementById('sb-url-input').value      = SUPABASE_URL      || '';
-  document.getElementById('sb-anon-key-input').value = SUPABASE_ANON_KEY ? '••••••••••••••••' : '';
   switchTab('manager');
   updateDraftIndicator();
   renderManagerCategories();
@@ -948,17 +956,6 @@ async function saveMenuUrl() {
   await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
-function saveSupabaseConfig() {
-  const urlVal = document.getElementById('sb-url-input').value.trim().replace(/\/+$/, '');
-  const keyVal = document.getElementById('sb-anon-key-input').value.trim();
-  let changed = false;
-  if (urlVal) { SUPABASE_URL = urlVal; lsSet('hf_supabase_url', SUPABASE_URL); changed = true; }
-  if (keyVal && !keyVal.startsWith('•')) { SUPABASE_ANON_KEY = keyVal; lsSet('hf_supabase_anon_key', SUPABASE_ANON_KEY); changed = true; }
-  if (!changed) { showToast('No changes made.', 'info'); return; }
-  if (SUPABASE_ANON_KEY) document.getElementById('sb-anon-key-input').value = '••••••••••••••••';
-  showToast('✅ Supabase config saved!', 'success');
-}
-
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
 function renderManagerCategories() {
   const container = document.getElementById('manager-categories');
