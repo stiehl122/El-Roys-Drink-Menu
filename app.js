@@ -1,14 +1,14 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 let BOT_ID    = '';
 let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
-let FB_SECRET = localStorage.getItem('hf_fb_secret') || '';
+let FB_SECRET = '';
 let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
 let SUPABASE_URL      = '';
 let SUPABASE_ANON_KEY = '';
 let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
 
-let isFirstSetup  = !FB_SECRET || !FB_URL;
+let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
 let syncInterval  = null;
 let _authMode     = 'signin'; // 'signin' | 'signup'
@@ -503,7 +503,6 @@ async function init() {
     if (data && data._config) {
       const cfg = data._config;
       if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
-      if (cfg.fbSecret) { FB_SECRET = cfg.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
       if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
       if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
         CATEGORY_DEFS = cfg.categories;
@@ -763,6 +762,17 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '' };
 }
 
+async function fetchFirebaseSecret() {
+  if (!currentUser?.accessToken) return;
+  try {
+    const r = await fetch('/api/firebase-config', {
+      headers: { 'Authorization': `Bearer ${currentUser.accessToken}` }
+    });
+    if (!r.ok) return;
+    const { fbSecret } = await r.json();
+    if (fbSecret) FB_SECRET = fbSecret;
+  } catch(e) {}
+}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
@@ -833,6 +843,7 @@ function applyRole(role) {
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
+  if (isManager) fetchFirebaseSecret();
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -950,7 +961,6 @@ function enterManager() {
   document.getElementById('action-btn').classList.add('active');
   if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
   document.getElementById('fb-url-input').value    = FB_URL    || '';
-  document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
   document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
   switchTab('manager');
@@ -972,12 +982,8 @@ function exitManager() {
 // ─── CONFIG SAVES ─────────────────────────────────────────────────────────────
 async function saveFirebaseConfig() {
   const urlVal = document.getElementById('fb-url-input').value.trim().replace(/\/+$/, '');
-  const secVal = document.getElementById('fb-secret-input').value.trim();
-  let changed = false;
-  if (urlVal) { FB_URL = urlVal; lsSet('hf_fb_url', FB_URL); changed = true; }
-  if (secVal && !secVal.startsWith('•')) { FB_SECRET = secVal; lsSet('hf_fb_secret', FB_SECRET); changed = true; }
-  if (!changed) { showToast('No changes made.', 'info'); return; }
-  if (FB_SECRET) document.getElementById('fb-secret-input').value = '••••••••••••••••';
+  if (!urlVal) { showToast('No changes made.', 'info'); return; }
+  FB_URL = urlVal; lsSet('hf_fb_url', FB_URL);
   document.getElementById('setup-banner').style.display = 'none';
   isFirstSetup = false;
   await persistState();
@@ -1086,7 +1092,7 @@ async function persistState() {
   if (!FB_SECRET || !FB_URL) return;
   try {
     menuState._config = {
-      menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL,
+      menuUrl: MENU_URL, fbUrl: FB_URL,
       categories: CATEGORY_DEFS,
       design: currentDesign,
     };
