@@ -1,18 +1,22 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-let MANAGER_PIN = localStorage.getItem('hf_pin') || '1234';
-let OWNER_PIN   = localStorage.getItem('hf_owner_pin') || '';
-let isOwnerMode = false;
-let BOT_ID      = '';
-let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
-let FB_SECRET   = localStorage.getItem('hf_fb_secret') || '';
-let FB_URL      = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
+const APP_VERSION = 'v0.4';
+const IS_PREVIEW = window.location.hostname.includes('vercel.app') &&
+  !/^el-roys[^-]/.test(window.location.hostname);
 
-let isFirstSetup = !FB_SECRET || !FB_URL;
+let BOT_ID    = '';
+let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
+let FB_SECRET = '';
+let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
+
+let SUPABASE_URL      = '';
+let SUPABASE_ANON_KEY = '';
+let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
+
+let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
-let pinEntry = '';
-let syncInterval = null;
-let _pinFailCount = 0;
-let _pinLockedUntil = 0;
+let syncInterval  = null;
+let _authMode     = 'signin'; // 'signin' | 'signup'
+let _tokenRefreshTimer = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -262,7 +266,25 @@ function onFontSelectChange(selectId) {
 function updateColorLabel(inputId) {
   const input = document.getElementById(inputId);
   const label = document.getElementById(inputId + '-label');
-  if (input && label) label.textContent = input.value;
+  if (input && label) label.value = input.value;
+}
+
+function syncHexInput(colorInputId) {
+  const hexInput = document.getElementById(colorInputId + '-label');
+  const colorInput = document.getElementById(colorInputId);
+  if (!hexInput || !colorInput) return;
+  const val = hexInput.value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(val)) {
+    colorInput.value = val;
+    // Live preview: apply immediately without saving
+    const d = {
+      ...currentDesign,
+      primaryColor: document.getElementById('design-primary-color')?.value || currentDesign.primaryColor,
+      accentColor:  document.getElementById('design-accent-color')?.value  || currentDesign.accentColor,
+      bgColor:      document.getElementById('design-bg-color')?.value      || currentDesign.bgColor,
+    };
+    applyDesign(d);
+  }
 }
 
 function handleLogoUpload(event) {
@@ -473,11 +495,21 @@ async function confirmAddCategory() {
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+async function loadSupabaseConfig() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const cfg = await r.json();
+    if (cfg.supabaseUrl)     SUPABASE_URL      = cfg.supabaseUrl;
+    if (cfg.supabaseAnonKey) SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+  } catch(e) {}
+}
+
 async function init() {
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
 
-  await loadLocalConfig();
+  await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
 
   if (!FB_URL) {
     applyDesign(currentDesign);
@@ -492,11 +524,8 @@ async function init() {
     // Extract config (including categories + design) BEFORE building state
     if (data && data._config) {
       const cfg = data._config;
-      if (cfg.pin)      { MANAGER_PIN = cfg.pin;     lsSet('hf_pin', MANAGER_PIN); }
-      if (cfg.menuUrl)  { MENU_URL    = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
-      if (cfg.fbSecret) { FB_SECRET   = cfg.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
-      if (cfg.fbUrl)    { FB_URL      = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
-      if (cfg.ownerPin) { OWNER_PIN   = cfg.ownerPin; lsSet('hf_owner_pin', OWNER_PIN); }
+      if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
+      if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
       if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
         CATEGORY_DEFS = cfg.categories;
       }
@@ -534,6 +563,32 @@ async function init() {
     applyDesign(currentDesign);
     menuState = defaultState();
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
+  }
+
+  // Restore Supabase session if stored tokens exist
+  await _tryRestoreSession();
+}
+
+async function _tryRestoreSession() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  const storedRefresh  = localStorage.getItem('hf_sb_refresh_token');
+  const storedExpiresAt = Number(localStorage.getItem('hf_sb_expires_at') || 0);
+  if (!storedRefresh) return;
+  try {
+    const data = await sbRefreshToken(storedRefresh);
+    let role = 'none', name = '';
+    if (data.access_token) {
+      const profile = await sbGetProfile(data.access_token);
+      role = profile.role;
+      name = profile.name;
+    }
+    _applySession(data, role, name);
+    applyRole(role);
+  } catch(e) {
+    // Stored session is invalid — clear it silently
+    localStorage.removeItem('hf_sb_access_token');
+    localStorage.removeItem('hf_sb_refresh_token');
+    localStorage.removeItem('hf_sb_expires_at');
   }
 }
 
@@ -602,15 +657,35 @@ function stopPolling() {
   if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
 }
 
+function getLastUpdatedTs() {
+  return (menuState._meta && menuState._meta.lastUpdatedTs) ||
+    localStorage.getItem('hf_last_updated_ts') ||
+    localStorage.getItem('hf_last_sent_ts');
+}
+
+function formatUpdatedAt(ts, prefix) {
+  const d = new Date(parseInt(ts));
+  return prefix +
+    d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) +
+    ' at ' +
+    d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
 function updateLastUpdatedLabel() {
-  const ts = (menuState._meta && menuState._meta.lastUpdatedTs) || localStorage.getItem('hf_last_updated_ts') || localStorage.getItem('hf_last_sent_ts');
+  const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
-  if (ts) {
-    const d = new Date(parseInt(ts));
-    el.textContent = 'Last Updated: ' + d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}) + ' at ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  } else {
-    el.textContent = 'Last Updated: —';
-  }
+  el.textContent = ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+  renderFooter();
+}
+
+function renderFooter() {
+  const vEl = document.getElementById('footer-version');
+  const tsEl = document.getElementById('footer-last-updated');
+  if (!vEl || !tsEl) return;
+  vEl.innerHTML = APP_VERSION +
+    (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
+  const ts = getLastUpdatedTs();
+  tsEl.textContent = ts ? formatUpdatedAt(ts, 'Updated ') : '';
 }
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
@@ -689,61 +764,231 @@ function updateCollapseAllBtn() {
   btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
 }
 
-// ─── PIN ──────────────────────────────────────────────────────────────────────
-function onManagerBtnClick() {
-  if (isManagerMode) { exitManager(); return; }
-  openPinOverlay();
+// ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
+async function sbSignUp(email, password, name) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password, data: { name } })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
 }
-function openPinOverlay() {
-  document.getElementById('pin-overlay').classList.add('open');
-  const remaining = Math.ceil((_pinLockedUntil - Date.now()) / 1000);
-  if (remaining > 0) {
-    const errEl = document.getElementById('pin-error');
-    errEl.textContent = `Too many attempts. Try again in ${remaining}s.`;
-    errEl.classList.add('visible');
-  }
-  const hi = document.getElementById('pin-hidden-input');
-  hi.value = '';
-  hi.focus();
+
+async function sbSignIn(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
 }
-function closePinOverlay() {
-  document.getElementById('pin-overlay').classList.remove('open');
-  pinEntry = ''; updateDots();
-  document.getElementById('pin-error').classList.remove('visible');
-  const hi = document.getElementById('pin-hidden-input'); hi.value = ''; hi.blur();
+
+async function sbRefreshToken(refreshToken) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
 }
-function pinPress(d) {
-  if (Date.now() < _pinLockedUntil) return;
-  if (pinEntry.length >= 4) return;
-  pinEntry += d; updateDots();
-  if (pinEntry.length === 4) setTimeout(checkPin, 100);
+
+async function sbGetProfile(accessToken) {
+  const r = await fetch('/api/role', {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  if (!r.ok) return { role: 'none', name: '' };
+  const { role, name } = await r.json();
+  return { role: role || 'none', name: name || '' };
 }
-function pinBack() { pinEntry = pinEntry.slice(0,-1); updateDots(); document.getElementById('pin-error').classList.remove('visible'); }
-function updateDots() {
-  for (let i=0;i<4;i++) {
-    const dot = document.getElementById('d'+i);
-    dot.classList.remove('error');
-    dot.classList.toggle('filled', i < pinEntry.length);
-  }
+
+async function fetchFirebaseSecret() {
+  if (!currentUser?.accessToken) return;
+  try {
+    const r = await fetch('/api/firebase-config', {
+      headers: { 'Authorization': `Bearer ${currentUser.accessToken}` }
+    });
+    if (!r.ok) return;
+    const { fbSecret } = await r.json();
+    if (fbSecret) FB_SECRET = fbSecret;
+  } catch(e) {}
 }
-function checkPin() {
-  if (Date.now() < _pinLockedUntil) return;
-  if (OWNER_PIN !== '' && pinEntry === OWNER_PIN) { _pinFailCount = 0; isOwnerMode = true; closePinOverlay(); enterManager(); }
-  else if (pinEntry === MANAGER_PIN) { _pinFailCount = 0; isOwnerMode = false; closePinOverlay(); enterManager(); }
-  else {
-    _pinFailCount++;
-    for (let i=0;i<4;i++) document.getElementById('d'+i).classList.add('error');
-    const errEl = document.getElementById('pin-error');
-    if (_pinFailCount >= 5) {
-      _pinLockedUntil = Date.now() + 30000;
-      _pinFailCount = 0;
-      errEl.textContent = 'Too many attempts. Try again in 30s.';
-    } else {
-      errEl.textContent = 'Incorrect PIN';
+
+function _scheduleTokenRefresh(expiresAt) {
+  if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
+  const msUntilRefresh = Math.max(0, expiresAt - Date.now() - 5 * 60 * 1000);
+  _tokenRefreshTimer = setTimeout(async () => {
+    if (!currentUser) return;
+    try {
+      const data = await sbRefreshToken(currentUser.refreshToken);
+      const expiresIn = (data.expires_in || 3600) * 1000;
+      currentUser.accessToken  = data.access_token;
+      currentUser.refreshToken = data.refresh_token;
+      currentUser.expiresAt    = Date.now() + expiresIn;
+      lsSet('hf_sb_access_token',  currentUser.accessToken);
+      lsSet('hf_sb_refresh_token', currentUser.refreshToken);
+      lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+      _scheduleTokenRefresh(currentUser.expiresAt);
+    } catch(e) {
+      // Refresh failed — sign out silently
+      signOut();
     }
-    errEl.classList.add('visible');
-    setTimeout(() => { pinEntry=''; updateDots(); errEl.classList.remove('visible'); errEl.textContent = 'Incorrect PIN'; }, 1200);
+  }, msUntilRefresh);
+}
+
+function _applySession(data, role, name) {
+  const expiresIn = (data.expires_in || 3600) * 1000;
+  const uid   = data.user?.id || data.user_id || '';
+  const email = data.user?.email || data.email || '';
+  currentUser = {
+    uid, email, name: name || '', role,
+    accessToken:  data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt:    Date.now() + expiresIn,
+  };
+  lsSet('hf_sb_access_token',  currentUser.accessToken);
+  lsSet('hf_sb_refresh_token', currentUser.refreshToken);
+  lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+  _scheduleTokenRefresh(currentUser.expiresAt);
+}
+
+function renderUserHeader() {
+  const signedIn  = !!currentUser;
+  const role      = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  const name      = currentUser?.name || '';
+  const parts     = name.trim().split(/\s+/).filter(Boolean);
+  const initials  = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (parts[0]?.[0] || '?').toUpperCase();
+  const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
+
+  document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
+  document.getElementById('user-chip').style.display  = signedIn ? '' : 'none';
+  document.getElementById('action-btn').style.display = signedIn ? '' : 'none';
+
+  if (signedIn) {
+    document.getElementById('user-initials').textContent      = initials;
+    document.getElementById('user-dropdown-name').textContent = name || currentUser?.email || '';
+    document.getElementById('user-dropdown-role').textContent = roleLabel;
+    document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
   }
+}
+
+function applyRole(role) {
+  const isManager = role === 'manager' || role === 'admin';
+  const isAdmin   = role === 'admin';
+  document.getElementById('tab-btn-admin').style.display    = isAdmin ? '' : 'none';
+  document.getElementById('tab-btn-database').style.display = isAdmin ? '' : 'none';
+  const pruneSection = document.getElementById('prune-section');
+  if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
+  renderUserHeader();
+  if (isManager) fetchFirebaseSecret();
+}
+
+// ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
+function onActionBtnClick() {
+  const role = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  if (isManager) {
+    if (isManagerMode) exitManager(); else enterManager();
+  } else {
+    showToast('Settings coming soon.', 'info');
+  }
+}
+
+function toggleUserDropdown() {
+  const chip = document.getElementById('user-chip');
+  chip.classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const chip = document.getElementById('user-chip');
+  if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+});
+
+function openAuthOverlay() {
+  const overlay = document.getElementById('auth-overlay');
+  overlay.classList.add('open');
+  const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+  document.getElementById('auth-no-config').style.display    = noConfig ? '' : 'none';
+  document.getElementById('auth-form-wrap').style.display    = noConfig ? 'none' : '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-email').value    = '';
+  document.getElementById('auth-password').value = '';
+  if (!noConfig) document.getElementById('auth-email').focus();
+}
+
+function closeAuthOverlay() {
+  document.getElementById('auth-overlay').classList.remove('open');
+}
+
+function toggleAuthMode() {
+  _authMode = _authMode === 'signin' ? 'signup' : 'signin';
+  const isSignIn = _authMode === 'signin';
+  document.getElementById('auth-title').textContent       = isSignIn ? 'SIGN IN' : 'CREATE ACCOUNT';
+  document.getElementById('auth-subtitle').textContent    = isSignIn ? 'Sign in to your account' : 'Sign up with your work email';
+  document.getElementById('auth-submit-btn').textContent  = isSignIn ? 'Sign In' : 'Sign Up';
+  document.getElementById('auth-toggle-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
+  document.getElementById('auth-toggle-btn').textContent  = isSignIn ? 'Sign Up' : 'Sign In';
+  document.getElementById('auth-name-field').style.display     = isSignIn ? 'none' : '';
+  document.getElementById('auth-lastname-field').style.display = isSignIn ? 'none' : '';
+  document.getElementById('auth-error').textContent = '';
+}
+
+async function handleAuthSubmit() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl    = document.getElementById('auth-error');
+  const btn      = document.getElementById('auth-submit-btn');
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  btn.textContent = _authMode === 'signin' ? 'Signing in…' : 'Creating account…';
+  errEl.textContent = '';
+  try {
+    let data, role, name;
+    if (_authMode === 'signup') {
+      const firstName = (document.getElementById('auth-firstname')?.value || '').trim();
+      const lastName  = (document.getElementById('auth-lastname')?.value  || '').trim();
+      name = [firstName, lastName].filter(Boolean).join(' ');
+      data = await sbSignUp(email, password, name);
+      role = 'none';
+    } else {
+      data = await sbSignIn(email, password);
+      if (data.access_token) {
+        const profile = await sbGetProfile(data.access_token);
+        role = profile.role;
+        name = profile.name;
+      } else {
+        role = 'none'; name = '';
+      }
+    }
+    _applySession(data, role, name);
+    closeAuthOverlay();
+    applyRole(role);
+    if (role === 'none') {
+      showToast('Signed in. Contact admin to get manager access.', 'info');
+    }
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = _authMode === 'signin' ? 'Sign In' : 'Sign Up';
+  }
+}
+
+function signOut() {
+  currentUser = null;
+  if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
+  localStorage.removeItem('hf_sb_access_token');
+  localStorage.removeItem('hf_sb_refresh_token');
+  localStorage.removeItem('hf_sb_expires_at');
+  if (isManagerMode) exitManager();
+  renderUserHeader();
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
@@ -754,15 +999,12 @@ function enterManager() {
   document.getElementById('public-view').style.display = 'none';
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('manager-view').style.display = 'block';
-  document.getElementById('manager-toggle-btn').textContent = '✕ Exit';
-  document.getElementById('manager-toggle-btn').classList.add('active');
+  document.getElementById('action-btn').textContent = '✕ Exit';
+  document.getElementById('action-btn').classList.add('active');
   if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
-  document.getElementById('fb-url-input').value    = FB_URL     || '';
-  document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
+  document.getElementById('fb-url-input').value    = FB_URL    || '';
   document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
-  // Admin tab visible to owners only (or everyone when no owner PIN is set)
-  document.getElementById('tab-btn-admin').style.display = (OWNER_PIN === '' || isOwnerMode) ? '' : 'none';
   switchTab('manager');
   updateDraftIndicator();
   renderManagerCategories();
@@ -770,23 +1012,20 @@ function enterManager() {
 
 function exitManager() {
   isManagerMode = false;
-  isOwnerMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
-  document.getElementById('manager-toggle-btn').textContent = '⚙ Manager';
-  document.getElementById('manager-toggle-btn').classList.remove('active');
+  const role = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
+  document.getElementById('action-btn').classList.remove('active');
   showPublicView();
 }
 
 // ─── CONFIG SAVES ─────────────────────────────────────────────────────────────
 async function saveFirebaseConfig() {
   const urlVal = document.getElementById('fb-url-input').value.trim().replace(/\/+$/, '');
-  const secVal = document.getElementById('fb-secret-input').value.trim();
-  let changed = false;
-  if (urlVal) { FB_URL = urlVal; lsSet('hf_fb_url', FB_URL); changed = true; }
-  if (secVal && !secVal.startsWith('•')) { FB_SECRET = secVal; lsSet('hf_fb_secret', FB_SECRET); changed = true; }
-  if (!changed) { showToast('No changes made.', 'info'); return; }
-  if (FB_SECRET) document.getElementById('fb-secret-input').value = '••••••••••••••••';
+  if (!urlVal) { showToast('No changes made.', 'info'); return; }
+  FB_URL = urlVal; lsSet('hf_fb_url', FB_URL);
   document.getElementById('setup-banner').style.display = 'none';
   isFirstSetup = false;
   await persistState();
@@ -806,18 +1045,6 @@ async function saveMenuUrl() {
   await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
-async function _savePinField(inputId, isOwner) {
-  const val = document.getElementById(inputId).value.trim();
-  if (!/^\d{4}$/.test(val)) { showToast(`${isOwner ? 'Owner ' : ''}PIN must be exactly 4 digits.`, 'error'); return; }
-  if (isOwner) { OWNER_PIN = val; lsSet('hf_owner_pin', OWNER_PIN); }
-  else         { MANAGER_PIN = val; lsSet('hf_pin', MANAGER_PIN); }
-  document.getElementById(inputId).value = '';
-  await persistState();
-  showToast(`✅ ${isOwner ? 'Owner ' : ''}PIN updated!`, 'success');
-}
-async function savePin()      { await _savePinField('new-pin-input', false); }
-async function saveOwnerPin() { await _savePinField('owner-pin-input', true); }
-
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
 function renderManagerCategories() {
   const container = document.getElementById('manager-categories');
@@ -907,7 +1134,7 @@ async function persistState() {
   if (!FB_SECRET || !FB_URL) return;
   try {
     menuState._config = {
-      pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL,
+      menuUrl: MENU_URL, fbUrl: FB_URL,
       categories: CATEGORY_DEFS,
       design: currentDesign,
     };
@@ -1112,9 +1339,10 @@ function removeItem(catId, itemId) {
 }
 
 function renderPruneSection() {
+  const isAdmin = currentUser?.role === 'admin';
   const section = document.getElementById('prune-section');
-  section.style.display = isOwnerMode ? '' : 'none';
-  if (!isOwnerMode) return;
+  section.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin) return;
   const wrap = document.getElementById('prune-items-wrap');
   const allOffMenu = [];
   CATEGORY_DEFS.forEach(cat => {
@@ -1136,7 +1364,7 @@ function renderPruneSection() {
 }
 
 async function pruneSingleItem(catId, itemName) {
-  if (!isOwnerMode) return;
+  if (currentUser?.role !== 'admin') return;
   if (!menuState[catId]) return;
   menuState[catId].items = menuState[catId].items.filter(
     i => !(i.onMenu === false && i.name === itemName)
@@ -1147,7 +1375,7 @@ async function pruneSingleItem(catId, itemName) {
 }
 
 async function pruneRemoved(catId) {
-  if (!isOwnerMode) return;
+  if (currentUser?.role !== 'admin') return;
   const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
   cats.forEach(id => { if (menuState[id]) menuState[id].items = menuState[id].items.filter(i => i.onMenu !== false); });
   await persistState();
@@ -1266,8 +1494,12 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING...';
 
   try {
+    const authHeaders = currentUser?.accessToken
+      ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
+      : {};
     const r1 = await fetch('/api/send-groupme', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({ text: patchMessage })
     });
 
@@ -1285,6 +1517,10 @@ async function sendUpdate() {
       updateDraftIndicator();
       closeModal();
       showToast('✅ Drink menu update sent!', 'success');
+    } else if (r1.status === 401) {
+      showToast('❌ Not authorized. Please sign in.', 'error');
+    } else if (r1.status === 403) {
+      showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
     } else {
       showToast('❌ GroupMe error. Check GROUPME_BOT_ID env var.', 'error');
     }
@@ -1398,21 +1634,13 @@ function renderDatabaseTab() {
 
 function filterDatabase() { renderDatabaseTab(); }
 
-// ─── NATIVE MOBILE KEYPAD SUPPORT ────────────────────────────────────────────
+// ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
-  const hi = document.getElementById('pin-hidden-input');
-  hi.addEventListener('input', function() {
-    const digits = this.value.replace(/\D/g, '');
-    this.value = '';
-    for (const d of digits) pinPress(d);
+  document.getElementById('auth-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleAuthSubmit();
   });
-  hi.addEventListener('keydown', function(e) {
-    if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
-  });
-  document.getElementById('pin-overlay').addEventListener('click', function(e) {
-    if (!e.target.closest('.key') && !e.target.closest('.pin-cancel')) {
-      hi.focus();
-    }
+  document.getElementById('auth-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('auth-password').focus();
   });
 })();
 
