@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Honcho Fuego | Current Menu</title>
+<title>Current Menu</title>
 <link rel="stylesheet" href="lib/fonts/fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="wrapper">
   <header>
-    <img class="hf-logo" src="lib/images/hf-logo.png" alt="Honcho Fuego Logo"/>
-    <span class="logo-mark">HONCHO FUEGO</span>
+    <img class="hf-logo" src="" alt="Logo" style="display:none"/>
+    <span class="logo-mark" style="display:none"></span>
     <h1>CURRENT MENU</h1>
     <div class="header-sub" id="last-updated-label">Last Updated: —</div>
     <button class="manager-btn" id="manager-toggle-btn" onclick="onManagerBtnClick()">⚙ Manager</button>
@@ -43,9 +43,10 @@
 
     <!-- TAB BAR -->
     <div class="tab-bar">
-      <button class="tab-btn active" id="tab-btn-manager" onclick="switchTab('manager')">MANAGER</button>
-      <button class="tab-btn" id="tab-btn-admin" onclick="switchTab('admin')">ADMIN</button>
-      <button class="tab-btn" id="tab-btn-database" onclick="switchTab('database')">DATABASE</button>
+      <button class="tab-btn active" id="tab-btn-manager"    onclick="switchTab('manager')">MANAGER</button>
+      <button class="tab-btn"        id="tab-btn-categories" onclick="switchTab('categories')">CATEGORIES</button>
+      <button class="tab-btn"        id="tab-btn-admin"      onclick="switchTab('admin')">ADMIN</button>
+      <button class="tab-btn"        id="tab-btn-database"   onclick="switchTab('database')">DATABASE</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
@@ -57,6 +58,36 @@
         <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
       </div>
       <div id="sync-status"></div>
+    </div>
+
+    <!-- CATEGORIES PANEL: Manage category list -->
+    <div class="tab-panel" id="tab-panel-categories">
+      <div class="section-label">Menu Categories</div>
+      <div id="catmgr-list"></div>
+      <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
+        <h3>New Category</h3>
+        <div class="catmgr-field-row">
+          <label>Icon</label>
+          <input type="text" id="new-cat-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Title</label>
+          <input type="text" id="new-cat-title" class="catmgr-input" placeholder="Category name (required)"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Subtitle</label>
+          <input type="text" id="new-cat-sub" class="catmgr-input" placeholder="Short description (optional)"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Hint text</label>
+          <input type="text" id="new-cat-placeholder" class="catmgr-input" placeholder="Add item input hint (optional)"/>
+        </div>
+        <div class="catmgr-add-btn-row">
+          <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
+          <button class="btn-small" onclick="document.getElementById('catmgr-add-form').style.display='none'">Cancel</button>
+        </div>
+      </div>
+      <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()" style="margin-top:4px">+ Add Category</button>
     </div>
 
     <!-- ADMIN PANEL: Configuration -->
@@ -110,6 +141,95 @@
         </div>
         <div class="hint">Only the owner PIN can access admin settings. If not set, any manager PIN can access admin.</div>
       </div>
+
+      <!-- DESIGN & BRANDING -->
+      <div class="config-card">
+        <h3>Design &amp; Branding</h3>
+
+        <div class="design-row">
+          <span class="design-label">Logo</span>
+          <div class="design-control">
+            <img id="design-logo-preview" class="design-logo-preview"/>
+            <input type="file" id="design-logo-upload" accept="image/*" style="display:none" onchange="handleLogoUpload(event)"/>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <button class="btn-small" onclick="document.getElementById('design-logo-upload').click()">Upload Image</button>
+              <button class="btn-small" id="design-logo-clear-btn" onclick="clearLogo()" style="display:none">Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Brand Name</span>
+          <div class="design-control">
+            <input type="text" id="design-brand-name" class="design-input" placeholder="e.g. HONCHO FUEGO"/>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Menu Title</span>
+          <div class="design-control">
+            <input type="text" id="design-menu-title" class="design-input" placeholder="e.g. CURRENT MENU"/>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Header Color</span>
+          <div class="design-control">
+            <div class="design-color-row">
+              <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
+              <span class="design-color-label" id="design-primary-color-label">#2d3748</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Accent Color</span>
+          <div class="design-control">
+            <div class="design-color-row">
+              <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
+              <span class="design-color-label" id="design-accent-color-label">#4299e1</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Background</span>
+          <div class="design-control">
+            <div class="design-color-row">
+              <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
+              <span class="design-color-label" id="design-bg-color-label">#f0f4f8</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Heading Font</span>
+          <div class="design-control">
+            <select id="design-heading-font" class="design-select" onchange="onFontSelectChange('design-heading-font')"></select>
+            <input type="text" id="design-heading-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Body Font</span>
+          <div class="design-control">
+            <select id="design-body-font" class="design-select" onchange="onFontSelectChange('design-body-font')"></select>
+            <input type="text" id="design-body-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+          </div>
+        </div>
+
+        <div class="design-row">
+          <span class="design-label">Accent Font</span>
+          <div class="design-control">
+            <select id="design-accent-font" class="design-select" onchange="onFontSelectChange('design-accent-font')"></select>
+            <input type="text" id="design-accent-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+          </div>
+        </div>
+
+        <div class="design-save-row">
+          <button class="btn-small" onclick="saveDesign()">Save Design</button>
+        </div>
+      </div>
     </div>
 
     <!-- DATABASE PANEL: Recipe Spreadsheet -->
@@ -152,7 +272,6 @@
 <!-- PIN OVERLAY -->
 <div id="pin-overlay">
   <div class="pin-box">
-    <!-- Hidden input to trigger native mobile numeric keypad -->
     <input id="pin-hidden-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"/>
     <h2>MANAGER LOGIN</h2>
     <p>Enter your 4-digit PIN</p>

@@ -1,15 +1,13 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-// FB_SECRET stays in localStorage (write credential). All other settings are
-// stored in Firebase and synced to localStorage as a local cache on load.
 let MANAGER_PIN = localStorage.getItem('hf_pin') || '1234';
 let OWNER_PIN   = localStorage.getItem('hf_owner_pin') || '';
 let isOwnerMode = false;
 let BOT_ID      = '';
 let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
-let FB_SECRET   = localStorage.getItem('hf_fb_secret') || ''; // Firebase Database Secret (write credential)
-let FB_URL      = localStorage.getItem('hf_fb_url')    || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com'; // Firebase Realtime DB URL
+let FB_SECRET   = localStorage.getItem('hf_fb_secret') || '';
+let FB_URL      = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
-let isFirstSetup = !FB_SECRET || !FB_URL; // Both Firebase URL and Secret are required
+let isFirstSetup = !FB_SECRET || !FB_URL;
 let isManagerMode = false;
 let pinEntry = '';
 let syncInterval = null;
@@ -17,22 +15,53 @@ let _pinFailCount = 0;
 let _pinLockedUntil = 0;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
-const CATEGORY_DEFS = [
-  { id:'beer',    icon:'🍺', iconClass:'icon-beer',    title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
-  { id:'canned',    icon:'🍻', iconClass:'icon-canned',    title:'Canned & Bottled', sub:'Canned & bottled offerings',      placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
-  { id:'cocktails', icon:'🍹', iconClass:'icon-cocktails', title:'Cocktails',        sub:'Craft cocktail offerings',        placeholder:'e.g. Paloma, Spicy Margarita...' },
-  { id:'tequila',   icon:'🌶️', iconClass:'icon-tequila',   title:'Infused Tequila',  sub:'Rotating infused marg tequila',   placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
-  { id:'frozen',  icon:'🧊', iconClass:'icon-frozen',  title:'Frozen Marg',     sub:'Current frozen margarita flavor', placeholder:'e.g. Strawberry Basil...' },
-  { id:'special', icon:'⭐', iconClass:'icon-special', title:'Monthly Specials', sub:'Featured cocktails & promos',    placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
+const ICON_COLOR_PALETTE = [
+  'rgba(245,210,66,0.22)',
+  'rgba(18,133,120,0.15)',
+  'rgba(100,180,255,0.18)',
+  'rgba(190,67,48,0.12)',
+  'rgba(140,200,120,0.18)',
+  'rgba(180,100,220,0.15)',
+  'rgba(255,150,100,0.18)',
+  'rgba(100,200,220,0.18)',
 ];
 
-// In-memory menu state — loaded from JSONBin on init
-// Shape: { beer: { items:[{id,name}], lastSent:[{id,name}] }, ... }
+const DEFAULT_CATEGORY_DEFS = [
+  { id:'beer',      icon:'🍺', color:ICON_COLOR_PALETTE[0], title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
+  { id:'canned',    icon:'🍻', color:ICON_COLOR_PALETTE[4], title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
+  { id:'cocktails', icon:'🍹', color:ICON_COLOR_PALETTE[5], title:'Cocktails',        sub:'Craft cocktail offerings',       placeholder:'e.g. Paloma, Spicy Margarita...' },
+  { id:'tequila',   icon:'🌶️', color:ICON_COLOR_PALETTE[1], title:'Infused Tequila',  sub:'Rotating infused marg tequila',  placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
+  { id:'frozen',    icon:'🧊', color:ICON_COLOR_PALETTE[2], title:'Frozen Marg',      sub:'Current frozen margarita flavor',placeholder:'e.g. Strawberry Basil...' },
+  { id:'special',   icon:'⭐', color:ICON_COLOR_PALETTE[3], title:'Monthly Specials', sub:'Featured cocktails & promos',   placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
+];
+
+let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
+
+// ─── DESIGN ──────────────────────────────────────────────────────────────────
+const HEADING_FONTS = ['DM Sans','Bebas Neue','Oswald','Pacifico','Bangers','Fredoka One','Lilita One','Black Han Sans','Righteous','Boogaloo','Titan One'];
+const BODY_FONTS    = ['DM Sans','Inter','Outfit','Nunito','Raleway','Poppins','Lato','Open Sans','Roboto','Source Sans 3'];
+const ACCENT_FONTS  = ['DM Sans','Permanent Marker','Satisfy','Dancing Script','Caveat','Indie Flower','Kalam','Patrick Hand','Courgette','Handlee'];
+
+const DESIGN_DEFAULTS = {
+  brandName:    '',
+  menuTitle:    'CURRENT MENU',
+  logoDataUrl:  '',
+  primaryColor: '#2d3748',
+  accentColor:  '#4299e1',
+  bgColor:      '#f0f4f8',
+  headingFont:  'DM Sans',
+  bodyFont:     'DM Sans',
+  accentFont:   'DM Sans',
+};
+
+let currentDesign = { ...DESIGN_DEFAULTS };
+
+// ─── MENU STATE ───────────────────────────────────────────────────────────────
 let menuState = {};
 
 function defaultState() {
   const s = {};
-  CATEGORY_DEFS.forEach(c => { s[c.id] = { items:[], lastSent:[] }; });
+  CATEGORY_DEFS.forEach(c => { s[c.id] = s[c.id] || { items:[], lastSent:[] }; });
   return s;
 }
 
@@ -54,15 +83,11 @@ function getCachedDiff() {
 }
 
 // ─── FIREBASE REALTIME DATABASE API ───────────────────────────────────────────
-// Firebase stores the entire menuState object at /menu.json.
-// Reads are public (no auth). Writes require the Database Secret as ?auth=.
-// Security rules: { "rules": { ".read": true, ".write": false } }
-
 async function fbRead() {
   if (!FB_URL) return null;
   const res = await fetch(`${FB_URL}/menu.json`);
   if (!res.ok) throw new Error(`Firebase read failed: ${res.status}`);
-  return await res.json(); // returns the stored object directly (or null if empty)
+  return await res.json();
 }
 
 async function fbWrite(state) {
@@ -76,20 +101,15 @@ async function fbWrite(state) {
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
-// Fetches lib/config/notifications.json for API keys that should never
-// be stored in Firebase or localStorage. If the file is absent (404) or
-// unreachable, BOT_ID stays empty until set via the admin UI.
 async function loadLocalConfig() {
   try {
     const res = await fetch('lib/config/notifications.json');
-    if (!res.ok) return; // 404 on production deploys — BOT_ID stays empty
+    if (!res.ok) return;
     const cfg = await res.json();
     if (cfg.groupme && typeof cfg.groupme.botId === 'string' && cfg.groupme.botId.trim()) {
       BOT_ID = cfg.groupme.botId.trim();
     }
-  } catch(e) {
-    // Network error or malformed JSON — BOT_ID stays empty
-  }
+  } catch(e) {}
 }
 
 function showConfigModal() {
@@ -105,6 +125,353 @@ async function copyConfigJson() {
   showToast('Copied!', 'success');
 }
 
+// ─── DESIGN ──────────────────────────────────────────────────────────────────
+function darkenHex(hex, amount) {
+  if (!hex || !hex.startsWith('#') || hex.length < 7) return hex;
+  const r = Math.max(0, parseInt(hex.substr(1,2),16) - Math.round(255*amount));
+  const g = Math.max(0, parseInt(hex.substr(3,2),16) - Math.round(255*amount));
+  const b = Math.max(0, parseInt(hex.substr(5,2),16) - Math.round(255*amount));
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function lightenHex(hex, amount) {
+  if (!hex || !hex.startsWith('#') || hex.length < 7) return hex;
+  const r = Math.min(255, parseInt(hex.substr(1,2),16) + Math.round(255*amount));
+  const g = Math.min(255, parseInt(hex.substr(3,2),16) + Math.round(255*amount));
+  const b = Math.min(255, parseInt(hex.substr(5,2),16) + Math.round(255*amount));
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function loadGoogleFont(fontName) {
+  if (!fontName) return;
+  if (['DM Sans','Lilita One','Permanent Marker'].includes(fontName)) return;
+  const id = 'gfont-' + fontName.replace(/\s+/g,'-').toLowerCase();
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id; link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g,'+')}:wght@400;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+function applyDesign(design) {
+  const root = document.documentElement;
+  if (design.primaryColor) {
+    root.style.setProperty('--teal',    design.primaryColor);
+    root.style.setProperty('--teal-dk', darkenHex(design.primaryColor, 0.08));
+  }
+  if (design.accentColor) {
+    root.style.setProperty('--terra',    design.accentColor);
+    root.style.setProperty('--terra-dk', darkenHex(design.accentColor, 0.08));
+    root.style.setProperty('--fire',     design.accentColor);
+    root.style.setProperty('--ember',    lightenHex(design.accentColor, 0.05));
+  }
+  if (design.bgColor) {
+    root.style.setProperty('--bg',     design.bgColor);
+    root.style.setProperty('--salmon', design.bgColor);
+  }
+  const logo = document.querySelector('.hf-logo');
+  if (logo) {
+    if (design.logoDataUrl) {
+      logo.src = design.logoDataUrl;
+      logo.style.display = '';
+    } else {
+      logo.style.display = 'none';
+    }
+  }
+  const brandEl = document.querySelector('.logo-mark');
+  if (brandEl) {
+    brandEl.textContent = design.brandName || '';
+    brandEl.style.display = design.brandName ? '' : 'none';
+  }
+  const titleEl = document.querySelector('header h1');
+  if (titleEl && design.menuTitle) titleEl.textContent = design.menuTitle;
+
+  if (design.headingFont) {
+    loadGoogleFont(design.headingFont);
+    root.style.setProperty('--font-heading', `'${design.headingFont}', cursive`);
+  }
+  if (design.bodyFont) {
+    loadGoogleFont(design.bodyFont);
+    root.style.setProperty('--font-body', `'${design.bodyFont}', sans-serif`);
+  }
+  if (design.accentFont) {
+    loadGoogleFont(design.accentFont);
+    root.style.setProperty('--font-accent', `'${design.accentFont}', cursive`);
+  }
+  const brand = (design.brandName || '').trim();
+  const title = (design.menuTitle || '').trim();
+  document.title = [brand, title].filter(Boolean).join(' | ') || 'Current Menu';
+}
+
+function renderDesignSection() {
+  const d = currentDesign;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('design-brand-name', d.brandName);
+  set('design-menu-title', d.menuTitle);
+
+  const pEl = document.getElementById('design-primary-color');
+  const aEl = document.getElementById('design-accent-color');
+  const bEl = document.getElementById('design-bg-color');
+  if (pEl) { pEl.value = d.primaryColor || '#2d3748'; updateColorLabel('design-primary-color'); }
+  if (aEl) { aEl.value = d.accentColor  || '#4299e1'; updateColorLabel('design-accent-color'); }
+  if (bEl) { bEl.value = d.bgColor      || '#f0f4f8'; updateColorLabel('design-bg-color'); }
+
+  _populateFontSelect('design-heading-font', HEADING_FONTS, d.headingFont || 'DM Sans');
+  _populateFontSelect('design-body-font',    BODY_FONTS,    d.bodyFont    || 'DM Sans');
+  _populateFontSelect('design-accent-font',  ACCENT_FONTS,  d.accentFont  || 'DM Sans');
+
+  const preview = document.getElementById('design-logo-preview');
+  const clearBtn = document.getElementById('design-logo-clear-btn');
+  if (preview) {
+    if (d.logoDataUrl) { preview.src = d.logoDataUrl; preview.style.display = ''; }
+    else preview.style.display = 'none';
+  }
+  if (clearBtn) clearBtn.style.display = d.logoDataUrl ? '' : 'none';
+}
+
+function _populateFontSelect(selectId, fonts, currentFont) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  if (!sel.children.length) {
+    fonts.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f; opt.textContent = f;
+      sel.appendChild(opt);
+    });
+    const custom = document.createElement('option');
+    custom.value = '__custom__'; custom.textContent = 'Custom…';
+    sel.appendChild(custom);
+  }
+  const isPreset = fonts.includes(currentFont);
+  sel.value = isPreset ? currentFont : '__custom__';
+  const customInput = document.getElementById(selectId + '-custom');
+  if (customInput) {
+    customInput.style.display = isPreset ? 'none' : '';
+    if (!isPreset) customInput.value = currentFont;
+  }
+}
+
+function onFontSelectChange(selectId) {
+  const sel = document.getElementById(selectId);
+  const customInput = document.getElementById(selectId + '-custom');
+  if (!sel || !customInput) return;
+  customInput.style.display = sel.value === '__custom__' ? '' : 'none';
+  if (sel.value === '__custom__') customInput.focus();
+}
+
+function updateColorLabel(inputId) {
+  const input = document.getElementById(inputId);
+  const label = document.getElementById(inputId + '-label');
+  if (input && label) label.textContent = input.value;
+}
+
+function handleLogoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file.', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentDesign.logoDataUrl = e.target.result;
+    const preview = document.getElementById('design-logo-preview');
+    if (preview) { preview.src = e.target.result; preview.style.display = ''; }
+    const clearBtn = document.getElementById('design-logo-clear-btn');
+    if (clearBtn) clearBtn.style.display = '';
+    const logo = document.querySelector('.hf-logo');
+    if (logo) { logo.src = e.target.result; logo.style.display = ''; }
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLogo() {
+  currentDesign.logoDataUrl = '';
+  const preview = document.getElementById('design-logo-preview');
+  if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  const clearBtn = document.getElementById('design-logo-clear-btn');
+  if (clearBtn) clearBtn.style.display = 'none';
+  const logo = document.querySelector('.hf-logo');
+  if (logo) logo.style.display = 'none';
+}
+
+async function saveDesign() {
+  function getFontValue(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return '';
+    if (sel.value === '__custom__') {
+      return (document.getElementById(selectId + '-custom')?.value || '').trim();
+    }
+    return sel.value;
+  }
+  currentDesign = {
+    ...currentDesign,
+    brandName:    (document.getElementById('design-brand-name')?.value   || '').trim(),
+    menuTitle:    (document.getElementById('design-menu-title')?.value   || '').trim(),
+    primaryColor:  document.getElementById('design-primary-color')?.value || currentDesign.primaryColor,
+    accentColor:   document.getElementById('design-accent-color')?.value  || currentDesign.accentColor,
+    bgColor:       document.getElementById('design-bg-color')?.value      || currentDesign.bgColor,
+    headingFont:  getFontValue('design-heading-font') || currentDesign.headingFont,
+    bodyFont:     getFontValue('design-body-font')    || currentDesign.bodyFont,
+    accentFont:   getFontValue('design-accent-font')  || currentDesign.accentFont,
+  };
+  applyDesign(currentDesign);
+  await persistState();
+  showToast('✅ Design saved!', 'success');
+}
+
+// ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
+function getNextCategoryColor() {
+  const usedColors = new Set(CATEGORY_DEFS.map(c => c.color));
+  for (const color of ICON_COLOR_PALETTE) {
+    if (!usedColors.has(color)) return color;
+  }
+  return ICON_COLOR_PALETTE[CATEGORY_DEFS.length % ICON_COLOR_PALETTE.length];
+}
+
+function renderCategoriesTab() {
+  const container = document.getElementById('catmgr-list');
+  if (!container) return;
+  container.innerHTML = '';
+  CATEGORY_DEFS.forEach((cat, idx) => {
+    const card = document.createElement('div');
+    card.className = 'catmgr-card';
+    card.id = 'catmgr-' + cat.id;
+    const isFirst = idx === 0;
+    const isLast  = idx === CATEGORY_DEFS.length - 1;
+    card.innerHTML = `
+      <div class="catmgr-row">
+        <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+        <div class="catmgr-info">
+          <div class="catmgr-title">${escHtml(cat.title)}</div>
+          <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
+        </div>
+        <div class="catmgr-actions">
+          <button class="btn-small" onclick="moveCategoryUp('${cat.id}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
+          <button class="btn-small" onclick="moveCategoryDown('${cat.id}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">✏️</button>
+          <button class="btn-small btn-danger" onclick="deleteCategory('${cat.id}')">×</button>
+        </div>
+      </div>
+      <div class="catmgr-edit" id="catmgr-edit-${cat.id}" style="display:none">
+        <div class="catmgr-field-row">
+          <label>Icon</label>
+          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${cat.id}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Title</label>
+          <input type="text" class="catmgr-input" id="ce-title-${cat.id}" value="${escHtml(cat.title)}" placeholder="Category title"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Subtitle</label>
+          <input type="text" class="catmgr-input" id="ce-sub-${cat.id}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
+        </div>
+        <div class="catmgr-field-row">
+          <label>Hint text</label>
+          <input type="text" class="catmgr-input" id="ce-ph-${cat.id}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
+        </div>
+        <div class="catmgr-save-row">
+          <button class="btn-small btn-danger" onclick="toggleCategoryEdit('${cat.id}')">Cancel</button>
+          <button class="btn-small" onclick="saveCategoryEdit('${cat.id}')">Save</button>
+        </div>
+      </div>`;
+    container.appendChild(card);
+  });
+}
+
+function toggleCategoryEdit(catId) {
+  const el = document.getElementById('catmgr-edit-' + catId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function saveCategoryEdit(catId) {
+  const cat = CATEGORY_DEFS.find(c => c.id === catId);
+  if (!cat) return;
+  const icon  = document.getElementById('ce-icon-'  + catId)?.value.trim() || cat.icon;
+  const title = document.getElementById('ce-title-' + catId)?.value.trim();
+  if (!title) { showToast('Title is required.', 'error'); return; }
+  const sub   = document.getElementById('ce-sub-'   + catId)?.value.trim() || '';
+  const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
+  cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
+  toggleCategoryEdit(catId);
+  await persistState();
+  renderCategoriesTab();
+  renderManagerCategories();
+  renderPublicView();
+  showToast('✅ Category updated!', 'success');
+}
+
+async function moveCategoryUp(catId) {
+  const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
+  if (idx <= 0) return;
+  [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
+  await persistState();
+  renderCategoriesTab();
+  renderManagerCategories();
+  renderPublicView();
+}
+
+async function moveCategoryDown(catId) {
+  const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
+  if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
+  [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
+  await persistState();
+  renderCategoriesTab();
+  renderManagerCategories();
+  renderPublicView();
+}
+
+async function deleteCategory(catId) {
+  const cat = CATEGORY_DEFS.find(c => c.id === catId);
+  if (!cat) return;
+  const hasItems = (menuState[catId]?.items || []).some(i => i.onMenu !== false);
+  const msg = hasItems
+    ? `"${cat.title}" has active menu items. Delete it anyway? (Items will be hidden but not permanently removed.)`
+    : `Delete the "${cat.title}" category?`;
+  if (!confirm(msg)) return;
+  CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
+  invalidateDiff();
+  await persistState();
+  renderCategoriesTab();
+  renderManagerCategories();
+  renderPublicView();
+  showToast('✅ Category deleted.', 'success');
+}
+
+function toggleAddCategoryForm() {
+  const form = document.getElementById('catmgr-add-form');
+  const btn  = document.getElementById('show-add-cat-btn');
+  if (!form) return;
+  const opening = form.style.display === 'none';
+  form.style.display = opening ? '' : 'none';
+  if (btn) btn.textContent = opening ? '− Cancel' : '+ Add Category';
+  if (opening) document.getElementById('new-cat-title')?.focus();
+}
+
+async function confirmAddCategory() {
+  const icon  = document.getElementById('new-cat-icon')?.value.trim() || '🍸';
+  const title = document.getElementById('new-cat-title')?.value.trim();
+  if (!title) { showToast('Category title is required.', 'error'); return; }
+  const sub = document.getElementById('new-cat-sub')?.value.trim() || '';
+  const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item...`;
+  const id  = 'cat_' + Date.now().toString(36);
+  const color = getNextCategoryColor();
+  CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
+  menuState[id] = { items: [], lastSent: [] };
+  // Reset form
+  ['new-cat-icon','new-cat-title','new-cat-sub','new-cat-placeholder'].forEach(fid => {
+    const el = document.getElementById(fid); if (el) el.value = '';
+  });
+  const iconEl = document.getElementById('new-cat-icon');
+  if (iconEl) iconEl.value = '🍸';
+  document.getElementById('catmgr-add-form').style.display = 'none';
+  const btn = document.getElementById('show-add-cat-btn');
+  if (btn) btn.textContent = '+ Add Category';
+  await persistState();
+  renderCategoriesTab();
+  renderManagerCategories();
+  renderPublicView();
+  showToast(`✅ Category "${title}" added!`, 'success');
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
   document.getElementById('loading-view').style.display = 'block';
@@ -113,7 +480,7 @@ async function init() {
   await loadLocalConfig();
 
   if (!FB_URL) {
-    // No Firebase URL configured — show empty public view
+    applyDesign(currentDesign);
     menuState = defaultState();
     showPublicView();
     return;
@@ -121,16 +488,31 @@ async function init() {
 
   try {
     const data = await fbRead();
-    // Merge fetched data with defaults (in case new categories were added)
+
+    // Extract config (including categories + design) BEFORE building state
+    if (data && data._config) {
+      const cfg = data._config;
+      if (cfg.pin)      { MANAGER_PIN = cfg.pin;     lsSet('hf_pin', MANAGER_PIN); }
+      if (cfg.menuUrl)  { MENU_URL    = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
+      if (cfg.fbSecret) { FB_SECRET   = cfg.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
+      if (cfg.fbUrl)    { FB_URL      = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
+      if (cfg.ownerPin) { OWNER_PIN   = cfg.ownerPin; lsSet('hf_owner_pin', OWNER_PIN); }
+      if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
+        CATEGORY_DEFS = cfg.categories;
+      }
+      if (cfg.design && typeof cfg.design === 'object') {
+        currentDesign = { ...DESIGN_DEFAULTS, ...cfg.design };
+      }
+    }
+
+    applyDesign(currentDesign);
     menuState = defaultState();
+
     if (data && typeof data === 'object') {
       CATEGORY_DEFS.forEach(c => {
         if (data[c.id]) menuState[c.id] = data[c.id];
-        // Ensure items array exists
         if (!menuState[c.id].items) menuState[c.id].items = [];
-        // Default onMenu:true for any existing items that lack the field
         menuState[c.id].items = menuState[c.id].items.map(i => ({ onMenu: true, ...i }));
-        // Migrate legacy removed[] entries to onMenu:false items
         (menuState[c.id].removed || []).forEach(r => {
           const alreadyExists = menuState[c.id].items.some(
             i => i.name.trim().toLowerCase() === r.name.trim().toLowerCase()
@@ -146,16 +528,10 @@ async function init() {
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
         if (savedTs) lsSet('hf_last_updated_ts', savedTs);
       }
-      if (data._config) {
-        if (data._config.pin)     { MANAGER_PIN = data._config.pin;     lsSet('hf_pin', MANAGER_PIN); }
-        if (data._config.menuUrl) { MENU_URL     = data._config.menuUrl; lsSet('hf_menu_url', MENU_URL); }
-        if (data._config.fbSecret) { FB_SECRET = data._config.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
-        if (data._config.fbUrl)    { FB_URL    = data._config.fbUrl;    lsSet('hf_fb_url', FB_URL); }
-        if (data._config.ownerPin) { OWNER_PIN = data._config.ownerPin; lsSet('hf_owner_pin', OWNER_PIN); }
-      }
     }
     showPublicView();
   } catch(e) {
+    applyDesign(currentDesign);
     menuState = defaultState();
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
   }
@@ -179,8 +555,6 @@ function showPublicViewWithError(msg) {
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
-// Re-reads Firebase every 60 s while in public view so changes pushed by a
-// manager on another device appear without a manual page reload.
 function startPolling() {
   stopPolling();
   if (!FB_URL) return;
@@ -189,18 +563,38 @@ function startPolling() {
     try {
       const data = await fbRead();
       if (!data || typeof data !== 'object') return;
+
+      let needsRender = false;
+
+      // Check for remote category/design changes
+      if (data._config) {
+        if (data._config.categories && Array.isArray(data._config.categories) && data._config.categories.length) {
+          const remoteCats = JSON.stringify(data._config.categories);
+          if (remoteCats !== JSON.stringify(CATEGORY_DEFS)) {
+            CATEGORY_DEFS = data._config.categories;
+            needsRender = true;
+          }
+        }
+        if (data._config.design && JSON.stringify(data._config.design) !== JSON.stringify(currentDesign)) {
+          currentDesign = { ...DESIGN_DEFAULTS, ...data._config.design };
+          applyDesign(currentDesign);
+        }
+      }
+
       const before = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
       const after = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
+
       const newTs = data._meta && (data._meta.lastUpdatedTs || data._meta.lastSentTs);
       const oldTs = menuState._meta && (menuState._meta.lastUpdatedTs || menuState._meta.lastSentTs);
       const metaChanged = newTs && newTs !== oldTs;
-      if (after !== before || metaChanged) {
+
+      if (after !== before || metaChanged || needsRender) {
         if (data._meta) { menuState._meta = data._meta; lsSet('hf_last_updated_ts', newTs || ''); }
         renderPublicView();
         updateLastUpdatedLabel();
       }
-    } catch(e) { /* silently ignore transient poll failures */ }
+    } catch(e) {}
   }, 60000);
 }
 
@@ -225,10 +619,9 @@ function renderPublicView() {
   container.innerHTML = '';
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
   CATEGORY_DEFS.forEach(cat => {
-    const state = menuState[cat.id];
+    const state = menuState[cat.id] || { items: [], lastSent: [] };
     const section = document.createElement('div');
     section.id = 'pub-section-' + cat.id;
-    // If a prior send exists, expand only categories that were in it; otherwise expand all
     const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
     section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
     const onMenuItems = state.items.filter(i => i.onMenu !== false);
@@ -261,8 +654,8 @@ function renderPublicView() {
       : `<div class="empty-menu">Nothing listed yet.</div>`;
     section.innerHTML = `
       <div class="menu-section-header collapsible-header" onclick="togglePublicCategory('${cat.id}')">
-        <div class="menu-icon ${cat.iconClass}">${cat.icon}</div>
-        <div><div class="menu-section-title">${cat.title}</div><div class="menu-section-sub">${cat.sub}</div></div>
+        <div class="menu-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+        <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
       <div class="menu-items">${itemsHtml}</div>`;
@@ -309,7 +702,6 @@ function openPinOverlay() {
     errEl.textContent = `Too many attempts. Try again in ${remaining}s.`;
     errEl.classList.add('visible');
   }
-  // Focus synchronously — must stay in same user-gesture tick for iOS keyboard to pop up
   const hi = document.getElementById('pin-hidden-input');
   hi.value = '';
   hi.focus();
@@ -365,14 +757,12 @@ function enterManager() {
   document.getElementById('manager-toggle-btn').textContent = '✕ Exit';
   document.getElementById('manager-toggle-btn').classList.add('active');
   if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
-  // Pre-fill admin config fields
-  document.getElementById('fb-url-input').value     = FB_URL     || '';
-  document.getElementById('fb-secret-input').value  = FB_SECRET ? '••••••••••••••••' : '';
-  document.getElementById('bot-id-input').value     = BOT_ID    ? '••••••••••••••••' : '';
-  document.getElementById('menu-url-input').value   = MENU_URL  || '';
-  // Show/hide Admin tab based on access level (owner PIN required when set)
+  document.getElementById('fb-url-input').value    = FB_URL     || '';
+  document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
+  document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
+  document.getElementById('menu-url-input').value  = MENU_URL  || '';
+  // Admin tab visible to owners only (or everyone when no owner PIN is set)
   document.getElementById('tab-btn-admin').style.display = (OWNER_PIN === '' || isOwnerMode) ? '' : 'none';
-  // Default to manager tab on entry
   switchTab('manager');
   updateDraftIndicator();
   renderManagerCategories();
@@ -399,7 +789,7 @@ async function saveFirebaseConfig() {
   if (FB_SECRET) document.getElementById('fb-secret-input').value = '••••••••••••••••';
   document.getElementById('setup-banner').style.display = 'none';
   isFirstSetup = false;
-  await persistState(); // sync all config to Firebase so other devices pick it up
+  await persistState();
   showToast('✅ Firebase config saved!', 'success');
 }
 function saveBotId() {
@@ -438,8 +828,8 @@ function renderManagerCategories() {
     card.id = 'mgr-card-' + cat.id;
     card.innerHTML = `
       <div class="cat-header collapsible-header" onclick="toggleManagerCategory('${cat.id}')">
-        <div class="cat-icon ${cat.iconClass}">${cat.icon}</div>
-        <div><div class="cat-title">${cat.title}</div><div class="cat-sub">${cat.sub}</div></div>
+        <div class="cat-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+        <div><div class="cat-title">${escHtml(cat.title)}</div><div class="cat-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
       <div class="current-section">
@@ -447,7 +837,7 @@ function renderManagerCategories() {
         <div class="current-items" id="mgr-items-${cat.id}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${cat.placeholder}"
+            <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
               oninput="showAutocomplete('${cat.id}')"
               onblur="setTimeout(()=>hideAutocomplete('${cat.id}'),150)"
               onkeydown="handleAddItemKeydown(event,'${cat.id}')"/>
@@ -467,10 +857,11 @@ function toggleManagerCategory(catId) {
 }
 
 function renderManagerItems(catId) {
-  const state = menuState[catId];
+  const state = menuState[catId] || { items: [], lastSent: [] };
   const lastSentNames = new Set(state.lastSent.filter(i => i.onMenu !== false).map(i => i.name.trim().toLowerCase()));
   const visibleItems = state.items.filter(i => i.onMenu !== false);
   const listEl = document.getElementById('mgr-items-' + catId);
+  if (!listEl) return;
   listEl.innerHTML = '';
   if (!visibleItems.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
   visibleItems.forEach(item => {
@@ -513,11 +904,13 @@ function renderManagerItems(catId) {
 }
 
 async function persistState() {
-  // Write to Firebase. If not configured, silently skip (state stays in memory for session).
   if (!FB_SECRET || !FB_URL) return;
   try {
-    // Always bundle current config so all devices stay in sync
-    menuState._config = { pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL };
+    menuState._config = {
+      pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL,
+      categories: CATEGORY_DEFS,
+      design: currentDesign,
+    };
     await fbWrite(menuState);
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
@@ -527,6 +920,7 @@ async function persistState() {
     showToast('⚠️ Cloud save failed — check Firebase config in Admin settings.', 'error');
   }
 }
+
 async function saveMenu() {
   const ts = Date.now();
   menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
@@ -541,20 +935,16 @@ function addItem(catId) {
   const name = input.value.trim();
   if (!name) return;
   const nameLower = name.toLowerCase();
-  // Prevent duplicate visible items
-  const alreadyOnMenu = (menuState[catId].items || []).find(
+  if (!menuState[catId]) menuState[catId] = { items: [], lastSent: [] };
+  const alreadyOnMenu = menuState[catId].items.find(
     i => i.onMenu !== false && i.name.toLowerCase() === nameLower
   );
   if (!alreadyOnMenu) {
-    // Re-add a previously removed item (flip onMenu instead of creating a new entry)
-    const offMenu = (menuState[catId].items || []).find(
+    const offMenu = menuState[catId].items.find(
       i => i.onMenu === false && i.name.toLowerCase() === nameLower
     );
-    if (offMenu) {
-      offMenu.onMenu = true;
-    } else {
-      menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
-    }
+    if (offMenu) { offMenu.onMenu = true; }
+    else { menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true }); }
   }
   input.value = '';
   hideAutocomplete(catId);
@@ -572,7 +962,7 @@ function showAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
-  const matches = (menuState[catId].items || []).filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
+  const matches = (menuState[catId]?.items || []).filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
@@ -789,16 +1179,15 @@ function updateDraftIndicator() {
 
 // ─── DIFF ─────────────────────────────────────────────────────────────────────
 function restoreLabel(catId) {
-  return catId === 'beer' ? 'Back on Tap' : 'Back in Stock';
+  const cat = CATEGORY_DEFS.find(c => c.id === catId);
+  if (cat && cat.title.toLowerCase().includes('tap')) return 'Back on Tap';
+  return 'Back in Stock';
 }
 
 function computeDiff() {
   const results = [];
   CATEGORY_DEFS.forEach(cat => {
-    const state = menuState[cat.id];
-
-    // Compute 86/restored FIRST so we can exclude those names from add/remove
-    // Only consider items that are onMenu in both current and lastSent
+    const state = menuState[cat.id] || { items: [], lastSent: [] };
     const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
     const eightySixed = [], restored = [];
     const eightySixedNames = new Set(), restoredNames = new Set();
@@ -810,15 +1199,12 @@ function computeDiff() {
         if ( prev.eightySixed && !item.eightySixed) { restored.push(item.name.trim());    restoredNames.add(nameLow); }
       }
     });
-
-    // Add/remove: only count onMenu items that aren't just changing 86 state
     const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const lastNames    = state.lastSent.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
     const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
     const added   = currentNames.filter(n => !lastSet.has(n.toLowerCase())   && !restoredNames.has(n.toLowerCase()));
     const removed = lastNames.filter(n   => !currentSet.has(n.toLowerCase()) && !eightySixedNames.has(n.toLowerCase()));
-
     if (added.length || removed.length || eightySixed.length || restored.length) {
       results.push({ id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored });
     }
@@ -863,7 +1249,6 @@ async function sendUpdate() {
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
 
-  // Single update message — all changes grouped by category, with menu link at bottom
   const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
   let lines = [`🔥 DRINK MENU UPDATES — ${dateStr} ${timeStr}`, ''];
   diff.forEach(s => {
@@ -888,10 +1273,9 @@ async function sendUpdate() {
     });
 
     if (r1.ok || r1.status===202) {
-      // Commit lastSent in memory + cloud
       const ts = Date.now();
       CATEGORY_DEFS.forEach(cat => {
-        menuState[cat.id].lastSent = menuState[cat.id].items.map(i => ({...i}));
+        if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
       });
       menuState._meta = { lastUpdatedTs: ts.toString(), lastSentCategories: diff.map(d => d.id) };
       lsSet('hf_last_updated_ts', ts.toString());
@@ -937,11 +1321,15 @@ document.getElementById('prune-items-wrap').addEventListener('click', e => {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['manager','admin','database'].forEach(t => {
-    document.getElementById('tab-btn-' + t).classList.toggle('active', t === name);
-    document.getElementById('tab-panel-' + t).classList.toggle('active', t === name);
+  ['manager','categories','admin','database'].forEach(t => {
+    const btn   = document.getElementById('tab-btn-'   + t);
+    const panel = document.getElementById('tab-panel-' + t);
+    if (btn)   btn.classList.toggle('active',   t === name);
+    if (panel) panel.classList.toggle('active', t === name);
   });
-  if (name === 'database') { renderDatabaseTab(); renderPruneSection(); }
+  if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
+  if (name === 'categories') { renderCategoriesTab(); }
+  if (name === 'admin')      { renderDesignSection(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
@@ -971,16 +1359,10 @@ function renderDatabaseTab() {
     });
 
     let filtered = rows;
-
-    // Recipe filter
     if (dbFilters.recipe === 'yes') filtered = filtered.filter(r => r.recipe.length > 0);
     if (dbFilters.recipe === 'no')  filtered = filtered.filter(r => r.recipe.length === 0);
-
-    // Status filter
     if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu);
     if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu);
-
-    // Search query filter
     if (query) {
       filtered = filtered.filter(r =>
         r.name.toLowerCase().includes(query) ||
@@ -1028,7 +1410,6 @@ function filterDatabase() { renderDatabaseTab(); }
   hi.addEventListener('keydown', function(e) {
     if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
   });
-  // Re-focus hidden input when tapping the dots area (in case focus was lost)
   document.getElementById('pin-overlay').addEventListener('click', function(e) {
     if (!e.target.closest('.key') && !e.target.closest('.pin-cancel')) {
       hi.focus();
