@@ -14,7 +14,18 @@
     <span class="logo-mark" style="display:none"></span>
     <h1>CURRENT MENU</h1>
     <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-    <button class="manager-btn" id="manager-toggle-btn" onclick="onManagerBtnClick()">⚙ Manager</button>
+    <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
+    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+    <div class="user-chip" id="user-chip" style="display:none" onclick="toggleUserDropdown()">
+      <span id="user-initials">?</span>
+      <span>▾</span>
+      <div class="user-dropdown" id="user-dropdown">
+        <div class="user-dropdown-name" id="user-dropdown-name"></div>
+        <div class="user-dropdown-role" id="user-dropdown-role"></div>
+        <div class="user-dropdown-divider"></div>
+        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
   </header>
 
   <!-- LOADING -->
@@ -47,7 +58,6 @@
       <button class="tab-btn"        id="tab-btn-categories" onclick="switchTab('categories')">CATEGORIES</button>
       <button class="tab-btn"        id="tab-btn-admin"      onclick="switchTab('admin')">ADMIN</button>
       <button class="tab-btn"        id="tab-btn-database"   onclick="switchTab('database')">DATABASE</button>
-      <button class="tab-btn signout-btn" onclick="signOut()">Sign Out</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
@@ -257,10 +267,13 @@
 <!-- AUTH OVERLAY -->
 <div id="auth-overlay">
   <div class="auth-box">
-    <h2 id="auth-title">MANAGER LOGIN</h2>
-    <p id="auth-subtitle">Sign in to access manager controls</p>
+    <h2 id="auth-title">SIGN IN</h2>
+    <p id="auth-subtitle">Sign in to your account</p>
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
+      <div class="auth-field" id="auth-name-field" style="display:none">
+        <input type="text" id="auth-name" placeholder="First name" autocomplete="given-name"/>
+      </div>
       <div class="auth-field">
         <input type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
       </div>

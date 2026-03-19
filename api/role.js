@@ -16,11 +16,11 @@ export default async function handler(req, res) {
   const { id: uid } = await userRes.json();
   if (!uid) return res.status(401).json({ error: 'Invalid token' });
 
-  // Read role with service key (bypasses RLS)
+  // Read role + name with service key (bypasses RLS)
   const roleRes = await fetch(
-    `${sbUrl}/rest/v1/profiles?id=eq.${uid}&select=role`,
+    `${sbUrl}/rest/v1/profiles?id=eq.${uid}&select=role,name`,
     { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
   );
   const [profile] = await roleRes.json();
-  res.json({ role: profile?.role || 'none' });
+  res.json({ role: profile?.role || 'none', name: profile?.name || '' });
 }

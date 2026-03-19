@@ -47,9 +47,22 @@
   .logo-mark { font-family: var(--font-accent); font-size: 12px; letter-spacing: 3px; color: var(--yellow); display: block; margin-bottom: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
   header h1 { font-family: var(--font-heading); font-size: 40px; letter-spacing: 2px; line-height: 1; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
   .header-sub { margin-top: 5px; color: rgba(253,244,236,0.72); font-family: var(--font-accent); font-size: 12px; letter-spacing: 0.5px; }
-  .manager-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
+  .manager-btn { position: absolute; top: 18px; left: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
   .manager-btn:hover { background: rgba(253,244,236,0.27); }
   .manager-btn.active { background: var(--terra); border-color: var(--terra); }
+  .header-signin-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
+  .header-signin-btn:hover { background: rgba(253,244,236,0.27); }
+  /* Avatar chip */
+  .user-chip { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 20px; padding: 5px 10px; cursor: pointer; color: var(--cream); font-size: 12px; user-select: none; }
+  .user-chip:hover { background: rgba(253,244,236,0.27); }
+  #user-initials { font-weight: 700; font-size: 13px; }
+  /* Dropdown */
+  .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; min-width: 140px; z-index: 50; text-align: left; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .user-chip.open .user-dropdown { display: block; }
+  .user-dropdown-name { font-weight: 600; font-size: 14px; color: var(--charcoal); }
+  .user-dropdown-role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+  .user-dropdown-divider { height: 1px; background: var(--border); margin: 10px 0; }
+  .user-dropdown-signout { background: none; border: none; color: var(--red); font-size: 13px; cursor: pointer; padding: 0; font-family: var(--font-body); }
   /* Manager mode header */
   body.manager-mode header { background: #111; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--border); }
   body.manager-mode header h1 { color: var(--text); }
@@ -97,8 +110,6 @@
   .auth-toggle-btn { background: none; border: none; color: var(--teal); font-size: 12px; cursor: pointer; padding: 0 4px; text-decoration: underline; font-family: var(--font-body); }
   .pin-cancel { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; margin-top: 14px; display: block; width: 100%; padding: 6px; transition: color 0.15s; }
   .pin-cancel:hover { color: var(--charcoal); }
-  .signout-btn { margin-left: auto; background: rgba(231,76,60,0.12) !important; color: #e74c3c !important; border-color: rgba(231,76,60,0.25) !important; }
-
   /* ── MANAGER VIEW (dark) ── */
   #manager-view { display: none; }
   .section-label { font-family: var(--font-heading); font-size: 11px; letter-spacing: 4px; color: var(--fire); margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }

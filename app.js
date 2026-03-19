@@ -6,7 +6,7 @@ let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-men
 
 let SUPABASE_URL      = '';
 let SUPABASE_ANON_KEY = '';
-let currentUser = null; // { uid, email, accessToken, refreshToken, role, expiresAt }
+let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
 
 let isFirstSetup  = !FB_SECRET || !FB_URL;
 let isManagerMode = false;
@@ -555,9 +555,13 @@ async function _tryRestoreSession() {
   if (!storedRefresh) return;
   try {
     const data = await sbRefreshToken(storedRefresh);
-    const uid  = data.user?.id || '';
-    const role = data.access_token ? await sbGetRole(data.access_token) : 'none';
-    _applySession(data, role);
+    let role = 'none', name = '';
+    if (data.access_token) {
+      const profile = await sbGetProfile(data.access_token);
+      role = profile.role;
+      name = profile.name;
+    }
+    _applySession(data, role, name);
     applyRole(role);
   } catch(e) {
     // Stored session is invalid — clear it silently
@@ -720,11 +724,11 @@ function updateCollapseAllBtn() {
 }
 
 // ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
-async function sbSignUp(email, password) {
+async function sbSignUp(email, password, name) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ email, password })
+    body: JSON.stringify({ email, password, data: { name } })
   });
   if (!r.ok) throw await r.json();
   return await r.json();
@@ -750,13 +754,13 @@ async function sbRefreshToken(refreshToken) {
   return await r.json();
 }
 
-async function sbGetRole(accessToken) {
+async function sbGetProfile(accessToken) {
   const r = await fetch('/api/role', {
     headers: { 'Authorization': `Bearer ${accessToken}` }
   });
-  if (!r.ok) return 'none';
-  const { role } = await r.json();
-  return role || 'none';
+  if (!r.ok) return { role: 'none', name: '' };
+  const { role, name } = await r.json();
+  return { role: role || 'none', name: name || '' };
 }
 
 
@@ -782,12 +786,12 @@ function _scheduleTokenRefresh(expiresAt) {
   }, msUntilRefresh);
 }
 
-function _applySession(data, role) {
+function _applySession(data, role, name) {
   const expiresIn = (data.expires_in || 3600) * 1000;
   const uid   = data.user?.id || data.user_id || '';
   const email = data.user?.email || data.email || '';
   currentUser = {
-    uid, email, role,
+    uid, email, name: name || '', role,
     accessToken:  data.access_token,
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
@@ -798,6 +802,26 @@ function _applySession(data, role) {
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
+function renderUserHeader() {
+  const signedIn  = !!currentUser;
+  const role      = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  const name      = currentUser?.name || '';
+  const initials  = name.charAt(0).toUpperCase() || '?';
+  const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
+
+  document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
+  document.getElementById('user-chip').style.display  = signedIn ? '' : 'none';
+  document.getElementById('action-btn').style.display = signedIn ? '' : 'none';
+
+  if (signedIn) {
+    document.getElementById('user-initials').textContent      = initials;
+    document.getElementById('user-dropdown-name').textContent = name || currentUser?.email || '';
+    document.getElementById('user-dropdown-role').textContent = roleLabel;
+    document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
+  }
+}
+
 function applyRole(role) {
   const isManager = role === 'manager' || role === 'admin';
   const isAdmin   = role === 'admin';
@@ -805,14 +829,31 @@ function applyRole(role) {
   document.getElementById('tab-btn-database').style.display = isAdmin ? '' : 'none';
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
+  renderUserHeader();
   if (isManager && !isManagerMode) { enterManager(); }
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
-function onManagerBtnClick() {
-  if (isManagerMode) { exitManager(); return; }
-  openAuthOverlay();
+function onActionBtnClick() {
+  const role = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  if (isManager) {
+    if (isManagerMode) exitManager(); else enterManager();
+  } else {
+    showToast('Settings coming soon.', 'info');
+  }
 }
+
+function toggleUserDropdown() {
+  const chip = document.getElementById('user-chip');
+  chip.classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const chip = document.getElementById('user-chip');
+  if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+});
 
 function openAuthOverlay() {
   const overlay = document.getElementById('auth-overlay');
@@ -833,11 +874,12 @@ function closeAuthOverlay() {
 function toggleAuthMode() {
   _authMode = _authMode === 'signin' ? 'signup' : 'signin';
   const isSignIn = _authMode === 'signin';
-  document.getElementById('auth-title').textContent       = isSignIn ? 'MANAGER LOGIN' : 'CREATE ACCOUNT';
-  document.getElementById('auth-subtitle').textContent    = isSignIn ? 'Sign in to access manager controls' : 'Sign up with your work email';
+  document.getElementById('auth-title').textContent       = isSignIn ? 'SIGN IN' : 'CREATE ACCOUNT';
+  document.getElementById('auth-subtitle').textContent    = isSignIn ? 'Sign in to your account' : 'Sign up with your work email';
   document.getElementById('auth-submit-btn').textContent  = isSignIn ? 'Sign In' : 'Sign Up';
   document.getElementById('auth-toggle-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
   document.getElementById('auth-toggle-btn').textContent  = isSignIn ? 'Sign Up' : 'Sign In';
+  document.getElementById('auth-name-field').style.display = isSignIn ? 'none' : '';
   document.getElementById('auth-error').textContent = '';
 }
 
@@ -851,16 +893,22 @@ async function handleAuthSubmit() {
   btn.textContent = _authMode === 'signin' ? 'Signing in…' : 'Creating account…';
   errEl.textContent = '';
   try {
-    let data, role;
+    let data, role, name;
     if (_authMode === 'signup') {
-      data = await sbSignUp(email, password);
+      name = (document.getElementById('auth-name')?.value || '').trim();
+      data = await sbSignUp(email, password, name);
       role = 'none';
     } else {
       data = await sbSignIn(email, password);
-      const uid = data.user?.id || '';
-      role = data.access_token ? await sbGetRole(data.access_token) : 'none';
+      if (data.access_token) {
+        const profile = await sbGetProfile(data.access_token);
+        role = profile.role;
+        name = profile.name;
+      } else {
+        role = 'none'; name = '';
+      }
     }
-    _applySession(data, role);
+    _applySession(data, role, name);
     closeAuthOverlay();
     applyRole(role);
     if (role === 'none') {
@@ -882,6 +930,7 @@ function signOut() {
   localStorage.removeItem('hf_sb_refresh_token');
   localStorage.removeItem('hf_sb_expires_at');
   if (isManagerMode) exitManager();
+  renderUserHeader();
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
@@ -892,8 +941,8 @@ function enterManager() {
   document.getElementById('public-view').style.display = 'none';
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('manager-view').style.display = 'block';
-  document.getElementById('manager-toggle-btn').textContent = '✕ Exit';
-  document.getElementById('manager-toggle-btn').classList.add('active');
+  document.getElementById('action-btn').textContent = '✕ Exit';
+  document.getElementById('action-btn').classList.add('active');
   if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
   document.getElementById('fb-url-input').value    = FB_URL    || '';
   document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
@@ -908,8 +957,10 @@ function exitManager() {
   isManagerMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
-  document.getElementById('manager-toggle-btn').textContent = '⚙ Manager';
-  document.getElementById('manager-toggle-btn').classList.remove('active');
+  const role = currentUser?.role || 'none';
+  const isManager = role === 'manager' || role === 'admin';
+  document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
+  document.getElementById('action-btn').classList.remove('active');
   showPublicView();
 }
 
