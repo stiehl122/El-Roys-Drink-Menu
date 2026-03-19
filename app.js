@@ -1,18 +1,18 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-let MANAGER_PIN = localStorage.getItem('hf_pin') || '1234';
-let OWNER_PIN   = localStorage.getItem('hf_owner_pin') || '';
-let isOwnerMode = false;
-let BOT_ID      = '';
-let MENU_URL    = localStorage.getItem('hf_menu_url') || '';
-let FB_SECRET   = localStorage.getItem('hf_fb_secret') || '';
-let FB_URL      = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
+let BOT_ID    = '';
+let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
+let FB_SECRET = localStorage.getItem('hf_fb_secret') || '';
+let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
-let isFirstSetup = !FB_SECRET || !FB_URL;
+let SUPABASE_URL      = localStorage.getItem('hf_supabase_url') || '';
+let SUPABASE_ANON_KEY = localStorage.getItem('hf_supabase_anon_key') || '';
+let currentUser = null; // { uid, email, accessToken, refreshToken, role, expiresAt }
+
+let isFirstSetup  = !FB_SECRET || !FB_URL;
 let isManagerMode = false;
-let pinEntry = '';
-let syncInterval = null;
-let _pinFailCount = 0;
-let _pinLockedUntil = 0;
+let syncInterval  = null;
+let _authMode     = 'signin'; // 'signin' | 'signup'
+let _tokenRefreshTimer = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -492,11 +492,9 @@ async function init() {
     // Extract config (including categories + design) BEFORE building state
     if (data && data._config) {
       const cfg = data._config;
-      if (cfg.pin)      { MANAGER_PIN = cfg.pin;     lsSet('hf_pin', MANAGER_PIN); }
-      if (cfg.menuUrl)  { MENU_URL    = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
-      if (cfg.fbSecret) { FB_SECRET   = cfg.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
-      if (cfg.fbUrl)    { FB_URL      = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
-      if (cfg.ownerPin) { OWNER_PIN   = cfg.ownerPin; lsSet('hf_owner_pin', OWNER_PIN); }
+      if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
+      if (cfg.fbSecret) { FB_SECRET = cfg.fbSecret; lsSet('hf_fb_secret', FB_SECRET); }
+      if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
       if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
         CATEGORY_DEFS = cfg.categories;
       }
@@ -534,6 +532,28 @@ async function init() {
     applyDesign(currentDesign);
     menuState = defaultState();
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
+  }
+
+  // Restore Supabase session if stored tokens exist
+  await _tryRestoreSession();
+}
+
+async function _tryRestoreSession() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  const storedRefresh  = localStorage.getItem('hf_sb_refresh_token');
+  const storedExpiresAt = Number(localStorage.getItem('hf_sb_expires_at') || 0);
+  if (!storedRefresh) return;
+  try {
+    const data = await sbRefreshToken(storedRefresh);
+    const uid  = data.user?.id || '';
+    const role = uid ? await sbGetRole(uid, data.access_token) : 'none';
+    _applySession(data, role);
+    applyRole(role);
+  } catch(e) {
+    // Stored session is invalid — clear it silently
+    localStorage.removeItem('hf_sb_access_token');
+    localStorage.removeItem('hf_sb_refresh_token');
+    localStorage.removeItem('hf_sb_expires_at');
   }
 }
 
@@ -689,61 +709,184 @@ function updateCollapseAllBtn() {
   btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
 }
 
-// ─── PIN ──────────────────────────────────────────────────────────────────────
+// ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
+async function sbSignUp(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
+}
+
+async function sbSignIn(email, password) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, password })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
+}
+
+async function sbRefreshToken(refreshToken) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ refresh_token: refreshToken })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
+}
+
+async function sbGetRole(uid, accessToken) {
+  const r = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${uid}&select=role`,
+    { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${accessToken}` } }
+  );
+  const data = await r.json();
+  return data?.[0]?.role || 'none';
+}
+
+async function sbInsertProfile(uid, email, accessToken) {
+  await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({ id: uid, email, role: 'none' })
+  });
+}
+
+function _scheduleTokenRefresh(expiresAt) {
+  if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
+  const msUntilRefresh = Math.max(0, expiresAt - Date.now() - 5 * 60 * 1000);
+  _tokenRefreshTimer = setTimeout(async () => {
+    if (!currentUser) return;
+    try {
+      const data = await sbRefreshToken(currentUser.refreshToken);
+      const expiresIn = (data.expires_in || 3600) * 1000;
+      currentUser.accessToken  = data.access_token;
+      currentUser.refreshToken = data.refresh_token;
+      currentUser.expiresAt    = Date.now() + expiresIn;
+      lsSet('hf_sb_access_token',  currentUser.accessToken);
+      lsSet('hf_sb_refresh_token', currentUser.refreshToken);
+      lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+      _scheduleTokenRefresh(currentUser.expiresAt);
+    } catch(e) {
+      // Refresh failed — sign out silently
+      signOut();
+    }
+  }, msUntilRefresh);
+}
+
+function _applySession(data, role) {
+  const expiresIn = (data.expires_in || 3600) * 1000;
+  const uid   = data.user?.id || data.user_id || '';
+  const email = data.user?.email || data.email || '';
+  currentUser = {
+    uid, email, role,
+    accessToken:  data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt:    Date.now() + expiresIn,
+  };
+  lsSet('hf_sb_access_token',  currentUser.accessToken);
+  lsSet('hf_sb_refresh_token', currentUser.refreshToken);
+  lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+  _scheduleTokenRefresh(currentUser.expiresAt);
+}
+
+function applyRole(role) {
+  const isManager = role === 'manager' || role === 'admin';
+  const isAdmin   = role === 'admin';
+  document.getElementById('tab-btn-admin').style.display    = isAdmin ? '' : 'none';
+  document.getElementById('tab-btn-database').style.display = isAdmin ? '' : 'none';
+  const pruneSection = document.getElementById('prune-section');
+  if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
+  if (isManager && !isManagerMode) { enterManager(); }
+}
+
+// ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onManagerBtnClick() {
   if (isManagerMode) { exitManager(); return; }
-  openPinOverlay();
+  openAuthOverlay();
 }
-function openPinOverlay() {
-  document.getElementById('pin-overlay').classList.add('open');
-  const remaining = Math.ceil((_pinLockedUntil - Date.now()) / 1000);
-  if (remaining > 0) {
-    const errEl = document.getElementById('pin-error');
-    errEl.textContent = `Too many attempts. Try again in ${remaining}s.`;
-    errEl.classList.add('visible');
-  }
-  const hi = document.getElementById('pin-hidden-input');
-  hi.value = '';
-  hi.focus();
+
+function openAuthOverlay() {
+  const overlay = document.getElementById('auth-overlay');
+  overlay.classList.add('open');
+  const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+  document.getElementById('auth-no-config').style.display    = noConfig ? '' : 'none';
+  document.getElementById('auth-form-wrap').style.display    = noConfig ? 'none' : '';
+  document.getElementById('auth-error').textContent = '';
+  document.getElementById('auth-email').value    = '';
+  document.getElementById('auth-password').value = '';
+  if (!noConfig) document.getElementById('auth-email').focus();
 }
-function closePinOverlay() {
-  document.getElementById('pin-overlay').classList.remove('open');
-  pinEntry = ''; updateDots();
-  document.getElementById('pin-error').classList.remove('visible');
-  const hi = document.getElementById('pin-hidden-input'); hi.value = ''; hi.blur();
+
+function closeAuthOverlay() {
+  document.getElementById('auth-overlay').classList.remove('open');
 }
-function pinPress(d) {
-  if (Date.now() < _pinLockedUntil) return;
-  if (pinEntry.length >= 4) return;
-  pinEntry += d; updateDots();
-  if (pinEntry.length === 4) setTimeout(checkPin, 100);
+
+function toggleAuthMode() {
+  _authMode = _authMode === 'signin' ? 'signup' : 'signin';
+  const isSignIn = _authMode === 'signin';
+  document.getElementById('auth-title').textContent       = isSignIn ? 'MANAGER LOGIN' : 'CREATE ACCOUNT';
+  document.getElementById('auth-subtitle').textContent    = isSignIn ? 'Sign in to access manager controls' : 'Sign up with your work email';
+  document.getElementById('auth-submit-btn').textContent  = isSignIn ? 'Sign In' : 'Sign Up';
+  document.getElementById('auth-toggle-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
+  document.getElementById('auth-toggle-btn').textContent  = isSignIn ? 'Sign Up' : 'Sign In';
+  document.getElementById('auth-error').textContent = '';
 }
-function pinBack() { pinEntry = pinEntry.slice(0,-1); updateDots(); document.getElementById('pin-error').classList.remove('visible'); }
-function updateDots() {
-  for (let i=0;i<4;i++) {
-    const dot = document.getElementById('d'+i);
-    dot.classList.remove('error');
-    dot.classList.toggle('filled', i < pinEntry.length);
-  }
-}
-function checkPin() {
-  if (Date.now() < _pinLockedUntil) return;
-  if (OWNER_PIN !== '' && pinEntry === OWNER_PIN) { _pinFailCount = 0; isOwnerMode = true; closePinOverlay(); enterManager(); }
-  else if (pinEntry === MANAGER_PIN) { _pinFailCount = 0; isOwnerMode = false; closePinOverlay(); enterManager(); }
-  else {
-    _pinFailCount++;
-    for (let i=0;i<4;i++) document.getElementById('d'+i).classList.add('error');
-    const errEl = document.getElementById('pin-error');
-    if (_pinFailCount >= 5) {
-      _pinLockedUntil = Date.now() + 30000;
-      _pinFailCount = 0;
-      errEl.textContent = 'Too many attempts. Try again in 30s.';
+
+async function handleAuthSubmit() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const errEl    = document.getElementById('auth-error');
+  const btn      = document.getElementById('auth-submit-btn');
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  btn.textContent = _authMode === 'signin' ? 'Signing in…' : 'Creating account…';
+  errEl.textContent = '';
+  try {
+    let data, role;
+    if (_authMode === 'signup') {
+      data = await sbSignUp(email, password);
+      const uid = data.user?.id || '';
+      const at  = data.access_token;
+      if (uid && at) await sbInsertProfile(uid, email, at);
+      role = 'none';
     } else {
-      errEl.textContent = 'Incorrect PIN';
+      data = await sbSignIn(email, password);
+      const uid = data.user?.id || '';
+      role = uid ? await sbGetRole(uid, data.access_token) : 'none';
     }
-    errEl.classList.add('visible');
-    setTimeout(() => { pinEntry=''; updateDots(); errEl.classList.remove('visible'); errEl.textContent = 'Incorrect PIN'; }, 1200);
+    _applySession(data, role);
+    closeAuthOverlay();
+    applyRole(role);
+    if (role === 'none') {
+      showToast('Signed in. Contact admin to get manager access.', 'info');
+    }
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = _authMode === 'signin' ? 'Sign In' : 'Sign Up';
   }
+}
+
+function signOut() {
+  currentUser = null;
+  if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
+  localStorage.removeItem('hf_sb_access_token');
+  localStorage.removeItem('hf_sb_refresh_token');
+  localStorage.removeItem('hf_sb_expires_at');
+  if (isManagerMode) exitManager();
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
@@ -757,12 +900,12 @@ function enterManager() {
   document.getElementById('manager-toggle-btn').textContent = '✕ Exit';
   document.getElementById('manager-toggle-btn').classList.add('active');
   if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
-  document.getElementById('fb-url-input').value    = FB_URL     || '';
+  document.getElementById('fb-url-input').value    = FB_URL    || '';
   document.getElementById('fb-secret-input').value = FB_SECRET ? '••••••••••••••••' : '';
   document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
-  // Admin tab visible to owners only (or everyone when no owner PIN is set)
-  document.getElementById('tab-btn-admin').style.display = (OWNER_PIN === '' || isOwnerMode) ? '' : 'none';
+  document.getElementById('sb-url-input').value      = SUPABASE_URL      || '';
+  document.getElementById('sb-anon-key-input').value = SUPABASE_ANON_KEY ? '••••••••••••••••' : '';
   switchTab('manager');
   updateDraftIndicator();
   renderManagerCategories();
@@ -770,7 +913,6 @@ function enterManager() {
 
 function exitManager() {
   isManagerMode = false;
-  isOwnerMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
   document.getElementById('manager-toggle-btn').textContent = '⚙ Manager';
@@ -806,17 +948,16 @@ async function saveMenuUrl() {
   await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
-async function _savePinField(inputId, isOwner) {
-  const val = document.getElementById(inputId).value.trim();
-  if (!/^\d{4}$/.test(val)) { showToast(`${isOwner ? 'Owner ' : ''}PIN must be exactly 4 digits.`, 'error'); return; }
-  if (isOwner) { OWNER_PIN = val; lsSet('hf_owner_pin', OWNER_PIN); }
-  else         { MANAGER_PIN = val; lsSet('hf_pin', MANAGER_PIN); }
-  document.getElementById(inputId).value = '';
-  await persistState();
-  showToast(`✅ ${isOwner ? 'Owner ' : ''}PIN updated!`, 'success');
+function saveSupabaseConfig() {
+  const urlVal = document.getElementById('sb-url-input').value.trim().replace(/\/+$/, '');
+  const keyVal = document.getElementById('sb-anon-key-input').value.trim();
+  let changed = false;
+  if (urlVal) { SUPABASE_URL = urlVal; lsSet('hf_supabase_url', SUPABASE_URL); changed = true; }
+  if (keyVal && !keyVal.startsWith('•')) { SUPABASE_ANON_KEY = keyVal; lsSet('hf_supabase_anon_key', SUPABASE_ANON_KEY); changed = true; }
+  if (!changed) { showToast('No changes made.', 'info'); return; }
+  if (SUPABASE_ANON_KEY) document.getElementById('sb-anon-key-input').value = '••••••••••••••••';
+  showToast('✅ Supabase config saved!', 'success');
 }
-async function savePin()      { await _savePinField('new-pin-input', false); }
-async function saveOwnerPin() { await _savePinField('owner-pin-input', true); }
 
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
 function renderManagerCategories() {
@@ -907,7 +1048,7 @@ async function persistState() {
   if (!FB_SECRET || !FB_URL) return;
   try {
     menuState._config = {
-      pin: MANAGER_PIN, ownerPin: OWNER_PIN, menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL,
+      menuUrl: MENU_URL, fbSecret: FB_SECRET, fbUrl: FB_URL,
       categories: CATEGORY_DEFS,
       design: currentDesign,
     };
@@ -1112,9 +1253,10 @@ function removeItem(catId, itemId) {
 }
 
 function renderPruneSection() {
+  const isAdmin = currentUser?.role === 'admin';
   const section = document.getElementById('prune-section');
-  section.style.display = isOwnerMode ? '' : 'none';
-  if (!isOwnerMode) return;
+  section.style.display = isAdmin ? '' : 'none';
+  if (!isAdmin) return;
   const wrap = document.getElementById('prune-items-wrap');
   const allOffMenu = [];
   CATEGORY_DEFS.forEach(cat => {
@@ -1136,7 +1278,7 @@ function renderPruneSection() {
 }
 
 async function pruneSingleItem(catId, itemName) {
-  if (!isOwnerMode) return;
+  if (currentUser?.role !== 'admin') return;
   if (!menuState[catId]) return;
   menuState[catId].items = menuState[catId].items.filter(
     i => !(i.onMenu === false && i.name === itemName)
@@ -1147,7 +1289,7 @@ async function pruneSingleItem(catId, itemName) {
 }
 
 async function pruneRemoved(catId) {
-  if (!isOwnerMode) return;
+  if (currentUser?.role !== 'admin') return;
   const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
   cats.forEach(id => { if (menuState[id]) menuState[id].items = menuState[id].items.filter(i => i.onMenu !== false); });
   await persistState();
@@ -1266,8 +1408,12 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING...';
 
   try {
+    const authHeaders = currentUser?.accessToken
+      ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
+      : {};
     const r1 = await fetch('/api/send-groupme', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify({ text: patchMessage })
     });
 
@@ -1285,6 +1431,10 @@ async function sendUpdate() {
       updateDraftIndicator();
       closeModal();
       showToast('✅ Drink menu update sent!', 'success');
+    } else if (r1.status === 401) {
+      showToast('❌ Not authorized. Please sign in.', 'error');
+    } else if (r1.status === 403) {
+      showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
     } else {
       showToast('❌ GroupMe error. Check GROUPME_BOT_ID env var.', 'error');
     }
@@ -1398,21 +1548,13 @@ function renderDatabaseTab() {
 
 function filterDatabase() { renderDatabaseTab(); }
 
-// ─── NATIVE MOBILE KEYPAD SUPPORT ────────────────────────────────────────────
+// ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
-  const hi = document.getElementById('pin-hidden-input');
-  hi.addEventListener('input', function() {
-    const digits = this.value.replace(/\D/g, '');
-    this.value = '';
-    for (const d of digits) pinPress(d);
+  document.getElementById('auth-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleAuthSubmit();
   });
-  hi.addEventListener('keydown', function(e) {
-    if (e.key === 'Backspace') { e.preventDefault(); pinBack(); }
-  });
-  document.getElementById('pin-overlay').addEventListener('click', function(e) {
-    if (!e.target.closest('.key') && !e.target.closest('.pin-cancel')) {
-      hi.focus();
-    }
+  document.getElementById('auth-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('auth-password').focus();
   });
 })();
 

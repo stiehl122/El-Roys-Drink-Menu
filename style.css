@@ -79,26 +79,25 @@
   .menu-item .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--teal); flex-shrink: 0; }
   .empty-menu { color: var(--muted); font-size: 13px; font-style: italic; padding: 4px 0; opacity: 0.65; }
 
-  /* ── PIN OVERLAY ── */
-  #pin-overlay { display: none; background: rgba(0,0,0,0.6); position: fixed; inset: 0; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
-  #pin-overlay.open { display: flex; }
-  .pin-box { background: var(--cream); border: 1px solid var(--border); border-radius: 16px; padding: 36px 28px; text-align: center; width: 100%; max-width: 320px; position: relative; }
-  .pin-box h2 { font-family: var(--font-heading); font-size: 22px; letter-spacing: 1px; margin-bottom: 5px; color: var(--charcoal); }
-  .pin-box p { color: var(--muted); font-size: 12px; margin-bottom: 22px; }
-  .pin-dots { display: flex; justify-content: center; gap: 11px; margin-bottom: 20px; }
-  .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid rgba(18,133,120,0.3); transition: all 0.2s; }
-  .pin-dot.filled { background: var(--teal); border-color: var(--teal); box-shadow: 0 0 8px rgba(18,133,120,0.5); }
-  .pin-dot.error { border-color: var(--red); background: var(--red); }
-  .keypad { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; max-width: 210px; margin: 0 auto; }
-  .key { background: var(--surface); border: 1px solid rgba(18,133,120,0.2); border-radius: 9px; color: var(--charcoal); font-family: var(--font-body); font-size: 18px; font-weight: 500; padding: 15px; cursor: pointer; transition: all 0.15s; user-select: none; }
-  .key:hover { background: var(--teal); color: var(--cream); border-color: var(--teal); }
-  .key.wide { grid-column: span 2; }
-  .key.del { font-size: 13px; color: var(--muted); }
-  .pin-error { color: #e74c3c; font-size: 12px; margin-top: 12px; height: 16px; opacity: 0; transition: opacity 0.2s; }
-  .pin-error.visible { opacity: 1; }
+  /* ── AUTH OVERLAY ── */
+  #auth-overlay { display: none; background: rgba(0,0,0,0.6); position: fixed; inset: 0; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+  #auth-overlay.open { display: flex; }
+  .auth-box { background: var(--cream); border: 1px solid var(--border); border-radius: 16px; padding: 36px 28px; text-align: center; width: 100%; max-width: 340px; position: relative; }
+  .auth-box h2 { font-family: var(--font-heading); font-size: 22px; letter-spacing: 1px; margin-bottom: 5px; color: var(--charcoal); }
+  .auth-box p { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .auth-hint-msg { color: var(--muted); font-size: 12px; margin-bottom: 16px; padding: 10px; background: rgba(0,0,0,0.05); border-radius: 8px; line-height: 1.5; }
+  .auth-field { margin-bottom: 10px; text-align: left; }
+  .auth-field input { width: 100%; padding: 11px 13px; border: 1px solid rgba(45,55,72,0.2); border-radius: 9px; font-family: var(--font-body); font-size: 14px; background: var(--surface); color: var(--charcoal); outline: none; transition: border-color 0.15s; }
+  .auth-field input:focus { border-color: var(--teal); }
+  .auth-error { color: #e74c3c; font-size: 12px; margin-bottom: 10px; min-height: 18px; text-align: left; }
+  .auth-submit-btn { width: 100%; padding: 13px; background: var(--teal); color: var(--cream); border: none; border-radius: 9px; font-family: var(--font-body); font-size: 14px; font-weight: 600; letter-spacing: 0.5px; cursor: pointer; transition: background 0.15s; margin-bottom: 12px; }
+  .auth-submit-btn:hover { background: var(--teal-dk); }
+  .auth-submit-btn:disabled { opacity: 0.6; cursor: default; }
+  .auth-toggle { font-size: 12px; color: var(--muted); }
+  .auth-toggle-btn { background: none; border: none; color: var(--teal); font-size: 12px; cursor: pointer; padding: 0 4px; text-decoration: underline; font-family: var(--font-body); }
   .pin-cancel { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; margin-top: 14px; display: block; width: 100%; padding: 6px; transition: color 0.15s; }
   .pin-cancel:hover { color: var(--charcoal); }
-  #pin-hidden-input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; border: none; background: none; color: transparent; outline: none; padding: 0; }
+  .signout-btn { margin-left: auto; background: rgba(231,76,60,0.12) !important; color: #e74c3c !important; border-color: rgba(231,76,60,0.25) !important; }
 
   /* ── MANAGER VIEW (dark) ── */
   #manager-view { display: none; }

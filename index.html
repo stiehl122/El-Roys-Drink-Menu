@@ -47,6 +47,7 @@
       <button class="tab-btn"        id="tab-btn-categories" onclick="switchTab('categories')">CATEGORIES</button>
       <button class="tab-btn"        id="tab-btn-admin"      onclick="switchTab('admin')">ADMIN</button>
       <button class="tab-btn"        id="tab-btn-database"   onclick="switchTab('database')">DATABASE</button>
+      <button class="tab-btn signout-btn" onclick="signOut()">Sign Out</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
@@ -126,20 +127,15 @@
       </div>
 
       <div class="config-card">
-        <h3>Manager PIN (default: 1234)</h3>
-        <div class="input-row">
-          <input type="password" id="new-pin-input" placeholder="New 4-digit PIN..." maxlength="4" inputmode="numeric" pattern="[0-9]*"/>
-          <button class="btn-small" onclick="savePin()">Update</button>
+        <h3>Supabase Auth</h3>
+        <div class="input-row" style="margin-bottom:8px;">
+          <input type="text" id="sb-url-input" placeholder="Project URL (e.g. https://xyz.supabase.co)"/>
         </div>
-      </div>
-
-      <div class="config-card">
-        <h3>Owner PIN <span style="color:#3a3a3a;font-weight:300">(admin settings access)</span></h3>
         <div class="input-row">
-          <input type="password" id="owner-pin-input" placeholder="New 4-digit owner PIN..." maxlength="4" inputmode="numeric" pattern="[0-9]*"/>
-          <button class="btn-small" onclick="saveOwnerPin()">Update</button>
+          <input type="password" id="sb-anon-key-input" placeholder="Anon / public key"/>
+          <button class="btn-small" onclick="saveSupabaseConfig()">Save</button>
         </div>
-        <div class="hint">Only the owner PIN can access admin settings. If not set, any manager PIN can access admin.</div>
+        <div class="hint">The anon key is safe to store here — it is the public key. User roles are enforced server-side.</div>
       </div>
 
       <!-- DESIGN & BRANDING -->
@@ -269,24 +265,27 @@
   </div>
 </div>
 
-<!-- PIN OVERLAY -->
-<div id="pin-overlay">
-  <div class="pin-box">
-    <input id="pin-hidden-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"/>
-    <h2>MANAGER LOGIN</h2>
-    <p>Enter your 4-digit PIN</p>
-    <div class="pin-dots">
-      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
-      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <h2 id="auth-title">MANAGER LOGIN</h2>
+    <p id="auth-subtitle">Sign in to access manager controls</p>
+    <div id="auth-no-config" style="display:none" class="auth-hint-msg">Configure Supabase in Admin → Supabase Auth settings first.</div>
+    <div id="auth-form-wrap">
+      <div class="auth-field">
+        <input type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password"/>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="auth-submit-btn" id="auth-submit-btn" onclick="handleAuthSubmit()">Sign In</button>
+      <div class="auth-toggle">
+        <span id="auth-toggle-text">Don't have an account?</span>
+        <button class="auth-toggle-btn" id="auth-toggle-btn" onclick="toggleAuthMode()">Sign Up</button>
+      </div>
     </div>
-    <div class="keypad">
-      <button class="key" onclick="pinPress('1')">1</button><button class="key" onclick="pinPress('2')">2</button><button class="key" onclick="pinPress('3')">3</button>
-      <button class="key" onclick="pinPress('4')">4</button><button class="key" onclick="pinPress('5')">5</button><button class="key" onclick="pinPress('6')">6</button>
-      <button class="key" onclick="pinPress('7')">7</button><button class="key" onclick="pinPress('8')">8</button><button class="key" onclick="pinPress('9')">9</button>
-      <button class="key wide" onclick="pinPress('0')">0</button><button class="key del" onclick="pinBack()">⌫</button>
-    </div>
-    <div class="pin-error" id="pin-error">Incorrect PIN. Try again.</div>
-    <button class="pin-cancel" onclick="closePinOverlay()">Cancel</button>
+    <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
   </div>
 </div>
 
