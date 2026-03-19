@@ -14,7 +14,18 @@
     <span class="logo-mark" style="display:none"></span>
     <h1>CURRENT MENU</h1>
     <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-    <button class="manager-btn" id="manager-toggle-btn" onclick="onManagerBtnClick()">⚙ Manager</button>
+    <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
+    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+    <div class="user-chip" id="user-chip" style="display:none" onclick="toggleUserDropdown()">
+      <span id="user-initials">?</span>
+      <span>▾</span>
+      <div class="user-dropdown" id="user-dropdown">
+        <div class="user-dropdown-name" id="user-dropdown-name"></div>
+        <div class="user-dropdown-role" id="user-dropdown-role"></div>
+        <div class="user-dropdown-divider"></div>
+        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
   </header>
 
   <!-- LOADING -->
@@ -100,15 +111,12 @@
 
       <div class="config-card">
         <h3>Firebase Database</h3>
-        <div class="input-row" style="margin-bottom:8px;">
-          <input type="text" id="fb-url-input" placeholder="Database URL (e.g. https://your-app.firebaseio.com)"/>
-        </div>
         <div class="input-row">
-          <input type="password" id="fb-secret-input" placeholder="Database Secret"/>
+          <input type="text" id="fb-url-input" placeholder="Database URL (e.g. https://your-app.firebaseio.com)"/>
           <button class="btn-small" onclick="saveFirebaseConfig()">Save</button>
         </div>
         <div class="hint">
-          Both URL and Secret sync to the cloud — any manager device picks them up automatically after first setup.
+          The Database Secret is managed as a Vercel environment variable (<code>FIREBASE_SECRET</code>) and is never stored in the database or browser.
         </div>
       </div>
 
@@ -129,22 +137,6 @@
         </div>
       </div>
 
-      <div class="config-card">
-        <h3>Manager PIN (default: 1234)</h3>
-        <div class="input-row">
-          <input type="password" id="new-pin-input" placeholder="New 4-digit PIN..." maxlength="4" inputmode="numeric" pattern="[0-9]*"/>
-          <button class="btn-small" onclick="savePin()">Update</button>
-        </div>
-      </div>
-
-      <div class="config-card">
-        <h3>Owner PIN <span style="color:#3a3a3a;font-weight:300">(admin settings access)</span></h3>
-        <div class="input-row">
-          <input type="password" id="owner-pin-input" placeholder="New 4-digit owner PIN..." maxlength="4" inputmode="numeric" pattern="[0-9]*"/>
-          <button class="btn-small" onclick="saveOwnerPin()">Update</button>
-        </div>
-        <div class="hint">Only the owner PIN can access admin settings. If not set, any manager PIN can access admin.</div>
-      </div>
 
       <!-- DESIGN & BRANDING -->
       <div class="config-card">
@@ -181,7 +173,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
-              <span class="design-color-label" id="design-primary-color-label">#2d3748</span>
+              <input type="text" class="design-hex-input" id="design-primary-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-primary-color')">
             </div>
           </div>
         </div>
@@ -191,7 +185,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
-              <span class="design-color-label" id="design-accent-color-label">#4299e1</span>
+              <input type="text" class="design-hex-input" id="design-accent-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-accent-color')">
             </div>
           </div>
         </div>
@@ -201,7 +197,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
-              <span class="design-color-label" id="design-bg-color-label">#f0f4f8</span>
+              <input type="text" class="design-hex-input" id="design-bg-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-bg-color')">
             </div>
           </div>
         </div>
@@ -273,24 +271,33 @@
   </div>
 </div>
 
-<!-- PIN OVERLAY -->
-<div id="pin-overlay">
-  <div class="pin-box">
-    <input id="pin-hidden-input" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off"/>
-    <h2>MANAGER LOGIN</h2>
-    <p>Enter your 4-digit PIN</p>
-    <div class="pin-dots">
-      <div class="pin-dot" id="d0"></div><div class="pin-dot" id="d1"></div>
-      <div class="pin-dot" id="d2"></div><div class="pin-dot" id="d3"></div>
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <h2 id="auth-title">SIGN IN</h2>
+    <p id="auth-subtitle">Sign in to your account</p>
+    <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
+    <div id="auth-form-wrap">
+      <div class="auth-field" id="auth-name-field" style="display:none">
+        <input type="text" id="auth-firstname" placeholder="First name" autocomplete="given-name"/>
+      </div>
+      <div class="auth-field" id="auth-lastname-field" style="display:none">
+        <input type="text" id="auth-lastname" placeholder="Last name" autocomplete="family-name"/>
+      </div>
+      <div class="auth-field">
+        <input type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password"/>
+      </div>
+      <div class="auth-error" id="auth-error"></div>
+      <button class="auth-submit-btn" id="auth-submit-btn" onclick="handleAuthSubmit()">Sign In</button>
+      <div class="auth-toggle">
+        <span id="auth-toggle-text">Don't have an account?</span>
+        <button class="auth-toggle-btn" id="auth-toggle-btn" onclick="toggleAuthMode()">Sign Up</button>
+      </div>
     </div>
-    <div class="keypad">
-      <button class="key" onclick="pinPress('1')">1</button><button class="key" onclick="pinPress('2')">2</button><button class="key" onclick="pinPress('3')">3</button>
-      <button class="key" onclick="pinPress('4')">4</button><button class="key" onclick="pinPress('5')">5</button><button class="key" onclick="pinPress('6')">6</button>
-      <button class="key" onclick="pinPress('7')">7</button><button class="key" onclick="pinPress('8')">8</button><button class="key" onclick="pinPress('9')">9</button>
-      <button class="key wide" onclick="pinPress('0')">0</button><button class="key del" onclick="pinBack()">⌫</button>
-    </div>
-    <div class="pin-error" id="pin-error">Incorrect PIN. Try again.</div>
-    <button class="pin-cancel" onclick="closePinOverlay()">Cancel</button>
+    <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
   </div>
 </div>
 
