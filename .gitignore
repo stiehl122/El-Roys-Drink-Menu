@@ -3,3 +3,4 @@ lib/config/notifications.json
 
 # macOS
 .DS_Store
+.vercel
