@@ -759,18 +759,6 @@ async function sbGetRole(uid, accessToken) {
   return data?.[0]?.role || 'none';
 }
 
-async function sbInsertProfile(uid, email, accessToken) {
-  await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
-    method: 'POST',
-    headers: {
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal'
-    },
-    body: JSON.stringify({ id: uid, email, role: 'none' })
-  });
-}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
@@ -866,9 +854,6 @@ async function handleAuthSubmit() {
     let data, role;
     if (_authMode === 'signup') {
       data = await sbSignUp(email, password);
-      const uid = data.user?.id || '';
-      const at  = data.access_token;
-      if (uid && at) await sbInsertProfile(uid, email, at);
       role = 'none';
     } else {
       data = await sbSignIn(email, password);
