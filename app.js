@@ -1241,7 +1241,6 @@ function closeModal() { document.getElementById('modal-bg').classList.remove('op
 
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
 async function sendUpdate() {
-  if (!BOT_ID) { closeModal(); showToast('⚠️ Set your GroupMe Bot ID first!', 'error'); return; }
   const diff = getCachedDiff();
   if (!diff.length) { closeModal(); return; }
 
@@ -1267,12 +1266,12 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING...';
 
   try {
-    const r1 = await fetch('https://api.groupme.com/v3/bots/post', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ bot_id: BOT_ID, text: patchMessage })
+    const r1 = await fetch('/api/send-groupme', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: patchMessage })
     });
 
-    if (r1.ok || r1.status===202) {
+    if (r1.status === 202) {
       const ts = Date.now();
       CATEGORY_DEFS.forEach(cat => {
         if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
@@ -1287,7 +1286,7 @@ async function sendUpdate() {
       closeModal();
       showToast('✅ Drink menu update sent!', 'success');
     } else {
-      showToast('❌ GroupMe error. Check your Bot ID.', 'error');
+      showToast('❌ GroupMe error. Check GROUPME_BOT_ID env var.', 'error');
     }
   } catch(e) {
     showToast('❌ Network error. Check connection.', 'error');
