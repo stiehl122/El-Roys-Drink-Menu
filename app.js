@@ -807,7 +807,10 @@ function renderUserHeader() {
   const role      = currentUser?.role || 'none';
   const isManager = role === 'manager' || role === 'admin';
   const name      = currentUser?.name || '';
-  const initials  = name.charAt(0).toUpperCase() || '?';
+  const parts     = name.trim().split(/\s+/).filter(Boolean);
+  const initials  = parts.length >= 2
+    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+    : (parts[0]?.[0] || '?').toUpperCase();
   const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
 
   document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
@@ -830,7 +833,6 @@ function applyRole(role) {
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
-  if (isManager && !isManagerMode) { enterManager(); }
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -879,7 +881,8 @@ function toggleAuthMode() {
   document.getElementById('auth-submit-btn').textContent  = isSignIn ? 'Sign In' : 'Sign Up';
   document.getElementById('auth-toggle-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
   document.getElementById('auth-toggle-btn').textContent  = isSignIn ? 'Sign Up' : 'Sign In';
-  document.getElementById('auth-name-field').style.display = isSignIn ? 'none' : '';
+  document.getElementById('auth-name-field').style.display     = isSignIn ? 'none' : '';
+  document.getElementById('auth-lastname-field').style.display = isSignIn ? 'none' : '';
   document.getElementById('auth-error').textContent = '';
 }
 
@@ -895,7 +898,9 @@ async function handleAuthSubmit() {
   try {
     let data, role, name;
     if (_authMode === 'signup') {
-      name = (document.getElementById('auth-name')?.value || '').trim();
+      const firstName = (document.getElementById('auth-firstname')?.value || '').trim();
+      const lastName  = (document.getElementById('auth-lastname')?.value  || '').trim();
+      name = [firstName, lastName].filter(Boolean).join(' ');
       data = await sbSignUp(email, password, name);
       role = 'none';
     } else {
