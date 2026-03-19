@@ -47,6 +47,7 @@ New accounts start with `role: none` and require admin promotion before they can
 - **Item descriptions:** Optional, expandable via a `›` icon on the public view; editable via `📝` in manager mode.
 - **Change count badge:** The Send Update button displays the number of unsent changes.
 - **Sign-up flow:** New accounts are created with `role: none`. An admin must promote the account to `manager` or `admin` via the Admin tab (or the Supabase dashboard) before the user can edit the menu.
+- **Public menu footer:** The footer on the public menu view displays the app version (`APP_VERSION` constant in `app.js`) and the last-updated timestamp. On Vercel preview deployments, it also shows a `PREVIEW` badge (detected via `IS_PREVIEW`, which checks that the hostname contains `vercel.app` but does not match the production URL pattern).
 
 ## Development Guidelines
 

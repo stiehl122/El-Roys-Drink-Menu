@@ -18,7 +18,8 @@ A live, single-page drink menu for El Roy's — built with zero external depende
 - **Firebase cloud sync** — menu state and config sync across devices in real time via Firebase Realtime Database
 - **Offline-capable** — falls back to localStorage if Firebase is unavailable
 - **Categories tab** — admin can add, remove, or reorder menu categories
-- **Design & Branding panel** — admin can set brand name, logo, fonts, and accent colors
+- **Design & Branding panel** — admin can set brand name, logo, fonts, and accent colors; color pickers include a typable hex input so exact color codes can be entered directly
+- **Public menu footer** — displays the app version and last-updated timestamp; shows a PREVIEW badge on Vercel preview deployments
 - **Database tab** — admin can prune items that have been removed from the menu
 - **Zero client-side dependencies** — no build step, no package manager required
 
