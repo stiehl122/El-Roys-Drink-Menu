@@ -177,7 +177,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
-              <span class="design-color-label" id="design-primary-color-label">#2d3748</span>
+              <input type="text" class="design-hex-input" id="design-primary-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-primary-color')">
             </div>
           </div>
         </div>
@@ -187,7 +189,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
-              <span class="design-color-label" id="design-accent-color-label">#4299e1</span>
+              <input type="text" class="design-hex-input" id="design-accent-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-accent-color')">
             </div>
           </div>
         </div>
@@ -197,7 +201,9 @@
           <div class="design-control">
             <div class="design-color-row">
               <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
-              <span class="design-color-label" id="design-bg-color-label">#f0f4f8</span>
+              <input type="text" class="design-hex-input" id="design-bg-color-label"
+                maxlength="7" placeholder="#000000"
+                oninput="syncHexInput('design-bg-color')">
             </div>
           </div>
         </div>
