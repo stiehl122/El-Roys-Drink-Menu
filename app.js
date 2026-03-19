@@ -556,7 +556,7 @@ async function _tryRestoreSession() {
   try {
     const data = await sbRefreshToken(storedRefresh);
     const uid  = data.user?.id || '';
-    const role = uid ? await sbGetRole(uid, data.access_token) : 'none';
+    const role = data.access_token ? await sbGetRole(data.access_token) : 'none';
     _applySession(data, role);
     applyRole(role);
   } catch(e) {
@@ -750,13 +750,13 @@ async function sbRefreshToken(refreshToken) {
   return await r.json();
 }
 
-async function sbGetRole(uid, accessToken) {
-  const r = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?id=eq.${uid}&select=role`,
-    { headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${accessToken}` } }
-  );
-  const data = await r.json();
-  return data?.[0]?.role || 'none';
+async function sbGetRole(accessToken) {
+  const r = await fetch('/api/role', {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  if (!r.ok) return 'none';
+  const { role } = await r.json();
+  return role || 'none';
 }
 
 
@@ -858,7 +858,7 @@ async function handleAuthSubmit() {
     } else {
       data = await sbSignIn(email, password);
       const uid = data.user?.id || '';
-      role = uid ? await sbGetRole(uid, data.access_token) : 'none';
+      role = data.access_token ? await sbGetRole(data.access_token) : 'none';
     }
     _applySession(data, role);
     closeAuthOverlay();
