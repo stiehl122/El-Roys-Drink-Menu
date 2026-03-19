@@ -1,7 +1,7 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const APP_VERSION = 'v0.4';
-const IS_PREVIEW = window.location.hostname.includes('vercel.app') &&
-  !/^el-roys[^-]/.test(window.location.hostname);
+const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
+  window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
 let BOT_ID    = '';
 let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
