@@ -1,22 +1,26 @@
 # El Roy's Drink Menu
 
-A live, single-page drink menu for El Roy's — built with zero external dependencies and no build step. Staff can update the menu in real time using a manager PIN, save changes to the database, and push a formatted update to a GroupMe group. The public-facing view updates instantly via Firebase.
+A live, single-page drink menu for El Roy's — built with zero external dependencies and no build step. Staff sign in with email and password, update the menu in real time, save changes to Firebase, and push a formatted update to a GroupMe group. The public-facing view updates instantly via Firebase.
 
 ---
 
 ## Features
 
-- **Live public menu** — displays beers on tap, infused tequilas, frozen marg flavors, monthly specials, and canned & bottled offerings
+- **Live public menu** — displays beers on tap, infused tequilas, frozen marg flavors, cocktails, monthly specials, and canned & bottled offerings
 - **Item descriptions** — optional per-item descriptions visible to the public via an expandable tap/click
+- **Recipe management** — internal-only recipe notes per item, visible only in manager mode
 - **86'd items** — mark items out of stock; they remain visible on the public menu with a strikethrough and "86'D" tag
-- **Manager mode** — PIN-protected editing interface; add or remove items per category, toggle 86 status, and write item descriptions
+- **Manager mode** — role-protected editing interface; add or remove items per category, toggle 86 status, and write item descriptions
 - **Save vs. Send Update** — save menu changes to the database without notifying the group; send only when ready
 - **Draft indicators** — green dot per item means it hasn't been announced yet; the Send Update button shows a change count when there are unsent changes
-- **Owner mode** — separate owner PIN locks down admin settings so only you can change credentials and PINs
+- **Supabase sign-in** — email/password authentication with role-based access (`none`, `manager`, `admin`)
 - **GroupMe integration** — sends a formatted patch-notes message to a GroupMe group via a bot
 - **Firebase cloud sync** — menu state and config sync across devices in real time via Firebase Realtime Database
 - **Offline-capable** — falls back to localStorage if Firebase is unavailable
-- **Zero dependencies** — no build step, no server, no package manager required
+- **Categories tab** — admin can add, remove, or reorder menu categories
+- **Design & Branding panel** — admin can set brand name, logo, fonts, and accent colors
+- **Database tab** — admin can prune items that have been removed from the menu
+- **Zero client-side dependencies** — no build step, no package manager required
 
 ---
 
@@ -25,10 +29,11 @@ A live, single-page drink menu for El Roy's — built with zero external depende
 | Category | Description |
 |---|---|
 | 🍺 Beers on Tap | Current draft beer offerings |
+| 🍻 Canned & Bottled | Canned and bottled offerings |
+| 🍹 Cocktails | Craft cocktail offerings |
 | 🌶️ Infused Tequila | Rotating infused margarita tequilas |
 | 🧊 Frozen Marg | Current frozen margarita flavor(s) |
 | ⭐ Monthly Specials | Featured cocktails and promos |
-| 🍻 Canned & Bottled | Canned and bottled offerings |
 
 ---
 
@@ -39,36 +44,52 @@ A live, single-page drink menu for El Roy's — built with zero external depende
 1. Go to [Firebase Console](https://console.firebase.google.com) and create a project
 2. Enable **Realtime Database** (start in test mode or set rules as needed)
 3. Copy your **Database URL** (e.g. `https://your-app-default-rtdb.firebaseio.com`)
-4. Go to **Project Settings → Service Accounts → Database Secrets** and generate a secret (legacy auth token)
+4. Go to **Project Settings → Service Accounts → Database Secrets** and generate a legacy secret
 
-### 2. GroupMe Bot
+### 2. Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a project
+2. Under **Project Settings → API**, copy the **Project URL** and **anon/public key**
+3. Enable **Email auth** under **Authentication → Providers**
+4. Create a `profiles` table (or equivalent) to store user roles (`none`, `manager`, `admin`)
+
+### 3. GroupMe Bot
 
 1. Go to [dev.groupme.com](https://dev.groupme.com) and sign in
 2. Click **Bots → Create Bot**, select your group, give it a name
 3. Copy the **Bot ID** shown after creation
 
-### 3. Enter Credentials (First-Time Setup)
+### 4. Vercel Deployment
 
-1. Open `index.html` in a browser
-2. Click **⚙ Manager** in the top-right corner
-3. Enter the default manager PIN: `1234`
-4. Switch to the **Admin** tab
-5. Fill in:
-   - **Firebase Database URL** and **Firebase Secret**
+This app requires Vercel for full functionality. The `/api/` routes run as serverless functions and handle credential delivery, role lookups, and GroupMe proxying.
+
+1. Fork or clone this repository and import it into [Vercel](https://vercel.com)
+2. Set the following **Environment Variables** in the Vercel dashboard:
+   - `FIREBASE_SECRET` — the legacy Firebase Database secret
+   - `SUPABASE_URL` — your Supabase project URL
+   - `SUPABASE_ANON_KEY` — your Supabase anon/public key
+   - `SUPABASE_SERVICE_ROLE_KEY` — your Supabase service role key (used by `/api/role`)
+3. Deploy. The app is available at your Vercel project URL.
+
+> **Note:** GitHub Pages and other plain static hosts will not work for write operations. Without the API routes, Firebase writes, Supabase auth config delivery, and GroupMe sending are all unavailable.
+
+### 5. First-Time Sign-In
+
+1. Open your Vercel deployment URL
+2. Click **Sign In** in the top-right corner
+3. Create an account using **Sign up** — new accounts start with `role: none`
+4. The first admin must be promoted manually via the **Supabase dashboard** (set their role to `admin` in the profiles table)
+5. Once you have an admin account, additional users can be promoted via the **Admin** tab in the app
+
+### 6. GroupMe and Firebase URL (In-App Config)
+
+1. Sign in with an admin account
+2. Open the **Admin** tab
+3. Fill in:
+   - **Firebase Database URL**
    - **GroupMe Bot ID**
-   - **Menu Page URL** — the public URL where this file is hosted (included in GroupMe messages)
-6. Click **Save** for each field
-7. Update the **Manager PIN** from the default `1234` to something private
-8. Set an **Owner PIN** — once set, only this PIN can access admin settings
-
-### 4. Hosting (Optional)
-
-Host all three files (`index.html`, `app.js`, `style.css`) from the same directory anywhere static files are served:
-- GitHub Pages
-- Netlify / Vercel (drag and drop)
-- Any web server
-
-No backend required — Firebase handles all data persistence.
+   - **Menu Page URL** — the public URL for the app (included in GroupMe messages)
+4. Click **Save** for each field
 
 ---
 
@@ -78,9 +99,9 @@ No backend required — Firebase handles all data persistence.
 
 Open the page URL in any browser. The menu loads automatically from Firebase and shows all current items by category. Items marked 86'd appear with a strikethrough and red "86'D" tag. Items with a description show a **›** icon — tap or click to expand.
 
-### Updating the Menu (Manager)
+### Updating the Menu (Manager or Admin)
 
-1. Click **⚙ Manager** and enter your manager PIN
+1. Click **Sign In** and enter your email and password
 2. Use the **Manager** tab to edit each category:
    - Type an item name in the input field and press **+** (or Enter) to add it
    - Click **86** on an item to mark it out of stock; click **↩** to restore it
@@ -91,25 +112,25 @@ Open the page URL in any browser. The menu loads automatically from Firebase and
    - **💾 SAVE** — saves all changes to Firebase without sending a GroupMe message
    - **🔥 SEND UPDATE** — saves changes and sends a patch-notes message to your GroupMe group, including any previously saved-but-not-sent changes; also updates the **Last Updated** timestamp in the header
 
-### Changing Admin Settings (Owner)
+### Changing Admin Settings
 
-1. Click **⚙ Manager** and enter your **owner PIN** (not the manager PIN)
-2. The **Admin** tab will be visible — manager PIN holders cannot see it
-3. Update Firebase credentials, Bot ID, Menu URL, or PINs as needed
+1. Click **Sign In** and sign in with an **admin** account
+2. The **Admin** tab will be visible — `manager` role accounts cannot see it
+3. Update Firebase URL, Bot ID, Menu URL, categories, design settings, or promote/demote users as needed
 
 ### Access Levels
 
-| Action | Manager PIN | Owner PIN |
-|---|---|---|
-| Edit menu items | ✅ | ✅ |
-| Save to database | ✅ | ✅ |
-| Send to GroupMe | ✅ | ✅ |
-| View admin settings | ❌ (hidden) | ✅ |
-| Change Firebase / Bot ID | ❌ | ✅ |
-| Change manager PIN | ❌ | ✅ |
-| Change owner PIN | ❌ | ✅ |
+| Action | `none` | `manager` | `admin` |
+|---|---|---|---|
+| View public menu | ✅ | ✅ | ✅ |
+| Edit menu items | ❌ | ✅ | ✅ |
+| Save to database | ❌ | ✅ | ✅ |
+| Send to GroupMe | ❌ | ✅ | ✅ |
+| View admin settings | ❌ | ❌ | ✅ |
+| Change categories / design | ❌ | ❌ | ✅ |
+| Promote / demote users | ❌ | ❌ | ✅ |
 
-> **Note:** If no owner PIN has been set, any manager PIN holder can access admin settings (backward-compatible behavior). Set an owner PIN as part of first-time setup.
+> **Note:** New accounts start with `role: none`. An admin must promote the account before the user can edit the menu.
 
 ---
 
@@ -117,11 +138,16 @@ Open the page URL in any browser. The menu loads automatically from Firebase and
 
 ```
 El-Roys-Drink-Menu/
-├── index.html   # HTML structure and markup
-├── app.js       # All JavaScript logic
-├── style.css    # All CSS styles
-├── README.md    # Setup and usage documentation
-└── CLAUDE.md    # AI assistant instructions and project context
+├── index.html        # HTML structure and markup
+├── app.js            # All JavaScript logic
+├── style.css         # All CSS styles
+├── api/
+│   ├── config.js         # Serves Supabase URL + anon key
+│   ├── role.js           # Looks up authenticated user's role
+│   ├── firebase-config.js# Serves Firebase secret (FIREBASE_SECRET env var)
+│   └── send-groupme.js   # Proxies GroupMe Bot API calls
+├── README.md         # Setup and usage documentation
+└── CLAUDE.md         # AI assistant instructions and project context
 ```
 
-All configuration is stored in the browser's `localStorage` and synced to Firebase. No build tools or package managers needed.
+Configuration is stored in Firebase and `localStorage`. The `FIREBASE_SECRET` and Supabase keys are kept server-side as Vercel environment variables and never exposed to the client directly.
