@@ -1542,6 +1542,10 @@ async function sendUpdate() {
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
   const patchMessage = lines.join('\n').trim();
 
+  if (patchMessage.length > 1000) {
+    showToast('Update is long and will be truncated in GroupMe.', 'info');
+  }
+
   const confirmBtn = document.getElementById('confirm-btn');
   confirmBtn.disabled = true;
   confirmBtn.textContent = 'SENDING...';
