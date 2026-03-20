@@ -1105,6 +1105,7 @@ function renderManagerItems(catId) {
       <div class="${rowClass}">
         <div class="item-status-dot" title="${statusTitle}"></div>
         <div class="item-name"><input type="text" value="${escHtml(item.name)}"
+          aria-label="Item name"
           onblur="renameItem('${catId}','${item.id}',this.value)"
           onkeydown="if(event.key==='Enter')this.blur()"/></div>
         <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
@@ -1113,7 +1114,7 @@ function renderManagerItems(catId) {
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')">×</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
-        <textarea class="desc-input" placeholder="Ingredients, description, how to sell it..."
+        <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it..."
           onblur="saveDesc('${catId}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
       </div>
       <div class="recipe-row" id="recipe-row-${item.id}">
