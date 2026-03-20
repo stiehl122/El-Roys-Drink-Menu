@@ -721,7 +721,7 @@ function renderPublicView() {
               <div class="dot"></div>
               <span class="item-name-text">${escHtml(i.name)}</span>
               ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
-              ${hasDetail ? `<span class="item-expand-icon">›</span>` : ''}
+              ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false">›</span>` : ''}
             </div>
             ${detailHtml}
           </div>`;
@@ -1068,7 +1068,7 @@ function renderManagerCategories() {
               oninput="showAutocomplete('${cat.id}')"
               onblur="setTimeout(()=>hideAutocomplete('${cat.id}'),150)"
               onkeydown="handleAddItemKeydown(event,'${cat.id}')"/>
-            <button class="add-item-btn" onclick="addItem('${cat.id}')">+</button>
+            <button class="add-item-btn" onclick="addItem('${cat.id}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
           </div>
           <div class="autocomplete-list" id="ac-${cat.id}"></div>
         </div>
@@ -1110,7 +1110,7 @@ function renderManagerItems(catId) {
         <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
         <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-        <button class="del-item" onclick="removeItem('${catId}','${item.id}')">×</button>
+        <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
         <textarea class="desc-input" placeholder="Ingredients, description, how to sell it..."
@@ -1281,7 +1281,7 @@ function renderRecipeIngredients(catId, itemId) {
   list.innerHTML = ingredients.map((ing, idx) =>
     `<div class="ingredient-row">
       <span class="ingredient-text">${escHtml(ing)}</span>
-      <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})">×</button>
+      <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})" aria-label="Remove ingredient">×</button>
     </div>`
   ).join('');
 }
