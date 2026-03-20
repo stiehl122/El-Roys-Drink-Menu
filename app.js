@@ -921,7 +921,26 @@ document.addEventListener('click', function(e) {
   if (chip && !chip.contains(e.target)) chip.classList.remove('open');
 });
 
+let _authFocusBefore = null;
+
+function _authFocusTrap(e) {
+  if (e.key !== 'Tab') return;
+  const box = document.querySelector('#auth-overlay .auth-box');
+  const focusable = Array.from(
+    box.querySelectorAll('input, button, [tabindex]:not([tabindex="-1"])')
+  ).filter(el => !el.disabled && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+}
+
 function openAuthOverlay() {
+  _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
   overlay.classList.add('open');
   const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
@@ -931,10 +950,14 @@ function openAuthOverlay() {
   document.getElementById('auth-email').value    = '';
   document.getElementById('auth-password').value = '';
   if (!noConfig) document.getElementById('auth-email').focus();
+  document.addEventListener('keydown', _authFocusTrap);
 }
 
 function closeAuthOverlay() {
   document.getElementById('auth-overlay').classList.remove('open');
+  document.removeEventListener('keydown', _authFocusTrap);
+  if (_authFocusBefore && typeof _authFocusBefore.focus === 'function') _authFocusBefore.focus();
+  _authFocusBefore = null;
 }
 
 function toggleAuthMode() {
