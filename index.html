@@ -64,15 +64,15 @@
     <div class="error-banner" id="manager-error"></div>
 
     <!-- TAB BAR -->
-    <div class="tab-bar">
-      <button class="tab-btn active" id="tab-btn-manager"    onclick="switchTab('manager')">MANAGER</button>
-      <button class="tab-btn"        id="tab-btn-categories" onclick="switchTab('categories')">CATEGORIES</button>
-      <button class="tab-btn"        id="tab-btn-admin"      onclick="switchTab('admin')">ADMIN</button>
-      <button class="tab-btn"        id="tab-btn-database"   onclick="switchTab('database')">DATABASE</button>
+    <div class="tab-bar" role="tablist">
+      <button class="tab-btn active" id="tab-btn-manager"    role="tab" aria-selected="true"  aria-controls="tab-panel-manager"    onclick="switchTab('manager')">MANAGER</button>
+      <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchTab('categories')">CATEGORIES</button>
+      <button class="tab-btn"        id="tab-btn-admin"      role="tab" aria-selected="false" aria-controls="tab-panel-admin"      onclick="switchTab('admin')">ADMIN</button>
+      <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchTab('database')">DATABASE</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
-    <div class="tab-panel active" id="tab-panel-manager">
+    <div class="tab-panel active" id="tab-panel-manager" role="tabpanel" aria-labelledby="tab-btn-manager">
       <div class="section-label">Edit Menu</div>
       <div id="manager-categories"></div>
       <div class="btn-row">
@@ -83,7 +83,7 @@
     </div>
 
     <!-- CATEGORIES PANEL: Manage category list -->
-    <div class="tab-panel" id="tab-panel-categories">
+    <div class="tab-panel" id="tab-panel-categories" role="tabpanel" aria-labelledby="tab-btn-categories">
       <div class="section-label">Menu Categories</div>
       <div id="catmgr-list"></div>
       <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
@@ -113,11 +113,12 @@
     </div>
 
     <!-- ADMIN PANEL: Configuration -->
-    <div class="tab-panel" id="tab-panel-admin">
+    <div class="tab-panel" id="tab-panel-admin" role="tabpanel" aria-labelledby="tab-btn-admin">
       <div class="section-label">Admin Config</div>
 
       <div class="config-card">
         <h3>Firebase Database</h3>
+        <label for="fb-url-input" class="config-input-label">Firebase Database URL</label>
         <div class="input-row">
           <input type="text" id="fb-url-input" placeholder="Database URL (e.g. https://your-app.firebaseio.com)"/>
           <button class="btn-small" onclick="saveFirebaseConfig()">Save</button>
@@ -129,6 +130,7 @@
 
       <div class="config-card">
         <h3>GroupMe Bot ID</h3>
+        <label for="bot-id-input" class="config-input-label">GroupMe Bot ID</label>
         <div class="input-row">
           <input type="password" id="bot-id-input" placeholder="Paste your Bot ID here..."/>
           <button class="btn-small" onclick="saveBotId()">Save</button>
@@ -138,6 +140,7 @@
 
       <div class="config-card">
         <h3>Menu Page URL <span style="color:#3a3a3a;font-weight:300">(sent in GroupMe messages)</span></h3>
+        <label for="menu-url-input" class="config-input-label">Menu Page URL</label>
         <div class="input-row">
           <input type="text" id="menu-url-input" placeholder="e.g. https://yourusername.github.io/honcho-fuego-menu"/>
           <button class="btn-small" onclick="saveMenuUrl()">Save</button>
@@ -242,7 +245,7 @@
     </div>
 
     <!-- DATABASE PANEL: Recipe Spreadsheet -->
-    <div class="tab-panel" id="tab-panel-database">
+    <div class="tab-panel" id="tab-panel-database" role="tabpanel" aria-labelledby="tab-btn-database">
       <div class="section-label">Recipe Database</div>
       <div class="db-search-row">
         <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
