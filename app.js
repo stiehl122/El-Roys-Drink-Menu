@@ -1,11 +1,20 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5';
+const APP_VERSION = 'v0.5.1';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
+const LS_KEYS = {
+  fbUrl:        'hf_fb_url',
+  menuUrl:      'hf_menu_url',
+  lastUpdated:  'hf_last_updated_ts',
+  accessToken:  'hf_sb_access_token',
+  refreshToken: 'hf_sb_refresh_token',
+  expiresAt:    'hf_sb_expires_at',
+};
+
 let BOT_ID    = '';
-let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
-let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
+let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
+let FB_URL    = localStorage.getItem(LS_KEYS.fbUrl) || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
 let SUPABASE_URL      = '';
 let SUPABASE_ANON_KEY = '';
@@ -342,6 +351,10 @@ async function saveDesign() {
 }
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
+function refreshAllViews() {
+  renderCategoriesTab(); renderManagerCategories(); renderPublicView();
+}
+
 function getNextCategoryColor() {
   const usedColors = new Set(CATEGORY_DEFS.map(c => c.color));
   for (const color of ICON_COLOR_PALETTE) {
@@ -417,9 +430,7 @@ async function saveCategoryEdit(catId) {
   cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
   toggleCategoryEdit(catId);
   await persistState();
-  renderCategoriesTab();
-  renderManagerCategories();
-  renderPublicView();
+  refreshAllViews();
   showToast('✅ Category updated!', 'success');
 }
 
@@ -428,9 +439,7 @@ async function moveCategoryUp(catId) {
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
   await persistState();
-  renderCategoriesTab();
-  renderManagerCategories();
-  renderPublicView();
+  refreshAllViews();
 }
 
 async function moveCategoryDown(catId) {
@@ -438,9 +447,7 @@ async function moveCategoryDown(catId) {
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
   await persistState();
-  renderCategoriesTab();
-  renderManagerCategories();
-  renderPublicView();
+  refreshAllViews();
 }
 
 async function deleteCategory(catId) {
@@ -454,9 +461,7 @@ async function deleteCategory(catId) {
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   invalidateDiff();
   await persistState();
-  renderCategoriesTab();
-  renderManagerCategories();
-  renderPublicView();
+  refreshAllViews();
   showToast('✅ Category deleted.', 'success');
 }
 
@@ -490,9 +495,7 @@ async function confirmAddCategory() {
   const btn = document.getElementById('show-add-cat-btn');
   if (btn) btn.textContent = '+ Add Category';
   await persistState();
-  renderCategoriesTab();
-  renderManagerCategories();
-  renderPublicView();
+  refreshAllViews();
   showToast(`✅ Category "${title}" added!`, 'success');
 }
 
@@ -526,8 +529,8 @@ async function init() {
     // Extract config (including categories + design) BEFORE building state
     if (data && data._config) {
       const cfg = data._config;
-      if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet('hf_menu_url', MENU_URL); }
-      if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet('hf_fb_url', FB_URL); }
+      if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet(LS_KEYS.menuUrl, MENU_URL); }
+      if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet(LS_KEYS.fbUrl, FB_URL); }
       if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
         CATEGORY_DEFS = cfg.categories;
       }
@@ -557,7 +560,7 @@ async function init() {
       if (data._meta) {
         menuState._meta = data._meta;
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
-        if (savedTs) lsSet('hf_last_updated_ts', savedTs);
+        if (savedTs) lsSet(LS_KEYS.lastUpdated, savedTs);
       }
     }
     showPublicView();
@@ -573,8 +576,8 @@ async function init() {
 
 async function _tryRestoreSession() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const storedRefresh  = localStorage.getItem('hf_sb_refresh_token');
-  const storedExpiresAt = Number(localStorage.getItem('hf_sb_expires_at') || 0);
+  const storedRefresh  = localStorage.getItem(LS_KEYS.refreshToken);
+  const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
   if (!storedRefresh) return;
   try {
     const data = await sbRefreshToken(storedRefresh);
@@ -588,9 +591,9 @@ async function _tryRestoreSession() {
     applyRole(role);
   } catch(e) {
     // Stored session is invalid — clear it silently
-    localStorage.removeItem('hf_sb_access_token');
-    localStorage.removeItem('hf_sb_refresh_token');
-    localStorage.removeItem('hf_sb_expires_at');
+    localStorage.removeItem(LS_KEYS.accessToken);
+    localStorage.removeItem(LS_KEYS.refreshToken);
+    localStorage.removeItem(LS_KEYS.expiresAt);
   }
 }
 
@@ -647,7 +650,7 @@ function startPolling() {
       const metaChanged = newTs && newTs !== oldTs;
 
       if (after !== before || metaChanged || needsRender) {
-        if (data._meta) { menuState._meta = data._meta; lsSet('hf_last_updated_ts', newTs || ''); }
+        if (data._meta) { menuState._meta = data._meta; lsSet(LS_KEYS.lastUpdated, newTs || ''); }
         renderPublicView();
         updateLastUpdatedLabel();
       }
@@ -661,7 +664,7 @@ function stopPolling() {
 
 function getLastUpdatedTs() {
   return (menuState._meta && menuState._meta.lastUpdatedTs) ||
-    localStorage.getItem('hf_last_updated_ts') ||
+    localStorage.getItem(LS_KEYS.lastUpdated) ||
     localStorage.getItem('hf_last_sent_ts');
 }
 
@@ -831,9 +834,9 @@ function _scheduleTokenRefresh(expiresAt) {
       currentUser.accessToken  = data.access_token;
       currentUser.refreshToken = data.refresh_token;
       currentUser.expiresAt    = Date.now() + expiresIn;
-      lsSet('hf_sb_access_token',  currentUser.accessToken);
-      lsSet('hf_sb_refresh_token', currentUser.refreshToken);
-      lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+      lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
+      lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
+      lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
       _scheduleTokenRefresh(currentUser.expiresAt);
     } catch(e) {
       // Refresh failed — sign out silently
@@ -852,9 +855,9 @@ function _applySession(data, role, name) {
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
   };
-  lsSet('hf_sb_access_token',  currentUser.accessToken);
-  lsSet('hf_sb_refresh_token', currentUser.refreshToken);
-  lsSet('hf_sb_expires_at',    String(currentUser.expiresAt));
+  lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
+  lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
+  lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
@@ -1029,9 +1032,9 @@ async function handleAuthSubmit() {
 function signOut() {
   currentUser = null;
   if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
-  localStorage.removeItem('hf_sb_access_token');
-  localStorage.removeItem('hf_sb_refresh_token');
-  localStorage.removeItem('hf_sb_expires_at');
+  localStorage.removeItem(LS_KEYS.accessToken);
+  localStorage.removeItem(LS_KEYS.refreshToken);
+  localStorage.removeItem(LS_KEYS.expiresAt);
   if (isManagerMode) exitManager();
   renderUserHeader();
 }
@@ -1070,7 +1073,7 @@ function exitManager() {
 async function saveFirebaseConfig() {
   const urlVal = document.getElementById('fb-url-input').value.trim().replace(/\/+$/, '');
   if (!urlVal) { showToast('No changes made.', 'info'); return; }
-  FB_URL = urlVal; lsSet('hf_fb_url', FB_URL);
+  FB_URL = urlVal; lsSet(LS_KEYS.fbUrl, FB_URL);
   document.getElementById('setup-banner').style.display = 'none';
   isFirstSetup = false;
   await persistState();
@@ -1086,7 +1089,7 @@ function saveBotId() {
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
   if (!val) { showToast('Enter a URL first.', 'info'); return; }
-  MENU_URL = val; lsSet('hf_menu_url', MENU_URL);
+  MENU_URL = val; lsSet(LS_KEYS.menuUrl, MENU_URL);
   await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
@@ -1204,7 +1207,7 @@ async function persistState() {
 async function saveMenu() {
   const ts = Date.now();
   menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-  lsSet('hf_last_updated_ts', ts.toString());
+  lsSet(LS_KEYS.lastUpdated, ts.toString());
   await persistState();
   updateLastUpdatedLabel();
   showToast('✅ Menu saved!', 'success');
@@ -1575,7 +1578,7 @@ async function sendUpdate() {
         if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
       });
       menuState._meta = { lastUpdatedTs: ts.toString(), lastSentCategories: diff.map(d => d.id) };
-      lsSet('hf_last_updated_ts', ts.toString());
+      lsSet(LS_KEYS.lastUpdated, ts.toString());
       invalidateDiff();
       await persistState();
       updateLastUpdatedLabel();
@@ -1689,7 +1692,7 @@ function renderDatabaseTab() {
             <td class="db-name">${escHtml(r.name)}</td>
             <td class="db-cat">${escHtml(r.category)}</td>
             <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
-            <td class="db-status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+            <td>${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
           </tr>`).join('')}
         </tbody>
       </table>`;
