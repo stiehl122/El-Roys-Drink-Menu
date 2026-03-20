@@ -16,7 +16,14 @@
     <div class="header-sub" id="last-updated-label">Last Updated: —</div>
     <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
     <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
-    <div class="user-chip" id="user-chip" style="display:none" onclick="toggleUserDropdown()">
+    <div class="user-chip" id="user-chip" style="display:none"
+         onclick="toggleUserDropdown()"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
+         tabindex="0"
+         role="button"
+         aria-haspopup="true"
+         aria-expanded="false"
+         aria-label="User menu">
       <span id="user-initials">?</span>
       <span>▾</span>
       <div class="user-dropdown" id="user-dropdown">

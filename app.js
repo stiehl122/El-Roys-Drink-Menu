@@ -901,13 +901,32 @@ function onActionBtnClick() {
 
 function toggleUserDropdown() {
   const chip = document.getElementById('user-chip');
-  chip.classList.toggle('open');
+  const isOpen = chip.classList.toggle('open');
+  chip.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (isOpen) {
+    const firstFocusable = document.querySelector('#user-dropdown button, #user-dropdown a');
+    if (firstFocusable) firstFocusable.focus();
+  }
 }
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
   const chip = document.getElementById('user-chip');
-  if (chip && !chip.contains(e.target)) chip.classList.remove('open');
+  if (chip && !chip.contains(e.target)) {
+    chip.classList.remove('open');
+    chip.setAttribute('aria-expanded', 'false');
+  }
+});
+
+// Close dropdown on Escape
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  const chip = document.getElementById('user-chip');
+  if (chip && chip.classList.contains('open')) {
+    chip.classList.remove('open');
+    chip.setAttribute('aria-expanded', 'false');
+    chip.focus();
+  }
 });
 
 function openAuthOverlay() {
