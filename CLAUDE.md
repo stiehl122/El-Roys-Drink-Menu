@@ -58,6 +58,8 @@ New accounts start with `role: none` and require admin promotion before they can
 - **Test in-browser** — for full functionality, deploy to Vercel and use the live URL. Local testing without the API routes will run in read-only / offline mode.
 - Keep Supabase auth and role-check flows intact when modifying authentication logic.
 - Preserve offline/localStorage fallback behavior when touching Firebase sync code.
+- **Use CSS custom properties for colors.** All colors in `style.css` must use `var(--*)` references — no hardcoded hex values. New colors should be declared as semantic variables in `:root` (and `body.manager-mode` where the value differs in manager view) before being referenced.
+- **Accessibility conventions:** Interactive elements follow WAI-ARIA patterns throughout. The tab bar uses a full ARIA tab widget (`role="tablist"`, `role="tab"`, `aria-selected`, `role="tabpanel"`). Collapsible category headers have `role="button"`, `aria-expanded`, and keyboard (Enter/Space) support. The auth overlay is a focus-trapped `role="dialog"`. The toast uses `role="status" aria-live="polite"`. The user chip dropdown syncs `aria-expanded` and moves focus on open/close. Preserve these attributes when touching the relevant elements.
 
 ## Hosting
 
