@@ -1383,12 +1383,13 @@ async function saveDesc(catId, itemId, val) {
 
 function removeItem(catId, itemId) {
   const item = findItem(catId, itemId);
-  if (!item) return;
-  if (!confirm(`Remove "${item.name}" from the menu?`)) return;
+  if (!item) return false;
+  if (!confirm('Remove this item from the menu?')) return false;
   item.onMenu = false;
   invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
+  return true;
 }
 
 function renderPruneSection() {
@@ -1438,7 +1439,15 @@ async function pruneRemoved(catId) {
 
 function renameItem(catId, itemId, newName) {
   const name = newName.trim();
-  if (!name) { removeItem(catId, itemId); return; }
+  if (!name) {
+    const item = findItem(catId, itemId);
+    const removed = removeItem(catId, itemId);
+    if (!removed && item) {
+      const input = document.querySelector(`#wrapper-${itemId} .item-name input`);
+      if (input) input.value = item.name;
+    }
+    return;
+  }
   const item = findItem(catId, itemId);
   if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); updateDraftIndicator(); }
 }
