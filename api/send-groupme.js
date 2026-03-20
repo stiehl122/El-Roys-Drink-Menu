@@ -24,6 +24,7 @@ export default async function handler(req, res) {
     `${sbUrl}/rest/v1/profiles?id=eq.${uid}&select=role`,
     { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
   );
+  if (!roleRes.ok) return res.status(500).json({ error: 'Failed to fetch role' });
   const [profile] = await roleRes.json();
   if (profile?.role !== 'manager' && profile?.role !== 'admin')
     return res.status(403).json({ error: 'Forbidden' });
