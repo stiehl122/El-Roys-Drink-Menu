@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  if (req.method !== 'GET') return res.status(405).end();
+  if (req.method !== 'POST') return res.status(405).end();
 
   const sbUrl     = process.env.SUPABASE_URL;
   const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -17,14 +17,25 @@ export default async function handler(req, res) {
   const { id: uid } = await userRes.json();
   if (!uid) return res.status(401).json({ error: 'Invalid token' });
 
-  // Read role with service key (bypasses RLS)
+  // Check role
   const roleRes = await fetch(
     `${sbUrl}/rest/v1/profiles?id=eq.${uid}&select=role`,
     { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
   );
+  if (!roleRes.ok) return res.status(500).json({ error: 'Failed to fetch role' });
   const [profile] = await roleRes.json();
-  const role = profile?.role || 'none';
-  if (role !== 'manager' && role !== 'admin') return res.status(403).json({ error: 'Forbidden' });
+  if (profile?.role !== 'manager' && profile?.role !== 'admin')
+    return res.status(403).json({ error: 'Forbidden' });
 
-  res.json({ fbSecret: process.env.FIREBASE_SECRET });
+  // Write to Firebase
+  const { fbUrl, state } = req.body;
+  if (!fbUrl || state === undefined) return res.status(400).json({ error: 'Missing fbUrl or state' });
+
+  const r = await fetch(`${fbUrl}/menu.json?auth=${fbSecret}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state)
+  });
+  if (!r.ok) return res.status(502).json({ error: `Firebase write failed: ${r.status}` });
+  res.status(200).end();
 }

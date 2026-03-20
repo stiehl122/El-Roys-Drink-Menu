@@ -5,7 +5,6 @@ const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
 
 let BOT_ID    = '';
 let MENU_URL  = localStorage.getItem('hf_menu_url') || '';
-let FB_SECRET = '';
 let FB_URL    = localStorage.getItem('hf_fb_url') || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
 
 let SUPABASE_URL      = '';
@@ -95,11 +94,14 @@ async function fbRead() {
 }
 
 async function fbWrite(state) {
-  if (!FB_SECRET || !FB_URL) return;
-  const res = await fetch(`${FB_URL}/menu.json?auth=${FB_SECRET}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(state)
+  if (!FB_URL || !currentUser?.accessToken) return;
+  const res = await fetch('/api/firebase-write', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${currentUser.accessToken}`
+    },
+    body: JSON.stringify({ fbUrl: FB_URL, state })
   });
   if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
 }
@@ -817,17 +819,6 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '' };
 }
 
-async function fetchFirebaseSecret() {
-  if (!currentUser?.accessToken) return;
-  try {
-    const r = await fetch('/api/firebase-config', {
-      headers: { 'Authorization': `Bearer ${currentUser.accessToken}` }
-    });
-    if (!r.ok) return;
-    const { fbSecret } = await r.json();
-    if (fbSecret) FB_SECRET = fbSecret;
-  } catch(e) {}
-}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
@@ -898,7 +889,6 @@ function applyRole(role) {
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
-  if (isManager) fetchFirebaseSecret();
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -1194,7 +1184,7 @@ function renderManagerItems(catId) {
 }
 
 async function persistState() {
-  if (!FB_SECRET || !FB_URL) return;
+  if (!FB_URL || !currentUser?.accessToken) return;
   try {
     menuState._config = {
       menuUrl: MENU_URL, fbUrl: FB_URL,
