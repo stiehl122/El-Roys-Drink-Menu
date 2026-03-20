@@ -1559,7 +1559,7 @@ function switchTab(name) {
   ['manager','categories','admin','database'].forEach(t => {
     const btn   = document.getElementById('tab-btn-'   + t);
     const panel = document.getElementById('tab-panel-' + t);
-    if (btn)   btn.classList.toggle('active',   t === name);
+    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
