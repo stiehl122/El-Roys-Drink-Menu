@@ -721,7 +721,7 @@ function renderPublicView() {
               <div class="dot"></div>
               <span class="item-name-text">${escHtml(i.name)}</span>
               ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
-              ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false">›</span>` : ''}
+              ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
             </div>
             ${detailHtml}
           </div>`;
@@ -744,6 +744,8 @@ function renderPublicView() {
 
 function togglePublicDesc(el) {
   el.classList.toggle('expanded');
+  const icon = el.querySelector('.item-expand-icon');
+  if (icon) icon.setAttribute('aria-expanded', el.classList.contains('expanded') ? 'true' : 'false');
 }
 
 function togglePublicCategory(catId) {
