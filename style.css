@@ -20,6 +20,12 @@
     --gold: #f6ad55;
     --green: #2ecc71;
     --red: #e74c3c;
+    /* Badge and danger semantic vars */
+    --badge-on-bg: #e6f4ea;
+    --badge-on-text: #1a7f37;
+    --badge-86-bg: #fde8e8;
+    --badge-86-text: #c0392b;
+    --danger-bg: #fde8e8;
     /* Font families — overridable via applyDesign() */
     --font-heading: 'Lilita One', cursive;
     --font-body: 'DM Sans', sans-serif;
@@ -36,6 +42,12 @@
     --fire: #BE4330;
     --ember: #d45040;
     --gold: #F5D242;
+    /* Badge and danger semantic vars — dark overrides */
+    --badge-on-bg: #1a3a1a;
+    --badge-on-text: #6f6;
+    --badge-86-bg: #3a1a1a;
+    --badge-86-text: #f66;
+    --danger-bg: #2c1a1a;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 80px; transition: background 0.3s, color 0.3s; }
