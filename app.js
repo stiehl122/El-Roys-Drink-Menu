@@ -728,7 +728,10 @@ function renderPublicView() {
         }).join('')
       : `<div class="empty-menu">Nothing listed yet.</div>`;
     section.innerHTML = `
-      <div class="menu-section-header collapsible-header" onclick="togglePublicCategory('${cat.id}')">
+      <div class="menu-section-header collapsible-header" role="button" tabindex="0"
+           aria-expanded="${isCollapsed ? 'false' : 'true'}"
+           onclick="togglePublicCategory('${cat.id}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${cat.id}')}">
         <div class="menu-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
         <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
@@ -745,14 +748,22 @@ function togglePublicDesc(el) {
 
 function togglePublicCategory(catId) {
   const section = document.getElementById('pub-section-' + catId);
-  if (section) section.classList.toggle('collapsed');
+  if (section) {
+    section.classList.toggle('collapsed');
+    const hdr = section.querySelector('.collapsible-header');
+    if (hdr) hdr.setAttribute('aria-expanded', section.classList.contains('collapsed') ? 'false' : 'true');
+  }
   updateCollapseAllBtn();
 }
 
 function toggleAllCategories() {
   const sections = document.querySelectorAll('#public-categories .menu-section');
   const anyExpanded = Array.from(sections).some(s => !s.classList.contains('collapsed'));
-  sections.forEach(s => s.classList.toggle('collapsed', anyExpanded));
+  sections.forEach(s => {
+    s.classList.toggle('collapsed', anyExpanded);
+    const hdr = s.querySelector('.collapsible-header');
+    if (hdr) hdr.setAttribute('aria-expanded', anyExpanded ? 'false' : 'true');
+  });
   updateCollapseAllBtn();
 }
 
@@ -1054,7 +1065,10 @@ function renderManagerCategories() {
     card.className = 'cat-card';
     card.id = 'mgr-card-' + cat.id;
     card.innerHTML = `
-      <div class="cat-header collapsible-header" onclick="toggleManagerCategory('${cat.id}')">
+      <div class="cat-header collapsible-header" role="button" tabindex="0"
+           aria-expanded="true"
+           onclick="toggleManagerCategory('${cat.id}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${cat.id}')}">
         <div class="cat-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
         <div><div class="cat-title">${escHtml(cat.title)}</div><div class="cat-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
@@ -1080,7 +1094,11 @@ function renderManagerCategories() {
 
 function toggleManagerCategory(catId) {
   const card = document.getElementById('mgr-card-' + catId);
-  if (card) card.classList.toggle('collapsed');
+  if (card) {
+    card.classList.toggle('collapsed');
+    const hdr = card.querySelector('.collapsible-header');
+    if (hdr) hdr.setAttribute('aria-expanded', card.classList.contains('collapsed') ? 'false' : 'true');
+  }
 }
 
 function renderManagerItems(catId) {
