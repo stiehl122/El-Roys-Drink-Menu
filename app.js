@@ -79,7 +79,7 @@ function defaultState() {
 }
 
 function uid() { return Math.random().toString(36).slice(2,9); }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function lsSet(key, val) {
   try { localStorage.setItem(key, val); }
   catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
@@ -376,38 +376,38 @@ function renderCategoriesTab() {
     const isLast  = idx === CATEGORY_DEFS.length - 1;
     card.innerHTML = `
       <div class="catmgr-row">
-        <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+        <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div class="catmgr-info">
           <div class="catmgr-title">${escHtml(cat.title)}</div>
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
         <div class="catmgr-actions">
-          <button class="btn-small" onclick="moveCategoryUp('${cat.id}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
-          <button class="btn-small" onclick="moveCategoryDown('${cat.id}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
-          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">✏️</button>
-          <button class="btn-small btn-danger" onclick="deleteCategory('${cat.id}')">×</button>
+          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
+          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">✏️</button>
+          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')">×</button>
         </div>
       </div>
-      <div class="catmgr-edit" id="catmgr-edit-${cat.id}" style="display:none">
+      <div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
         <div class="catmgr-field-row">
           <label>Icon</label>
-          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${cat.id}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
+          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
         </div>
         <div class="catmgr-field-row">
           <label>Title</label>
-          <input type="text" class="catmgr-input" id="ce-title-${cat.id}" value="${escHtml(cat.title)}" placeholder="Category title"/>
+          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title"/>
         </div>
         <div class="catmgr-field-row">
           <label>Subtitle</label>
-          <input type="text" class="catmgr-input" id="ce-sub-${cat.id}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
+          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
         </div>
         <div class="catmgr-field-row">
           <label>Hint text</label>
-          <input type="text" class="catmgr-input" id="ce-ph-${cat.id}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
+          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
         </div>
         <div class="catmgr-save-row">
-          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">Cancel</button>
-          <button class="btn-small" onclick="saveCategoryEdit('${cat.id}')">Save</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
+          <button class="btn-small" onclick="saveCategoryEdit('${escHtml(cat.id)}')">Save</button>
         </div>
       </div>`;
     container.appendChild(card);
@@ -755,9 +755,9 @@ function renderPublicView() {
     section.innerHTML = `
       <div class="menu-section-header collapsible-header" role="button" tabindex="0"
            aria-expanded="${isCollapsed ? 'false' : 'true'}"
-           onclick="togglePublicCategory('${cat.id}')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${cat.id}')}">
-        <div class="menu-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+           onclick="togglePublicCategory('${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${escHtml(cat.id)}')}">
+        <div class="menu-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
@@ -1236,24 +1236,24 @@ function renderManagerCategories() {
     card.innerHTML = `
       <div class="cat-header collapsible-header" role="button" tabindex="0"
            aria-expanded="true"
-           onclick="toggleManagerCategory('${cat.id}')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${cat.id}')}">
-        <div class="cat-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+           onclick="toggleManagerCategory('${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${escHtml(cat.id)}')}">
+        <div class="cat-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div><div class="cat-title">${escHtml(cat.title)}</div><div class="cat-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
-        <div class="current-items" id="mgr-items-${cat.id}"></div>
+        <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
-              oninput="showAutocomplete('${cat.id}')"
-              onblur="setTimeout(()=>hideAutocomplete('${cat.id}'),150)"
-              onkeydown="handleAddItemKeydown(event,'${cat.id}')"/>
-            <button class="add-item-btn" onclick="addItem('${cat.id}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
+              oninput="showAutocomplete('${escHtml(cat.id)}')"
+              onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
+              onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"/>
+            <button class="add-item-btn" onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
           </div>
-          <div class="autocomplete-list" id="ac-${cat.id}"></div>
+          <div class="autocomplete-list" id="ac-${escHtml(cat.id)}"></div>
         </div>
       </div>`;
     container.appendChild(card);
@@ -1651,7 +1651,7 @@ function openPreview() {
     diff.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
-      let html = `<div class="preview-cat">${s.icon} ${s.label}</div>`;
+      let html = `<div class="preview-cat">${escHtml(s.icon)} ${escHtml(s.label)}</div>`;
       s.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
       s.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
       s.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
