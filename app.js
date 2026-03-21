@@ -160,12 +160,19 @@ function lightenHex(hex, amount) {
 
 function loadGoogleFont(fontName) {
   if (!fontName) return;
+  // Default fonts are self-hosted in lib/fonts/ — no external request needed.
   if (['DM Sans','Lilita One','Permanent Marker'].includes(fontName)) return;
   const id = 'gfont-' + fontName.replace(/\s+/g,'-').toLowerCase();
   if (document.getElementById(id)) return;
   const link = document.createElement('link');
   link.id = id; link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g,'+')}:wght@400;700&display=swap`;
+  // NOTE (#148): Google Fonts CDN serves dynamically-generated CSS responses, so
+  // Subresource Integrity (SRI) hashes cannot be applied — the response content
+  // changes with each request. The default fonts (DM Sans, Lilita One, Permanent
+  // Marker) are self-hosted in lib/fonts/ for full SRI compliance. Any additional
+  // fonts selected via the Design panel are loaded from the CDN without SRI.
+  // TODO: self-host additional fonts for SRI compliance.
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName).replace(/%20/g,'+')}:wght@400;700&display=swap`;
   document.head.appendChild(link);
 }
 
@@ -202,17 +209,30 @@ function applyDesign(design) {
   const titleEl = document.querySelector('header h1');
   if (titleEl && design.menuTitle) titleEl.textContent = design.menuTitle;
 
-  if (design.headingFont) {
-    loadGoogleFont(design.headingFont);
-    root.style.setProperty('--font-heading', `'${design.headingFont}', cursive`);
+  // #149: Validate font names against the allowlist before applying as CSS values
+  // to prevent CSS injection via unsanitized font names from the database.
+  const FONT_ALLOWLIST = new Set([...HEADING_FONTS, ...BODY_FONTS, ...ACCENT_FONTS]);
+  function _safeFont(name, fallback) {
+    if (!name) return null;
+    if (FONT_ALLOWLIST.has(name)) return name;
+    console.warn(`[security] Rejected invalid font name: "${name}" — falling back to "${fallback}"`);
+    return fallback;
   }
-  if (design.bodyFont) {
-    loadGoogleFont(design.bodyFont);
-    root.style.setProperty('--font-body', `'${design.bodyFont}', sans-serif`);
+
+  const headingFont = _safeFont(design.headingFont, 'Lilita One');
+  if (headingFont) {
+    loadGoogleFont(headingFont);
+    root.style.setProperty('--font-heading', `'${headingFont}', cursive`);
   }
-  if (design.accentFont) {
-    loadGoogleFont(design.accentFont);
-    root.style.setProperty('--font-accent', `'${design.accentFont}', cursive`);
+  const bodyFont = _safeFont(design.bodyFont, 'DM Sans');
+  if (bodyFont) {
+    loadGoogleFont(bodyFont);
+    root.style.setProperty('--font-body', `'${bodyFont}', sans-serif`);
+  }
+  const accentFont = _safeFont(design.accentFont, 'Permanent Marker');
+  if (accentFont) {
+    loadGoogleFont(accentFont);
+    root.style.setProperty('--font-accent', `'${accentFont}', cursive`);
   }
   const brand = (design.brandName || '').trim();
   const title = (design.menuTitle || '').trim();
@@ -889,6 +909,88 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '' };
 }
 
+// #145: URL-encode the provider name to prevent open-redirect / URL injection.
+async function sbOAuthRedirect(provider) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  const redirectTo = encodeURIComponent(window.location.origin);
+  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${redirectTo}`;
+  window.location.href = url;
+}
+
+// #147: Rate-limited SMS OTP flow. Prevents rapid repeated sends that abuse Twilio credits.
+let _smsStep = 'phone'; // 'phone' | 'otp'
+let _smsPhone = '';
+let _smsRateLimitTimer = null;
+
+async function handleSmsFlow(btnEl) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  if (_smsStep === 'phone') {
+    const phone = (document.getElementById('auth-sms-phone')?.value || '').trim();
+    if (!phone) return;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Sending…';
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ phone })
+      });
+      if (!r.ok) throw await r.json();
+      _smsPhone = phone;
+      _smsStep = 'otp';
+      // Start 60-second countdown to prevent rapid resends.
+      let remaining = 60;
+      btnEl.disabled = true;
+      btnEl.textContent = `Resend in ${remaining}s`;
+      _smsRateLimitTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(_smsRateLimitTimer);
+          _smsRateLimitTimer = null;
+          btnEl.disabled = false;
+          btnEl.textContent = 'Resend Code';
+        } else {
+          btnEl.textContent = `Resend in ${remaining}s`;
+        }
+      }, 1000);
+    } catch(err) {
+      const msg = err?.msg || err?.message || 'Failed to send code.';
+      const errEl = document.getElementById('auth-error');
+      if (errEl) errEl.textContent = msg;
+      btnEl.disabled = false;
+      btnEl.textContent = 'Send Code';
+    }
+  } else {
+    // OTP verification step
+    const token = (document.getElementById('auth-sms-otp')?.value || '').trim();
+    if (!token) return;
+    btnEl.disabled = true;
+    btnEl.textContent = 'Verifying…';
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ type: 'sms', phone: _smsPhone, token })
+      });
+      if (!r.ok) throw await r.json();
+      const data = await r.json();
+      if (data.access_token) {
+        const profile = await sbGetProfile(data.access_token);
+        _applySession(data, profile.role, profile.name);
+        closeAuthOverlay();
+        applyRole(profile.role);
+        _smsStep = 'phone';
+        _smsPhone = '';
+      }
+    } catch(err) {
+      const msg = err?.msg || err?.message || 'Verification failed.';
+      const errEl = document.getElementById('auth-error');
+      if (errEl) errEl.textContent = msg;
+      btnEl.disabled = false;
+      btnEl.textContent = 'Verify Code';
+    }
+  }
+}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
