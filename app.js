@@ -111,7 +111,7 @@ async function fbWrite(state) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${currentUser.accessToken}`
     },
-    body: JSON.stringify({ fbUrl: FB_URL, state })
+    body: JSON.stringify({ state })
   });
   if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
 }
