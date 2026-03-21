@@ -26,6 +26,8 @@
     --badge-86-bg: #fde8e8;
     --badge-86-text: #c0392b;
     --danger-bg: #fde8e8;
+    --danger-border: rgba(192,57,43,0.3);
+    --prune-divider: rgba(0,0,0,0.06);
     /* Font families — overridable via applyDesign() */
     --font-heading: 'Lilita One', cursive;
     --font-body: 'DM Sans', sans-serif;
@@ -48,6 +50,7 @@
     --badge-86-bg: #3a1a1a;
     --badge-86-text: #f66;
     --danger-bg: #2c1a1a;
+    --prune-divider: rgba(255,255,255,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 80px; transition: background 0.3s, color 0.3s; }
@@ -307,19 +310,19 @@
   .db-filter-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
   .db-filter-group { display: flex; gap: 4px; }
   .db-filter-btn { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: transparent; font-size: 0.78rem; cursor: pointer; color: var(--text); transition: background 0.15s, color 0.15s; }
-  .db-filter-btn.active { background: var(--fire); color: #fff; border-color: var(--fire); }
+  .db-filter-btn.active { background: var(--fire); color: var(--cream); border-color: var(--fire); }
 
   /* ── PRUNE SECTION (owner-only) ── */
-  .prune-section { margin-top: 1.5rem; padding: 1rem; border: 1px solid rgba(192,57,43,0.3); border-radius: 8px; background: var(--danger-bg); }
+  .prune-section { margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--danger-border); border-radius: 8px; background: var(--danger-bg); }
   .prune-section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .25rem; }
   .prune-section-label { color: var(--red) !important; }
-  .prune-item { display: flex; align-items: center; gap: .5rem; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .prune-item { display: flex; align-items: center; gap: .5rem; padding: 5px 0; border-bottom: 1px solid var(--prune-divider); }
   .prune-item:last-child { border-bottom: none; }
   .prune-item-name { flex: 1; font-size: .9rem; color: var(--text); }
   .prune-item-cat { font-size: .78rem; color: var(--muted); white-space: nowrap; }
   .prune-del-btn { padding: 2px 8px; font-size: .9rem; line-height: 1; flex-shrink: 0; }
   .prune-empty { color: var(--muted); font-size: .88rem; padding: .5rem 0 .25rem; margin: 0; }
-  .btn-danger { background: var(--fire) !important; color: #fff !important; border-color: var(--fire) !important; }
+  .btn-danger { background: var(--fire) !important; color: var(--cream) !important; border-color: var(--fire) !important; }
   .btn-danger:hover { background: var(--ember) !important; border-color: var(--ember) !important; }
 
   /* ── COLLAPSE ALL ROW ── */
