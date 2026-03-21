@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.3';
+const APP_VERSION = 'v0.5.4';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -24,6 +24,7 @@ let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
 let syncInterval  = null;
 let _authMode     = 'signin'; // 'signin' | 'signup'
+let _smsStep      = 'phone';  // 'phone' | 'otp'
 let _tokenRefreshTimer = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
@@ -570,8 +571,27 @@ async function init() {
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
   }
 
-  // Restore Supabase session if stored tokens exist
-  await _tryRestoreSession();
+  // Restore Supabase session — OAuth callback takes priority over stored tokens
+  const handledOAuth = await _tryHandleOAuthCallback();
+  if (!handledOAuth) await _tryRestoreSession();
+}
+
+async function _tryHandleOAuthCallback() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const verifier = sessionStorage.getItem('hf_pkce_verifier');
+  if (!code || !verifier) return false;
+  history.replaceState({}, '', window.location.pathname);
+  sessionStorage.removeItem('hf_pkce_verifier');
+  const data = await sbExchangeOAuthCode(code, verifier);
+  if (!data.access_token) return false;
+  const { role, name } = await sbGetProfile(data.access_token);
+  _applySession(data, role, name);
+  applyRole(role);
+  renderUserHeader();
+  if (role === 'none') showToast('Signed in. Contact admin to get manager access.');
+  return true;
 }
 
 async function _tryRestoreSession() {
@@ -783,6 +803,53 @@ function updateCollapseAllBtn() {
 }
 
 // ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
+async function _generatePKCE() {
+  const array = crypto.getRandomValues(new Uint8Array(32));
+  const verifier = btoa(String.fromCharCode(...array))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  return { verifier, challenge };
+}
+
+async function sbOAuthRedirect(provider) {
+  const { verifier, challenge } = await _generatePKCE();
+  sessionStorage.setItem('hf_pkce_verifier', verifier);
+  const redirectTo = window.location.origin + window.location.pathname;
+  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${provider}`
+    + `&redirect_to=${encodeURIComponent(redirectTo)}`
+    + `&code_challenge=${challenge}&code_challenge_method=S256`;
+  window.location.href = url;
+}
+
+async function sbExchangeOAuthCode(code, verifier) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=authorization_code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ code, code_verifier: verifier })
+  });
+  return r.json();
+}
+
+async function sbSendOtp(phone) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ phone })
+  });
+  return r.json();
+}
+
+async function sbVerifyOtp(phone, token) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ phone, token })
+  });
+  return r.json();
+}
+
 async function sbSignUp(email, password, name) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
     method: 'POST',
@@ -963,6 +1030,7 @@ function openAuthOverlay() {
   document.getElementById('auth-error').textContent = '';
   document.getElementById('auth-email').value    = '';
   document.getElementById('auth-password').value = '';
+  hideSmsSection(); // reset SMS state and restore main form visibility
   if (!noConfig) document.getElementById('auth-email').focus();
   document.addEventListener('keydown', _authFocusTrap);
 }
@@ -1026,6 +1094,70 @@ async function handleAuthSubmit() {
   } finally {
     btn.disabled = false;
     btn.textContent = _authMode === 'signin' ? 'Sign In' : 'Sign Up';
+  }
+}
+
+function showSmsSection() {
+  _smsStep = 'phone';
+  document.getElementById('auth-social-section').style.display = 'none';
+  document.getElementById('auth-name-field').style.display     = 'none';
+  document.getElementById('auth-lastname-field').style.display = 'none';
+  document.getElementById('auth-email').closest('.auth-field').style.display    = 'none';
+  document.getElementById('auth-password').closest('.auth-field').style.display = 'none';
+  document.getElementById('auth-submit-btn').style.display     = 'none';
+  document.querySelector('.auth-toggle').style.display         = 'none';
+  document.getElementById('auth-otp-field').style.display      = 'none';
+  document.getElementById('auth-sms-section').style.display    = '';
+  document.getElementById('auth-sms-error').textContent        = '';
+  document.getElementById('auth-phone').value = '';
+  document.getElementById('auth-otp').value   = '';
+  document.getElementById('auth-sms-send-btn').textContent = 'Send Code';
+  document.getElementById('auth-sms-send-btn').disabled    = false;
+  document.getElementById('auth-phone').focus();
+}
+
+function hideSmsSection() {
+  document.getElementById('auth-sms-section').style.display    = 'none';
+  document.getElementById('auth-social-section').style.display = '';
+  document.getElementById('auth-email').closest('.auth-field').style.display    = '';
+  document.getElementById('auth-password').closest('.auth-field').style.display = '';
+  document.getElementById('auth-submit-btn').style.display     = '';
+  document.querySelector('.auth-toggle').style.display         = '';
+  _smsStep = 'phone';
+}
+
+async function handleSmsFlow() {
+  const btn   = document.getElementById('auth-sms-send-btn');
+  const errEl = document.getElementById('auth-sms-error');
+  errEl.textContent = '';
+  if (_smsStep === 'phone') {
+    const phone = document.getElementById('auth-phone').value.trim();
+    if (!phone) { errEl.textContent = 'Enter a phone number.'; return; }
+    btn.textContent = 'Sending…'; btn.disabled = true;
+    const res = await sbSendOtp(phone);
+    btn.disabled = false;
+    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.textContent = 'Send Code'; return; }
+    _smsStep = 'otp';
+    document.getElementById('auth-otp-field').style.display = '';
+    btn.textContent = 'Verify Code';
+    document.getElementById('auth-otp').focus();
+  } else {
+    const phone = document.getElementById('auth-phone').value.trim();
+    const token = document.getElementById('auth-otp').value.trim();
+    if (!token) { errEl.textContent = 'Enter the 6-digit code.'; return; }
+    btn.textContent = 'Verifying…'; btn.disabled = true;
+    const data = await sbVerifyOtp(phone, token);
+    btn.disabled = false;
+    if (data.error || !data.access_token) {
+      errEl.textContent = data.error?.message || 'Invalid code.';
+      btn.textContent = 'Verify Code'; return;
+    }
+    const { role, name } = await sbGetProfile(data.access_token);
+    _applySession(data, role, name);
+    closeAuthOverlay();
+    applyRole(role);
+    renderUserHeader();
+    if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
   }
 }
 
