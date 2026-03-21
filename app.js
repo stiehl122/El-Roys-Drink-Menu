@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.1';
+const APP_VERSION = 'v0.5.2';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -847,10 +847,10 @@ function _scheduleTokenRefresh(expiresAt) {
 
 function _applySession(data, role, name) {
   const expiresIn = (data.expires_in || 3600) * 1000;
-  const uid   = data.user?.id || data.user_id || '';
+  const userId = data.user?.id || data.user_id || '';
   const email = data.user?.email || data.email || '';
   currentUser = {
-    uid, email, name: name || '', role,
+    uid: userId, email, name: name || '', role,
     accessToken:  data.access_token,
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
