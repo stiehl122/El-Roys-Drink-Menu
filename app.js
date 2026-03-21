@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.2';
+const APP_VERSION = 'v0.5.3';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -405,7 +405,7 @@ function renderCategoriesTab() {
           <input type="text" class="catmgr-input" id="ce-ph-${cat.id}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
         </div>
         <div class="catmgr-save-row">
-          <button class="btn-small btn-danger" onclick="toggleCategoryEdit('${cat.id}')">Cancel</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">Cancel</button>
           <button class="btn-small" onclick="saveCategoryEdit('${cat.id}')">Save</button>
         </div>
       </div>`;
@@ -723,7 +723,7 @@ function renderPublicView() {
             </div>` : '';
           return `<div class="${classes}" ${onClick}>
             <div class="item-main-row">
-              <div class="dot"></div>
+              <div class="dot" aria-hidden="true"></div>
               <span class="item-name-text">${escHtml(i.name)}</span>
               ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
               ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
@@ -1158,7 +1158,7 @@ function renderManagerItems(catId) {
     const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
     wrapper.innerHTML = `
       <div class="${rowClass}">
-        <div class="item-status-dot" title="${statusTitle}"></div>
+        <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
         <div class="item-name"><input type="text" value="${escHtml(item.name)}"
           aria-label="Item name"
           onblur="renameItem('${catId}','${item.id}',this.value)"
@@ -1462,7 +1462,7 @@ function updateDraftIndicator() {
   const diff = getCachedDiff();
   const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
   if (total > 0) {
-    btn.innerHTML = `🔥 SEND UPDATE <span style="font-size:13px;opacity:0.85;">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
+    btn.innerHTML = `🔥 SEND UPDATE <span class="send-update-count">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
     btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
   } else {
     btn.innerHTML = '🔥 SEND UPDATE';
