@@ -164,8 +164,9 @@
   .item-name { flex: 1; }
   .item-name input { background: none; border: none; outline: none; color: var(--text); font-family: var(--font-body); font-size: 13px; width: 100%; padding: 0; }
   .item-name input::placeholder { color: var(--muted); opacity: 0.45; }
-  .del-item { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 3px; border-radius: 4px; transition: all 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.4; }
+  .del-item { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 3px; border-radius: 4px; transition: all 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.6; }
   .del-item:hover { color: var(--red); opacity: 1; }
+  .send-update-count { font-size: 13px; opacity: 0.85; }
   .empty-state { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0 2px; opacity: 0.5; }
   .add-item-wrap { position: relative; margin-top: 9px; }
   .add-item-area { display: flex; gap: 7px; }
