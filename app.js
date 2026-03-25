@@ -890,6 +890,25 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '' };
 }
 
+async function sbResetPasswordForEmail(email) {
+  const redirectTo = window.location.origin + window.location.pathname;
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, redirect_to: redirectTo })
+  });
+  if (!r.ok) throw await r.json();
+}
+
+async function sbUpdatePassword(newPassword, accessToken) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({ password: newPassword })
+  });
+  if (!r.ok) throw await r.json();
+  return r.json();
+}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
