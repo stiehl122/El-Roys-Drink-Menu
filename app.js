@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.4';
+const APP_VERSION = 'v0.5.5';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -25,6 +25,8 @@ let isManagerMode = false;
 let syncInterval  = null;
 let _authMode     = 'signin'; // 'signin' | 'signup'
 let _smsStep      = 'phone';  // 'phone' | 'otp'
+let _smsPhone     = '';
+let _smsRateLimitTimer = null;
 let _tokenRefreshTimer = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
@@ -917,80 +919,6 @@ async function sbOAuthRedirect(provider) {
   window.location.href = url;
 }
 
-// #147: Rate-limited SMS OTP flow. Prevents rapid repeated sends that abuse Twilio credits.
-let _smsStep = 'phone'; // 'phone' | 'otp'
-let _smsPhone = '';
-let _smsRateLimitTimer = null;
-
-async function handleSmsFlow(btnEl) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  if (_smsStep === 'phone') {
-    const phone = (document.getElementById('auth-sms-phone')?.value || '').trim();
-    if (!phone) return;
-    btnEl.disabled = true;
-    btnEl.textContent = 'Sending…';
-    try {
-      const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-        body: JSON.stringify({ phone })
-      });
-      if (!r.ok) throw await r.json();
-      _smsPhone = phone;
-      _smsStep = 'otp';
-      // Start 60-second countdown to prevent rapid resends.
-      let remaining = 60;
-      btnEl.disabled = true;
-      btnEl.textContent = `Resend in ${remaining}s`;
-      _smsRateLimitTimer = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          clearInterval(_smsRateLimitTimer);
-          _smsRateLimitTimer = null;
-          btnEl.disabled = false;
-          btnEl.textContent = 'Resend Code';
-        } else {
-          btnEl.textContent = `Resend in ${remaining}s`;
-        }
-      }, 1000);
-    } catch(err) {
-      const msg = err?.msg || err?.message || 'Failed to send code.';
-      const errEl = document.getElementById('auth-error');
-      if (errEl) errEl.textContent = msg;
-      btnEl.disabled = false;
-      btnEl.textContent = 'Send Code';
-    }
-  } else {
-    // OTP verification step
-    const token = (document.getElementById('auth-sms-otp')?.value || '').trim();
-    if (!token) return;
-    btnEl.disabled = true;
-    btnEl.textContent = 'Verifying…';
-    try {
-      const r = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-        body: JSON.stringify({ type: 'sms', phone: _smsPhone, token })
-      });
-      if (!r.ok) throw await r.json();
-      const data = await r.json();
-      if (data.access_token) {
-        const profile = await sbGetProfile(data.access_token);
-        _applySession(data, profile.role, profile.name);
-        closeAuthOverlay();
-        applyRole(profile.role);
-        _smsStep = 'phone';
-        _smsPhone = '';
-      }
-    } catch(err) {
-      const msg = err?.msg || err?.message || 'Verification failed.';
-      const errEl = document.getElementById('auth-error');
-      if (errEl) errEl.textContent = msg;
-      btnEl.disabled = false;
-      btnEl.textContent = 'Verify Code';
-    }
-  }
-}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
@@ -1226,8 +1154,11 @@ function hideSmsSection() {
   document.getElementById('auth-submit-btn').style.display     = '';
   document.querySelector('.auth-toggle').style.display         = '';
   _smsStep = 'phone';
+  _smsPhone = '';
+  if (_smsRateLimitTimer) { clearInterval(_smsRateLimitTimer); _smsRateLimitTimer = null; }
 }
 
+// #147: Rate-limited SMS OTP flow. Prevents rapid repeated sends that abuse Twilio credits.
 async function handleSmsFlow() {
   const btn   = document.getElementById('auth-sms-send-btn');
   const errEl = document.getElementById('auth-sms-error');
@@ -1237,18 +1168,31 @@ async function handleSmsFlow() {
     if (!phone) { errEl.textContent = 'Enter a phone number.'; return; }
     btn.textContent = 'Sending…'; btn.disabled = true;
     const res = await sbSendOtp(phone);
-    btn.disabled = false;
-    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.textContent = 'Send Code'; return; }
+    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.disabled = false; btn.textContent = 'Send Code'; return; }
+    _smsPhone = phone;
     _smsStep = 'otp';
     document.getElementById('auth-otp-field').style.display = '';
-    btn.textContent = 'Verify Code';
+    // Start 60-second countdown to prevent rapid resends.
+    let remaining = 60;
+    btn.disabled = true;
+    btn.textContent = `Resend in ${remaining}s`;
+    _smsRateLimitTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(_smsRateLimitTimer);
+        _smsRateLimitTimer = null;
+        btn.disabled = false;
+        btn.textContent = 'Resend Code';
+      } else {
+        btn.textContent = `Resend in ${remaining}s`;
+      }
+    }, 1000);
     document.getElementById('auth-otp').focus();
   } else {
-    const phone = document.getElementById('auth-phone').value.trim();
     const token = document.getElementById('auth-otp').value.trim();
     if (!token) { errEl.textContent = 'Enter the 6-digit code.'; return; }
     btn.textContent = 'Verifying…'; btn.disabled = true;
-    const data = await sbVerifyOtp(phone, token);
+    const data = await sbVerifyOtp(_smsPhone, token);
     btn.disabled = false;
     if (data.error || !data.access_token) {
       errEl.textContent = data.error?.message || 'Invalid code.';
