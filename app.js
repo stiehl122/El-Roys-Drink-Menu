@@ -23,11 +23,9 @@ let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, 
 let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
 let syncInterval  = null;
-let _authMode     = 'signin'; // 'signin' | 'signup'
-let _smsStep      = 'phone';  // 'phone' | 'otp'
-let _smsPhone     = '';
-let _smsRateLimitTimer = null;
 let _tokenRefreshTimer = null;
+let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
+let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
