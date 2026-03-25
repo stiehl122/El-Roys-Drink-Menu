@@ -718,10 +718,31 @@ function formatUpdatedAt(ts, prefix) {
     d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatRelativeTime(ts) {
+  if (!ts) return null;
+  const diffMs = Date.now() - parseInt(ts);
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1)  return 'just now';
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)  return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7)  return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+  return formatUpdatedAt(ts, ''); // fall back to absolute for older timestamps
+}
+
 function updateLastUpdatedLabel() {
   const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
-  el.textContent = ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+  if (ts) {
+    const rel = formatRelativeTime(ts);
+    const abs = formatUpdatedAt(ts, 'Last Updated: ');
+    el.textContent = `Updated ${rel}`;
+    el.title = abs;
+  } else {
+    el.textContent = 'Last Updated: —';
+    el.title = '';
+  }
   renderFooter();
 }
 
@@ -732,7 +753,13 @@ function renderFooter() {
   vEl.innerHTML = APP_VERSION +
     (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
   const ts = getLastUpdatedTs();
-  tsEl.textContent = ts ? formatUpdatedAt(ts, 'Updated ') : '';
+  if (ts) {
+    tsEl.textContent = `Updated ${formatRelativeTime(ts)}`;
+    tsEl.title = formatUpdatedAt(ts, 'Updated ');
+  } else {
+    tsEl.textContent = '';
+    tsEl.title = '';
+  }
 }
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
@@ -1915,6 +1942,11 @@ function renderDatabaseTab() {
 }
 
 function filterDatabase() { renderDatabaseTab(); }
+
+// ─── RELATIVE TIMESTAMP REFRESH ──────────────────────────────────────────────
+setInterval(() => {
+  updateLastUpdatedLabel();
+}, 60000);
 
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
