@@ -1054,13 +1054,9 @@ function openAuthOverlay() {
   const overlay = document.getElementById('auth-overlay');
   overlay.classList.add('open');
   const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
-  document.getElementById('auth-no-config').style.display    = noConfig ? '' : 'none';
-  document.getElementById('auth-form-wrap').style.display    = noConfig ? 'none' : '';
-  document.getElementById('auth-error').textContent = '';
-  document.getElementById('auth-email').value    = '';
-  document.getElementById('auth-password').value = '';
-  hideSmsSection(); // reset SMS state and restore main form visibility
-  if (!noConfig) document.getElementById('auth-email').focus();
+  document.getElementById('auth-no-config').style.display = noConfig ? '' : 'none';
+  document.getElementById('auth-form-wrap').style.display = noConfig ? 'none' : '';
+  if (!noConfig) renderAuthScreen('signin');
   document.addEventListener('keydown', _authFocusTrap);
 }
 
@@ -1071,6 +1067,120 @@ function closeAuthOverlay() {
   _authFocusBefore = null;
 }
 
+function renderAuthScreen(screen) {
+  _authScreen = screen;
+  ['signin', 'signup', 'forgot', 'reset'].forEach(s => {
+    const el = document.getElementById(`auth-screen-${s}`);
+    if (el) el.style.display = s === screen ? '' : 'none';
+  });
+  const errEl = document.getElementById(`${screen}-error`);
+  if (errEl) errEl.textContent = '';
+  const box = document.getElementById('auth-box');
+  const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password', reset: 'Set New Password' };
+  if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
+  const firstInput = document.querySelector(`#auth-screen-${screen} input`);
+  if (firstInput) setTimeout(() => firstInput.focus(), 0);
+}
+
+async function handleSignIn() {
+  const email    = document.getElementById('signin-email').value.trim();
+  const password = document.getElementById('signin-password').value;
+  const errEl    = document.getElementById('signin-error');
+  const btn      = document.getElementById('signin-submit-btn');
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Signing in\u2026';
+  errEl.textContent = '';
+  try {
+    const data = await sbSignIn(email, password);
+    const { role, name } = await sbGetProfile(data.access_token);
+    _applySession(data, role, name);
+    closeAuthOverlay();
+    applyRole(role);
+    if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+async function handleSignUp() {
+  const firstName = document.getElementById('signup-firstname').value.trim();
+  const lastName  = document.getElementById('signup-lastname').value.trim();
+  const email     = document.getElementById('signup-email').value.trim();
+  const password  = document.getElementById('signup-password').value;
+  const errEl     = document.getElementById('signup-error');
+  const btn       = document.getElementById('signup-submit-btn');
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Creating account\u2026';
+  errEl.textContent = '';
+  try {
+    const name = [firstName, lastName].filter(Boolean).join(' ');
+    await sbSignUp(email, password, name);
+    closeAuthOverlay();
+    showToast('Account created. Contact admin to activate manager access.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Sign-up failed.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+}
+
+async function handleForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const errEl = document.getElementById('forgot-error');
+  const btn   = document.getElementById('forgot-submit-btn');
+  if (!email) { errEl.textContent = 'Enter your email address.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Sending\u2026';
+  errEl.textContent = '';
+  try {
+    await sbResetPasswordForEmail(email);
+    closeAuthOverlay();
+    showToast('Check your email for a password reset link.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Failed to send reset email.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Reset Link';
+  }
+}
+
+async function handleResetPassword() {
+  const password = document.getElementById('reset-password').value;
+  const confirm  = document.getElementById('reset-confirm').value;
+  const errEl    = document.getElementById('reset-error');
+  const btn      = document.getElementById('reset-submit-btn');
+  if (!password) { errEl.textContent = 'Enter a new password.'; return; }
+  if (password !== confirm) { errEl.textContent = 'Passwords do not match.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  if (!_recoverySessionData) { errEl.textContent = 'Reset session expired. Please request a new link.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+  errEl.textContent = '';
+  try {
+    await sbUpdatePassword(password, _recoverySessionData.access_token);
+    const { role, name } = await sbGetProfile(_recoverySessionData.access_token);
+    _applySession(_recoverySessionData, role, name);
+    _recoverySessionData = null;
+    closeAuthOverlay();
+    applyRole(role);
+    showToast('Password updated. You are now signed in.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Failed to update password.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Set Password';
+  }
+}
 
 function signOut() {
   currentUser = null;
