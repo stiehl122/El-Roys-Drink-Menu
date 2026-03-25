@@ -552,8 +552,7 @@ async function init() {
     // Extract config (including categories + design) BEFORE building state
     if (data && data._config) {
       const cfg = data._config;
-      if (cfg.menuUrl)  { MENU_URL  = cfg.menuUrl;  lsSet(LS_KEYS.menuUrl, MENU_URL); }
-      if (cfg.fbUrl)    { FB_URL    = cfg.fbUrl;    lsSet(LS_KEYS.fbUrl, FB_URL); }
+
       if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
         CATEGORY_DEFS = cfg.categories;
       }
@@ -1368,7 +1367,6 @@ async function persistState() {
   if (!FB_URL || !currentUser?.accessToken) return;
   try {
     menuState._config = {
-      menuUrl: MENU_URL, fbUrl: FB_URL,
       categories: CATEGORY_DEFS,
       design: currentDesign,
     };
@@ -1479,6 +1477,13 @@ function toggle86(catId, itemId) {
   invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
+  // Trigger animation on the newly-rendered wrapper
+  const wrapper = document.getElementById('wrapper-' + itemId);
+  if (wrapper) {
+    const cls = item.eightySixed ? 'flash-86' : 'flash-restore';
+    wrapper.classList.add(cls);
+    setTimeout(() => wrapper.classList.remove(cls), 400);
+  }
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
 }
 
