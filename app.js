@@ -850,52 +850,6 @@ function updateCollapseAllBtn() {
 }
 
 // ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
-async function _generatePKCE() {
-  const array = crypto.getRandomValues(new Uint8Array(32));
-  const verifier = btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  return { verifier, challenge };
-}
-
-async function sbOAuthRedirect(provider) {
-  const { verifier, challenge } = await _generatePKCE();
-  sessionStorage.setItem('hf_pkce_verifier', verifier);
-  const redirectTo = window.location.origin + window.location.pathname;
-  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${provider}`
-    + `&redirect_to=${encodeURIComponent(redirectTo)}`
-    + `&code_challenge=${challenge}&code_challenge_method=S256`;
-  window.location.href = url;
-}
-
-async function sbExchangeOAuthCode(code, verifier) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=authorization_code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ code, code_verifier: verifier })
-  });
-  return r.json();
-}
-
-async function sbSendOtp(phone) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ phone })
-  });
-  return r.json();
-}
-
-async function sbVerifyOtp(phone, token) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=otp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ phone, token })
-  });
-  return r.json();
-}
 
 async function sbSignUp(email, password, name) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -934,14 +888,6 @@ async function sbGetProfile(accessToken) {
   if (!r.ok) return { role: 'none', name: '' };
   const { role, name } = await r.json();
   return { role: role || 'none', name: name || '' };
-}
-
-// #145: URL-encode the provider name to prevent open-redirect / URL injection.
-async function sbOAuthRedirect(provider) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const redirectTo = encodeURIComponent(window.location.origin);
-  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${redirectTo}`;
-  window.location.href = url;
 }
 
 
