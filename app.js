@@ -591,26 +591,26 @@ async function init() {
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
   }
 
-  // Restore Supabase session — OAuth callback takes priority over stored tokens
-  const handledOAuth = await _tryHandleOAuthCallback();
-  if (!handledOAuth) await _tryRestoreSession();
+  // Restore Supabase session — recovery callback takes priority over stored tokens
+  const handledRecovery = await _tryHandleRecoveryCallback();
+  if (!handledRecovery) await _tryRestoreSession();
 }
 
-async function _tryHandleOAuthCallback() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const verifier = sessionStorage.getItem('hf_pkce_verifier');
-  if (!code || !verifier) return false;
+async function _tryHandleRecoveryCallback() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return false;
+  const params = new URLSearchParams(hash);
+  if (params.get('type') !== 'recovery') return false;
+  const accessToken = params.get('access_token');
+  if (!accessToken) return false;
   history.replaceState({}, '', window.location.pathname);
-  sessionStorage.removeItem('hf_pkce_verifier');
-  const data = await sbExchangeOAuthCode(code, verifier);
-  if (!data.access_token) return false;
-  const { role, name } = await sbGetProfile(data.access_token);
-  _applySession(data, role, name);
-  applyRole(role);
-  renderUserHeader();
-  if (role === 'none') showToast('Signed in. Contact admin to get manager access.');
+  _recoverySessionData = {
+    access_token:  accessToken,
+    refresh_token: params.get('refresh_token') || '',
+    expires_in:    Number(params.get('expires_in') || 3600),
+  };
+  openAuthOverlay();
+  renderAuthScreen('reset');
   return true;
 }
 
