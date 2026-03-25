@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.4';
+const APP_VERSION = 'v0.5.5';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -25,6 +25,8 @@ let isManagerMode = false;
 let syncInterval  = null;
 let _authMode     = 'signin'; // 'signin' | 'signup'
 let _smsStep      = 'phone';  // 'phone' | 'otp'
+let _smsPhone     = '';
+let _smsRateLimitTimer = null;
 let _tokenRefreshTimer = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
@@ -79,7 +81,7 @@ function defaultState() {
 }
 
 function uid() { return Math.random().toString(36).slice(2,9); }
-function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function lsSet(key, val) {
   try { localStorage.setItem(key, val); }
   catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
@@ -111,7 +113,7 @@ async function fbWrite(state) {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${currentUser.accessToken}`
     },
-    body: JSON.stringify({ fbUrl: FB_URL, state })
+    body: JSON.stringify({ state })
   });
   if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
 }
@@ -160,12 +162,19 @@ function lightenHex(hex, amount) {
 
 function loadGoogleFont(fontName) {
   if (!fontName) return;
+  // Default fonts are self-hosted in lib/fonts/ — no external request needed.
   if (['DM Sans','Lilita One','Permanent Marker'].includes(fontName)) return;
   const id = 'gfont-' + fontName.replace(/\s+/g,'-').toLowerCase();
   if (document.getElementById(id)) return;
   const link = document.createElement('link');
   link.id = id; link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g,'+')}:wght@400;700&display=swap`;
+  // NOTE (#148): Google Fonts CDN serves dynamically-generated CSS responses, so
+  // Subresource Integrity (SRI) hashes cannot be applied — the response content
+  // changes with each request. The default fonts (DM Sans, Lilita One, Permanent
+  // Marker) are self-hosted in lib/fonts/ for full SRI compliance. Any additional
+  // fonts selected via the Design panel are loaded from the CDN without SRI.
+  // TODO: self-host additional fonts for SRI compliance.
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName).replace(/%20/g,'+')}:wght@400;700&display=swap`;
   document.head.appendChild(link);
 }
 
@@ -202,17 +211,30 @@ function applyDesign(design) {
   const titleEl = document.querySelector('header h1');
   if (titleEl && design.menuTitle) titleEl.textContent = design.menuTitle;
 
-  if (design.headingFont) {
-    loadGoogleFont(design.headingFont);
-    root.style.setProperty('--font-heading', `'${design.headingFont}', cursive`);
+  // #149: Validate font names against the allowlist before applying as CSS values
+  // to prevent CSS injection via unsanitized font names from the database.
+  const FONT_ALLOWLIST = new Set([...HEADING_FONTS, ...BODY_FONTS, ...ACCENT_FONTS]);
+  function _safeFont(name, fallback) {
+    if (!name) return null;
+    if (FONT_ALLOWLIST.has(name)) return name;
+    console.warn(`[security] Rejected invalid font name: "${name}" — falling back to "${fallback}"`);
+    return fallback;
   }
-  if (design.bodyFont) {
-    loadGoogleFont(design.bodyFont);
-    root.style.setProperty('--font-body', `'${design.bodyFont}', sans-serif`);
+
+  const headingFont = _safeFont(design.headingFont, 'Lilita One');
+  if (headingFont) {
+    loadGoogleFont(headingFont);
+    root.style.setProperty('--font-heading', `'${headingFont}', cursive`);
   }
-  if (design.accentFont) {
-    loadGoogleFont(design.accentFont);
-    root.style.setProperty('--font-accent', `'${design.accentFont}', cursive`);
+  const bodyFont = _safeFont(design.bodyFont, 'DM Sans');
+  if (bodyFont) {
+    loadGoogleFont(bodyFont);
+    root.style.setProperty('--font-body', `'${bodyFont}', sans-serif`);
+  }
+  const accentFont = _safeFont(design.accentFont, 'Permanent Marker');
+  if (accentFont) {
+    loadGoogleFont(accentFont);
+    root.style.setProperty('--font-accent', `'${accentFont}', cursive`);
   }
   const brand = (design.brandName || '').trim();
   const title = (design.menuTitle || '').trim();
@@ -376,38 +398,38 @@ function renderCategoriesTab() {
     const isLast  = idx === CATEGORY_DEFS.length - 1;
     card.innerHTML = `
       <div class="catmgr-row">
-        <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+        <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div class="catmgr-info">
           <div class="catmgr-title">${escHtml(cat.title)}</div>
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
         <div class="catmgr-actions">
-          <button class="btn-small" onclick="moveCategoryUp('${cat.id}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
-          <button class="btn-small" onclick="moveCategoryDown('${cat.id}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
-          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">✏️</button>
-          <button class="btn-small btn-danger" onclick="deleteCategory('${cat.id}')">×</button>
+          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
+          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">✏️</button>
+          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')">×</button>
         </div>
       </div>
-      <div class="catmgr-edit" id="catmgr-edit-${cat.id}" style="display:none">
+      <div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
         <div class="catmgr-field-row">
           <label>Icon</label>
-          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${cat.id}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
+          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
         </div>
         <div class="catmgr-field-row">
           <label>Title</label>
-          <input type="text" class="catmgr-input" id="ce-title-${cat.id}" value="${escHtml(cat.title)}" placeholder="Category title"/>
+          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title"/>
         </div>
         <div class="catmgr-field-row">
           <label>Subtitle</label>
-          <input type="text" class="catmgr-input" id="ce-sub-${cat.id}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
+          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
         </div>
         <div class="catmgr-field-row">
           <label>Hint text</label>
-          <input type="text" class="catmgr-input" id="ce-ph-${cat.id}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
+          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
         </div>
         <div class="catmgr-save-row">
-          <button class="btn-small" onclick="toggleCategoryEdit('${cat.id}')">Cancel</button>
-          <button class="btn-small" onclick="saveCategoryEdit('${cat.id}')">Save</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
+          <button class="btn-small" onclick="saveCategoryEdit('${escHtml(cat.id)}')">Save</button>
         </div>
       </div>`;
     container.appendChild(card);
@@ -755,9 +777,9 @@ function renderPublicView() {
     section.innerHTML = `
       <div class="menu-section-header collapsible-header" role="button" tabindex="0"
            aria-expanded="${isCollapsed ? 'false' : 'true'}"
-           onclick="togglePublicCategory('${cat.id}')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${cat.id}')}">
-        <div class="menu-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+           onclick="togglePublicCategory('${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${escHtml(cat.id)}')}">
+        <div class="menu-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
@@ -887,6 +909,14 @@ async function sbGetProfile(accessToken) {
   if (!r.ok) return { role: 'none', name: '' };
   const { role, name } = await r.json();
   return { role: role || 'none', name: name || '' };
+}
+
+// #145: URL-encode the provider name to prevent open-redirect / URL injection.
+async function sbOAuthRedirect(provider) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
+  const redirectTo = encodeURIComponent(window.location.origin);
+  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${redirectTo}`;
+  window.location.href = url;
 }
 
 
@@ -1124,8 +1154,11 @@ function hideSmsSection() {
   document.getElementById('auth-submit-btn').style.display     = '';
   document.querySelector('.auth-toggle').style.display         = '';
   _smsStep = 'phone';
+  _smsPhone = '';
+  if (_smsRateLimitTimer) { clearInterval(_smsRateLimitTimer); _smsRateLimitTimer = null; }
 }
 
+// #147: Rate-limited SMS OTP flow. Prevents rapid repeated sends that abuse Twilio credits.
 async function handleSmsFlow() {
   const btn   = document.getElementById('auth-sms-send-btn');
   const errEl = document.getElementById('auth-sms-error');
@@ -1135,18 +1168,31 @@ async function handleSmsFlow() {
     if (!phone) { errEl.textContent = 'Enter a phone number.'; return; }
     btn.textContent = 'Sending…'; btn.disabled = true;
     const res = await sbSendOtp(phone);
-    btn.disabled = false;
-    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.textContent = 'Send Code'; return; }
+    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.disabled = false; btn.textContent = 'Send Code'; return; }
+    _smsPhone = phone;
     _smsStep = 'otp';
     document.getElementById('auth-otp-field').style.display = '';
-    btn.textContent = 'Verify Code';
+    // Start 60-second countdown to prevent rapid resends.
+    let remaining = 60;
+    btn.disabled = true;
+    btn.textContent = `Resend in ${remaining}s`;
+    _smsRateLimitTimer = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(_smsRateLimitTimer);
+        _smsRateLimitTimer = null;
+        btn.disabled = false;
+        btn.textContent = 'Resend Code';
+      } else {
+        btn.textContent = `Resend in ${remaining}s`;
+      }
+    }, 1000);
     document.getElementById('auth-otp').focus();
   } else {
-    const phone = document.getElementById('auth-phone').value.trim();
     const token = document.getElementById('auth-otp').value.trim();
     if (!token) { errEl.textContent = 'Enter the 6-digit code.'; return; }
     btn.textContent = 'Verifying…'; btn.disabled = true;
-    const data = await sbVerifyOtp(phone, token);
+    const data = await sbVerifyOtp(_smsPhone, token);
     btn.disabled = false;
     if (data.error || !data.access_token) {
       errEl.textContent = data.error?.message || 'Invalid code.';
@@ -1236,24 +1282,24 @@ function renderManagerCategories() {
     card.innerHTML = `
       <div class="cat-header collapsible-header" role="button" tabindex="0"
            aria-expanded="true"
-           onclick="toggleManagerCategory('${cat.id}')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${cat.id}')}">
-        <div class="cat-icon" style="background:${escHtml(cat.color)}">${cat.icon}</div>
+           onclick="toggleManagerCategory('${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${escHtml(cat.id)}')}">
+        <div class="cat-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
         <div><div class="cat-title">${escHtml(cat.title)}</div><div class="cat-sub">${escHtml(cat.sub || '')}</div></div>
         <span class="category-chevron">›</span>
       </div>
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
-        <div class="current-items" id="mgr-items-${cat.id}"></div>
+        <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${cat.id}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
-              oninput="showAutocomplete('${cat.id}')"
-              onblur="setTimeout(()=>hideAutocomplete('${cat.id}'),150)"
-              onkeydown="handleAddItemKeydown(event,'${cat.id}')"/>
-            <button class="add-item-btn" onclick="addItem('${cat.id}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
+              oninput="showAutocomplete('${escHtml(cat.id)}')"
+              onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
+              onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"/>
+            <button class="add-item-btn" onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
           </div>
-          <div class="autocomplete-list" id="ac-${cat.id}"></div>
+          <div class="autocomplete-list" id="ac-${escHtml(cat.id)}"></div>
         </div>
       </div>`;
     container.appendChild(card);
@@ -1651,7 +1697,7 @@ function openPreview() {
     diff.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
-      let html = `<div class="preview-cat">${s.icon} ${s.label}</div>`;
+      let html = `<div class="preview-cat">${escHtml(s.icon)} ${escHtml(s.label)}</div>`;
       s.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
       s.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
       s.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
