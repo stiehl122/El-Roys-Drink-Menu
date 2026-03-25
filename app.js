@@ -609,8 +609,7 @@ async function _tryHandleRecoveryCallback() {
     refresh_token: params.get('refresh_token') || '',
     expires_in:    Number(params.get('expires_in') || 3600),
   };
-  openAuthOverlay();
-  renderAuthScreen('reset');
+  openAuthOverlay('reset');
   return true;
 }
 
@@ -907,7 +906,7 @@ async function sbUpdatePassword(newPassword, accessToken) {
     body: JSON.stringify({ password: newPassword })
   });
   if (!r.ok) throw await r.json();
-  return r.json();
+  return await r.json();
 }
 
 function _scheduleTokenRefresh(expiresAt) {
@@ -1049,14 +1048,14 @@ function _authFocusTrap(e) {
   }
 }
 
-function openAuthOverlay() {
+function openAuthOverlay(screen) {
   _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
   overlay.classList.add('open');
   const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
   document.getElementById('auth-no-config').style.display = noConfig ? '' : 'none';
   document.getElementById('auth-form-wrap').style.display = noConfig ? 'none' : '';
-  if (!noConfig) renderAuthScreen('signin');
+  if (!noConfig) renderAuthScreen(screen || 'signin');
   document.addEventListener('keydown', _authFocusTrap);
 }
 
