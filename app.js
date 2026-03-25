@@ -1033,6 +1033,7 @@ document.addEventListener('keydown', function(e) {
 let _authFocusBefore = null;
 
 function _authFocusTrap(e) {
+  if (e.key === 'Escape') { closeAuthOverlay(); return; }
   if (e.key !== 'Tab') return;
   const box = document.querySelector('#auth-overlay .auth-box');
   const focusable = Array.from(
@@ -1064,6 +1065,7 @@ function closeAuthOverlay() {
   document.removeEventListener('keydown', _authFocusTrap);
   if (_authFocusBefore && typeof _authFocusBefore.focus === 'function') _authFocusBefore.focus();
   _authFocusBefore = null;
+  _recoverySessionData = null;
 }
 
 function renderAuthScreen(screen) {
