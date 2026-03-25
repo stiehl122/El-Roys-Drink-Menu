@@ -126,6 +126,12 @@
   .auth-approval-notice { font-size: 11px; color: var(--muted); margin: -4px 0 10px; line-height: 1.5; text-align: center; opacity: 0.8; }
   .pin-cancel { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; margin-top: 14px; display: block; width: 100%; padding: 6px; transition: color 0.15s; }
   .pin-cancel:hover { color: var(--charcoal); }
+  .auth-social-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .auth-social-btn { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 11px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; font-family: var(--font-body); font-size: 11px; color: var(--charcoal); cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .auth-social-btn:hover { border-color: var(--teal); background: var(--cream); }
+  .auth-social-btn svg { width: 20px; height: 20px; }
+  .auth-divider { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 10px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+  .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
   /* ── MANAGER VIEW (dark) ── */
   #manager-view { display: none; }
   .section-label { font-family: var(--font-heading); font-size: 11px; letter-spacing: 4px; color: var(--fire); margin-bottom: 14px; display: flex; align-items: center; gap: 10px; }
