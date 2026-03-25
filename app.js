@@ -800,7 +800,7 @@ function renderPublicView() {
             ${detailHtml}
           </div>`;
         }).join('')
-      : `<div class="empty-menu">Nothing listed yet.</div>`;
+      : `<div class="empty-menu">Nothing here yet — check back soon.</div>`;
     section.innerHTML = `
       <div class="menu-section-header collapsible-header" role="button" tabindex="0"
            aria-expanded="${isCollapsed ? 'false' : 'true'}"
@@ -1359,7 +1359,12 @@ function renderManagerItems(catId) {
   const listEl = document.getElementById('mgr-items-' + catId);
   if (!listEl) return;
   listEl.innerHTML = '';
-  if (!visibleItems.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
+  if (!visibleItems.length) {
+    const cat = CATEGORY_DEFS.find(c => c.id === catId);
+    const ph = cat?.placeholder ? ` Try: "${escHtml(cat.placeholder)}"` : '';
+    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Nothing here yet.${ph}</span></div>`;
+    return;
+  }
   visibleItems.forEach(item => {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
@@ -1515,6 +1520,12 @@ function toggle86(catId, itemId) {
   invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
+  const wrapper = document.getElementById('wrapper-' + itemId);
+  if (wrapper) {
+    const cls = item.eightySixed ? 'flash-86' : 'flash-restore';
+    wrapper.classList.add(cls);
+    setTimeout(() => wrapper.classList.remove(cls), 400);
+  }
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
 }
 

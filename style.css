@@ -28,6 +28,8 @@
     --danger-bg: #fde8e8;
     --danger-border: rgba(192,57,43,0.3);
     --prune-divider: rgba(0,0,0,0.06);
+    --flash-86-bg: rgba(231, 76, 60, 0.12);
+    --flash-restore-bg: rgba(46, 204, 113, 0.12);
     /* Font families — overridable via applyDesign() */
     --font-heading: 'Lilita One', cursive;
     --font-body: 'DM Sans', sans-serif;
@@ -51,6 +53,8 @@
     --badge-86-text: #f66;
     --danger-bg: #2c1a1a;
     --prune-divider: rgba(255,255,255,0.06);
+    --flash-86-bg: rgba(231, 76, 60, 0.18);
+    --flash-restore-bg: rgba(46, 204, 113, 0.18);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 80px; transition: background 0.3s, color 0.3s; }
@@ -173,7 +177,8 @@
   .del-item { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 3px; border-radius: 4px; transition: all 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.6; }
   .del-item:hover { color: var(--red); opacity: 1; }
   .send-update-count { font-size: 13px; opacity: 0.85; }
-  .empty-state { color: var(--muted); font-size: 12px; font-style: italic; padding: 6px 0 2px; opacity: 0.5; }
+  .empty-state { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-style: italic; padding: 12px 0 6px; }
+  .empty-state-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px dashed var(--muted); border-radius: 50%; font-size: 14px; font-style: normal; opacity: 0.5; flex-shrink: 0; }
   .add-item-wrap { position: relative; margin-top: 9px; }
   .add-item-area { display: flex; gap: 7px; }
   .autocomplete-list { position: fixed; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
@@ -239,6 +244,24 @@
   .eighty-six-btn:hover { color: var(--red); opacity: 1; }
   .eighty-six-btn.restore { color: rgba(231,76,60,0.5); opacity: 1; }
   .eighty-six-btn.restore:hover { color: var(--green); }
+  @keyframes item-shake {
+    0%   { transform: translateX(0); }
+    20%  { transform: translateX(-5px); }
+    40%  { transform: translateX(5px); }
+    60%  { transform: translateX(-4px); }
+    80%  { transform: translateX(3px); }
+    100% { transform: translateX(0); }
+  }
+  .item-wrapper.flash-86 .current-item {
+    animation: item-shake 0.35s ease;
+    background: var(--flash-86-bg);
+    transition: background 0.35s;
+  }
+  .item-wrapper.flash-restore .current-item {
+    animation: item-shake 0.35s ease;
+    background: var(--flash-restore-bg);
+    transition: background 0.35s;
+  }
 
   /* ── DESCRIPTION — MANAGER ── */
   .item-wrapper { display: flex; flex-direction: column; }
