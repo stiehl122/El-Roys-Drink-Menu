@@ -1900,11 +1900,24 @@ setInterval(() => {
 
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
-  document.getElementById('auth-password').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleAuthSubmit();
+  // Sign In: email Enter → focus password; password Enter → submit
+  document.getElementById('signin-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('signin-password').focus();
   });
-  document.getElementById('auth-email').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') document.getElementById('auth-password').focus();
+  document.getElementById('signin-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleSignIn();
+  });
+  // Sign Up: password Enter → submit
+  document.getElementById('signup-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleSignUp();
+  });
+  // Forgot: email Enter → submit
+  document.getElementById('forgot-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleForgotPassword();
+  });
+  // Reset: confirm Enter → submit
+  document.getElementById('reset-confirm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleResetPassword();
   });
 })();
 
