@@ -281,19 +281,19 @@
 
 <!-- AUTH OVERLAY -->
 <div id="auth-overlay">
-  <div class="auth-box" role="dialog" aria-modal="true" aria-labelledby="auth-screen-title">
+  <div class="auth-box" id="auth-box" role="dialog" aria-modal="true" aria-label="Sign In">
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
 
       <!-- SIGN IN -->
       <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title" id="auth-screen-title">SIGN IN</h2>
+        <h2 class="auth-screen-title">SIGN IN</h2>
         <p class="auth-screen-subtitle">Sign in to your account</p>
         <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email"/>
+          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password"/>
+          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
         </div>
         <div class="auth-error" id="signin-error"></div>
         <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
@@ -306,7 +306,7 @@
 
       <!-- SIGN UP -->
       <div id="auth-screen-signup" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title" id="auth-screen-title">CREATE ACCOUNT</h2>
+        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
         <p class="auth-screen-subtitle">Sign up with your work email</p>
         <div class="auth-field">
           <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"/>
@@ -315,10 +315,10 @@
           <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"/>
         </div>
         <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"/>
+          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email" aria-describedby="signup-error"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"/>
+          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password" aria-describedby="signup-error"/>
         </div>
         <div class="auth-error" id="signup-error"></div>
         <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>
@@ -328,10 +328,10 @@
 
       <!-- FORGOT PASSWORD -->
       <div id="auth-screen-forgot" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title" id="auth-screen-title">RESET PASSWORD</h2>
+        <h2 class="auth-screen-title">RESET PASSWORD</h2>
         <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
         <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email"/>
+          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
         </div>
         <div class="auth-error" id="forgot-error"></div>
         <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
@@ -340,13 +340,13 @@
 
       <!-- RESET PASSWORD -->
       <div id="auth-screen-reset" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title" id="auth-screen-title">SET NEW PASSWORD</h2>
+        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
         <p class="auth-screen-subtitle">Choose a new password for your account</p>
         <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password"/>
+          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password"/>
+          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
         </div>
         <div class="auth-error" id="reset-error"></div>
         <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
