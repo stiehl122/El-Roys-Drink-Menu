@@ -1032,6 +1032,15 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (!isManagerMode) return;
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    saveMenu();
+  }
+});
+
 let _authFocusBefore = null;
 
 function _authFocusTrap(e) {
