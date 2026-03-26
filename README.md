@@ -13,7 +13,7 @@ A live, single-page drink menu for El Roy's — built with zero external depende
 - **Manager mode** — role-protected editing interface; add or remove items per category, toggle 86 status, and write item descriptions
 - **Save vs. Send Update** — save menu changes to the database without notifying the group; send only when ready
 - **Draft indicators** — green dot per item means it hasn't been announced yet; the Send Update button shows a change count when there are unsent changes
-- **Supabase sign-in** — email/password authentication with role-based access (`none`, `manager`, `admin`)
+- **Supabase sign-in** — four-screen auth wizard: Sign In, Sign Up, Forgot Password, and Reset Password; role-based access (`none`, `manager`, `admin`)
 - **GroupMe integration** — sends a formatted patch-notes message to a GroupMe group via a bot
 - **Firebase cloud sync** — menu state and config sync across devices in real time via Firebase Realtime Database
 - **Offline-capable** — falls back to localStorage if Firebase is unavailable
@@ -79,7 +79,7 @@ This app requires Vercel for full functionality. The `/api/` routes run as serve
 
 1. Open your Vercel deployment URL
 2. Click **Sign In** in the top-right corner
-3. Create an account using **Sign up** — new accounts start with `role: none`
+3. Click **Sign up** in the auth overlay, fill in your first name, last name, email, and password — new accounts start with `role: none`
 4. The first admin must be promoted manually via the **Supabase dashboard** (set their role to `admin` in the profiles table)
 5. Once you have an admin account, additional users can be promoted via the **Admin** tab in the app
 
@@ -103,7 +103,7 @@ Open the page URL in any browser. The menu loads automatically from Firebase and
 
 ### Updating the Menu (Manager or Admin)
 
-1. Click **Sign In** and enter your email and password
+1. Click **Sign In** and enter your email and password. To reset a forgotten password, click **Forgot password?** on the Sign In screen, enter your email, and follow the link in the reset email — it opens the app directly to the Reset Password screen.
 2. Use the **Manager** tab to edit each category:
    - Type an item name in the input field and press **+** (or Enter) to add it
    - Click **86** on an item to mark it out of stock; click **↩** to restore it
