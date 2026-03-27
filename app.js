@@ -50,6 +50,9 @@ const DEFAULT_CATEGORY_DEFS = [
 
 let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
 
+// Reserved key for items orphaned by category deletion — never rendered in UI
+const UNCATEGORIZED_ID = '__uncategorized__';
+
 // ─── DESIGN ──────────────────────────────────────────────────────────────────
 const HEADING_FONTS = ['DM Sans','Bebas Neue','Oswald','Pacifico','Bangers','Fredoka One','Lilita One','Black Han Sans','Righteous','Boogaloo','Titan One'];
 const BODY_FONTS    = ['DM Sans','Inter','Outfit','Nunito','Raleway','Poppins','Lato','Open Sans','Roboto','Source Sans 3'];
@@ -474,11 +477,20 @@ async function moveCategoryDown(catId) {
 async function deleteCategory(catId) {
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
-  const hasItems = (menuState[catId]?.items || []).some(i => i.onMenu !== false);
-  const msg = hasItems
-    ? `"${cat.title}" has active menu items. Delete it anyway? (Items will be hidden but not permanently removed.)`
+  const items = menuState[catId]?.items || [];
+  const msg = items.length > 0
+    ? `Delete "${cat.title}"? Its ${items.length} item(s) will be moved to the uncategorized pool and remain available as autocomplete suggestions.`
     : `Delete the "${cat.title}" category?`;
   if (!confirm(msg)) return;
+  // Move all items to uncategorized pool so they aren't lost
+  if (items.length > 0) {
+    if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [] };
+    const pool = menuState[UNCATEGORIZED_ID].items;
+    items.forEach(item => {
+      const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      if (!exists) pool.push({ ...item, onMenu: false });
+    });
+  }
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   invalidateDiff();
   await persistState();
@@ -578,6 +590,11 @@ async function init() {
         });
         delete menuState[c.id].removed;
       });
+      // Load uncategorized pool (items orphaned by category deletion)
+      if (data[UNCATEGORIZED_ID]) {
+        menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
+        if (!menuState[UNCATEGORIZED_ID].items) menuState[UNCATEGORIZED_ID].items = [];
+      }
       if (data._meta) {
         menuState._meta = data._meta;
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
@@ -682,6 +699,7 @@ function startPolling() {
 
       const before = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
+      if (data[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
       const after = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
 
       const newTs = data._meta && (data._meta.lastUpdatedTs || data._meta.lastSentTs);
@@ -1386,7 +1404,18 @@ function addItem(catId) {
       i => i.onMenu === false && i.name.toLowerCase() === nameLower
     );
     if (offMenu) { offMenu.onMenu = true; }
-    else { menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true }); }
+    else {
+      // Check uncategorized pool — if found, move it into this category
+      const uncatIdx = (menuState[UNCATEGORIZED_ID]?.items || []).findIndex(
+        i => i.name.toLowerCase() === nameLower
+      );
+      if (uncatIdx !== -1) {
+        const [uncatItem] = menuState[UNCATEGORIZED_ID].items.splice(uncatIdx, 1);
+        menuState[catId].items.push({ ...uncatItem, onMenu: true });
+      } else {
+        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
+      }
+    }
   }
   input.value = '';
   hideAutocomplete(catId);
@@ -1404,7 +1433,15 @@ function showAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
-  const matches = (menuState[catId]?.items || []).filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
+  const valLower = val.toLowerCase();
+  const catMatches = (menuState[catId]?.items || []).filter(
+    i => i.onMenu === false && i.name.toLowerCase().startsWith(valLower)
+  );
+  const catNames = new Set((menuState[catId]?.items || []).map(i => i.name.trim().toLowerCase()));
+  const uncatMatches = (menuState[UNCATEGORIZED_ID]?.items || []).filter(
+    i => i.name.toLowerCase().startsWith(valLower) && !catNames.has(i.name.trim().toLowerCase())
+  );
+  const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`

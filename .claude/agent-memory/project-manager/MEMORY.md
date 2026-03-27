@@ -1,0 +1,2 @@
+- [User role and workflow](user_role.md) — Luke reviews/approves; agents implement; Vercel preview per branch for testing
+- [v0.6 auth overhaul](project_v06_auth_overhaul.md) — Wizard screens replaced old overlay in PR #174; OAuth/SMS removed; three minor a11y/CSS items open

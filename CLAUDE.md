@@ -14,8 +14,9 @@ A zero-dependency web app that powers the live drink menu for El Roy's. Staff si
 - **Vercel API routes** — four serverless endpoints required for full functionality:
   - `/api/config` — serves Supabase credentials to the client
   - `/api/role` — looks up the authenticated user's role
-  - `/api/firebase-config` — serves the Firebase secret for database writes
+  - `/api/firebase-write` — performs server-side Firebase writes (client never sees `FIREBASE_SECRET`)
   - `/api/send-groupme` — proxies GroupMe Bot API calls server-side
+- `api/_auth.js` is a shared auth helper imported by the API routes; the underscore prefix intentionally excludes it from Vercel's routing.
 - Full functionality requires Vercel (or equivalent serverless) deployment for the API routes. Plain static hosting will not support Firebase writes or GroupMe sending.
 
 ## Menu Categories
@@ -56,7 +57,7 @@ New accounts start with `role: none` and require admin promotion before they can
 - **Always ask clarifying questions** before making changes if the request is ambiguous or could be interpreted in multiple ways.
 - **Do not introduce external dependencies.** The app must remain self-contained with no external libraries or package manager.
 - **No build tools.** Changes are made directly to `index.html`, `style.css`, or `app.js` as appropriate.
-- **Firebase Secret (`FIREBASE_SECRET`) is a Vercel environment variable**, not entered in the UI at runtime. The client retrieves it via `/api/firebase-config`.
+- **Required Vercel environment variables:** `FIREBASE_SECRET` (Firebase auth token) and `FIREBASE_URL` (database URL). Both are used server-side by `/api/firebase-write`; neither is ever sent to the client.
 - **Test in-browser** — for full functionality, deploy to Vercel and use the live URL. Local testing without the API routes will run in read-only / offline mode.
 - Keep Supabase auth and role-check flows intact when modifying authentication logic.
 - Preserve offline/localStorage fallback behavior when touching Firebase sync code.
@@ -75,9 +76,10 @@ El-Roys-Drink-Menu/
 ├── app.js            # All JavaScript logic
 ├── style.css         # All CSS styles
 ├── api/
+│   ├── _auth.js          # Shared auth helper (underscore = not a Vercel endpoint)
 │   ├── config.js         # Serves Supabase URL + anon key
 │   ├── role.js           # Looks up authenticated user's role
-│   ├── firebase-config.js# Serves Firebase secret (FIREBASE_SECRET env var)
+│   ├── firebase-write.js # Performs server-side Firebase writes (uses FIREBASE_SECRET + FIREBASE_URL)
 │   └── send-groupme.js   # Proxies GroupMe Bot API calls
 ├── README.md         # Setup and usage documentation
 └── CLAUDE.md         # This file
