@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.5.5';
+const APP_VERSION = 'v0.6.1';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -23,11 +23,9 @@ let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, 
 let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
 let syncInterval  = null;
-let _authMode     = 'signin'; // 'signin' | 'signup'
-let _smsStep      = 'phone';  // 'phone' | 'otp'
-let _smsPhone     = '';
-let _smsRateLimitTimer = null;
 let _tokenRefreshTimer = null;
+let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
+let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -51,6 +49,9 @@ const DEFAULT_CATEGORY_DEFS = [
 ];
 
 let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
+
+// Reserved key for items orphaned by category deletion — never rendered in UI
+const UNCATEGORIZED_ID = '__uncategorized__';
 
 // ─── DESIGN ──────────────────────────────────────────────────────────────────
 const HEADING_FONTS = ['DM Sans','Bebas Neue','Oswald','Pacifico','Bangers','Fredoka One','Lilita One','Black Han Sans','Righteous','Boogaloo','Titan One'];
@@ -476,11 +477,20 @@ async function moveCategoryDown(catId) {
 async function deleteCategory(catId) {
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
-  const hasItems = (menuState[catId]?.items || []).some(i => i.onMenu !== false);
-  const msg = hasItems
-    ? `"${cat.title}" has active menu items. Delete it anyway? (Items will be hidden but not permanently removed.)`
+  const items = menuState[catId]?.items || [];
+  const msg = items.length > 0
+    ? `Delete "${cat.title}"? Its ${items.length} item(s) will be moved to the uncategorized pool and remain available as autocomplete suggestions.`
     : `Delete the "${cat.title}" category?`;
   if (!confirm(msg)) return;
+  // Move all items to uncategorized pool so they aren't lost
+  if (items.length > 0) {
+    if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [] };
+    const pool = menuState[UNCATEGORIZED_ID].items;
+    items.forEach(item => {
+      const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+      if (!exists) pool.push({ ...item, onMenu: false });
+    });
+  }
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   invalidateDiff();
   await persistState();
@@ -579,6 +589,11 @@ async function init() {
         });
         delete menuState[c.id].removed;
       });
+      // Load uncategorized pool (items orphaned by category deletion)
+      if (data[UNCATEGORIZED_ID]) {
+        menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
+        if (!menuState[UNCATEGORIZED_ID].items) menuState[UNCATEGORIZED_ID].items = [];
+      }
       if (data._meta) {
         menuState._meta = data._meta;
         const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
@@ -592,26 +607,25 @@ async function init() {
     showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
   }
 
-  // Restore Supabase session — OAuth callback takes priority over stored tokens
-  const handledOAuth = await _tryHandleOAuthCallback();
-  if (!handledOAuth) await _tryRestoreSession();
+  // Restore Supabase session — recovery callback takes priority over stored tokens
+  const handledRecovery = await _tryHandleRecoveryCallback();
+  if (!handledRecovery) await _tryRestoreSession();
 }
 
-async function _tryHandleOAuthCallback() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
-  const params = new URLSearchParams(window.location.search);
-  const code = params.get('code');
-  const verifier = sessionStorage.getItem('hf_pkce_verifier');
-  if (!code || !verifier) return false;
+async function _tryHandleRecoveryCallback() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return false;
+  const params = new URLSearchParams(hash);
+  if (params.get('type') !== 'recovery') return false;
+  const accessToken = params.get('access_token');
+  if (!accessToken) return false;
   history.replaceState({}, '', window.location.pathname);
-  sessionStorage.removeItem('hf_pkce_verifier');
-  const data = await sbExchangeOAuthCode(code, verifier);
-  if (!data.access_token) return false;
-  const { role, name } = await sbGetProfile(data.access_token);
-  _applySession(data, role, name);
-  applyRole(role);
-  renderUserHeader();
-  if (role === 'none') showToast('Signed in. Contact admin to get manager access.');
+  _recoverySessionData = {
+    access_token:  accessToken,
+    refresh_token: params.get('refresh_token') || '',
+    expires_in:    Number(params.get('expires_in') || 3600),
+  };
+  openAuthOverlay('reset');
   return true;
 }
 
@@ -684,6 +698,7 @@ function startPolling() {
 
       const before = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
+      if (data[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
       const after = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
 
       const newTs = data._meta && (data._meta.lastUpdatedTs || data._meta.lastSentTs);
@@ -717,10 +732,31 @@ function formatUpdatedAt(ts, prefix) {
     d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatRelativeTime(ts) {
+  if (!ts) return null;
+  const diffMs = Date.now() - parseInt(ts);
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1)  return 'just now';
+  if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)  return `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7)  return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+  return formatUpdatedAt(ts, ''); // fall back to absolute for older timestamps
+}
+
 function updateLastUpdatedLabel() {
   const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
-  el.textContent = ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+  if (ts) {
+    const rel = formatRelativeTime(ts);
+    const abs = formatUpdatedAt(ts, 'Last Updated: ');
+    el.textContent = `Updated ${rel}`;
+    el.title = abs;
+  } else {
+    el.textContent = 'Last Updated: —';
+    el.title = '';
+  }
   renderFooter();
 }
 
@@ -731,7 +767,13 @@ function renderFooter() {
   vEl.innerHTML = APP_VERSION +
     (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
   const ts = getLastUpdatedTs();
-  tsEl.textContent = ts ? formatUpdatedAt(ts, 'Updated ') : '';
+  if (ts) {
+    tsEl.textContent = `Updated ${formatRelativeTime(ts)}`;
+    tsEl.title = formatUpdatedAt(ts, 'Updated ');
+  } else {
+    tsEl.textContent = '';
+    tsEl.title = '';
+  }
 }
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
@@ -772,7 +814,7 @@ function renderPublicView() {
             ${detailHtml}
           </div>`;
         }).join('')
-      : `<div class="empty-menu">Nothing listed yet.</div>`;
+      : `<div class="empty-menu">Nothing here yet — check back soon.</div>`;
     section.innerHTML = `
       <div class="menu-section-header collapsible-header" role="button" tabindex="0"
            aria-expanded="${isCollapsed ? 'false' : 'true'}"
@@ -824,52 +866,6 @@ function updateCollapseAllBtn() {
 }
 
 // ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
-async function _generatePKCE() {
-  const array = crypto.getRandomValues(new Uint8Array(32));
-  const verifier = btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-  const challenge = btoa(String.fromCharCode(...new Uint8Array(hash)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  return { verifier, challenge };
-}
-
-async function sbOAuthRedirect(provider) {
-  const { verifier, challenge } = await _generatePKCE();
-  sessionStorage.setItem('hf_pkce_verifier', verifier);
-  const redirectTo = window.location.origin + window.location.pathname;
-  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${provider}`
-    + `&redirect_to=${encodeURIComponent(redirectTo)}`
-    + `&code_challenge=${challenge}&code_challenge_method=S256`;
-  window.location.href = url;
-}
-
-async function sbExchangeOAuthCode(code, verifier) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=authorization_code`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ code, code_verifier: verifier })
-  });
-  return r.json();
-}
-
-async function sbSendOtp(phone) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ phone })
-  });
-  return r.json();
-}
-
-async function sbVerifyOtp(phone, token) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=otp`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ phone, token })
-  });
-  return r.json();
-}
 
 async function sbSignUp(email, password, name) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
@@ -910,14 +906,25 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '' };
 }
 
-// #145: URL-encode the provider name to prevent open-redirect / URL injection.
-async function sbOAuthRedirect(provider) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const redirectTo = encodeURIComponent(window.location.origin);
-  const url = `${SUPABASE_URL}/auth/v1/authorize?provider=${encodeURIComponent(provider)}&redirect_to=${redirectTo}`;
-  window.location.href = url;
+async function sbResetPasswordForEmail(email) {
+  const redirectTo = window.location.origin + window.location.pathname;
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+    body: JSON.stringify({ email, redirect_to: redirectTo })
+  });
+  if (!r.ok) throw await r.json();
 }
 
+async function sbUpdatePassword(newPassword, accessToken) {
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({ password: newPassword })
+  });
+  if (!r.ok) throw await r.json();
+  return await r.json();
+}
 
 function _scheduleTokenRefresh(expiresAt) {
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
@@ -1031,9 +1038,19 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+  if (!isManagerMode) return;
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    saveMenu();
+  }
+});
+
 let _authFocusBefore = null;
 
 function _authFocusTrap(e) {
+  if (e.key === 'Escape') { closeAuthOverlay(); return; }
   if (e.key !== 'Tab') return;
   const box = document.querySelector('#auth-overlay .auth-box');
   const focusable = Array.from(
@@ -1049,18 +1066,14 @@ function _authFocusTrap(e) {
   }
 }
 
-function openAuthOverlay() {
+function openAuthOverlay(screen) {
   _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
   overlay.classList.add('open');
   const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
-  document.getElementById('auth-no-config').style.display    = noConfig ? '' : 'none';
-  document.getElementById('auth-form-wrap').style.display    = noConfig ? 'none' : '';
-  document.getElementById('auth-error').textContent = '';
-  document.getElementById('auth-email').value    = '';
-  document.getElementById('auth-password').value = '';
-  hideSmsSection(); // reset SMS state and restore main form visibility
-  if (!noConfig) document.getElementById('auth-email').focus();
+  document.getElementById('auth-no-config').style.display = noConfig ? '' : 'none';
+  document.getElementById('auth-form-wrap').style.display = noConfig ? 'none' : '';
+  if (!noConfig) renderAuthScreen(screen || 'signin');
   document.addEventListener('keydown', _authFocusTrap);
 }
 
@@ -1069,140 +1082,121 @@ function closeAuthOverlay() {
   document.removeEventListener('keydown', _authFocusTrap);
   if (_authFocusBefore && typeof _authFocusBefore.focus === 'function') _authFocusBefore.focus();
   _authFocusBefore = null;
+  _recoverySessionData = null;
 }
 
-function toggleAuthMode() {
-  _authMode = _authMode === 'signin' ? 'signup' : 'signin';
-  const isSignIn = _authMode === 'signin';
-  document.getElementById('auth-title').textContent       = isSignIn ? 'SIGN IN' : 'CREATE ACCOUNT';
-  document.getElementById('auth-subtitle').textContent    = isSignIn ? 'Sign in to your account' : 'Sign up with your work email';
-  document.getElementById('auth-submit-btn').textContent  = isSignIn ? 'Sign In' : 'Sign Up';
-  document.getElementById('auth-toggle-text').textContent = isSignIn ? "Don't have an account?" : 'Already have an account?';
-  document.getElementById('auth-toggle-btn').textContent  = isSignIn ? 'Sign Up' : 'Sign In';
-  document.getElementById('auth-name-field').style.display     = isSignIn ? 'none' : '';
-  document.getElementById('auth-lastname-field').style.display = isSignIn ? 'none' : '';
-  document.getElementById('auth-error').textContent = '';
+function renderAuthScreen(screen) {
+  _authScreen = screen;
+  ['signin', 'signup', 'forgot', 'reset'].forEach(s => {
+    const el = document.getElementById(`auth-screen-${s}`);
+    if (el) el.style.display = s === screen ? '' : 'none';
+  });
+  const errEl = document.getElementById(`${screen}-error`);
+  if (errEl) errEl.textContent = '';
+  const box = document.getElementById('auth-box');
+  const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password', reset: 'Set New Password' };
+  if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
+  const firstInput = document.querySelector(`#auth-screen-${screen} input`);
+  if (firstInput) setTimeout(() => firstInput.focus(), 0);
 }
 
-async function handleAuthSubmit() {
-  const email    = document.getElementById('auth-email').value.trim();
-  const password = document.getElementById('auth-password').value;
-  const errEl    = document.getElementById('auth-error');
-  const btn      = document.getElementById('auth-submit-btn');
+async function handleSignIn() {
+  const email    = document.getElementById('signin-email').value.trim();
+  const password = document.getElementById('signin-password').value;
+  const errEl    = document.getElementById('signin-error');
+  const btn      = document.getElementById('signin-submit-btn');
   if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
   btn.disabled = true;
-  btn.textContent = _authMode === 'signin' ? 'Signing in…' : 'Creating account…';
+  btn.textContent = 'Signing in\u2026';
   errEl.textContent = '';
   try {
-    let data, role, name;
-    if (_authMode === 'signup') {
-      const firstName = (document.getElementById('auth-firstname')?.value || '').trim();
-      const lastName  = (document.getElementById('auth-lastname')?.value  || '').trim();
-      name = [firstName, lastName].filter(Boolean).join(' ');
-      data = await sbSignUp(email, password, name);
-      role = 'none';
-    } else {
-      data = await sbSignIn(email, password);
-      if (data.access_token) {
-        const profile = await sbGetProfile(data.access_token);
-        role = profile.role;
-        name = profile.name;
-      } else {
-        role = 'none'; name = '';
-      }
-    }
+    const data = await sbSignIn(email, password);
+    const { role, name } = await sbGetProfile(data.access_token);
     _applySession(data, role, name);
     closeAuthOverlay();
     applyRole(role);
-    if (role === 'none') {
-      showToast('Signed in. Contact admin to get manager access.', 'info');
-    }
+    if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
   } catch(err) {
     const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
     errEl.textContent = msg;
   } finally {
     btn.disabled = false;
-    btn.textContent = _authMode === 'signin' ? 'Sign In' : 'Sign Up';
+    btn.textContent = 'Sign In';
   }
 }
 
-function showSmsSection() {
-  _smsStep = 'phone';
-  document.getElementById('auth-social-section').style.display = 'none';
-  document.getElementById('auth-name-field').style.display     = 'none';
-  document.getElementById('auth-lastname-field').style.display = 'none';
-  document.getElementById('auth-email').closest('.auth-field').style.display    = 'none';
-  document.getElementById('auth-password').closest('.auth-field').style.display = 'none';
-  document.getElementById('auth-submit-btn').style.display     = 'none';
-  document.querySelector('.auth-toggle').style.display         = 'none';
-  document.getElementById('auth-otp-field').style.display      = 'none';
-  document.getElementById('auth-sms-section').style.display    = '';
-  document.getElementById('auth-sms-error').textContent        = '';
-  document.getElementById('auth-phone').value = '';
-  document.getElementById('auth-otp').value   = '';
-  document.getElementById('auth-sms-send-btn').textContent = 'Send Code';
-  document.getElementById('auth-sms-send-btn').disabled    = false;
-  document.getElementById('auth-phone').focus();
-}
-
-function hideSmsSection() {
-  document.getElementById('auth-sms-section').style.display    = 'none';
-  document.getElementById('auth-social-section').style.display = '';
-  document.getElementById('auth-email').closest('.auth-field').style.display    = '';
-  document.getElementById('auth-password').closest('.auth-field').style.display = '';
-  document.getElementById('auth-submit-btn').style.display     = '';
-  document.querySelector('.auth-toggle').style.display         = '';
-  _smsStep = 'phone';
-  _smsPhone = '';
-  if (_smsRateLimitTimer) { clearInterval(_smsRateLimitTimer); _smsRateLimitTimer = null; }
-}
-
-// #147: Rate-limited SMS OTP flow. Prevents rapid repeated sends that abuse Twilio credits.
-async function handleSmsFlow() {
-  const btn   = document.getElementById('auth-sms-send-btn');
-  const errEl = document.getElementById('auth-sms-error');
+async function handleSignUp() {
+  const firstName = document.getElementById('signup-firstname').value.trim();
+  const lastName  = document.getElementById('signup-lastname').value.trim();
+  const email     = document.getElementById('signup-email').value.trim();
+  const password  = document.getElementById('signup-password').value;
+  const errEl     = document.getElementById('signup-error');
+  const btn       = document.getElementById('signup-submit-btn');
+  if (!email || !password) { errEl.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Creating account\u2026';
   errEl.textContent = '';
-  if (_smsStep === 'phone') {
-    const phone = document.getElementById('auth-phone').value.trim();
-    if (!phone) { errEl.textContent = 'Enter a phone number.'; return; }
-    btn.textContent = 'Sending…'; btn.disabled = true;
-    const res = await sbSendOtp(phone);
-    if (res.error) { errEl.textContent = res.error.message || 'Failed to send code.'; btn.disabled = false; btn.textContent = 'Send Code'; return; }
-    _smsPhone = phone;
-    _smsStep = 'otp';
-    document.getElementById('auth-otp-field').style.display = '';
-    // Start 60-second countdown to prevent rapid resends.
-    let remaining = 60;
-    btn.disabled = true;
-    btn.textContent = `Resend in ${remaining}s`;
-    _smsRateLimitTimer = setInterval(() => {
-      remaining -= 1;
-      if (remaining <= 0) {
-        clearInterval(_smsRateLimitTimer);
-        _smsRateLimitTimer = null;
-        btn.disabled = false;
-        btn.textContent = 'Resend Code';
-      } else {
-        btn.textContent = `Resend in ${remaining}s`;
-      }
-    }, 1000);
-    document.getElementById('auth-otp').focus();
-  } else {
-    const token = document.getElementById('auth-otp').value.trim();
-    if (!token) { errEl.textContent = 'Enter the 6-digit code.'; return; }
-    btn.textContent = 'Verifying…'; btn.disabled = true;
-    const data = await sbVerifyOtp(_smsPhone, token);
+  try {
+    const name = [firstName, lastName].filter(Boolean).join(' ');
+    await sbSignUp(email, password, name);
+    closeAuthOverlay();
+    showToast('Account created. Contact admin to activate manager access.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Sign-up failed.';
+    errEl.textContent = msg;
+  } finally {
     btn.disabled = false;
-    if (data.error || !data.access_token) {
-      errEl.textContent = data.error?.message || 'Invalid code.';
-      btn.textContent = 'Verify Code'; return;
-    }
-    const { role, name } = await sbGetProfile(data.access_token);
-    _applySession(data, role, name);
+    btn.textContent = 'Create Account';
+  }
+}
+
+async function handleForgotPassword() {
+  const email = document.getElementById('forgot-email').value.trim();
+  const errEl = document.getElementById('forgot-error');
+  const btn   = document.getElementById('forgot-submit-btn');
+  if (!email) { errEl.textContent = 'Enter your email address.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Sending\u2026';
+  errEl.textContent = '';
+  try {
+    await sbResetPasswordForEmail(email);
+    closeAuthOverlay();
+    showToast('Check your email for a password reset link.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Failed to send reset email.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Reset Link';
+  }
+}
+
+async function handleResetPassword() {
+  const password = document.getElementById('reset-password').value;
+  const confirm  = document.getElementById('reset-confirm').value;
+  const errEl    = document.getElementById('reset-error');
+  const btn      = document.getElementById('reset-submit-btn');
+  if (!password) { errEl.textContent = 'Enter a new password.'; return; }
+  if (password !== confirm) { errEl.textContent = 'Passwords do not match.'; return; }
+  if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+  if (!_recoverySessionData) { errEl.textContent = 'Reset session expired. Please request a new link.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+  errEl.textContent = '';
+  try {
+    await sbUpdatePassword(password, _recoverySessionData.access_token);
+    const { role, name } = await sbGetProfile(_recoverySessionData.access_token);
+    _applySession(_recoverySessionData, role, name);
+    _recoverySessionData = null;
     closeAuthOverlay();
     applyRole(role);
-    renderUserHeader();
-    if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
+    showToast('Password updated. You are now signed in.', 'info');
+  } catch(err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Failed to update password.';
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Set Password';
   }
 }
 
@@ -1322,7 +1316,12 @@ function renderManagerItems(catId) {
   const listEl = document.getElementById('mgr-items-' + catId);
   if (!listEl) return;
   listEl.innerHTML = '';
-  if (!visibleItems.length) { listEl.innerHTML = `<div class="empty-state">Nothing on menu yet.</div>`; return; }
+  if (!visibleItems.length) {
+    const cat = CATEGORY_DEFS.find(c => c.id === catId);
+    const ph = cat?.placeholder ? ` Try: "${escHtml(cat.placeholder)}"` : '';
+    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Nothing here yet.${ph}</span></div>`;
+    return;
+  }
   visibleItems.forEach(item => {
     const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
     const is86     = !!item.eightySixed;
@@ -1403,7 +1402,18 @@ function addItem(catId) {
       i => i.onMenu === false && i.name.toLowerCase() === nameLower
     );
     if (offMenu) { offMenu.onMenu = true; }
-    else { menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true }); }
+    else {
+      // Check uncategorized pool — if found, move it into this category
+      const uncatIdx = (menuState[UNCATEGORIZED_ID]?.items || []).findIndex(
+        i => i.name.toLowerCase() === nameLower
+      );
+      if (uncatIdx !== -1) {
+        const [uncatItem] = menuState[UNCATEGORIZED_ID].items.splice(uncatIdx, 1);
+        menuState[catId].items.push({ ...uncatItem, onMenu: true });
+      } else {
+        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
+      }
+    }
   }
   input.value = '';
   hideAutocomplete(catId);
@@ -1421,7 +1431,15 @@ function showAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
-  const matches = (menuState[catId]?.items || []).filter(i => i.onMenu === false && i.name.toLowerCase().startsWith(val.toLowerCase()));
+  const valLower = val.toLowerCase();
+  const catMatches = (menuState[catId]?.items || []).filter(
+    i => i.onMenu === false && i.name.toLowerCase().startsWith(valLower)
+  );
+  const catNames = new Set((menuState[catId]?.items || []).map(i => i.name.trim().toLowerCase()));
+  const uncatMatches = (menuState[UNCATEGORIZED_ID]?.items || []).filter(
+    i => i.name.toLowerCase().startsWith(valLower) && !catNames.has(i.name.trim().toLowerCase())
+  );
+  const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
@@ -1570,11 +1588,18 @@ async function saveDesc(catId, itemId, val) {
 function removeItem(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return false;
-  if (!confirm('Remove this item from the menu?')) return false;
   item.onMenu = false;
   invalidateDiff();
   renderManagerItems(catId);
   updateDraftIndicator();
+  const removedName = item.name;
+  showToast(`"${removedName}" removed`, 'info', () => {
+    item.onMenu = true;
+    invalidateDiff();
+    renderManagerItems(catId);
+    updateDraftIndicator();
+    showToast(`"${removedName}" restored`, 'success');
+  });
   return true;
 }
 
@@ -1785,10 +1810,29 @@ async function sendUpdate() {
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
-function showToast(msg, type='info') {
+let _toastUndoTimer = null;
+function showToast(msg, type='info', undoCallback=null) {
+  if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
   const t = document.getElementById('toast');
-  t.textContent = msg; t.className = `toast ${type} show`;
-  setTimeout(() => t.classList.remove('show'), 3200);
+  t.className = `toast ${type} show`;
+  if (undoCallback) {
+    t.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-undo-btn" onclick="_toastUndo()">Undo</button>`;
+    window._toastUndoCallback = undoCallback;
+    _toastUndoTimer = setTimeout(() => { t.classList.remove('show'); window._toastUndoCallback = null; }, 5000);
+  } else {
+    t.textContent = msg;
+    window._toastUndoCallback = null;
+    _toastUndoTimer = setTimeout(() => t.classList.remove('show'), 3200);
+  }
+}
+function _toastUndo() {
+  if (typeof window._toastUndoCallback === 'function') {
+    window._toastUndoCallback();
+    window._toastUndoCallback = null;
+  }
+  const t = document.getElementById('toast');
+  t.classList.remove('show');
+  if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
 }
 
 document.getElementById('modal-bg').addEventListener('click', e => {
@@ -1886,13 +1930,31 @@ function renderDatabaseTab() {
 
 function filterDatabase() { renderDatabaseTab(); }
 
+// ─── RELATIVE TIMESTAMP REFRESH ──────────────────────────────────────────────
+setInterval(() => {
+  updateLastUpdatedLabel();
+}, 60000);
+
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
-  document.getElementById('auth-password').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleAuthSubmit();
+  // Sign In: email Enter → focus password; password Enter → submit
+  document.getElementById('signin-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('signin-password').focus();
   });
-  document.getElementById('auth-email').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') document.getElementById('auth-password').focus();
+  document.getElementById('signin-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleSignIn();
+  });
+  // Sign Up: password Enter → submit
+  document.getElementById('signup-password').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleSignUp();
+  });
+  // Forgot: email Enter → submit
+  document.getElementById('forgot-email').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleForgotPassword();
+  });
+  // Reset: confirm Enter → submit
+  document.getElementById('reset-confirm').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') handleResetPassword();
   });
 })();
 
