@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.6.1';
+const APP_VERSION = 'v0.6.2';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -92,7 +92,10 @@ function findItem(catId, itemId) {
 }
 let _diffCache = null;
 let _diffDirty = true;
-function invalidateDiff() { _diffDirty = true; }
+let _dirty = false;
+let _pollFailCount = 0;
+function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+function updateSaveBtn() { const btn = document.getElementById('save-btn'); if (btn) btn.disabled = !_dirty; }
 function getCachedDiff() {
   if (_diffDirty) { _diffCache = computeDiff(); _diffDirty = false; }
   return _diffCache;
@@ -710,7 +713,16 @@ function startPolling() {
         renderPublicView();
         updateLastUpdatedLabel();
       }
-    } catch(e) {}
+      _pollFailCount = 0;
+      const syncEl = document.getElementById('sync-status');
+      if (syncEl && syncEl.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
+    } catch(e) {
+      _pollFailCount++;
+      if (_pollFailCount >= 3) {
+        const syncEl = document.getElementById('sync-status');
+        if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
+      }
+    }
   }, 60000);
 }
 
@@ -1226,6 +1238,7 @@ function enterManager() {
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
   switchTab('manager');
   updateDraftIndicator();
+  updateSaveBtn();
   renderManagerCategories();
 }
 
@@ -1384,6 +1397,8 @@ async function saveMenu() {
   menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
   lsSet(LS_KEYS.lastUpdated, ts.toString());
   await persistState();
+  _dirty = false;
+  updateSaveBtn();
   updateLastUpdatedLabel();
   showToast('✅ Menu saved!', 'success');
 }
@@ -1444,10 +1459,6 @@ function showAutocomplete(catId) {
   list.innerHTML = matches.map(r =>
     `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
   ).join('');
-  const rect = document.getElementById('new-input-' + catId).getBoundingClientRect();
-  list.style.top   = (rect.bottom + 2) + 'px';
-  list.style.left  = rect.left + 'px';
-  list.style.width = rect.width + 'px';
   list.classList.add('open');
 }
 

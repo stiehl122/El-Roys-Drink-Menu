@@ -66,10 +66,10 @@
   .logo-mark { font-family: var(--font-accent); font-size: 12px; letter-spacing: 3px; color: var(--yellow); display: block; margin-bottom: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
   header h1 { font-family: var(--font-heading); font-size: 40px; letter-spacing: 2px; line-height: 1; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
   .header-sub { margin-top: 5px; color: rgba(253,244,236,0.72); font-family: var(--font-accent); font-size: 12px; letter-spacing: 0.5px; }
-  .manager-btn { position: absolute; top: 18px; left: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
+  .manager-btn { position: absolute; top: 18px; left: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
   .manager-btn:hover { background: rgba(253,244,236,0.27); }
   .manager-btn.active { background: var(--terra); border-color: var(--terra); }
-  .header-signin-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
+  .header-signin-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
   .header-signin-btn:hover { background: rgba(253,244,236,0.27); }
   /* Avatar chip */
   .user-chip { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 20px; padding: 5px 10px; cursor: pointer; color: var(--cream); font-size: 12px; user-select: none; }
@@ -179,7 +179,7 @@
   .empty-state-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px dashed var(--muted); border-radius: 50%; font-size: 14px; font-style: normal; opacity: 0.5; flex-shrink: 0; }
   .add-item-wrap { position: relative; margin-top: 9px; }
   .add-item-area { display: flex; gap: 7px; }
-  .autocomplete-list { position: fixed; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+  .autocomplete-list { position: absolute; top: 100%; left: 0; width: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto; z-index: 9999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
   .autocomplete-list.open { display: block; }
   .autocomplete-item { padding: 8px 12px; cursor: pointer; font-family: var(--font-body); font-size: 13px; color: var(--text); }
   .autocomplete-item:hover, .autocomplete-item.ac-selected { background: var(--surface); color: var(--fire); }
@@ -193,12 +193,14 @@
   .btn-row { display:flex; gap:10px; margin-top:18px; }
   .save-btn { flex:0 0 auto; padding:14px 22px; border-radius:12px; border:none; cursor:pointer; font-family:var(--font-heading); font-size:15px; letter-spacing:1px; background:var(--surface); color:var(--text); transition:opacity .15s; box-shadow:0 2px 8px rgba(0,0,0,0.12); }
   .save-btn:hover { opacity:0.8; }
+  .save-btn:disabled { opacity:0.4; cursor:not-allowed; }
   .send-btn { flex:1; background: linear-gradient(135deg, var(--terra), var(--terra-dk)); border: none; border-radius: 12px; color: white; font-family: var(--font-heading); font-size: 20px; letter-spacing: 2px; padding: 16px; cursor: pointer; transition: transform 0.14s, box-shadow 0.14s; box-shadow: 0 4px 18px rgba(190,67,48,0.35); }
   .send-btn:hover { transform: translateY(-1px); box-shadow: 0 7px 26px rgba(190,67,48,0.5); }
   .send-btn:active { transform: translateY(0); }
   .send-btn:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; transform: none; }
   #sync-status:empty { display: none; }
   #sync-status.sync-error { display: inline-block; background: var(--red); color: #fff; font-size: 11px; font-family: var(--font-body); padding: 4px 10px; border-radius: 6px; margin-top: 8px; }
+  #sync-status.sync-poll-error { display: inline-block; background: var(--terra); color: #fff; font-size: 11px; font-family: var(--font-body); padding: 4px 10px; border-radius: 6px; margin-top: 8px; opacity: 0.75; }
 
   /* ── MODAL ── */
   .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
@@ -308,7 +310,7 @@
   /* ── 86'D — PUBLIC ── */
   .menu-item.is-eighty-sixed .item-name-text { text-decoration: line-through; color: var(--muted); }
   .menu-item.is-eighty-sixed { opacity: 0.5; }
-  .eighty-sixed-tag { font-size: 10px; color: var(--red); letter-spacing: 1px; font-weight: 600; flex-shrink: 0; margin-left: auto; }
+  .eighty-sixed-tag { font-size: 12px; color: var(--red); letter-spacing: 1px; font-weight: 600; flex-shrink: 0; margin-left: auto; }
 
   /* ── TABS ── */
   .tab-bar { display: flex; gap: 4px; margin-bottom: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px; overflow-x: auto; scrollbar-width: none; }
@@ -430,7 +432,7 @@
   display: inline-block;
   background: var(--fire, #e86a3f);
   color: #fff;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1px;
   padding: 1px 5px;
