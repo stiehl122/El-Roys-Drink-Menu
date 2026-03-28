@@ -30,6 +30,8 @@ let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
+let _menuPickerNeeded = false;     // true when multiple menus exist and no slug was given
+let _invalidMenuSlug  = null;      // set when ?menu= slug resolved to nothing
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -118,15 +120,52 @@ function sbHeaders(extra = {}) {
   };
 }
 
-async function sbLoadMenuId() {
+// Resolve which menu to load based on ?menu={slug}, localStorage cache, or
+// auto-selection. Sets MENU_ID, pushes slug to URL for single-menu sites,
+// or sets _menuPickerNeeded / _invalidMenuSlug for multi-menu / bad-slug cases.
+async function sbResolveMenu() {
+  const slug = new URLSearchParams(location.search).get('menu');
+
+  if (slug) {
+    // Load menu by URL slug
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id`,
+      { headers: sbHeaders() }
+    );
+    if (res.ok) {
+      const [menu] = await res.json();
+      if (menu?.id) {
+        MENU_ID = menu.id;
+        lsSet(LS_KEYS.menuId, MENU_ID);
+        return;
+      }
+    }
+    // Slug present but not found
+    _invalidMenuSlug = slug;
+    return;
+  }
+
+  // No URL slug — use cached MENU_ID (returning visitor) or auto-resolve
   if (MENU_ID) return;
+
+  // Fetch up to 2 menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id&limit=1`,
+    `${SUPABASE_URL}/rest/v1/menus?select=id,slug&limit=2`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
-  const [menu] = await res.json();
-  if (menu?.id) { MENU_ID = menu.id; lsSet(LS_KEYS.menuId, MENU_ID); }
+  const menus = await res.json();
+
+  if (menus.length === 1) {
+    // Single menu — auto-load and push slug to URL so it can be bookmarked
+    MENU_ID = menus[0].id;
+    lsSet(LS_KEYS.menuId, MENU_ID);
+    const url = new URL(location.href);
+    url.searchParams.set('menu', menus[0].slug);
+    history.replaceState({}, '', url.toString());
+  } else if (menus.length > 1) {
+    _menuPickerNeeded = true;
+  }
 }
 
 async function sbEnsureUncategorized() {
@@ -697,9 +736,17 @@ async function init() {
 
   await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
 
-  if (SUPABASE_URL) await sbLoadMenuId();
+  if (SUPABASE_URL) await sbResolveMenu();
 
-  if (!SUPABASE_URL || !MENU_ID) {
+  if (_invalidMenuSlug) {
+    menuState = defaultState();
+    applyDesign(currentDesign);
+    showPublicViewWithError(`⚠️ Menu "${escHtml(_invalidMenuSlug)}" not found.`);
+  } else if (_menuPickerNeeded) {
+    // Multiple menus, no slug — Unit 2.3 renders the picker
+    applyDesign(currentDesign);
+    showMenuPicker();
+  } else if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
     const cached = localStorage.getItem(LS_KEYS.menuCache);
     if (cached) {
