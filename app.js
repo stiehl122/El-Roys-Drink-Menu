@@ -17,7 +17,8 @@ const LS_KEYS = {
   email:        'hf_sb_email',
 };
 
-let BOT_ID    = '';
+let BOT_ID        = '';
+let NOTIFICATIONS = null; // per-menu notification channel config from menu_meta.notifications
 let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
 let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
@@ -265,6 +266,12 @@ function hydrateState({ cats, meta }) {
       lastSentCategories: meta.last_sent_categories         || [],
     };
     if (meta.bot_id) BOT_ID        = meta.bot_id;
+    if (meta.notifications) {
+      NOTIFICATIONS = meta.notifications;
+      // Keep BOT_ID in sync with notifications.groupme.bot_id if present
+      const gmBotId = meta.notifications?.groupme?.bot_id;
+      if (gmBotId) BOT_ID = gmBotId;
+    }
     if (meta.design) currentDesign = { ...DESIGN_DEFAULTS, ...meta.design };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
   }
