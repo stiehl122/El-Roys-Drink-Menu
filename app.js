@@ -1509,7 +1509,8 @@ function renderUncategorizedItems() {
     return;
   }
   items.forEach(item => {
-    const hasDesc = !!(item.desc && item.desc.trim());
+    const hasDesc   = !!(item.desc && item.desc.trim());
+    const hasRecipe = recipeArray(item.recipe).length > 0;
     const wrapper = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
@@ -1517,12 +1518,23 @@ function renderUncategorizedItems() {
       <div class="current-item">
         <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
         <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
+        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
         <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
           onblur="saveDesc('${UNCATEGORIZED_ID}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
+      </div>
+      <div class="recipe-row" id="recipe-row-${item.id}">
+        <div class="recipe-ingredient-list" id="recipe-list-${item.id}"></div>
+        <div class="add-ingredient-area">
+          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text"
+            placeholder="Add ingredient..."
+            onkeydown="handleIngredientKeydown(event,'${UNCATEGORIZED_ID}','${item.id}')"/>
+          <button class="add-ingredient-btn" onclick="addIngredient('${UNCATEGORIZED_ID}','${item.id}')">+</button>
+        </div>
       </div>`;
     listEl.appendChild(wrapper);
+    renderRecipeIngredients(UNCATEGORIZED_ID, item.id);
   });
 }
 
