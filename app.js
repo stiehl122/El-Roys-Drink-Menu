@@ -2302,7 +2302,7 @@ async function sendUpdate() {
   const patchMessage = lines.join('\n').trim();
 
   if (patchMessage.length > 1000) {
-    showToast('Update is long and will be truncated in GroupMe.', 'info');
+    showToast('Update is long and will be truncated.', 'info');
   }
 
   const confirmBtn = document.getElementById('confirm-btn');
@@ -2313,13 +2313,13 @@ async function sendUpdate() {
     const authHeaders = currentUser?.accessToken
       ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
       : {};
-    const r1 = await fetch('/api/send-groupme', {
+    const r1 = await fetch('/api/send-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ text: patchMessage })
+      body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
     });
 
-    if (r1.status === 202) {
+    if (r1.status === 202 || r1.status === 207) {
       const ts = Date.now();
       CATEGORY_DEFS.forEach(cat => {
         if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
@@ -2352,7 +2352,7 @@ async function sendUpdate() {
     } else if (r1.status === 403) {
       showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
     } else {
-      showToast('❌ GroupMe error. Check GROUPME_BOT_ID env var.', 'error');
+      showToast('❌ Notification error. Check channel config in Admin settings.', 'error');
     }
   } catch(e) {
     showToast('❌ Network error. Check connection.', 'error');
