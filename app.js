@@ -1437,6 +1437,9 @@ async function saveMenuUrl() {
 function renderManagerCategories() {
   const container = document.getElementById('manager-categories');
   container.innerHTML = '';
+  // Preserve uncategorized expansion state across re-renders
+  const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
+
   CATEGORY_DEFS.forEach(cat => {
     const card = document.createElement('div');
     card.className = 'cat-card';
@@ -1467,6 +1470,76 @@ function renderManagerCategories() {
     container.appendChild(card);
     renderManagerItems(cat.id);
   });
+
+  // Permanent uncategorized card — always last, collapsed by default
+  const uncatCard = document.createElement('div');
+  uncatCard.className = 'cat-card' + (_uncatWasExpanded ? '' : ' collapsed');
+  uncatCard.id = 'mgr-card-' + UNCATEGORIZED_ID;
+  uncatCard.innerHTML = `
+    <div class="cat-header collapsible-header" role="button" tabindex="0"
+         aria-expanded="${_uncatWasExpanded ? 'true' : 'false'}"
+         onclick="toggleManagerCategory('${UNCATEGORIZED_ID}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${UNCATEGORIZED_ID}')}">
+      <div class="cat-icon" style="background:rgba(120,120,120,0.12)">📦</div>
+      <div><div class="cat-title">Uncategorized</div><div class="cat-sub">Autocomplete pool — not shown on public menu</div></div>
+      <span class="category-chevron">›</span>
+    </div>
+    <div class="current-section">
+      <div class="current-label">Item Pool</div>
+      <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
+      <div class="add-item-wrap">
+        <div class="add-item-area">
+          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();addUncategorizedItem()}"/>
+          <button class="add-item-btn" onclick="addUncategorizedItem()" aria-label="Add item to uncategorized pool">+</button>
+        </div>
+      </div>
+    </div>`;
+  container.appendChild(uncatCard);
+  renderUncategorizedItems();
+}
+
+function renderUncategorizedItems() {
+  const listEl = document.getElementById('mgr-items-' + UNCATEGORIZED_ID);
+  if (!listEl) return;
+  const items = menuState[UNCATEGORIZED_ID]?.items || [];
+  listEl.innerHTML = '';
+  if (!items.length) {
+    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Pool is empty — add items or delete a category to populate it.</span></div>`;
+    return;
+  }
+  items.forEach(item => {
+    const hasDesc = !!(item.desc && item.desc.trim());
+    const wrapper = document.createElement('div');
+    wrapper.className = 'item-wrapper';
+    wrapper.id = 'wrapper-' + item.id;
+    wrapper.innerHTML = `
+      <div class="current-item">
+        <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
+        <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
+      </div>
+      <div class="desc-row" id="desc-row-${item.id}">
+        <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
+          onblur="saveDesc('${UNCATEGORIZED_ID}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
+      </div>`;
+    listEl.appendChild(wrapper);
+  });
+}
+
+async function addUncategorizedItem() {
+  const input = document.getElementById('new-input-' + UNCATEGORIZED_ID);
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+  if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [], lastSent: [] };
+  const pool = menuState[UNCATEGORIZED_ID].items;
+  if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
+    showToast('Already in pool.', 'info'); return;
+  }
+  pool.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: false });
+  input.value = '';
+  renderUncategorizedItems();
+  await persistState();
 }
 
 function toggleManagerCategory(catId) {
