@@ -2351,6 +2351,11 @@ function renderDatabaseTab() {
         rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
       });
     });
+    (menuState[UNCATEGORIZED_ID]?.items || []).forEach(item => {
+      const recipe = recipeArray(item.recipe);
+      rows.push({ name: item.name, category: 'Uncategorized', recipe, onMenu: false, eightySixed: false });
+      totalItems++;
+    });
 
     let filtered = rows;
     if (dbFilters.recipe === 'yes') filtered = filtered.filter(r => r.recipe.length > 0);
@@ -2369,7 +2374,7 @@ function renderDatabaseTab() {
 
     if (!filtered.length) {
       wrap.innerHTML = totalItems === 0
-        ? '<p class="db-empty">No menu items loaded. Check your Firebase connection in the Admin tab.</p>'
+        ? '<p class="db-empty">No menu items loaded.</p>'
         : '<p class="db-empty">No items match the current filters.</p>';
       return;
     }
