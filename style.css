@@ -121,7 +121,7 @@
   .auth-field { margin-bottom: 10px; text-align: left; }
   .auth-field input { width: 100%; padding: 11px 13px; border: 1px solid rgba(45,55,72,0.2); border-radius: 9px; font-family: var(--font-body); font-size: 14px; background: var(--surface); color: var(--charcoal); outline: none; transition: border-color 0.15s; }
   .auth-field input:focus { border-color: var(--teal); }
-  .auth-error { color: #e74c3c; font-size: 12px; margin-bottom: 10px; min-height: 18px; text-align: left; }
+  .auth-error { color: var(--red); font-size: 12px; margin-bottom: 10px; min-height: 18px; text-align: left; }
   .auth-submit-btn { width: 100%; padding: 13px; background: var(--teal); color: var(--cream); border: none; border-radius: 9px; font-family: var(--font-body); font-size: 14px; font-weight: 600; letter-spacing: 0.5px; cursor: pointer; transition: background 0.15s; margin-bottom: 12px; }
   .auth-submit-btn:hover { background: var(--teal-dk); }
   .auth-submit-btn:disabled { opacity: 0.6; cursor: default; }
@@ -156,7 +156,7 @@
   #setup-banner p { font-size: 12px; color: var(--muted); line-height: 1.6; }
 
   /* ── CATEGORY CARDS (manager) ── */
-  .cat-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; overflow: hidden; }
+  .cat-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 12px; }
   .cat-header { display: flex; align-items: center; gap: 11px; padding: 18px 20px 14px; }
   .cat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; }
   .cat-title { font-family: var(--font-heading); font-size: 18px; letter-spacing: 1px; line-height: 1; color: var(--text); }
@@ -172,6 +172,7 @@
   .item-name { flex: 1; }
   .item-name input { background: none; border: none; outline: none; color: var(--text); font-family: var(--font-body); font-size: 13px; width: 100%; padding: 0; }
   .item-name input::placeholder { color: var(--muted); opacity: 0.45; }
+  .item-name-static { color: var(--text); font-family: var(--font-body); font-size: 13px; }
   .del-item { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 2px 3px; border-radius: 4px; transition: all 0.14s; flex-shrink: 0; line-height: 1; opacity: 0.6; }
   .del-item:hover { color: var(--red); opacity: 1; }
   .send-update-count { font-size: 13px; opacity: 0.85; }
@@ -333,6 +334,13 @@
   .user-mgmt-role-select { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--font-body); font-size:13px; padding:9px 13px; outline:none; cursor:pointer; transition:border-color 0.2s; }
   .user-mgmt-role-select:focus { border-color:var(--fire); }
   .user-mgmt-self-note { font-size:11px; color:var(--muted); align-self:center; font-style:italic; }
+  .user-menu-access { margin-top:8px; padding-top:8px; border-top:1px solid var(--border); }
+  .user-menu-access-row { display:flex; flex-direction:column; gap:6px; }
+  .user-menu-access-label { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); cursor:pointer; }
+  .user-menu-access-label input[type="checkbox"] { accent-color:var(--fire); width:15px; height:15px; }
+  .db-status { font-size:13px; font-weight:500; color:var(--muted); }
+  .db-status--ok    { color:var(--green, #27ae60); }
+  .db-status--error { color:var(--red); }
 
   /* ── PREVIEW TOOLBAR ── */
   #preview-toolbar { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:110; display:flex; flex-direction:column; align-items:stretch; background:var(--card); border:1px solid var(--border); border-right:none; border-radius:10px 0 0 10px; padding:8px 6px; gap:4px; min-width:72px; box-shadow:-2px 0 14px rgba(0,0,0,0.18); }
