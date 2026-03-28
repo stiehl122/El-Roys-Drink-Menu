@@ -320,6 +320,20 @@
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
+  /* ── USERS TAB ── */
+  .users-invite-row { display:flex; justify-content:flex-end; margin-bottom:12px; }
+  .user-mgmt-top { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+  .user-mgmt-identity { flex:1; min-width:0; }
+  .user-mgmt-email { font-size:11px; color:var(--muted); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .user-role-badge { flex-shrink:0; display:inline-block; border-radius:6px; padding:3px 9px; font-size:11px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; white-space:nowrap; }
+  .user-role-badge--none { background:var(--surface); color:var(--muted); border:1px solid var(--border); }
+  .user-role-badge--manager { background:var(--ember); color:#fff; }
+  .user-role-badge--admin { background:var(--fire); color:#fff; }
+  .user-mgmt-role-row { margin-top:4px; }
+  .user-mgmt-role-select { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:var(--font-body); font-size:13px; padding:9px 13px; outline:none; cursor:pointer; transition:border-color 0.2s; }
+  .user-mgmt-role-select:focus { border-color:var(--fire); }
+  .user-mgmt-self-note { font-size:11px; color:var(--muted); align-self:center; font-style:italic; }
+
   /* ── DATABASE TAB ── */
   .db-search-row { padding: 12px 0 8px; }
   .db-search-row input { width: 100%; box-sizing: border-box; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.95rem; }

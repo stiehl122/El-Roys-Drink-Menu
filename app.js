@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.6.2';
+const APP_VERSION = 'v0.6.3';
 const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app';
 
@@ -1004,6 +1004,7 @@ function applyRole(role) {
   const isAdmin   = role === 'admin';
   document.getElementById('tab-btn-admin').style.display    = isAdmin ? '' : 'none';
   document.getElementById('tab-btn-database').style.display = isAdmin ? '' : 'none';
+  document.getElementById('tab-btn-users').style.display    = isAdmin ? '' : 'none';
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
@@ -1861,9 +1862,118 @@ document.getElementById('prune-items-wrap').addEventListener('click', e => {
   pruneSingleItem(btn.dataset.catid, btn.dataset.name);
 });
 
+// ─── USER MANAGEMENT ─────────────────────────────────────────────────────────
+async function loadUsers() {
+  const wrap = document.getElementById('users-list');
+  wrap.innerHTML = '<div class="db-empty">Loading...</div>';
+  try {
+    const r = await fetch('/api/users', {
+      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}` }
+    });
+    if (!r.ok) throw new Error(await r.text());
+    renderUsersTab(await r.json());
+  } catch (e) {
+    wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
+  }
+}
+
+function renderUsersTab(users) {
+  const wrap = document.getElementById('users-list');
+  if (!users.length) {
+    wrap.innerHTML = '<div class="db-empty">No accounts found.</div>';
+    return;
+  }
+  const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
+  wrap.innerHTML = users.map(u => {
+    const isSelf = u.id === currentUser?.uid;
+    const roleControls = isSelf
+      ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
+      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select">
+           <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
+           <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
+           <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
+         </select>
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save Role</button>`;
+    return `
+      <div class="config-card">
+        <div class="user-mgmt-top">
+          <div class="user-mgmt-identity">
+            <div class="input-row">
+              <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" />
+              <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save</button>
+            </div>
+            <div class="user-mgmt-email">${escHtml(u.email)}</div>
+          </div>
+          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
+        </div>
+        <div class="input-row user-mgmt-role-row">${roleControls}</div>
+      </div>`;
+  }).join('');
+}
+
+async function saveUserRole(userId) {
+  const select = document.getElementById(`user-role-${userId}`);
+  if (!select) return;
+  const role = select.value;
+  try {
+    const r = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, role }),
+    });
+    if (!r.ok) { showToast((await r.json()).error || 'Failed to update role.', 'error'); return; }
+    showToast('Role updated.', 'success');
+    const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
+    if (badge) {
+      const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
+      badge.className = `user-role-badge user-role-badge--${role}`;
+      badge.textContent = label[role] || role;
+    }
+  } catch (e) {
+    showToast('Network error.', 'error');
+  }
+}
+
+async function saveUserName(userId) {
+  const input = document.getElementById(`user-name-${userId}`);
+  if (!input) return;
+  try {
+    const r = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, name: input.value }),
+    });
+    if (!r.ok) { showToast((await r.json()).error || 'Failed to update name.', 'error'); return; }
+    showToast('Name updated.', 'success');
+  } catch (e) {
+    showToast('Network error.', 'error');
+  }
+}
+
+function openInviteModal() {
+  const url = MENU_URL || window.location.origin;
+  const brand = document.getElementById('design-brand-name')?.value?.trim() || 'the menu';
+  document.getElementById('invite-text-output').value =
+    `You've been invited to manage ${brand}!\n\nVisit ${url} and tap "Sign In" to create your account. Once you've signed up, ask an admin to approve your access.`;
+  document.getElementById('invite-modal-bg').classList.add('open');
+}
+
+function closeInviteModal() {
+  document.getElementById('invite-modal-bg').classList.remove('open');
+}
+
+async function copyInviteText() {
+  await navigator.clipboard.writeText(document.getElementById('invite-text-output').value);
+  showToast('Copied!', 'success');
+}
+
+document.getElementById('invite-modal-bg').addEventListener('click', e => {
+  if (e.target === document.getElementById('invite-modal-bg')) closeInviteModal();
+});
+
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchTab(name) {
-  ['manager','categories','admin','database'].forEach(t => {
+  ['manager','categories','admin','database','users'].forEach(t => {
     const btn   = document.getElementById('tab-btn-'   + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
@@ -1872,6 +1982,7 @@ function switchTab(name) {
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
   if (name === 'categories') { renderCategoriesTab(); }
   if (name === 'admin')      { renderDesignSection(); }
+  if (name === 'users')      { loadUsers(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
