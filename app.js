@@ -1,7 +1,9 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.6.3';
-const IS_PREVIEW = window.location.hostname.endsWith('.vercel.app') &&
-  window.location.hostname !== 'el-roys-drink-menu.vercel.app';
+const APP_VERSION = 'v0.6.4';
+const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
+  window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1';
 
 const LS_KEYS = {
   fbUrl:        'hf_fb_url',
@@ -10,6 +12,8 @@ const LS_KEYS = {
   accessToken:  'hf_sb_access_token',
   refreshToken: 'hf_sb_refresh_token',
   expiresAt:    'hf_sb_expires_at',
+  uid:          'hf_sb_uid',
+  email:        'hf_sb_email',
 };
 
 let BOT_ID    = '';
@@ -634,24 +638,60 @@ async function _tryHandleRecoveryCallback() {
 
 async function _tryRestoreSession() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const storedRefresh  = localStorage.getItem(LS_KEYS.refreshToken);
+  const storedAccess    = localStorage.getItem(LS_KEYS.accessToken);
+  const storedRefresh   = localStorage.getItem(LS_KEYS.refreshToken);
   const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
+  const storedUid       = localStorage.getItem(LS_KEYS.uid)   || '';
+  const storedEmail     = localStorage.getItem(LS_KEYS.email) || '';
   if (!storedRefresh) return;
-  try {
-    const data = await sbRefreshToken(storedRefresh);
+
+  // If access token is still valid (2-min buffer), use it directly — skip refresh call.
+  // This avoids unnecessary network round-trips and is resilient to Supabase cold starts.
+  if (storedAccess && storedExpiresAt > Date.now() + 120_000) {
+    try {
+      const profile = await sbGetProfile(storedAccess);
+      currentUser = {
+        uid: storedUid, email: storedEmail,
+        name: profile.name, role: profile.role,
+        accessToken: storedAccess, refreshToken: storedRefresh,
+        expiresAt: storedExpiresAt,
+      };
+      _scheduleTokenRefresh(storedExpiresAt);
+      applyRole(profile.role);
+      return;
+    } catch(e) { /* fall through to refresh */ }
+  }
+
+  // Access token expired or unusable — exchange refresh token for a new one.
+  const _doRefresh = async () => {
+    const refresh = localStorage.getItem(LS_KEYS.refreshToken);
+    if (!refresh) throw new Error('no refresh token');
+    const data = await sbRefreshToken(refresh);
     let role = 'none', name = '';
     if (data.access_token) {
       const profile = await sbGetProfile(data.access_token);
-      role = profile.role;
-      name = profile.name;
+      role = profile.role; name = profile.name;
     }
     _applySession(data, role, name);
     applyRole(role);
+  };
+
+  try {
+    await _doRefresh();
   } catch(e) {
-    // Stored session is invalid — clear it silently
-    localStorage.removeItem(LS_KEYS.accessToken);
-    localStorage.removeItem(LS_KEYS.refreshToken);
-    localStorage.removeItem(LS_KEYS.expiresAt);
+    // First attempt failed — Supabase may be cold-starting. Retry once after 2s
+    // before giving up and clearing tokens.
+    setTimeout(async () => {
+      try {
+        await _doRefresh();
+      } catch(e2) {
+        localStorage.removeItem(LS_KEYS.accessToken);
+        localStorage.removeItem(LS_KEYS.refreshToken);
+        localStorage.removeItem(LS_KEYS.expiresAt);
+        localStorage.removeItem(LS_KEYS.uid);
+        localStorage.removeItem(LS_KEYS.email);
+      }
+    }, 2000);
   }
 }
 
@@ -973,6 +1013,8 @@ function _applySession(data, role, name) {
   lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
   lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
   lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
+  lsSet(LS_KEYS.uid,          userId);
+  lsSet(LS_KEYS.email,        email);
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
@@ -1219,6 +1261,8 @@ function signOut() {
   localStorage.removeItem(LS_KEYS.accessToken);
   localStorage.removeItem(LS_KEYS.refreshToken);
   localStorage.removeItem(LS_KEYS.expiresAt);
+  localStorage.removeItem(LS_KEYS.uid);
+  localStorage.removeItem(LS_KEYS.email);
   if (isManagerMode) exitManager();
   renderUserHeader();
 }
@@ -2080,4 +2124,53 @@ setInterval(() => {
   });
 })();
 
+// ─── PREVIEW ROLE-SWITCHER TOOLBAR ───────────────────────────────────────────
+let _previewRole = null; // tracks active mock role; null = using real session
+
+function _initPreviewToolbar() {
+  if (!IS_PREVIEW) return;
+  const toolbar = document.createElement('div');
+  toolbar.id = 'preview-toolbar';
+  toolbar.setAttribute('aria-label', 'Preview role switcher');
+  toolbar.innerHTML = `
+    <div class="preview-toolbar-label">PREVIEW</div>
+    <button class="preview-toolbar-btn" data-role="public"  onclick="_setPreviewRole('public')">Public</button>
+    <button class="preview-toolbar-btn" data-role="manager" onclick="_setPreviewRole('manager')">Manager</button>
+    <button class="preview-toolbar-btn" data-role="admin"   onclick="_setPreviewRole('admin')">Admin</button>
+    <div class="preview-toolbar-divider"></div>
+    <button class="preview-toolbar-btn preview-toolbar-login" onclick="openAuthOverlay()">Login</button>
+  `;
+  document.body.appendChild(toolbar);
+  _updatePreviewToolbar();
+}
+
+function _setPreviewRole(role) {
+  _previewRole = role;
+  if (role === 'public') {
+    if (isManagerMode) exitManager();
+    currentUser = null;
+    applyRole('none');
+    renderUserHeader();
+  } else {
+    // Mock session — no real tokens; writes will fail gracefully
+    currentUser = {
+      uid: 'preview-user', email: 'preview@preview.test',
+      name: 'Preview User', role,
+      accessToken: null, refreshToken: null, expiresAt: 0,
+    };
+    applyRole(role);
+    renderUserHeader();
+    if (!isManagerMode) enterManager();
+  }
+  _updatePreviewToolbar();
+}
+
+function _updatePreviewToolbar() {
+  const active = _previewRole ?? (currentUser?.role || 'public');
+  document.querySelectorAll('#preview-toolbar .preview-toolbar-btn[data-role]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.role === active);
+  });
+}
+
 init();
+if (IS_PREVIEW) _initPreviewToolbar();
