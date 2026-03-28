@@ -612,10 +612,11 @@ async function deleteCategory(catId) {
     const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
     if (!exists) pool.push({ ...item, onMenu: false });
   });
+  // Always ensure __uncategorized__ DB row exists so persistState() can write items there,
+  // regardless of whether the deleted category had a DB row.
+  await sbEnsureUncategorized();
   if (cat._uuid) {
-    // Ensure __uncategorized__ row exists in DB, then PATCH items to it BEFORE deleting
-    // the category — this prevents CASCADE from wiping the items.
-    await sbEnsureUncategorized();
+    // PATCH items to uncategorized BEFORE deleting the category to prevent CASCADE.
     if (_uncatCategoryUuid && items.length > 0) {
       await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${cat._uuid}`, {
         method: 'PATCH',
