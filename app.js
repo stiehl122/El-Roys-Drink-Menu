@@ -605,18 +605,26 @@ async function deleteCategory(catId) {
     ? `Delete "${cat.title}"? Its ${items.length} item(s) will be moved to the uncategorized pool and remain available as autocomplete suggestions.`
     : `Delete the "${cat.title}" category?`;
   if (!confirm(msg)) return;
-  // Move all items to uncategorized pool so they aren't lost
-  if (items.length > 0) {
-    if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [] };
-    const pool = menuState[UNCATEGORIZED_ID].items;
-    items.forEach(item => {
-      const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
-      if (!exists) pool.push({ ...item, onMenu: false });
-    });
-    await sbEnsureUncategorized(); // ensure DB row exists before re-upsert
+  // Move all items to uncategorized pool in memory
+  if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [] };
+  const pool = menuState[UNCATEGORIZED_ID].items;
+  items.forEach(item => {
+    const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
+    if (!exists) pool.push({ ...item, onMenu: false });
+  });
+  if (cat._uuid) {
+    // Ensure __uncategorized__ row exists in DB, then PATCH items to it BEFORE deleting
+    // the category — this prevents CASCADE from wiping the items.
+    await sbEnsureUncategorized();
+    if (_uncatCategoryUuid && items.length > 0) {
+      await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${cat._uuid}`, {
+        method: 'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ category_id: _uncatCategoryUuid, on_menu: false }),
+      });
+    }
+    await sbDeleteCategory(cat._uuid);
   }
-  // Delete category from DB (cascade-deletes its items; they'll be re-upserted under uncategorized)
-  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   delete menuState[catId];
   invalidateDiff();
