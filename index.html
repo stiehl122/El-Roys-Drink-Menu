@@ -58,7 +58,7 @@
   <div id="manager-view">
     <div id="setup-banner">
       <h3>⚙️ One-Time Setup</h3>
-      <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to enter your Firebase Database URL and Secret, then your Bot ID, Menu URL, and PIN. Everything syncs to the cloud from this point on.</p>
+      <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to configure your GroupMe Bot ID and Menu URL. Everything syncs to the cloud from this point on.</p>
     </div>
 
     <!-- TAB BAR -->
@@ -116,14 +116,10 @@
       <div class="section-label">Admin Config</div>
 
       <div class="config-card">
-        <h3>Firebase Database</h3>
-        <label for="fb-url-input" class="config-input-label">Firebase Database URL</label>
+        <h3>Supabase Connection</h3>
         <div class="input-row">
-          <input type="text" id="fb-url-input" placeholder="Database URL (e.g. https://your-app.firebaseio.com)"/>
-          <button class="btn-small" onclick="saveFirebaseConfig()">Save</button>
-        </div>
-        <div class="hint">
-          The Database Secret is managed as a Vercel environment variable (<code>FIREBASE_SECRET</code>) and is never stored in the database or browser.
+          <span id="supabase-status" class="db-status">Checking…</span>
+          <button class="btn-small" onclick="checkSupabaseStatus()">Refresh</button>
         </div>
       </div>
 
@@ -134,7 +130,7 @@
           <input type="password" id="bot-id-input" placeholder="Paste your Bot ID here..."/>
           <button class="btn-small" onclick="saveBotId()">Save</button>
         </div>
-        <div class="hint">Not stored in Firebase or localStorage. Saving shows the updated <code>notifications.json</code> to copy into <code>lib/config/</code> (gitignored).</div>
+        <div class="hint">Saved to Supabase. The GroupMe API call is made server-side via the <code>GROUPME_BOT_ID</code> Vercel environment variable.</div>
       </div>
 
       <div class="config-card">
@@ -280,7 +276,7 @@
           <div class="section-label prune-section-label">Prune Database</div>
           <button id="prune-all-btn" class="btn-small btn-danger">Clear All</button>
         </div>
-        <p class="hint">Permanently removes items from Firebase's removed-item history (autocomplete trash). Live menu items are unaffected.</p>
+        <p class="hint">Permanently removes off-menu items from Supabase (autocomplete trash). Live menu items are unaffected.</p>
         <div id="prune-items-wrap"></div>
       </div>
     </div>
@@ -319,16 +315,24 @@
         <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
         <p class="auth-screen-subtitle">Sign up with your work email</p>
         <div class="auth-field">
-          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"/>
+          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"/>
+          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email" aria-describedby="signup-error"/>
+          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password" aria-describedby="signup-error"/>
+          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
         </div>
         <div class="auth-error" id="signup-error"></div>
         <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>

@@ -1,13 +1,14 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.6.4';
+const APP_VERSION = 'v0.7.0';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1';
 
 const LS_KEYS = {
-  fbUrl:        'hf_fb_url',
+  menuId:       'hf_menu_id',
   menuUrl:      'hf_menu_url',
+  menuCache:    'hf_menu_cache',
   lastUpdated:  'hf_last_updated_ts',
   accessToken:  'hf_sb_access_token',
   refreshToken: 'hf_sb_refresh_token',
@@ -18,13 +19,12 @@ const LS_KEYS = {
 
 let BOT_ID    = '';
 let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
-let FB_URL    = localStorage.getItem(LS_KEYS.fbUrl) || 'https://el-roy-s-drink-menu-default-rtdb.firebaseio.com';
+let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
 let SUPABASE_URL      = '';
 let SUPABASE_ANON_KEY = '';
 let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
 
-let isFirstSetup  = !FB_URL;
 let isManagerMode = false;
 let syncInterval  = null;
 let _tokenRefreshTimer = null;
@@ -85,7 +85,7 @@ function defaultState() {
   return s;
 }
 
-function uid() { return Math.random().toString(36).slice(2,9); }
+function uid() { return crypto.randomUUID(); }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function lsSet(key, val) {
   try { localStorage.setItem(key, val); }
@@ -98,6 +98,8 @@ let _diffCache = null;
 let _diffDirty = true;
 let _dirty = false;
 let _pollFailCount = 0;
+let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistState()
+let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
 function updateSaveBtn() { const btn = document.getElementById('save-btn'); if (btn) btn.disabled = !_dirty; }
 function getCachedDiff() {
@@ -105,25 +107,139 @@ function getCachedDiff() {
   return _diffCache;
 }
 
-// ─── FIREBASE REALTIME DATABASE API ───────────────────────────────────────────
-async function fbRead() {
-  if (!FB_URL) return null;
-  const res = await fetch(`${FB_URL}/menu.json`);
-  if (!res.ok) throw new Error(`Firebase read failed: ${res.status}`);
-  return await res.json();
+// ─── SUPABASE DATA LAYER ──────────────────────────────────────────────────────
+
+function sbHeaders(extra = {}) {
+  return {
+    'apikey':        SUPABASE_ANON_KEY,
+    'Authorization': `Bearer ${currentUser?.accessToken || SUPABASE_ANON_KEY}`,
+    'Content-Type':  'application/json',
+    ...extra,
+  };
 }
 
-async function fbWrite(state) {
-  if (!FB_URL || !currentUser?.accessToken) return;
-  const res = await fetch('/api/firebase-write', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${currentUser.accessToken}`
-    },
-    body: JSON.stringify({ state })
+async function sbLoadMenuId() {
+  if (MENU_ID) return;
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/menus?select=id&limit=1`,
+    { headers: sbHeaders() }
+  );
+  if (!res.ok) return;
+  const [menu] = await res.json();
+  if (menu?.id) { MENU_ID = menu.id; lsSet(LS_KEYS.menuId, MENU_ID); }
+}
+
+async function sbEnsureUncategorized() {
+  if (_uncatCategoryUuid || !SUPABASE_URL || !MENU_ID) return;
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${MENU_ID}&key=eq.__uncategorized__&select=id`,
+    { headers: sbHeaders() }
+  );
+  if (!res.ok) return;
+  const rows = await res.json();
+  if (rows.length) { _uncatCategoryUuid = rows[0].id; return; }
+  const create = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+    method:  'POST',
+    headers: sbHeaders({ 'Prefer': 'return=representation' }),
+    body:    JSON.stringify({
+      menu_id: MENU_ID, key: UNCATEGORIZED_ID,
+      label: 'Uncategorized', icon: '', color: '', sub: '', placeholder: '',
+      display_order: 9999,
+    }),
   });
-  if (!res.ok) throw new Error(`Firebase write failed: ${res.status}`);
+  if (create.ok) { const [cat] = await create.json(); _uncatCategoryUuid = cat.id; }
+}
+
+async function sbRead() {
+  if (!SUPABASE_URL || !MENU_ID) return null;
+  const [catsRes, metaRes] = await Promise.all([
+    fetch(
+      `${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${MENU_ID}&select=*,items(*)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    ),
+    fetch(
+      `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}&select=*`,
+      { headers: sbHeaders() }
+    ),
+  ]);
+  if (!catsRes.ok || !metaRes.ok) throw new Error('Supabase read failed');
+  const cats = await catsRes.json();
+  const [meta] = await metaRes.json();
+  return { cats, meta: meta || null };
+}
+
+function hydrateState({ cats, meta }) {
+  const realCats = (cats || []).filter(c => c.key !== UNCATEGORIZED_ID);
+  const uncatCat = (cats || []).find(c => c.key === UNCATEGORIZED_ID);
+
+  if (uncatCat) _uncatCategoryUuid = uncatCat.id;
+
+  if (realCats.length) {
+    CATEGORY_DEFS = realCats.map(c => ({
+      id:          c.key,
+      _uuid:       c.id,
+      icon:        c.icon        || '',
+      color:       c.color       || '',
+      title:       c.label,
+      sub:         c.sub         || '',
+      placeholder: c.placeholder || '',
+    }));
+  }
+
+  const lastSentState = meta?.last_sent_state || {};
+  menuState = {};
+  realCats.forEach(c => {
+    menuState[c.key] = {
+      items: (c.items || [])
+        .sort((a, b) => a.display_order - b.display_order)
+        .map(i => ({
+          id:          i.id,
+          name:        i.name,
+          desc:        i.desc   || '',
+          recipe:      i.recipe || [],
+          eightySixed: i.is_eighty_sixed,
+          onMenu:      i.on_menu,
+        })),
+      lastSent: lastSentState[c.key] || [],
+    };
+  });
+
+  if (uncatCat) {
+    menuState[UNCATEGORIZED_ID] = {
+      items: (uncatCat.items || []).map(i => ({
+        id: i.id, name: i.name, desc: i.desc || '',
+        recipe: i.recipe || [], eightySixed: i.is_eighty_sixed, onMenu: false,
+      })),
+      lastSent: [],
+    };
+  }
+
+  if (meta) {
+    menuState._meta = {
+      lastUpdatedTs:      meta.last_updated_ts?.toString()  || '',
+      lastSentTs:         meta.last_sent_ts?.toString()     || '',
+      lastSentCategories: meta.last_sent_categories         || [],
+    };
+    if (meta.bot_id) BOT_ID        = meta.bot_id;
+    if (meta.design) currentDesign = { ...DESIGN_DEFAULTS, ...meta.design };
+    if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
+  }
+}
+
+async function sbPatchMenuMeta(update) {
+  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
+    method:  'PATCH',
+    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+    body:    JSON.stringify(update),
+  });
+}
+
+async function sbDeleteCategory(categoryUuid) {
+  if (!SUPABASE_URL || !categoryUuid || !currentUser?.accessToken) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/categories?id=eq.${categoryUuid}`, {
+    method: 'DELETE', headers: sbHeaders(),
+  });
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
@@ -497,8 +613,12 @@ async function deleteCategory(catId) {
       const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
       if (!exists) pool.push({ ...item, onMenu: false });
     });
+    await sbEnsureUncategorized(); // ensure DB row exists before re-upsert
   }
+  // Delete category from DB (cascade-deletes its items; they'll be re-upserted under uncategorized)
+  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
+  delete menuState[catId];
   invalidateDiff();
   await persistState();
   refreshAllViews();
@@ -523,6 +643,7 @@ async function confirmAddCategory() {
   const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item...`;
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
+  // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
   CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
   menuState[id] = { items: [], lastSent: [] };
   // Reset form
@@ -556,62 +677,40 @@ async function init() {
 
   await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
 
-  if (!FB_URL) {
-    applyDesign(currentDesign);
-    menuState = defaultState();
-    showPublicView();
-    return;
-  }
+  if (SUPABASE_URL) await sbLoadMenuId();
 
-  try {
-    const data = await fbRead();
-
-    // Extract config (including categories + design) BEFORE building state
-    if (data && data._config) {
-      const cfg = data._config;
-
-      if (cfg.categories && Array.isArray(cfg.categories) && cfg.categories.length) {
-        CATEGORY_DEFS = cfg.categories;
-      }
-      if (cfg.design && typeof cfg.design === 'object') {
-        currentDesign = { ...DESIGN_DEFAULTS, ...cfg.design };
-      }
+  if (!SUPABASE_URL || !MENU_ID) {
+    // Offline or unconfigured — serve from localStorage cache if available
+    const cached = localStorage.getItem(LS_KEYS.menuCache);
+    if (cached) {
+      try { hydrateState(JSON.parse(cached)); } catch(e) { menuState = defaultState(); }
+    } else {
+      menuState = defaultState();
     }
-
     applyDesign(currentDesign);
-    menuState = defaultState();
-
-    if (data && typeof data === 'object') {
-      CATEGORY_DEFS.forEach(c => {
-        if (data[c.id]) menuState[c.id] = data[c.id];
-        if (!menuState[c.id].items) menuState[c.id].items = [];
-        menuState[c.id].items = menuState[c.id].items.map(i => ({ onMenu: true, ...i }));
-        (menuState[c.id].removed || []).forEach(r => {
-          const alreadyExists = menuState[c.id].items.some(
-            i => i.name.trim().toLowerCase() === r.name.trim().toLowerCase()
-          );
-          if (!alreadyExists) {
-            menuState[c.id].items.push({ id: uid(), name: r.name, desc: r.desc || '', recipe: r.recipe || [], eightySixed: false, onMenu: false });
-          }
-        });
-        delete menuState[c.id].removed;
-      });
-      // Load uncategorized pool (items orphaned by category deletion)
-      if (data[UNCATEGORIZED_ID]) {
-        menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
-        if (!menuState[UNCATEGORIZED_ID].items) menuState[UNCATEGORIZED_ID].items = [];
-      }
-      if (data._meta) {
-        menuState._meta = data._meta;
-        const savedTs = data._meta.lastUpdatedTs || data._meta.lastSentTs;
-        if (savedTs) lsSet(LS_KEYS.lastUpdated, savedTs);
-      }
-    }
     showPublicView();
-  } catch(e) {
-    applyDesign(currentDesign);
-    menuState = defaultState();
-    showPublicViewWithError('⚠️ Could not load menu data. Check your Firebase configuration in Admin settings.');
+  } else {
+    try {
+      const data = await sbRead();
+      if (data) {
+        hydrateState(data);
+        lsSet(LS_KEYS.menuCache, JSON.stringify(data));
+      } else {
+        menuState = defaultState();
+      }
+      applyDesign(currentDesign);
+      showPublicView();
+    } catch(e) {
+      // Fallback to localStorage cache
+      const cached = localStorage.getItem(LS_KEYS.menuCache);
+      if (cached) {
+        try { hydrateState(JSON.parse(cached)); } catch(e2) { menuState = defaultState(); }
+      } else {
+        menuState = defaultState();
+      }
+      applyDesign(currentDesign);
+      showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
+    }
   }
 
   // Restore Supabase session — recovery callback takes priority over stored tokens
@@ -653,6 +752,7 @@ async function _tryRestoreSession() {
       currentUser = {
         uid: storedUid, email: storedEmail,
         name: profile.name, role: profile.role,
+        accessibleMenuIds: profile.accessibleMenuIds,
         accessToken: storedAccess, refreshToken: storedRefresh,
         expiresAt: storedExpiresAt,
       };
@@ -667,12 +767,12 @@ async function _tryRestoreSession() {
     const refresh = localStorage.getItem(LS_KEYS.refreshToken);
     if (!refresh) throw new Error('no refresh token');
     const data = await sbRefreshToken(refresh);
-    let role = 'none', name = '';
+    let role = 'none', name = '', accessibleMenuIds = [];
     if (data.access_token) {
       const profile = await sbGetProfile(data.access_token);
-      role = profile.role; name = profile.name;
+      role = profile.role; name = profile.name; accessibleMenuIds = profile.accessibleMenuIds;
     }
-    _applySession(data, role, name);
+    _applySession(data, role, name, accessibleMenuIds);
     applyRole(role);
   };
 
@@ -715,47 +815,33 @@ function showPublicViewWithError(msg) {
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
 function startPolling() {
   stopPolling();
-  if (!FB_URL) return;
+  if (!SUPABASE_URL || !MENU_ID) return;
   syncInterval = setInterval(async () => {
     if (isManagerMode) return;
     try {
-      const data = await fbRead();
-      if (!data || typeof data !== 'object') return;
+      const data = await sbRead();
+      if (!data) return;
 
-      let needsRender = false;
+      const beforeCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
+      const oldTs      = menuState._meta?.lastUpdatedTs;
+      const oldDesign  = JSON.stringify(currentDesign);
 
-      // Check for remote category/design changes
-      if (data._config) {
-        if (data._config.categories && Array.isArray(data._config.categories) && data._config.categories.length) {
-          const remoteCats = JSON.stringify(data._config.categories);
-          if (remoteCats !== JSON.stringify(CATEGORY_DEFS)) {
-            CATEGORY_DEFS = data._config.categories;
-            needsRender = true;
-          }
-        }
-        if (data._config.design && JSON.stringify(data._config.design) !== JSON.stringify(currentDesign)) {
-          currentDesign = { ...DESIGN_DEFAULTS, ...data._config.design };
-          applyDesign(currentDesign);
-        }
-      }
+      hydrateState(data);
+      lsSet(LS_KEYS.menuCache, JSON.stringify(data));
 
-      const before = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
-      CATEGORY_DEFS.forEach(c => { if (data[c.id]) menuState[c.id] = data[c.id]; });
-      if (data[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = data[UNCATEGORIZED_ID];
-      const after = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
+      const afterCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
+      const newTs     = menuState._meta?.lastUpdatedTs;
+      const newDesign = JSON.stringify(currentDesign);
 
-      const newTs = data._meta && (data._meta.lastUpdatedTs || data._meta.lastSentTs);
-      const oldTs = menuState._meta && (menuState._meta.lastUpdatedTs || menuState._meta.lastSentTs);
-      const metaChanged = newTs && newTs !== oldTs;
-
-      if (after !== before || metaChanged || needsRender) {
-        if (data._meta) { menuState._meta = data._meta; lsSet(LS_KEYS.lastUpdated, newTs || ''); }
+      if (afterCats !== beforeCats || newTs !== oldTs) {
         renderPublicView();
         updateLastUpdatedLabel();
       }
+      if (newDesign !== oldDesign) applyDesign(currentDesign);
+
       _pollFailCount = 0;
       const syncEl = document.getElementById('sync-status');
-      if (syncEl && syncEl.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
+      if (syncEl?.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
     } catch(e) {
       _pollFailCount++;
       if (_pollFailCount >= 3) {
@@ -772,8 +858,7 @@ function stopPolling() {
 
 function getLastUpdatedTs() {
   return (menuState._meta && menuState._meta.lastUpdatedTs) ||
-    localStorage.getItem(LS_KEYS.lastUpdated) ||
-    localStorage.getItem('hf_last_sent_ts');
+    localStorage.getItem(LS_KEYS.lastUpdated);
 }
 
 function formatUpdatedAt(ts, prefix) {
@@ -953,9 +1038,9 @@ async function sbGetProfile(accessToken) {
   const r = await fetch('/api/role', {
     headers: { 'Authorization': `Bearer ${accessToken}` }
   });
-  if (!r.ok) return { role: 'none', name: '' };
-  const { role, name } = await r.json();
-  return { role: role || 'none', name: name || '' };
+  if (!r.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
+  const { role, name, accessibleMenuIds } = await r.json();
+  return { role: role || 'none', name: name || '', accessibleMenuIds: accessibleMenuIds || [] };
 }
 
 async function sbResetPasswordForEmail(email) {
@@ -1000,12 +1085,12 @@ function _scheduleTokenRefresh(expiresAt) {
   }, msUntilRefresh);
 }
 
-function _applySession(data, role, name) {
+function _applySession(data, role, name, accessibleMenuIds = []) {
   const expiresIn = (data.expires_in || 3600) * 1000;
   const userId = data.user?.id || data.user_id || '';
   const email = data.user?.email || data.email || '';
   currentUser = {
-    uid: userId, email, name: name || '', role,
+    uid: userId, email, name: name || '', role, accessibleMenuIds,
     accessToken:  data.access_token,
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
@@ -1166,8 +1251,8 @@ async function handleSignIn() {
   errEl.textContent = '';
   try {
     const data = await sbSignIn(email, password);
-    const { role, name } = await sbGetProfile(data.access_token);
-    _applySession(data, role, name);
+    const { role, name, accessibleMenuIds } = await sbGetProfile(data.access_token);
+    _applySession(data, role, name, accessibleMenuIds);
     closeAuthOverlay();
     applyRole(role);
     if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
@@ -1240,8 +1325,8 @@ async function handleResetPassword() {
   errEl.textContent = '';
   try {
     await sbUpdatePassword(password, _recoverySessionData.access_token);
-    const { role, name } = await sbGetProfile(_recoverySessionData.access_token);
-    _applySession(_recoverySessionData, role, name);
+    const { role, name, accessibleMenuIds } = await sbGetProfile(_recoverySessionData.access_token);
+    _applySession(_recoverySessionData, role, name, accessibleMenuIds);
     _recoverySessionData = null;
     closeAuthOverlay();
     applyRole(role);
@@ -1277,8 +1362,6 @@ function enterManager() {
   document.getElementById('manager-view').style.display = 'block';
   document.getElementById('action-btn').textContent = '✕ Exit';
   document.getElementById('action-btn').classList.add('active');
-  if (isFirstSetup) document.getElementById('setup-banner').style.display = 'block';
-  document.getElementById('fb-url-input').value    = FB_URL    || '';
   document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
   switchTab('manager');
@@ -1299,27 +1382,35 @@ function exitManager() {
 }
 
 // ─── CONFIG SAVES ─────────────────────────────────────────────────────────────
-async function saveFirebaseConfig() {
-  const urlVal = document.getElementById('fb-url-input').value.trim().replace(/\/+$/, '');
-  if (!urlVal) { showToast('No changes made.', 'info'); return; }
-  FB_URL = urlVal; lsSet(LS_KEYS.fbUrl, FB_URL);
-  document.getElementById('setup-banner').style.display = 'none';
-  isFirstSetup = false;
-  await persistState();
-  showToast('✅ Firebase config saved!', 'success');
+async function checkSupabaseStatus() {
+  const el = document.getElementById('supabase-status');
+  if (!el) return;
+  if (!SUPABASE_URL) { el.textContent = '⚠️ Supabase URL not configured'; el.className = 'db-status db-status--error'; return; }
+  el.textContent = 'Checking…'; el.className = 'db-status';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { 'apikey': SUPABASE_ANON_KEY } });
+    if (res.ok || res.status === 200 || res.status === 404) {
+      el.textContent = '✓ Connected'; el.className = 'db-status db-status--ok';
+    } else {
+      el.textContent = `✗ Unreachable (${res.status})`; el.className = 'db-status db-status--error';
+    }
+  } catch(e) {
+    el.textContent = '✗ Unreachable'; el.className = 'db-status db-status--error';
+  }
 }
-function saveBotId() {
+
+async function saveBotId() {
   const val = document.getElementById('bot-id-input').value.trim();
   if (!val || val.startsWith('•')) { showToast('No changes made.', 'info'); return; }
   BOT_ID = val;
   document.getElementById('bot-id-input').value = '••••••••••••••••';
-  showConfigModal();
+  await sbPatchMenuMeta({ bot_id: BOT_ID });
+  showToast('✅ Bot ID saved!', 'success');
 }
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
   if (!val) { showToast('Enter a URL first.', 'info'); return; }
   MENU_URL = val; lsSet(LS_KEYS.menuUrl, MENU_URL);
-  await persistState();
   showToast('✅ Menu URL saved!', 'success');
 }
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
@@ -1421,19 +1512,109 @@ function renderManagerItems(catId) {
 }
 
 async function persistState() {
-  if (!FB_URL || !currentUser?.accessToken) return;
+  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
   try {
-    menuState._config = {
-      categories: CATEGORY_DEFS,
-      design: currentDesign,
-    };
-    await fbWrite(menuState);
+    // 1. Upsert existing categories (those with a DB UUID)
+    const catRows = CATEGORY_DEFS
+      .filter(c => c._uuid)
+      .map((c, idx) => ({
+        id:            c._uuid,
+        menu_id:       MENU_ID,
+        key:           c.id,
+        label:         c.title,
+        icon:          c.icon        || '',
+        color:         c.color       || '',
+        sub:           c.sub         || '',
+        placeholder:   c.placeholder || '',
+        display_order: CATEGORY_DEFS.indexOf(c),
+      }));
+    if (catRows.length) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+        method:  'POST',
+        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body:    JSON.stringify(catRows),
+      });
+      if (!r.ok) throw new Error(`category upsert: ${r.status}`);
+    }
+
+    // 2. Insert new categories (no UUID yet) and capture their generated IDs
+    for (const c of CATEGORY_DEFS) {
+      if (c._uuid) continue;
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+        method:  'POST',
+        headers: sbHeaders({ 'Prefer': 'return=representation' }),
+        body:    JSON.stringify({
+          menu_id:       MENU_ID,
+          key:           c.id,
+          label:         c.title,
+          icon:          c.icon        || '',
+          color:         c.color       || '',
+          sub:           c.sub         || '',
+          placeholder:   c.placeholder || '',
+          display_order: CATEGORY_DEFS.indexOf(c),
+        }),
+      });
+      if (r.ok) { const [row] = await r.json(); c._uuid = row.id; }
+    }
+
+    // 3. Upsert all items
+    const itemRows = [];
+    CATEGORY_DEFS.forEach(cat => {
+      if (!cat._uuid) return;
+      (menuState[cat.id]?.items || []).forEach((item, idx) => {
+        itemRows.push({
+          id:              item.id,
+          category_id:     cat._uuid,
+          name:            item.name,
+          desc:            item.desc           || '',
+          recipe:          item.recipe         || [],
+          is_eighty_sixed: item.eightySixed    || false,
+          on_menu:         item.onMenu         !== false,
+          display_order:   idx,
+        });
+      });
+    });
+    if (_uncatCategoryUuid) {
+      (menuState[UNCATEGORIZED_ID]?.items || []).forEach((item, idx) => {
+        itemRows.push({
+          id:              item.id,
+          category_id:     _uncatCategoryUuid,
+          name:            item.name,
+          desc:            item.desc  || '',
+          recipe:          item.recipe || [],
+          is_eighty_sixed: false,
+          on_menu:         false,
+          display_order:   idx,
+        });
+      });
+    }
+    if (itemRows.length) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+        method:  'POST',
+        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body:    JSON.stringify(itemRows),
+      });
+      if (!r.ok) throw new Error(`items upsert: ${r.status}`);
+    }
+
+    // 4. Delete pruned items
+    if (_deletedItemIds.size) {
+      const ids = [..._deletedItemIds].map(id => `"${id}"`).join(',');
+      await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${ids})`, {
+        method: 'DELETE', headers: sbHeaders(),
+      });
+      _deletedItemIds.clear();
+    }
+
+    // 5. Sync design + bot_id to menu_meta
+    await sbPatchMenuMeta({ design: currentDesign, bot_id: BOT_ID });
+
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
   } catch(e) {
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
-    showToast('⚠️ Cloud save failed — check Firebase config in Admin settings.', 'error');
+    showToast('⚠️ Cloud save failed.', 'error');
   }
 }
 
@@ -1442,6 +1623,7 @@ async function saveMenu() {
   menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
   lsSet(LS_KEYS.lastUpdated, ts.toString());
   await persistState();
+  await sbPatchMenuMeta({ last_updated_ts: ts });
   _dirty = false;
   updateSaveBtn();
   updateLastUpdatedLabel();
@@ -1687,6 +1869,9 @@ function renderPruneSection() {
 async function pruneSingleItem(catId, itemName) {
   if (currentUser?.role !== 'admin') return;
   if (!menuState[catId]) return;
+  menuState[catId].items
+    .filter(i => i.onMenu === false && i.name === itemName)
+    .forEach(i => _deletedItemIds.add(i.id));
   menuState[catId].items = menuState[catId].items.filter(
     i => !(i.onMenu === false && i.name === itemName)
   );
@@ -1698,7 +1883,11 @@ async function pruneSingleItem(catId, itemName) {
 async function pruneRemoved(catId) {
   if (currentUser?.role !== 'admin') return;
   const cats = catId === 'all' ? CATEGORY_DEFS.map(c => c.id) : [catId];
-  cats.forEach(id => { if (menuState[id]) menuState[id].items = menuState[id].items.filter(i => i.onMenu !== false); });
+  cats.forEach(id => {
+    if (!menuState[id]) return;
+    menuState[id].items.filter(i => i.onMenu === false).forEach(i => _deletedItemIds.add(i.id));
+    menuState[id].items = menuState[id].items.filter(i => i.onMenu !== false);
+  });
   await persistState();
   renderPruneSection();
   showToast('✅ Off-menu items permanently deleted.', 'success');
@@ -1841,10 +2030,24 @@ async function sendUpdate() {
       CATEGORY_DEFS.forEach(cat => {
         if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
       });
-      menuState._meta = { lastUpdatedTs: ts.toString(), lastSentCategories: diff.map(d => d.id) };
+      menuState._meta = {
+        ...(menuState._meta || {}),
+        lastUpdatedTs:      ts.toString(),
+        lastSentTs:         ts.toString(),
+        lastSentCategories: diff.map(d => d.id),
+      };
       lsSet(LS_KEYS.lastUpdated, ts.toString());
       invalidateDiff();
       await persistState();
+      // Build last_sent_state snapshot for diff computation on next load
+      const lastSentState = {};
+      CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
+      await sbPatchMenuMeta({
+        last_updated_ts:      ts,
+        last_sent_ts:         ts,
+        last_sent_state:      lastSentState,
+        last_sent_categories: diff.map(d => d.id),
+      });
       updateLastUpdatedLabel();
       renderManagerCategories();
       updateDraftIndicator();
@@ -1911,11 +2114,21 @@ async function loadUsers() {
   const wrap = document.getElementById('users-list');
   wrap.innerHTML = '<div class="db-empty">Loading...</div>';
   try {
+    // Fetch menus list for menu access checkboxes
+    if (SUPABASE_URL) {
+      const menusRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/menus?select=id,name&order=created_at.asc`,
+        { headers: sbHeaders() }
+      );
+      if (menusRes.ok) window._adminMenuList = await menusRes.json();
+    }
     const r = await fetch('/api/users', {
       headers: { 'Authorization': `Bearer ${currentUser?.accessToken}` }
     });
     if (!r.ok) throw new Error(await r.text());
-    renderUsersTab(await r.json());
+    const users = await r.json();
+    window._adminUserList = users;
+    renderUsersTab(users);
   } catch (e) {
     wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
   }
@@ -1930,14 +2143,24 @@ function renderUsersTab(users) {
   const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
   wrap.innerHTML = users.map(u => {
     const isSelf = u.id === currentUser?.uid;
+
+    // Role controls
     const roleControls = isSelf
       ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
-      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select">
+      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
+                 onchange="renderMenuAccessForUser('${escHtml(u.id)}')">
            <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
            <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
            <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
          </select>
-         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save Role</button>`;
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button>`;
+
+    // Menu access section (only for non-self users)
+    const menuAccessSection = isSelf ? '' : `
+      <div class="user-menu-access" id="user-menu-access-${escHtml(u.id)}">
+        ${buildMenuAccessHTML(u)}
+      </div>`;
+
     return `
       <div class="config-card">
         <div class="user-mgmt-top">
@@ -1951,8 +2174,40 @@ function renderUsersTab(users) {
           <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
         </div>
         <div class="input-row user-mgmt-role-row">${roleControls}</div>
+        ${menuAccessSection}
       </div>`;
   }).join('');
+}
+
+function buildMenuAccessHTML(u) {
+  const role = document.getElementById(`user-role-${u.id}`)?.value ?? u.role;
+  if (role === 'admin') {
+    return `<p class="hint" style="margin:6px 0 0">Admin — access to all menus.</p>`;
+  }
+  if (role === 'none') return '';
+  // role === 'manager': show checkboxes for each menu
+  const menus = window._adminMenuList || [];
+  if (!menus.length) return `<p class="hint" style="margin:6px 0 0">No menus found.</p>`;
+  const checkboxes = menus.map(m => {
+    const checked = (u.menuAccess || []).includes(m.id) ? 'checked' : '';
+    return `<label class="user-menu-access-label">
+      <input type="checkbox" class="user-menu-access-cb"
+             data-user="${escHtml(u.id)}" data-menu="${escHtml(m.id)}" ${checked}/>
+      ${escHtml(m.name)}
+    </label>`;
+  }).join('');
+  return `<div class="user-menu-access-row">
+    <span class="config-input-label" style="margin-bottom:4px">Menu Access</span>
+    ${checkboxes}
+    <button class="btn-small" onclick="saveMenuAccess('${escHtml(u.id)}')">Save Access</button>
+  </div>`;
+}
+
+function renderMenuAccessForUser(userId) {
+  const u = window._adminUserList?.find(u => u.id === userId);
+  if (!u) return;
+  const el = document.getElementById(`user-menu-access-${userId}`);
+  if (el) el.innerHTML = buildMenuAccessHTML(u);
 }
 
 async function saveUserRole(userId) {
@@ -1973,6 +2228,28 @@ async function saveUserRole(userId) {
       badge.className = `user-role-badge user-role-badge--${role}`;
       badge.textContent = label[role] || role;
     }
+    renderMenuAccessForUser(userId);
+  } catch (e) {
+    showToast('Network error.', 'error');
+  }
+}
+
+async function saveMenuAccess(userId) {
+  const checkboxes = document.querySelectorAll(`.user-menu-access-cb[data-user="${userId}"]`);
+  const menuAccess = [...checkboxes].filter(cb => cb.checked).map(cb => cb.dataset.menu);
+  try {
+    const r = await fetch('/api/users', {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, menuAccess }),
+    });
+    if (!r.ok) { showToast((await r.json()).error || 'Failed to update access.', 'error'); return; }
+    // Update local cache
+    if (window._adminUserList) {
+      const u = window._adminUserList.find(u => u.id === userId);
+      if (u) u.menuAccess = menuAccess;
+    }
+    showToast('Menu access updated.', 'success');
   } catch (e) {
     showToast('Network error.', 'error');
   }
@@ -2025,7 +2302,7 @@ function switchTab(name) {
   });
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
   if (name === 'categories') { renderCategoriesTab(); }
-  if (name === 'admin')      { renderDesignSection(); }
+  if (name === 'admin')      { renderDesignSection(); checkSupabaseStatus(); }
   if (name === 'users')      { loadUsers(); }
 }
 
@@ -2155,7 +2432,7 @@ function _setPreviewRole(role) {
     // Mock session — no real tokens; writes will fail gracefully
     currentUser = {
       uid: 'preview-user', email: 'preview@preview.test',
-      name: 'Preview User', role,
+      name: 'Preview User', role, accessibleMenuIds: [],
       accessToken: null, refreshToken: null, expiresAt: 0,
     };
     applyRole(role);
