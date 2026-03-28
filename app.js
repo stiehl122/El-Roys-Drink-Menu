@@ -612,20 +612,31 @@ async function deleteCategory(catId) {
     const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
     if (!exists) pool.push({ ...item, onMenu: false });
   });
-  // Always ensure __uncategorized__ DB row exists so persistState() can write items there,
-  // regardless of whether the deleted category had a DB row.
-  await sbEnsureUncategorized();
-  if (cat._uuid) {
-    // PATCH items to uncategorized BEFORE deleting the category to prevent CASCADE.
-    if (_uncatCategoryUuid && items.length > 0) {
-      await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${cat._uuid}`, {
-        method: 'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify({ category_id: _uncatCategoryUuid, on_menu: false }),
+  if (items.length > 0 && SUPABASE_URL) {
+    await sbEnsureUncategorized();
+    if (_uncatCategoryUuid) {
+      // Directly upsert the entire pool now — handles both DB-backed items
+      // (ON CONFLICT updates their category_id) and memory-only items (inserts them).
+      // This is explicit and doesn't rely on persistState() to handle orphaned items.
+      const rows = pool.map((item, idx) => ({
+        id:              item.id,
+        category_id:     _uncatCategoryUuid,
+        name:            item.name,
+        desc:            item.desc            || '',
+        recipe:          item.recipe          || [],
+        is_eighty_sixed: false,
+        on_menu:         false,
+        display_order:   idx,
+      }));
+      await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+        method:  'POST',
+        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body:    JSON.stringify(rows),
       });
     }
-    await sbDeleteCategory(cat._uuid);
   }
+  // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
+  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   delete menuState[catId];
   invalidateDiff();
