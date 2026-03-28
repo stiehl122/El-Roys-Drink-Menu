@@ -32,6 +32,9 @@ let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
 let _menuPickerNeeded = false;     // true when multiple menus exist and no slug was given
 let _invalidMenuSlug  = null;      // set when ?menu= slug resolved to nothing
+let _activeMenuName   = '';        // display name of the currently loaded menu
+let _pickerFocusBefore = null;
+let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -129,13 +132,14 @@ async function sbResolveMenu() {
   if (slug) {
     // Load menu by URL slug
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id`,
+      `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name`,
       { headers: sbHeaders() }
     );
     if (res.ok) {
       const [menu] = await res.json();
       if (menu?.id) {
         MENU_ID = menu.id;
+        _activeMenuName = menu.name || '';
         lsSet(LS_KEYS.menuId, MENU_ID);
         return;
       }
@@ -150,7 +154,7 @@ async function sbResolveMenu() {
 
   // Fetch up to 2 menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id,slug&limit=2`,
+    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name&limit=2`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
@@ -159,6 +163,7 @@ async function sbResolveMenu() {
   if (menus.length === 1) {
     // Single menu — auto-load and push slug to URL so it can be bookmarked
     MENU_ID = menus[0].id;
+    _activeMenuName = menus[0].name || '';
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
     url.searchParams.set('menu', menus[0].slug);
@@ -743,9 +748,17 @@ async function init() {
     applyDesign(currentDesign);
     showPublicViewWithError(`⚠️ Menu "${escHtml(_invalidMenuSlug)}" not found.`);
   } else if (_menuPickerNeeded) {
-    // Multiple menus, no slug — Unit 2.3 renders the picker
+    // Multiple menus, no slug — show picker; load menu after selection
     applyDesign(currentDesign);
-    showMenuPicker();
+    showMenuPicker(async () => {
+      try {
+        const data = await sbRead();
+        if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
+        else menuState = defaultState();
+      } catch(e) { menuState = defaultState(); }
+      applyDesign(currentDesign);
+      showPublicView();
+    });
   } else if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
     const cached = localStorage.getItem(LS_KEYS.menuCache);
@@ -1254,6 +1267,121 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ─── MENU PICKER ─────────────────────────────────────────────────────────────
+
+function _pickerFocusTrap(e) {
+  if (e.key === 'Escape') { closeMenuPicker(); return; }
+  if (e.key !== 'Tab') return;
+  const box = document.querySelector('#menu-picker-overlay .picker-box');
+  const focusable = Array.from(
+    box.querySelectorAll('button, [tabindex]:not([tabindex="-1"])')
+  ).filter(el => !el.disabled && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+}
+
+// afterSelect: optional callback fired after the user picks a menu.
+async function showMenuPicker(afterSelect) {
+  _pickerFocusBefore = document.activeElement;
+  _pickerOnSelect    = afterSelect || null;
+
+  const list = document.getElementById('picker-menu-list');
+  list.innerHTML = '<p class="picker-loading">Loading…</p>';
+  document.getElementById('menu-picker-overlay').classList.add('open');
+  document.addEventListener('keydown', _pickerFocusTrap);
+
+  let menus = [];
+  if (SUPABASE_URL) {
+    const accessibleIds = currentUser?.accessibleMenuIds;
+    let url = `${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type&order=name.asc`;
+    // Managers only see menus they have explicit access to
+    if (currentUser?.role === 'manager' && accessibleIds?.length) {
+      url += `&id=in.(${accessibleIds.join(',')})`;
+    }
+    try {
+      const res = await fetch(url, { headers: sbHeaders() });
+      if (res.ok) menus = await res.json();
+    } catch(e) {}
+  }
+
+  list.innerHTML = '';
+  if (!menus.length) {
+    list.innerHTML = '<p class="picker-empty">No menus available.</p>';
+  } else {
+    menus.forEach(m => {
+      const btn = document.createElement('button');
+      btn.className = 'picker-menu-card';
+      btn.setAttribute('aria-label', `Select ${m.name}`);
+      btn.innerHTML = `<span class="picker-menu-name">${escHtml(m.name)}</span><span class="picker-menu-type">${escHtml(m.type)}</span>`;
+      btn.onclick = () => selectMenu(m.id, m.slug, m.name);
+      list.appendChild(btn);
+    });
+    const first = list.querySelector('.picker-menu-card');
+    if (first) setTimeout(() => first.focus(), 0);
+  }
+}
+
+function closeMenuPicker() {
+  document.getElementById('menu-picker-overlay').classList.remove('open');
+  document.removeEventListener('keydown', _pickerFocusTrap);
+  if (_pickerFocusBefore?.focus) _pickerFocusBefore.focus();
+  _pickerFocusBefore = null;
+}
+
+function selectMenu(menuId, slug, menuName) {
+  MENU_ID = menuId;
+  _activeMenuName = menuName || '';
+  lsSet(LS_KEYS.menuId, MENU_ID);
+  _menuPickerNeeded = false;
+  const url = new URL(location.href);
+  url.searchParams.set('menu', slug);
+  history.replaceState({}, '', url.toString());
+  closeMenuPicker();
+  updateActiveMenuBar(menuName);
+  const cb = _pickerOnSelect;
+  _pickerOnSelect = null;
+  if (cb) cb();
+}
+
+function updateActiveMenuBar(name) {
+  const bar       = document.getElementById('active-menu-bar');
+  const nameEl    = document.getElementById('active-menu-name');
+  const switchBtn = document.getElementById('switch-menu-btn');
+  if (!bar) return;
+  if (name) nameEl.textContent = name;
+  bar.style.display = name ? '' : 'none';
+  // Show "Switch" only when the user has access to more than one menu
+  const role          = currentUser?.role;
+  const accessibleIds = currentUser?.accessibleMenuIds || [];
+  const canSwitch     = role === 'admin' || accessibleIds.length > 1;
+  if (switchBtn) switchBtn.style.display = canSwitch ? '' : 'none';
+}
+
+async function onSwitchMenuClick() {
+  showMenuPicker(async () => {
+    // Reload menu data into the manager view for the newly selected menu
+    _uncatCategoryUuid = null;
+    try {
+      const data = await sbRead();
+      if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
+      else menuState = defaultState();
+    } catch(e) { menuState = defaultState(); }
+    await sbEnsureUncategorized();
+    renderManagerCategories();
+    if (typeof renderCatManager  === 'function') renderCatManager();
+    if (typeof renderDatabase    === 'function') renderDatabase();
+    if (typeof renderUsersList   === 'function') renderUsersList();
+    updateDraftIndicator();
+    updateSaveBtn();
+  });
+}
+
 let _authFocusBefore = null;
 
 function _authFocusTrap(e) {
@@ -1421,11 +1549,17 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
+  // If no menu is loaded yet, show picker first then re-enter
+  if (!MENU_ID) {
+    showMenuPicker(() => enterManager());
+    return;
+  }
   isManagerMode = true;
   stopPolling();
   document.body.classList.add('manager-mode');
   document.getElementById('public-view').style.display = 'none';
   document.getElementById('loading-view').style.display = 'none';
+  document.getElementById('menu-picker-overlay').classList.remove('open');
   document.getElementById('manager-view').style.display = 'block';
   document.getElementById('action-btn').textContent = '✕ Exit';
   document.getElementById('action-btn').classList.add('active');
@@ -1435,6 +1569,7 @@ function enterManager() {
   updateDraftIndicator();
   updateSaveBtn();
   renderManagerCategories();
+  updateActiveMenuBar(_activeMenuName);
 }
 
 function exitManager() {

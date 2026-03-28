@@ -62,6 +62,13 @@
       <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to configure your GroupMe Bot ID and Menu URL. Everything syncs to the cloud from this point on.</p>
     </div>
 
+    <!-- ACTIVE MENU BAR -->
+    <div id="active-menu-bar" style="display:none;" aria-live="polite">
+      <span class="active-menu-label">MENU</span>
+      <span id="active-menu-name" class="active-menu-name-text"></span>
+      <button class="btn-small" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch</button>
+    </div>
+
     <!-- TAB BAR -->
     <div class="tab-bar" role="tablist">
       <button class="tab-btn active" id="tab-btn-manager"    role="tab" aria-selected="true"  aria-controls="tab-panel-manager"    onclick="switchTab('manager')">MANAGER</button>
@@ -408,6 +415,15 @@
       <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
       <button class="btn-confirm" onclick="copyInviteText()">COPY MESSAGE</button>
     </div>
+  </div>
+</div>
+
+<!-- MENU PICKER OVERLAY -->
+<div id="menu-picker-overlay">
+  <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
+    <h2 class="picker-title">SELECT A MENU</h2>
+    <p class="picker-subtitle">Choose which menu to view</p>
+    <div id="picker-menu-list" class="picker-menu-list"></div>
   </div>
 </div>
 
