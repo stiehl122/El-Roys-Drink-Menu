@@ -67,6 +67,7 @@
       <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchTab('categories')">CATEGORIES</button>
       <button class="tab-btn"        id="tab-btn-admin"      role="tab" aria-selected="false" aria-controls="tab-panel-admin"      onclick="switchTab('admin')">ADMIN</button>
       <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchTab('database')">DATABASE</button>
+      <button class="tab-btn"        id="tab-btn-users"      role="tab" aria-selected="false" aria-controls="tab-panel-users"      onclick="switchTab('users')">USERS</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu -->
@@ -242,6 +243,15 @@
       </div>
     </div>
 
+    <!-- USERS PANEL: Staff Account Management -->
+    <div class="tab-panel" id="tab-panel-users" role="tabpanel" aria-labelledby="tab-btn-users">
+      <div class="section-label">Staff Accounts</div>
+      <div class="users-invite-row">
+        <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
+      </div>
+      <div id="users-list"></div>
+    </div>
+
     <!-- DATABASE PANEL: Recipe Spreadsheet -->
     <div class="tab-panel" id="tab-panel-database" role="tabpanel" aria-labelledby="tab-btn-database">
       <div class="section-label">Recipe Database</div>
@@ -379,6 +389,19 @@
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
       <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND TO GROUP</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVITE MODAL -->
+<div class="modal-bg" id="invite-modal-bg">
+  <div class="modal">
+    <h2>INVITE STAFF</h2>
+    <div class="modal-sub">Copy this message and send it to new staff members.</div>
+    <textarea id="invite-text-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
+      <button class="btn-confirm" onclick="copyInviteText()">COPY MESSAGE</button>
     </div>
   </div>
 </div>
