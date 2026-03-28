@@ -1045,7 +1045,7 @@ function applyRole(role) {
   const isManager = role === 'manager' || role === 'admin';
   const isAdmin   = role === 'admin';
   document.getElementById('tab-btn-admin').style.display    = isAdmin ? '' : 'none';
-  document.getElementById('tab-btn-database').style.display = isAdmin ? '' : 'none';
+  document.getElementById('tab-btn-database').style.display = isManager ? '' : 'none';
   document.getElementById('tab-btn-users').style.display    = isAdmin ? '' : 'none';
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
