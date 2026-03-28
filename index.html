@@ -59,7 +59,7 @@
   <div id="manager-view">
     <div id="setup-banner">
       <h3>⚙️ One-Time Setup</h3>
-      <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to configure your GroupMe Bot ID and Menu URL. Everything syncs to the cloud from this point on.</p>
+      <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to configure your notification channels and Menu URL. Everything syncs to the cloud from this point on.</p>
     </div>
 
     <!-- ACTIVE MENU BAR -->
@@ -131,14 +131,98 @@
         </div>
       </div>
 
-      <div class="config-card">
-        <h3>GroupMe Bot ID</h3>
-        <label for="bot-id-input" class="config-input-label">GroupMe Bot ID</label>
-        <div class="input-row">
-          <input type="password" id="bot-id-input" placeholder="Paste your Bot ID here..."/>
-          <button class="btn-small" onclick="saveBotId()">Save</button>
+      <!-- NOTIFICATIONS PANEL -->
+      <div class="config-card" id="notifications-panel">
+        <h3>Notifications</h3>
+        <p class="config-hint">Choose which channels receive updates when you send a menu update. Config is saved per-menu.</p>
+
+        <!-- GroupMe -->
+        <div class="notif-channel" id="notif-groupme">
+          <div class="notif-channel-header">
+            <label class="notif-toggle-label" for="notif-groupme-enabled">
+              <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')" aria-describedby="notif-groupme-help"/>
+              <span class="notif-channel-name">GroupMe</span>
+            </label>
+          </div>
+          <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
+            <div class="notif-field">
+              <label for="notif-groupme-bot-id" class="config-input-label">Bot ID</label>
+              <input type="password" id="notif-groupme-bot-id" placeholder="Paste your Bot ID here..." aria-describedby="notif-groupme-help"/>
+            </div>
+            <details class="notif-help" id="notif-groupme-help">
+              <summary>How to set up GroupMe</summary>
+              <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID into the field above. <strong>The Bot ID is stored per-menu in the database — not in Vercel environment variables.</strong></p>
+            </details>
+          </div>
         </div>
-        <div class="hint">Saved to Supabase. The GroupMe API call is made server-side via the <code>GROUPME_BOT_ID</code> Vercel environment variable.</div>
+
+        <!-- Twilio SMS -->
+        <div class="notif-channel" id="notif-sms">
+          <div class="notif-channel-header">
+            <label class="notif-toggle-label" for="notif-sms-enabled">
+              <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')" aria-describedby="notif-sms-help"/>
+              <span class="notif-channel-name">Twilio SMS</span>
+            </label>
+          </div>
+          <div class="notif-channel-body" id="notif-sms-body" style="display:none">
+            <div class="notif-field">
+              <label for="notif-sms-numbers" class="config-input-label">Recipient Numbers (one per line)</label>
+              <textarea id="notif-sms-numbers" class="notif-textarea" placeholder="+15551234567&#10;+15559876543" rows="3" aria-describedby="notif-sms-help"></textarea>
+            </div>
+            <details class="notif-help" id="notif-sms-help">
+              <summary>How to set up Twilio SMS</summary>
+              <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Then add three Vercel environment variables: <code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, and <code>TWILIO_FROM_NUMBER</code>. Enter recipient phone numbers above in E.164 format (e.g. +15551234567), one per line.</p>
+            </details>
+          </div>
+        </div>
+
+        <!-- Discord -->
+        <div class="notif-channel" id="notif-discord">
+          <div class="notif-channel-header">
+            <label class="notif-toggle-label" for="notif-discord-enabled">
+              <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')" aria-describedby="notif-discord-help"/>
+              <span class="notif-channel-name">Discord</span>
+            </label>
+          </div>
+          <div class="notif-channel-body" id="notif-discord-body" style="display:none">
+            <div class="notif-field">
+              <label for="notif-discord-url" class="config-input-label">Webhook URL</label>
+              <input type="text" id="notif-discord-url" placeholder="https://discord.com/api/webhooks/..." aria-describedby="notif-discord-help"/>
+            </div>
+            <details class="notif-help" id="notif-discord-help">
+              <summary>How to set up Discord</summary>
+              <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL into the field above.</p>
+            </details>
+          </div>
+        </div>
+
+        <!-- Generic Webhook -->
+        <div class="notif-channel" id="notif-webhook">
+          <div class="notif-channel-header">
+            <label class="notif-toggle-label" for="notif-webhook-enabled">
+              <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')" aria-describedby="notif-webhook-help"/>
+              <span class="notif-channel-name">Generic Webhook</span>
+            </label>
+          </div>
+          <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
+            <div class="notif-field">
+              <label for="notif-webhook-url" class="config-input-label">URL</label>
+              <input type="text" id="notif-webhook-url" placeholder="https://example.com/webhook" aria-describedby="notif-webhook-help"/>
+            </div>
+            <div class="notif-field">
+              <label for="notif-webhook-secret" class="config-input-label">Secret (optional)</label>
+              <input type="password" id="notif-webhook-secret" placeholder="Sent as X-Webhook-Secret header"/>
+            </div>
+            <details class="notif-help" id="notif-webhook-help">
+              <summary>How to set up Generic Webhook</summary>
+              <p>Enter any HTTPS endpoint. The full update payload will be POSTed as JSON. If a secret is provided, it is sent as an <code>X-Webhook-Secret</code> header.</p>
+            </details>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn-small" onclick="saveNotifications()">Save Notifications</button>
+        </div>
       </div>
 
       <div class="config-card">

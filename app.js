@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.0';
+const APP_VERSION = 'v0.7.1';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -1570,8 +1570,8 @@ function enterManager() {
   document.getElementById('manager-view').style.display = 'block';
   document.getElementById('action-btn').textContent = '✕ Exit';
   document.getElementById('action-btn').classList.add('active');
-  document.getElementById('bot-id-input').value    = BOT_ID    ? '••••••••••••••••' : '';
   document.getElementById('menu-url-input').value  = MENU_URL  || '';
+  populateNotificationsPanel();
   switchTab('manager');
   updateDraftIndicator();
   updateSaveBtn();
@@ -1608,13 +1608,102 @@ async function checkSupabaseStatus() {
   }
 }
 
-async function saveBotId() {
-  const val = document.getElementById('bot-id-input').value.trim();
-  if (!val || val.startsWith('•')) { showToast('No changes made.', 'info'); return; }
-  BOT_ID = val;
-  document.getElementById('bot-id-input').value = '••••••••••••••••';
-  await sbPatchMenuMeta({ bot_id: BOT_ID });
-  showToast('✅ Bot ID saved!', 'success');
+// ─── NOTIFICATIONS PANEL ─────────────────────────────────────────────────────
+
+function onNotifToggle(channel) {
+  const enabled = document.getElementById(`notif-${channel}-enabled`)?.checked;
+  const body    = document.getElementById(`notif-${channel}-body`);
+  if (body) body.style.display = enabled ? '' : 'none';
+}
+
+function populateNotificationsPanel() {
+  const n = NOTIFICATIONS || {};
+
+  // GroupMe
+  const gm = n.groupme || {};
+  const gmEl = document.getElementById('notif-groupme-enabled');
+  if (gmEl) {
+    gmEl.checked = !!gm.enabled;
+    onNotifToggle('groupme');
+    const botEl = document.getElementById('notif-groupme-bot-id');
+    if (botEl) botEl.value = gm.bot_id ? '••••••••••••••••' : '';
+    // Store actual value for save — overwrite only if user types something new
+    if (botEl) botEl.dataset.actual = gm.bot_id || '';
+  }
+
+  // SMS
+  const sms = n.sms || {};
+  const smsEl = document.getElementById('notif-sms-enabled');
+  if (smsEl) {
+    smsEl.checked = !!sms.enabled;
+    onNotifToggle('sms');
+    const numsEl = document.getElementById('notif-sms-numbers');
+    if (numsEl) numsEl.value = (sms.numbers || []).join('\n');
+  }
+
+  // Discord
+  const disc = n.discord || {};
+  const discEl = document.getElementById('notif-discord-enabled');
+  if (discEl) {
+    discEl.checked = !!disc.enabled;
+    onNotifToggle('discord');
+    const urlEl = document.getElementById('notif-discord-url');
+    if (urlEl) urlEl.value = disc.webhook_url || '';
+  }
+
+  // Generic Webhook
+  const wh = n.webhook || {};
+  const whEl = document.getElementById('notif-webhook-enabled');
+  if (whEl) {
+    whEl.checked = !!wh.enabled;
+    onNotifToggle('webhook');
+    const urlEl = document.getElementById('notif-webhook-url');
+    if (urlEl) urlEl.value = wh.url || '';
+    const secEl = document.getElementById('notif-webhook-secret');
+    if (secEl) {
+      secEl.value = wh.secret ? '••••••••••••••••' : '';
+      secEl.dataset.actual = wh.secret || '';
+    }
+  }
+}
+
+async function saveNotifications() {
+  const readField = (id, masked) => {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    const val = el.value.trim();
+    // If the value is still the masked placeholder, return the stored actual value
+    if (masked && val.startsWith('•')) return el.dataset.actual || '';
+    return val;
+  };
+
+  const notifications = {
+    groupme: {
+      enabled:  !!document.getElementById('notif-groupme-enabled')?.checked,
+      bot_id:   readField('notif-groupme-bot-id', true),
+    },
+    sms: {
+      enabled: !!document.getElementById('notif-sms-enabled')?.checked,
+      numbers: (document.getElementById('notif-sms-numbers')?.value || '')
+        .split('\n').map(s => s.trim()).filter(Boolean),
+    },
+    discord: {
+      enabled:     !!document.getElementById('notif-discord-enabled')?.checked,
+      webhook_url: readField('notif-discord-url', false),
+    },
+    webhook: {
+      enabled: !!document.getElementById('notif-webhook-enabled')?.checked,
+      url:     readField('notif-webhook-url', false),
+      secret:  readField('notif-webhook-secret', true),
+    },
+  };
+
+  // Keep BOT_ID in sync with groupme config
+  if (notifications.groupme.bot_id) BOT_ID = notifications.groupme.bot_id;
+
+  NOTIFICATIONS = notifications;
+  await sbPatchMenuMeta({ notifications, bot_id: notifications.groupme.bot_id || BOT_ID });
+  showToast('✅ Notifications saved!', 'success');
 }
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();

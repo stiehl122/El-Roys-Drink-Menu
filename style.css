@@ -490,3 +490,21 @@
 #active-menu-bar { display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: var(--surface); border-bottom: 1px solid var(--border); font-size: 12px; }
 .active-menu-label { font-family: var(--font-heading); letter-spacing: 1px; color: var(--muted); font-size: 11px; }
 .active-menu-name-text { font-weight: 600; color: var(--text); font-size: 13px; flex: 1; }
+
+/* ─── NOTIFICATIONS PANEL ────────────────────────────────────────────────── */
+.config-hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; line-height: 1.5; }
+.notif-channel { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.notif-channel-header { display: flex; align-items: center; padding: 11px 14px; background: var(--surface); }
+.notif-toggle-label { display: flex; align-items: center; gap: 10px; cursor: pointer; width: 100%; }
+.notif-toggle { width: 16px; height: 16px; cursor: pointer; accent-color: var(--ember); flex-shrink: 0; }
+.notif-channel-name { font-family: var(--font-heading); font-size: 13px; letter-spacing: 0.5px; color: var(--text); }
+.notif-channel-body { padding: 12px 14px 14px; background: var(--bg); border-top: 1px solid var(--border); }
+.notif-field { margin-bottom: 10px; }
+.notif-field:last-of-type { margin-bottom: 0; }
+.notif-field input, .notif-textarea { width: 100%; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-family: var(--font-body); font-size: 13px; outline: none; transition: border-color 0.2s; box-sizing: border-box; }
+.notif-field input:focus, .notif-textarea:focus { border-color: var(--ember); }
+.notif-textarea { resize: vertical; min-height: 64px; }
+.notif-help { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.notif-help summary { cursor: pointer; font-weight: 600; color: var(--ember); font-size: 12px; }
+.notif-help p { margin: 8px 0 0; line-height: 1.6; }
+.notif-help code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; color: var(--text); }
