@@ -35,6 +35,7 @@ let _menuPickerNeeded  = false;     // true when multiple menus exist and no slu
 let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
 let _activeMenuName    = '';        // display name of the currently loaded menu
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
+let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 
@@ -161,8 +162,33 @@ async function sbResolveMenu() {
     return;
   }
 
-  // No URL slug — use cached MENU_ID (returning visitor) or auto-resolve
-  if (MENU_ID) return;
+  // No URL slug — returning visitor (MENU_ID cached) or auto-resolve
+  if (MENU_ID) {
+    // Enrich cached MENU_ID: fetch name/slug (for active-menu-bar) + sibling count in parallel
+    const [nameRes, countRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&limit=2`, { headers: sbHeaders() }),
+    ]);
+    if (nameRes.ok) {
+      const [menu] = await nameRes.json();
+      if (menu?.name) _activeMenuName = menu.name;
+      if (menu?.slug) {
+        const url = new URL(location.href);
+        url.searchParams.set('menu', menu.slug);
+        history.replaceState({}, '', url.toString());
+      }
+      if (!menu?.id) {
+        // Cached MENU_ID is stale (menu deleted) — clear it and fall through to auto-resolve
+        MENU_ID = '';
+        lsSet(LS_KEYS.menuId, '');
+      }
+    }
+    if (countRes.ok) {
+      const siblings = await countRes.json();
+      if (siblings.length > 1) _hasMultipleMenus = true;
+    }
+    if (MENU_ID) return;
+  }
 
   // Fetch up to 2 menus to determine routing
   const res = await fetch(
@@ -1566,6 +1592,7 @@ async function handleResetPassword() {
 
 function signOut() {
   currentUser = null;
+  _managerMenuPicked = false;
   if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
   localStorage.removeItem(LS_KEYS.accessToken);
   localStorage.removeItem(LS_KEYS.refreshToken);
@@ -1578,9 +1605,12 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
-  // If no menu is loaded yet, show picker first then re-enter
-  if (!MENU_ID) {
-    showMenuPicker(() => enterManager());
+  // Show picker when: no menu loaded yet, OR user has multiple accessible menus
+  // and hasn't explicitly chosen one in this session.
+  const isAdmin    = currentUser?.role === 'admin';
+  const multiMenu  = isAdmin ? _hasMultipleMenus : (currentUser?.accessibleMenuIds?.length || 0) > 1;
+  if (!MENU_ID || (multiMenu && !_managerMenuPicked)) {
+    showMenuPicker(() => { _managerMenuPicked = true; enterManager(); });
     return;
   }
   isManagerMode = true;
