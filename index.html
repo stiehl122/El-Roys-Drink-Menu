@@ -47,6 +47,7 @@
     <div class="error-banner" id="public-error"></div>
     <div class="collapse-all-row">
       <button id="collapse-all-btn" class="collapse-all-btn" onclick="toggleAllCategories()">Collapse All</button>
+      <button id="public-switch-menu-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
     </div>
     <div id="public-categories"></div>
     <footer id="menu-footer">
@@ -134,25 +135,21 @@
       <!-- NOTIFICATIONS PANEL -->
       <div class="config-card" id="notifications-panel">
         <h3>Notifications</h3>
-        <p class="config-hint">Choose which channels receive updates when you send a menu update. Config is saved per-menu.</p>
+        <p class="config-hint">Toggle which channels fire when you send a menu update. All credentials are set as Vercel environment variables — nothing is stored in the database.</p>
 
         <!-- GroupMe -->
         <div class="notif-channel" id="notif-groupme">
           <div class="notif-channel-header">
             <label class="notif-toggle-label" for="notif-groupme-enabled">
-              <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')" aria-describedby="notif-groupme-help"/>
+              <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')"/>
               <span class="notif-channel-name">GroupMe</span>
             </label>
           </div>
           <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
-            <div class="notif-field">
-              <label for="notif-groupme-bot-id" class="config-input-label">Bot ID</label>
-              <input type="password" id="notif-groupme-bot-id" placeholder="Paste your Bot ID here..." aria-describedby="notif-groupme-help"/>
+            <div class="notif-help">
+              <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID and add it as a Vercel environment variable:</p>
+              <p><code>GROUPME_BOT_ID</code></p>
             </div>
-            <details class="notif-help" id="notif-groupme-help">
-              <summary>How to set up GroupMe</summary>
-              <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID into the field above. <strong>The Bot ID is stored per-menu in the database — not in Vercel environment variables.</strong></p>
-            </details>
           </div>
         </div>
 
@@ -160,19 +157,15 @@
         <div class="notif-channel" id="notif-sms">
           <div class="notif-channel-header">
             <label class="notif-toggle-label" for="notif-sms-enabled">
-              <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')" aria-describedby="notif-sms-help"/>
+              <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')"/>
               <span class="notif-channel-name">Twilio SMS</span>
             </label>
           </div>
           <div class="notif-channel-body" id="notif-sms-body" style="display:none">
-            <div class="notif-field">
-              <label for="notif-sms-numbers" class="config-input-label">Recipient Numbers (one per line)</label>
-              <textarea id="notif-sms-numbers" class="notif-textarea" placeholder="+15551234567&#10;+15559876543" rows="3" aria-describedby="notif-sms-help"></textarea>
+            <div class="notif-help">
+              <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Add these Vercel environment variables:</p>
+              <p><code>TWILIO_ACCOUNT_SID</code><br><code>TWILIO_AUTH_TOKEN</code><br><code>TWILIO_FROM_NUMBER</code><br><code>TWILIO_TO_NUMBERS</code> <span class="notif-help-note">(comma-separated E.164 numbers, e.g. +15551234567,+15559876543)</span></p>
             </div>
-            <details class="notif-help" id="notif-sms-help">
-              <summary>How to set up Twilio SMS</summary>
-              <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Then add three Vercel environment variables: <code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, and <code>TWILIO_FROM_NUMBER</code>. Enter recipient phone numbers above in E.164 format (e.g. +15551234567), one per line.</p>
-            </details>
           </div>
         </div>
 
@@ -180,19 +173,15 @@
         <div class="notif-channel" id="notif-discord">
           <div class="notif-channel-header">
             <label class="notif-toggle-label" for="notif-discord-enabled">
-              <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')" aria-describedby="notif-discord-help"/>
+              <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')"/>
               <span class="notif-channel-name">Discord</span>
             </label>
           </div>
           <div class="notif-channel-body" id="notif-discord-body" style="display:none">
-            <div class="notif-field">
-              <label for="notif-discord-url" class="config-input-label">Webhook URL</label>
-              <input type="text" id="notif-discord-url" placeholder="https://discord.com/api/webhooks/..." aria-describedby="notif-discord-help"/>
+            <div class="notif-help">
+              <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL and add it as a Vercel environment variable:</p>
+              <p><code>DISCORD_WEBHOOK_URL</code></p>
             </div>
-            <details class="notif-help" id="notif-discord-help">
-              <summary>How to set up Discord</summary>
-              <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL into the field above.</p>
-            </details>
           </div>
         </div>
 
@@ -200,23 +189,15 @@
         <div class="notif-channel" id="notif-webhook">
           <div class="notif-channel-header">
             <label class="notif-toggle-label" for="notif-webhook-enabled">
-              <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')" aria-describedby="notif-webhook-help"/>
+              <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')"/>
               <span class="notif-channel-name">Generic Webhook</span>
             </label>
           </div>
           <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
-            <div class="notif-field">
-              <label for="notif-webhook-url" class="config-input-label">URL</label>
-              <input type="text" id="notif-webhook-url" placeholder="https://example.com/webhook" aria-describedby="notif-webhook-help"/>
+            <div class="notif-help">
+              <p>The full update payload will be POSTed as JSON to your endpoint. Add these Vercel environment variables:</p>
+              <p><code>GENERIC_WEBHOOK_URL</code><br><code>GENERIC_WEBHOOK_SECRET</code> <span class="notif-help-note">(optional — sent as <code>X-Webhook-Secret</code> header)</span></p>
             </div>
-            <div class="notif-field">
-              <label for="notif-webhook-secret" class="config-input-label">Secret (optional)</label>
-              <input type="password" id="notif-webhook-secret" placeholder="Sent as X-Webhook-Secret header"/>
-            </div>
-            <details class="notif-help" id="notif-webhook-help">
-              <summary>How to set up Generic Webhook</summary>
-              <p>Enter any HTTPS endpoint. The full update payload will be POSTed as JSON. If a secret is provided, it is sent as an <code>X-Webhook-Secret</code> header.</p>
-            </details>
           </div>
         </div>
 

@@ -16,18 +16,16 @@ export default async function handler(req, res) {
   const sbUrl     = process.env.SUPABASE_URL;
   const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  // Fetch per-menu notification config from menu_meta
+  // Fetch per-menu enabled flags from menu_meta.notifications
   let notifications = {};
-  let legacyBotId   = '';
   try {
     const r = await fetch(
-      `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menu_id}&select=notifications,bot_id`,
+      `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menu_id}&select=notifications`,
       { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
     );
     if (r.ok) {
       const [meta] = await r.json();
       notifications = meta?.notifications || {};
-      legacyBotId   = meta?.bot_id        || '';
     }
   } catch(e) {}
 
@@ -39,9 +37,9 @@ export default async function handler(req, res) {
   const results = {};
 
   // ── GroupMe ──────────────────────────────────────────────────────────────────
-  const gm      = notifications.groupme || {};
-  const gmBotId = gm.bot_id || legacyBotId;
-  if (gm.enabled && gmBotId) {
+  const gmEnabled = notifications.groupme?.enabled;
+  const gmBotId   = process.env.GROUPME_BOT_ID;
+  if (gmEnabled && gmBotId) {
     try {
       const r = await fetch('https://api.groupme.com/v3/bots/post', {
         method:  'POST',
@@ -57,18 +55,22 @@ export default async function handler(req, res) {
   }
 
   // ── Twilio SMS ────────────────────────────────────────────────────────────────
-  const sms = notifications.sms || {};
-  if (sms.enabled && Array.isArray(sms.numbers) && sms.numbers.length) {
+  const smsEnabled = notifications.sms?.enabled;
+  if (smsEnabled) {
     const sid      = process.env.TWILIO_ACCOUNT_SID;
     const authTok  = process.env.TWILIO_AUTH_TOKEN;
     const fromNum  = process.env.TWILIO_FROM_NUMBER;
+    const toNums   = (process.env.TWILIO_TO_NUMBERS || '')
+      .split(',').map(s => s.trim()).filter(Boolean);
     if (!sid || !authTok || !fromNum) {
       results.sms = 'error:TWILIO env vars not configured';
+    } else if (!toNums.length) {
+      results.sms = 'error:TWILIO_TO_NUMBERS not configured';
     } else {
       const basicAuth = Buffer.from(`${sid}:${authTok}`).toString('base64');
       const apiUrl    = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
       const errors    = [];
-      for (const to of sms.numbers) {
+      for (const to of toNums) {
         try {
           const body = new URLSearchParams({ From: fromNum, To: to, Body: safeText });
           const r = await fetch(apiUrl, {
@@ -91,10 +93,11 @@ export default async function handler(req, res) {
   }
 
   // ── Discord ───────────────────────────────────────────────────────────────────
-  const discord = notifications.discord || {};
-  if (discord.enabled && discord.webhook_url) {
+  const discEnabled    = notifications.discord?.enabled;
+  const discWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  if (discEnabled && discWebhookUrl) {
     try {
-      const r = await fetch(discord.webhook_url, {
+      const r = await fetch(discWebhookUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ content: safeText }),
@@ -108,12 +111,14 @@ export default async function handler(req, res) {
   }
 
   // ── Generic Webhook ───────────────────────────────────────────────────────────
-  const webhook = notifications.webhook || {};
-  if (webhook.enabled && webhook.url) {
+  const whEnabled = notifications.webhook?.enabled;
+  const whUrl     = process.env.GENERIC_WEBHOOK_URL;
+  if (whEnabled && whUrl) {
     try {
       const headers = { 'Content-Type': 'application/json' };
-      if (webhook.secret) headers['X-Webhook-Secret'] = webhook.secret;
-      const r = await fetch(webhook.url, {
+      const secret  = process.env.GENERIC_WEBHOOK_SECRET;
+      if (secret) headers['X-Webhook-Secret'] = secret;
+      const r = await fetch(whUrl, {
         method:  'POST',
         headers,
         body:    JSON.stringify({ text: safeText, menu_id }),

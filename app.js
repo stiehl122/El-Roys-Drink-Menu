@@ -31,9 +31,10 @@ let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
-let _menuPickerNeeded = false;     // true when multiple menus exist and no slug was given
-let _invalidMenuSlug  = null;      // set when ?menu= slug resolved to nothing
-let _activeMenuName   = '';        // display name of the currently loaded menu
+let _menuPickerNeeded  = false;     // true when multiple menus exist and no slug was given
+let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
+let _activeMenuName    = '';        // display name of the currently loaded menu
+let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 
@@ -131,13 +132,23 @@ async function sbResolveMenu() {
   const slug = new URLSearchParams(location.search).get('menu');
 
   if (slug) {
-    // Load menu by URL slug
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name`,
-      { headers: sbHeaders() }
-    );
-    if (res.ok) {
-      const [menu] = await res.json();
+    // Load menu by URL slug — also check for siblings in background
+    const [menuRes, countRes] = await Promise.all([
+      fetch(
+        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name`,
+        { headers: sbHeaders() }
+      ),
+      fetch(
+        `${SUPABASE_URL}/rest/v1/menus?select=id&limit=2`,
+        { headers: sbHeaders() }
+      ),
+    ]);
+    if (countRes.ok) {
+      const siblings = await countRes.json();
+      if (siblings.length > 1) _hasMultipleMenus = true;
+    }
+    if (menuRes.ok) {
+      const [menu] = await menuRes.json();
       if (menu?.id) {
         MENU_ID = menu.id;
         _activeMenuName = menu.name || '';
@@ -170,7 +181,8 @@ async function sbResolveMenu() {
     url.searchParams.set('menu', menus[0].slug);
     history.replaceState({}, '', url.toString());
   } else if (menus.length > 1) {
-    _menuPickerNeeded = true;
+    _menuPickerNeeded  = true;
+    _hasMultipleMenus  = true;
   }
 }
 
@@ -265,13 +277,8 @@ function hydrateState({ cats, meta }) {
       lastSentTs:         meta.last_sent_ts?.toString()     || '',
       lastSentCategories: meta.last_sent_categories         || [],
     };
-    if (meta.bot_id) BOT_ID        = meta.bot_id;
-    if (meta.notifications) {
-      NOTIFICATIONS = meta.notifications;
-      // Keep BOT_ID in sync with notifications.groupme.bot_id if present
-      const gmBotId = meta.notifications?.groupme?.bot_id;
-      if (gmBotId) BOT_ID = gmBotId;
-    }
+    if (meta.bot_id) BOT_ID = meta.bot_id;
+    if (meta.notifications) NOTIFICATIONS = meta.notifications;
     if (meta.design) currentDesign = { ...DESIGN_DEFAULTS, ...meta.design };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
   }
@@ -885,6 +892,8 @@ async function _tryRestoreSession() {
 function showPublicView() {
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('public-view').style.display = 'block';
+  const switchBtn = document.getElementById('public-switch-menu-btn');
+  if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
   updateLastUpdatedLabel();
   renderPublicView();
   startPolling();
@@ -1389,6 +1398,19 @@ async function onSwitchMenuClick() {
   });
 }
 
+async function onPublicSwitchMenuClick() {
+  showMenuPicker(async () => {
+    // Reload public view for the newly selected menu
+    try {
+      const data = await sbRead();
+      if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
+      else menuState = defaultState();
+    } catch(e) { menuState = defaultState(); }
+    renderPublicView();
+    updateLastUpdatedLabel();
+  });
+}
+
 let _authFocusBefore = null;
 
 function _authFocusTrap(e) {
@@ -1618,91 +1640,25 @@ function onNotifToggle(channel) {
 
 function populateNotificationsPanel() {
   const n = NOTIFICATIONS || {};
-
-  // GroupMe
-  const gm = n.groupme || {};
-  const gmEl = document.getElementById('notif-groupme-enabled');
-  if (gmEl) {
-    gmEl.checked = !!gm.enabled;
-    onNotifToggle('groupme');
-    const botEl = document.getElementById('notif-groupme-bot-id');
-    if (botEl) botEl.value = gm.bot_id ? '••••••••••••••••' : '';
-    // Store actual value for save — overwrite only if user types something new
-    if (botEl) botEl.dataset.actual = gm.bot_id || '';
-  }
-
-  // SMS
-  const sms = n.sms || {};
-  const smsEl = document.getElementById('notif-sms-enabled');
-  if (smsEl) {
-    smsEl.checked = !!sms.enabled;
-    onNotifToggle('sms');
-    const numsEl = document.getElementById('notif-sms-numbers');
-    if (numsEl) numsEl.value = (sms.numbers || []).join('\n');
-  }
-
-  // Discord
-  const disc = n.discord || {};
-  const discEl = document.getElementById('notif-discord-enabled');
-  if (discEl) {
-    discEl.checked = !!disc.enabled;
-    onNotifToggle('discord');
-    const urlEl = document.getElementById('notif-discord-url');
-    if (urlEl) urlEl.value = disc.webhook_url || '';
-  }
-
-  // Generic Webhook
-  const wh = n.webhook || {};
-  const whEl = document.getElementById('notif-webhook-enabled');
-  if (whEl) {
-    whEl.checked = !!wh.enabled;
-    onNotifToggle('webhook');
-    const urlEl = document.getElementById('notif-webhook-url');
-    if (urlEl) urlEl.value = wh.url || '';
-    const secEl = document.getElementById('notif-webhook-secret');
-    if (secEl) {
-      secEl.value = wh.secret ? '••••••••••••••••' : '';
-      secEl.dataset.actual = wh.secret || '';
+  for (const channel of ['groupme', 'sms', 'discord', 'webhook']) {
+    const el = document.getElementById(`notif-${channel}-enabled`);
+    if (el) {
+      el.checked = !!(n[channel]?.enabled);
+      onNotifToggle(channel);
     }
   }
 }
 
 async function saveNotifications() {
-  const readField = (id, masked) => {
-    const el = document.getElementById(id);
-    if (!el) return '';
-    const val = el.value.trim();
-    // If the value is still the masked placeholder, return the stored actual value
-    if (masked && val.startsWith('•')) return el.dataset.actual || '';
-    return val;
-  };
-
-  const notifications = {
-    groupme: {
-      enabled:  !!document.getElementById('notif-groupme-enabled')?.checked,
-      bot_id:   readField('notif-groupme-bot-id', true),
-    },
-    sms: {
-      enabled: !!document.getElementById('notif-sms-enabled')?.checked,
-      numbers: (document.getElementById('notif-sms-numbers')?.value || '')
-        .split('\n').map(s => s.trim()).filter(Boolean),
-    },
-    discord: {
-      enabled:     !!document.getElementById('notif-discord-enabled')?.checked,
-      webhook_url: readField('notif-discord-url', false),
-    },
-    webhook: {
-      enabled: !!document.getElementById('notif-webhook-enabled')?.checked,
-      url:     readField('notif-webhook-url', false),
-      secret:  readField('notif-webhook-secret', true),
-    },
-  };
-
-  // Keep BOT_ID in sync with groupme config
-  if (notifications.groupme.bot_id) BOT_ID = notifications.groupme.bot_id;
+  const notifications = {};
+  for (const channel of ['groupme', 'sms', 'discord', 'webhook']) {
+    notifications[channel] = {
+      enabled: !!document.getElementById(`notif-${channel}-enabled`)?.checked,
+    };
+  }
 
   NOTIFICATIONS = notifications;
-  await sbPatchMenuMeta({ notifications, bot_id: notifications.groupme.bot_id || BOT_ID });
+  await sbPatchMenuMeta({ notifications });
   showToast('✅ Notifications saved!', 'success');
 }
 async function saveMenuUrl() {
