@@ -15,7 +15,10 @@
     <span class="logo-mark" style="display:none"></span>
     <h1>CURRENT MENU</h1>
     <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-    <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
+    <div class="header-action-group">
+      <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
+      <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
+    </div>
     <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
     <div class="user-chip" id="user-chip" style="display:none"
          onclick="toggleUserDropdown()"
@@ -60,7 +63,7 @@
   <div id="manager-view">
     <div id="setup-banner">
       <h3>⚙️ One-Time Setup</h3>
-      <p>Go to the <strong style="color:var(--ember)">Admin</strong> tab to configure your notification channels and Menu URL. Everything syncs to the cloud from this point on.</p>
+      <p>Click <strong style="color:var(--ember)">⚙ Admin</strong> in the header to configure notification channels and design. Everything syncs to the cloud from this point on.</p>
     </div>
 
     <!-- ACTIVE MENU BAR -->
@@ -70,251 +73,104 @@
       <button class="btn-small" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch</button>
     </div>
 
-    <!-- TAB BAR -->
-    <div class="tab-bar" role="tablist">
-      <button class="tab-btn active" id="tab-btn-manager"    role="tab" aria-selected="true"  aria-controls="tab-panel-manager"    onclick="switchTab('manager')">MANAGER</button>
-      <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchTab('categories')">CATEGORIES</button>
-      <button class="tab-btn"        id="tab-btn-admin"      role="tab" aria-selected="false" aria-controls="tab-panel-admin"      onclick="switchTab('admin')">ADMIN</button>
-      <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchTab('database')">DATABASE</button>
-      <button class="tab-btn"        id="tab-btn-users"      role="tab" aria-selected="false" aria-controls="tab-panel-users"      onclick="switchTab('users')">USERS</button>
-    </div>
-
-    <!-- MANAGER PANEL: Edit Menu -->
-    <div class="tab-panel active" id="tab-panel-manager" role="tabpanel" aria-labelledby="tab-btn-manager">
-      <div class="section-label">Edit Menu</div>
-      <div id="manager-categories"></div>
-      <div class="btn-row">
-        <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
-        <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
-      </div>
-      <div id="sync-status"></div>
-    </div>
-
-    <!-- CATEGORIES PANEL: Manage category list -->
-    <div class="tab-panel" id="tab-panel-categories" role="tabpanel" aria-labelledby="tab-btn-categories">
-      <div class="section-label">Menu Categories</div>
-      <div class="active-menu-context" id="categories-menu-context"></div>
-      <div id="catmgr-list"></div>
-      <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
-        <h3>New Category</h3>
-        <div class="catmgr-field-row">
-          <label>Icon</label>
-          <input type="text" id="new-cat-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label>Title</label>
-          <input type="text" id="new-cat-title" class="catmgr-input" placeholder="Category name (required)"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label>Subtitle</label>
-          <input type="text" id="new-cat-sub" class="catmgr-input" placeholder="Short description (optional)"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label>Hint text</label>
-          <input type="text" id="new-cat-placeholder" class="catmgr-input" placeholder="Add item input hint (optional)"/>
-        </div>
-        <div class="catmgr-add-btn-row">
-          <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
-          <button class="btn-small" onclick="document.getElementById('catmgr-add-form').style.display='none'">Cancel</button>
-        </div>
-      </div>
-      <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()" style="margin-top:4px">+ Add Category</button>
-    </div>
-
-    <!-- ADMIN PANEL: Configuration -->
-    <div class="tab-panel" id="tab-panel-admin" role="tabpanel" aria-labelledby="tab-btn-admin">
-      <div class="section-label">Admin Config</div>
-
-      <div class="config-card">
-        <h3>Supabase Connection</h3>
-        <div class="input-row">
-          <span id="supabase-status" class="db-status">Checking…</span>
-          <button class="btn-small" onclick="checkSupabaseStatus()">Refresh</button>
-        </div>
+    <!-- MANAGER PANEL: Edit Menu, Categories, Database -->
+    <div id="manager-panel" style="display:none">
+      <div class="tab-bar" role="tablist" id="manager-tab-bar">
+        <button class="tab-btn active" id="tab-btn-edit-menu"  role="tab" aria-selected="true"  aria-controls="tab-panel-edit-menu"  onclick="switchManagerTab('edit-menu')">MANAGER</button>
+        <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchManagerTab('categories')">CATEGORIES</button>
+        <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchManagerTab('database')">DATABASE</button>
       </div>
 
-      <!-- NOTIFICATIONS PANEL -->
-      <div class="config-card" id="notifications-panel">
-        <h3>Notifications</h3>
-        <p class="config-hint">Toggle which channels fire when you send a menu update. All credentials are set as Vercel environment variables — nothing is stored in the database.</p>
-
-        <!-- GroupMe -->
-        <div class="notif-channel" id="notif-groupme">
-          <div class="notif-channel-header">
-            <label class="notif-toggle-label" for="notif-groupme-enabled">
-              <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')"/>
-              <span class="notif-channel-name">GroupMe</span>
-            </label>
-          </div>
-          <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
-            <div class="notif-help">
-              <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID and add it as a Vercel environment variable:</p>
-              <p><code>GROUPME_BOT_ID</code></p>
-            </div>
-          </div>
+      <!-- EDIT MENU TAB -->
+      <div class="tab-panel active" id="tab-panel-edit-menu" role="tabpanel" aria-labelledby="tab-btn-edit-menu">
+        <div class="section-label">Edit Menu</div>
+        <div id="manager-categories"></div>
+        <div class="btn-row">
+          <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
         </div>
-
-        <!-- Twilio SMS -->
-        <div class="notif-channel" id="notif-sms">
-          <div class="notif-channel-header">
-            <label class="notif-toggle-label" for="notif-sms-enabled">
-              <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')"/>
-              <span class="notif-channel-name">Twilio SMS</span>
-            </label>
-          </div>
-          <div class="notif-channel-body" id="notif-sms-body" style="display:none">
-            <div class="notif-help">
-              <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Add these Vercel environment variables:</p>
-              <p><code>TWILIO_ACCOUNT_SID</code><br><code>TWILIO_AUTH_TOKEN</code><br><code>TWILIO_FROM_NUMBER</code><br><code>TWILIO_TO_NUMBERS</code> <span class="notif-help-note">(comma-separated E.164 numbers, e.g. +15551234567,+15559876543)</span></p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Discord -->
-        <div class="notif-channel" id="notif-discord">
-          <div class="notif-channel-header">
-            <label class="notif-toggle-label" for="notif-discord-enabled">
-              <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')"/>
-              <span class="notif-channel-name">Discord</span>
-            </label>
-          </div>
-          <div class="notif-channel-body" id="notif-discord-body" style="display:none">
-            <div class="notif-help">
-              <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL and add it as a Vercel environment variable:</p>
-              <p><code>DISCORD_WEBHOOK_URL</code></p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Generic Webhook -->
-        <div class="notif-channel" id="notif-webhook">
-          <div class="notif-channel-header">
-            <label class="notif-toggle-label" for="notif-webhook-enabled">
-              <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')"/>
-              <span class="notif-channel-name">Generic Webhook</span>
-            </label>
-          </div>
-          <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
-            <div class="notif-help">
-              <p>The full update payload will be POSTed as JSON to your endpoint. Add these Vercel environment variables:</p>
-              <p><code>GENERIC_WEBHOOK_URL</code><br><code>GENERIC_WEBHOOK_SECRET</code> <span class="notif-help-note">(optional — sent as <code>X-Webhook-Secret</code> header)</span></p>
-            </div>
-          </div>
-        </div>
-
-        <div class="btn-row" style="margin-top:14px">
-          <button class="btn-small" onclick="saveNotifications()">Save Notifications</button>
-        </div>
+        <div id="sync-status"></div>
       </div>
 
-      <div class="config-card">
-        <h3>Menu Page URL <span style="color:#3a3a3a;font-weight:300">(sent in GroupMe messages)</span></h3>
-        <label for="menu-url-input" class="config-input-label">Menu Page URL</label>
-        <div class="input-row">
-          <input type="text" id="menu-url-input" placeholder="e.g. https://yourusername.github.io/honcho-fuego-menu"/>
-          <button class="btn-small" onclick="saveMenuUrl()">Save</button>
+      <!-- CATEGORIES TAB -->
+      <div class="tab-panel" id="tab-panel-categories" role="tabpanel" aria-labelledby="tab-btn-categories">
+        <div class="section-label">Menu Categories</div>
+        <div class="active-menu-context" id="categories-menu-context"></div>
+        <div id="catmgr-list"></div>
+        <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
+          <h3>New Category</h3>
+          <div class="catmgr-field-row">
+            <label>Icon</label>
+            <input type="text" id="new-cat-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji"/>
+          </div>
+          <div class="catmgr-field-row">
+            <label>Title</label>
+            <input type="text" id="new-cat-title" class="catmgr-input" placeholder="Category name (required)"/>
+          </div>
+          <div class="catmgr-field-row">
+            <label>Subtitle</label>
+            <input type="text" id="new-cat-sub" class="catmgr-input" placeholder="Short description (optional)"/>
+          </div>
+          <div class="catmgr-field-row">
+            <label>Hint text</label>
+            <input type="text" id="new-cat-placeholder" class="catmgr-input" placeholder="Add item input hint (optional)"/>
+          </div>
+          <div class="catmgr-add-btn-row">
+            <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
+            <button class="btn-small" onclick="document.getElementById('catmgr-add-form').style.display='none'">Cancel</button>
+          </div>
         </div>
+        <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()" style="margin-top:4px">+ Add Category</button>
       </div>
 
-
-      <!-- DESIGN & BRANDING -->
-      <div class="config-card">
-        <h3>Design &amp; Branding</h3>
-
-        <div class="design-row">
-          <span class="design-label">Logo</span>
-          <div class="design-control">
-            <img id="design-logo-preview" class="design-logo-preview"/>
-            <input type="file" id="design-logo-upload" accept="image/*" style="display:none" onchange="handleLogoUpload(event)"/>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <button class="btn-small" onclick="document.getElementById('design-logo-upload').click()">Upload Image</button>
-              <button class="btn-small" id="design-logo-clear-btn" onclick="clearLogo()" style="display:none">Remove</button>
-            </div>
+      <!-- DATABASE TAB -->
+      <div class="tab-panel" id="tab-panel-database" role="tabpanel" aria-labelledby="tab-btn-database">
+        <div class="section-label">Recipe Database</div>
+        <div class="db-search-row">
+          <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
+        </div>
+        <div class="db-filter-row">
+          <span class="db-filter-label">Recipe:</span>
+          <div class="db-filter-group" id="db-filter-recipe">
+            <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('recipe','all')">All</button>
+            <button class="db-filter-btn"        data-value="yes"  onclick="setDbFilter('recipe','yes')">With Recipe</button>
+            <button class="db-filter-btn"        data-value="no"   onclick="setDbFilter('recipe','no')">No Recipe</button>
+          </div>
+          <span class="db-filter-label">Status:</span>
+          <div class="db-filter-group" id="db-filter-status">
+            <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('status','all')">All</button>
+            <button class="db-filter-btn"        data-value="on"   onclick="setDbFilter('status','on')">On Menu</button>
+            <button class="db-filter-btn"        data-value="off"  onclick="setDbFilter('status','off')">Off Menu</button>
           </div>
         </div>
-
-        <div class="design-row">
-          <span class="design-label">Brand Name</span>
-          <div class="design-control">
-            <input type="text" id="design-brand-name" class="design-input" placeholder="e.g. HONCHO FUEGO"/>
+        <div id="db-table-wrap"></div>
+        <div id="prune-section" class="prune-section" style="display:none;">
+          <div class="prune-section-header">
+            <div class="section-label prune-section-label">Prune Database</div>
+            <button id="prune-all-btn" class="btn-small btn-danger">Clear All</button>
           </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Menu Title</span>
-          <div class="design-control">
-            <input type="text" id="design-menu-title" class="design-input" placeholder="e.g. CURRENT MENU"/>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Header Color</span>
-          <div class="design-control">
-            <div class="design-color-row">
-              <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
-              <input type="text" class="design-hex-input" id="design-primary-color-label"
-                maxlength="7" placeholder="#000000"
-                oninput="syncHexInput('design-primary-color')">
-            </div>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Accent Color</span>
-          <div class="design-control">
-            <div class="design-color-row">
-              <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
-              <input type="text" class="design-hex-input" id="design-accent-color-label"
-                maxlength="7" placeholder="#000000"
-                oninput="syncHexInput('design-accent-color')">
-            </div>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Background</span>
-          <div class="design-control">
-            <div class="design-color-row">
-              <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
-              <input type="text" class="design-hex-input" id="design-bg-color-label"
-                maxlength="7" placeholder="#000000"
-                oninput="syncHexInput('design-bg-color')">
-            </div>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Heading Font</span>
-          <div class="design-control">
-            <select id="design-heading-font" class="design-select" onchange="onFontSelectChange('design-heading-font')"></select>
-            <input type="text" id="design-heading-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Body Font</span>
-          <div class="design-control">
-            <select id="design-body-font" class="design-select" onchange="onFontSelectChange('design-body-font')"></select>
-            <input type="text" id="design-body-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-          </div>
-        </div>
-
-        <div class="design-row">
-          <span class="design-label">Accent Font</span>
-          <div class="design-control">
-            <select id="design-accent-font" class="design-select" onchange="onFontSelectChange('design-accent-font')"></select>
-            <input type="text" id="design-accent-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-          </div>
-        </div>
-
-        <div class="design-save-row">
-          <button class="btn-small" onclick="saveDesign()">Save Design</button>
+          <p class="hint">Permanently removes off-menu items from Supabase (autocomplete trash). Live menu items are unaffected.</p>
+          <div id="prune-items-wrap"></div>
         </div>
       </div>
+    </div><!-- /manager-panel -->
 
-      <!-- RESTAURANTS & MENUS MANAGEMENT -->
-      <div class="config-card" id="menus-mgmt-panel" style="display:none">
-        <h3>Restaurants &amp; Menus</h3>
+    <!-- ADMIN PANEL: Restaurants, Notifications, Design, Users -->
+    <div id="admin-panel" style="display:none">
+      <div id="admin-status-bar" class="admin-status-bar">
+        <span id="admin-supabase-status" class="db-status">Checking…</span>
+        <button class="btn-small btn-tiny" onclick="checkAdminSupabaseStatus()">↺</button>
+      </div>
+      <div class="tab-bar" role="tablist" id="admin-tab-bar">
+        <button class="tab-btn active" id="tab-btn-admin-restaurants"   role="tab" aria-selected="true"  aria-controls="tab-panel-admin-restaurants"   onclick="switchAdminTab('admin-restaurants')">RESTAURANTS</button>
+        <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
+        <button class="tab-btn"        id="tab-btn-admin-design"        role="tab" aria-selected="false" aria-controls="tab-panel-admin-design"        onclick="switchAdminTab('admin-design')">DESIGN</button>
+        <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
+      </div>
+
+      <!-- RESTAURANTS SUB-PANEL -->
+      <div class="tab-panel active" id="tab-panel-admin-restaurants" role="tabpanel" aria-labelledby="tab-btn-admin-restaurants">
+        <div class="section-label">Restaurants &amp; Menus</div>
         <div id="menus-mgmt-list"></div>
         <div class="btn-row" style="margin-top:10px">
           <button class="btn-small" onclick="openAddRestaurantForm()">+ Add Restaurant</button>
@@ -327,51 +183,185 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- USERS PANEL: Staff Account Management -->
-    <div class="tab-panel" id="tab-panel-users" role="tabpanel" aria-labelledby="tab-btn-users">
-      <div class="section-label">Staff Accounts</div>
-      <div class="users-invite-row">
-        <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
-      </div>
-      <div id="users-list"></div>
-    </div>
-
-    <!-- DATABASE PANEL: Recipe Spreadsheet -->
-    <div class="tab-panel" id="tab-panel-database" role="tabpanel" aria-labelledby="tab-btn-database">
-      <div class="section-label">Recipe Database</div>
-      <div class="db-search-row">
-        <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
-      </div>
-      <div class="db-filter-row">
-        <span class="db-filter-label">Recipe:</span>
-        <div class="db-filter-group" id="db-filter-recipe">
-          <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('recipe','all')">All</button>
-          <button class="db-filter-btn"        data-value="yes"  onclick="setDbFilter('recipe','yes')">With Recipe</button>
-          <button class="db-filter-btn"        data-value="no"   onclick="setDbFilter('recipe','no')">No Recipe</button>
+      <!-- NOTIFICATIONS SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-notifications" role="tabpanel" aria-labelledby="tab-btn-admin-notifications">
+        <div class="section-label">Notifications</div>
+        <div class="admin-context-switcher">
+          <label class="switcher-label" for="notif-restaurant-select">Restaurant</label>
+          <select id="notif-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('notif')"></select>
+          <label class="switcher-label" for="notif-menu-select">Menu</label>
+          <select id="notif-menu-select" class="switcher-select" onchange="onAdminSwitcherMenuChange('notif')"></select>
         </div>
-        <span class="db-filter-label">Status:</span>
-        <div class="db-filter-group" id="db-filter-status">
-          <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('status','all')">All</button>
-          <button class="db-filter-btn"        data-value="on"   onclick="setDbFilter('status','on')">On Menu</button>
-          <button class="db-filter-btn"        data-value="off"  onclick="setDbFilter('status','off')">Off Menu</button>
+        <div class="config-card">
+          <p class="config-hint">Toggle which channels fire when you send a menu update. All credentials are set as Vercel environment variables — nothing is stored in the database.</p>
+          <div class="notif-channel" id="notif-groupme">
+            <div class="notif-channel-header">
+              <label class="notif-toggle-label" for="notif-groupme-enabled">
+                <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')"/>
+                <span class="notif-channel-name">GroupMe</span>
+              </label>
+            </div>
+            <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
+              <div class="notif-help">
+                <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID and add it as a Vercel environment variable:</p>
+                <p><code>GROUPME_BOT_ID</code></p>
+              </div>
+            </div>
+          </div>
+          <div class="notif-channel" id="notif-sms">
+            <div class="notif-channel-header">
+              <label class="notif-toggle-label" for="notif-sms-enabled">
+                <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')"/>
+                <span class="notif-channel-name">Twilio SMS</span>
+              </label>
+            </div>
+            <div class="notif-channel-body" id="notif-sms-body" style="display:none">
+              <div class="notif-help">
+                <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Add these Vercel environment variables:</p>
+                <p><code>TWILIO_ACCOUNT_SID</code><br><code>TWILIO_AUTH_TOKEN</code><br><code>TWILIO_FROM_NUMBER</code><br><code>TWILIO_TO_NUMBERS</code> <span class="notif-help-note">(comma-separated E.164 numbers, e.g. +15551234567,+15559876543)</span></p>
+              </div>
+            </div>
+          </div>
+          <div class="notif-channel" id="notif-discord">
+            <div class="notif-channel-header">
+              <label class="notif-toggle-label" for="notif-discord-enabled">
+                <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')"/>
+                <span class="notif-channel-name">Discord</span>
+              </label>
+            </div>
+            <div class="notif-channel-body" id="notif-discord-body" style="display:none">
+              <div class="notif-help">
+                <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL and add it as a Vercel environment variable:</p>
+                <p><code>DISCORD_WEBHOOK_URL</code></p>
+              </div>
+            </div>
+          </div>
+          <div class="notif-channel" id="notif-webhook">
+            <div class="notif-channel-header">
+              <label class="notif-toggle-label" for="notif-webhook-enabled">
+                <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')"/>
+                <span class="notif-channel-name">Generic Webhook</span>
+              </label>
+            </div>
+            <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
+              <div class="notif-help">
+                <p>The full update payload will be POSTed as JSON to your endpoint. Add these Vercel environment variables:</p>
+                <p><code>GENERIC_WEBHOOK_URL</code><br><code>GENERIC_WEBHOOK_SECRET</code> <span class="notif-help-note">(optional — sent as <code>X-Webhook-Secret</code> header)</span></p>
+              </div>
+            </div>
+          </div>
+          <div class="btn-row" style="margin-top:14px">
+            <button class="btn-small" onclick="saveNotifications()">Save Notifications</button>
+          </div>
+        </div>
+        <div class="config-card" style="margin-top:10px">
+          <h3>Menu Page URL <span style="font-weight:300;color:var(--muted)">(sent in GroupMe messages)</span></h3>
+          <div class="input-row">
+            <input type="text" id="menu-url-input" placeholder="e.g. https://el-roys-drink-menu.vercel.app"/>
+            <button class="btn-small" onclick="saveMenuUrl()">Save</button>
+          </div>
         </div>
       </div>
-      <div id="db-table-wrap"></div>
 
-      <!-- PRUNE SECTION: Owner-only database cleanup -->
-      <div id="prune-section" class="prune-section" style="display:none;">
-        <div class="prune-section-header">
-          <div class="section-label prune-section-label">Prune Database</div>
-          <button id="prune-all-btn" class="btn-small btn-danger">Clear All</button>
+      <!-- DESIGN SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-design" role="tabpanel" aria-labelledby="tab-btn-admin-design">
+        <div class="section-label">Design &amp; Branding</div>
+        <div class="admin-context-switcher">
+          <label class="switcher-label" for="design-restaurant-select">Restaurant</label>
+          <select id="design-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('design')"></select>
+          <label class="switcher-label" for="design-menu-select">Menu</label>
+          <select id="design-menu-select" class="switcher-select" onchange="onAdminSwitcherMenuChange('design')"></select>
         </div>
-        <p class="hint">Permanently removes off-menu items from Supabase (autocomplete trash). Live menu items are unaffected.</p>
-        <div id="prune-items-wrap"></div>
+        <div class="config-card">
+          <div class="design-row">
+            <span class="design-label">Logo</span>
+            <div class="design-control">
+              <img id="design-logo-preview" class="design-logo-preview"/>
+              <input type="file" id="design-logo-upload" accept="image/*" style="display:none" onchange="handleLogoUpload(event)"/>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button class="btn-small" onclick="document.getElementById('design-logo-upload').click()">Upload Image</button>
+                <button class="btn-small" id="design-logo-clear-btn" onclick="clearLogo()" style="display:none">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Brand Name</span>
+            <div class="design-control">
+              <input type="text" id="design-brand-name" class="design-input" placeholder="e.g. HONCHO FUEGO"/>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Menu Title</span>
+            <div class="design-control">
+              <input type="text" id="design-menu-title" class="design-input" placeholder="e.g. CURRENT MENU"/>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Header Color</span>
+            <div class="design-control">
+              <div class="design-color-row">
+                <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
+                <input type="text" class="design-hex-input" id="design-primary-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-primary-color')">
+              </div>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Accent Color</span>
+            <div class="design-control">
+              <div class="design-color-row">
+                <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
+                <input type="text" class="design-hex-input" id="design-accent-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-accent-color')">
+              </div>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Background</span>
+            <div class="design-control">
+              <div class="design-color-row">
+                <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
+                <input type="text" class="design-hex-input" id="design-bg-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-bg-color')">
+              </div>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Heading Font</span>
+            <div class="design-control">
+              <select id="design-heading-font" class="design-select" onchange="onFontSelectChange('design-heading-font')"></select>
+              <input type="text" id="design-heading-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Body Font</span>
+            <div class="design-control">
+              <select id="design-body-font" class="design-select" onchange="onFontSelectChange('design-body-font')"></select>
+              <input type="text" id="design-body-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+            </div>
+          </div>
+          <div class="design-row">
+            <span class="design-label">Accent Font</span>
+            <div class="design-control">
+              <select id="design-accent-font" class="design-select" onchange="onFontSelectChange('design-accent-font')"></select>
+              <input type="text" id="design-accent-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
+            </div>
+          </div>
+          <div class="design-save-row">
+            <button class="btn-small" onclick="saveDesign()">Save Design</button>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <button class="logout-link" onclick="exitManager()">← Back to menu view</button>
+      <!-- USERS SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-users" role="tabpanel" aria-labelledby="tab-btn-admin-users">
+        <div class="section-label">Staff Accounts</div>
+        <div class="users-invite-row">
+          <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
+        </div>
+        <div id="users-list"></div>
+      </div>
+    </div><!-- /admin-panel -->
+
+    <button class="logout-link" onclick="exitView()">← Back to menu view</button>
   </div>
 </div>
 

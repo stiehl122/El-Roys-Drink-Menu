@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.2';
+const APP_VERSION = 'v0.7.3';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -27,6 +27,10 @@ let SUPABASE_ANON_KEY = '';
 let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
 
 let isManagerMode = false;
+let isAdminMode   = false;
+let _adminRestaurants   = [];
+let _adminAllMenus      = [];
+let _adminSwitcherState = { notif: { restaurantId: '', menuId: '' }, design: { restaurantId: '', menuId: '' } };
 let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
@@ -520,7 +524,11 @@ function applyDesign(design) {
 }
 
 function renderDesignSection() {
-  const d = currentDesign;
+  _populateAdminDesignPanel(currentDesign);
+}
+
+function _populateAdminDesignPanel(d) {
+  d = d || DESIGN_DEFAULTS;
   const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
   set('design-brand-name', d.brandName);
   set('design-menu-title', d.menuTitle);
@@ -627,6 +635,9 @@ function clearLogo() {
 }
 
 async function saveDesign() {
+  const targetRestaurantId = _adminSwitcherState.design.restaurantId;
+  if (!targetRestaurantId) { showToast('No restaurant selected.', 'info'); return; }
+
   function getFontValue(selectId) {
     const sel = document.getElementById(selectId);
     if (!sel) return '';
@@ -635,20 +646,42 @@ async function saveDesign() {
     }
     return sel.value;
   }
-  currentDesign = {
-    ...currentDesign,
+
+  // Capture logo from preview element (works for current and other restaurants)
+  const logoPreview = document.getElementById('design-logo-preview');
+  const logoDataUrl = (logoPreview && logoPreview.style.display !== 'none' &&
+    logoPreview.src && logoPreview.src.startsWith('data:')) ? logoPreview.src : '';
+
+  const design = {
+    logoDataUrl,
     brandName:    (document.getElementById('design-brand-name')?.value   || '').trim(),
     menuTitle:    (document.getElementById('design-menu-title')?.value   || '').trim(),
-    primaryColor:  document.getElementById('design-primary-color')?.value || currentDesign.primaryColor,
-    accentColor:   document.getElementById('design-accent-color')?.value  || currentDesign.accentColor,
-    bgColor:       document.getElementById('design-bg-color')?.value      || currentDesign.bgColor,
-    headingFont:  getFontValue('design-heading-font') || currentDesign.headingFont,
-    bodyFont:     getFontValue('design-body-font')    || currentDesign.bodyFont,
-    accentFont:   getFontValue('design-accent-font')  || currentDesign.accentFont,
+    primaryColor:  document.getElementById('design-primary-color')?.value || DESIGN_DEFAULTS.primaryColor,
+    accentColor:   document.getElementById('design-accent-color')?.value  || DESIGN_DEFAULTS.accentColor,
+    bgColor:       document.getElementById('design-bg-color')?.value      || DESIGN_DEFAULTS.bgColor,
+    headingFont:  getFontValue('design-heading-font') || 'DM Sans',
+    bodyFont:     getFontValue('design-body-font')    || 'DM Sans',
+    accentFont:   getFontValue('design-accent-font')  || 'DM Sans',
   };
-  applyDesign(currentDesign);
-  await persistState();
-  showToast('✅ Design saved!', 'success');
+
+  // If saving for the currently active restaurant, update global state + live preview
+  if (targetRestaurantId === RESTAURANT_ID) {
+    currentDesign = { ...currentDesign, ...design };
+    applyDesign(currentDesign);
+  }
+
+  try {
+    if (SUPABASE_URL && currentUser?.accessToken) {
+      await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(targetRestaurantId)}`, {
+        method:  'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body:    JSON.stringify({ design }),
+      });
+    }
+    showToast('✅ Design saved!', 'success');
+  } catch(e) {
+    showToast(`Failed to save design: ${escHtml(e.message)}`, 'error');
+  }
 }
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
@@ -1305,7 +1338,7 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
 function renderUserHeader() {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
-  const isManager = role === 'manager' || role === 'admin';
+  const isAdmin   = role === 'admin';
   const name      = currentUser?.name || '';
   const parts     = name.trim().split(/\s+/).filter(Boolean);
   const initials  = parts.length >= 2
@@ -1313,40 +1346,75 @@ function renderUserHeader() {
     : (parts[0]?.[0] || '?').toUpperCase();
   const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
 
+  // Access to the manager panel requires either admin role or explicit menu access
+  const hasMenuAccess = isAdmin || (currentUser?.accessibleMenuIds || []).includes(MENU_ID);
+
   document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
   document.getElementById('user-chip').style.display  = signedIn ? '' : 'none';
-  document.getElementById('action-btn').style.display = signedIn ? '' : 'none';
+
+  const actionBtn = document.getElementById('action-btn');
+  const adminBtn  = document.getElementById('admin-btn');
+
+  if (actionBtn) {
+    actionBtn.style.display = (signedIn && hasMenuAccess) ? '' : 'none';
+    actionBtn.textContent   = isManagerMode ? '✕ Exit' : '⚙ Manager';
+    actionBtn.classList.toggle('active', isManagerMode);
+  }
+  if (adminBtn) {
+    adminBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
+    adminBtn.classList.toggle('active', isAdminMode);
+  }
 
   if (signedIn) {
     document.getElementById('user-initials').textContent      = initials;
     document.getElementById('user-dropdown-name').textContent = name || currentUser?.email || '';
     document.getElementById('user-dropdown-role').textContent = roleLabel;
-    document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
   }
 }
 
 function applyRole(role) {
-  const isManager = role === 'manager' || role === 'admin';
-  const isAdmin   = role === 'admin';
-  document.getElementById('tab-btn-admin').style.display    = isAdmin ? '' : 'none';
-  document.getElementById('tab-btn-database').style.display = isManager ? '' : 'none';
-  document.getElementById('tab-btn-users').style.display    = isAdmin ? '' : 'none';
+  const isAdmin = role === 'admin';
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
-  const menusMgmtPanel = document.getElementById('menus-mgmt-panel');
-  if (menusMgmtPanel) menusMgmtPanel.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
-  const role = currentUser?.role || 'none';
-  const isManager = role === 'manager' || role === 'admin';
-  if (isManager) {
-    if (isManagerMode) exitManager(); else enterManager();
-  } else {
-    showToast('Settings coming soon.', 'info');
-  }
+  if (isManagerMode) exitView(); else enterManager();
+}
+
+function onAdminBtnClick() {
+  if (isAdminMode) exitView(); else enterAdmin();
+}
+
+function enterAdmin() {
+  if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
+  isAdminMode = true;
+  stopPolling();
+  document.body.classList.add('manager-mode');
+  document.getElementById('public-view').style.display     = 'none';
+  document.getElementById('loading-view').style.display    = 'none';
+  document.getElementById('menu-picker-overlay').classList.remove('open');
+  document.getElementById('manager-view').style.display    = 'block';
+  document.getElementById('manager-panel').style.display   = 'none';
+  document.getElementById('admin-panel').style.display     = 'block';
+  renderUserHeader();
+  checkAdminSupabaseStatus();
+  switchAdminTab('admin-restaurants');
+}
+
+function exitAdmin() {
+  isAdminMode = false;
+  document.body.classList.remove('manager-mode');
+  document.getElementById('manager-view').style.display = 'none';
+  renderUserHeader();
+  showPublicView();
+}
+
+function exitView() {
+  if (isManagerMode) exitManager();
+  else if (isAdminMode) exitAdmin();
 }
 
 function toggleUserDropdown() {
@@ -1469,6 +1537,7 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   history.replaceState({}, '', url.toString());
   closeMenuPicker();
   updateActiveMenuBar(menuName);
+  renderUserHeader();
   const cb = _pickerOnSelect;
   _pickerOnSelect = null;
   if (cb) cb();
@@ -1682,32 +1751,36 @@ function signOut() {
   localStorage.removeItem(LS_KEYS.expiresAt);
   localStorage.removeItem(LS_KEYS.uid);
   localStorage.removeItem(LS_KEYS.email);
-  if (isManagerMode) exitManager();
+  if (isManagerMode || isAdminMode) exitView();
   renderUserHeader();
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
-  // Show picker when: no menu loaded yet, OR user has multiple accessible menus
-  // and hasn't explicitly chosen one in this session.
   const isAdmin    = currentUser?.role === 'admin';
   const multiMenu  = isAdmin ? _hasMultipleMenus : (currentUser?.accessibleMenuIds?.length || 0) > 1;
   if (!MENU_ID || (multiMenu && !_managerMenuPicked)) {
     showMenuPicker(() => { _managerMenuPicked = true; enterManager(); });
     return;
   }
+  // Check that the user actually has access to the loaded menu
+  const hasAccess = isAdmin || (currentUser?.accessibleMenuIds || []).includes(MENU_ID);
+  if (!hasAccess) {
+    showToast('You don\'t have manager access to this menu.', 'error');
+    return;
+  }
+  if (isAdminMode) { isAdminMode = false; }
   isManagerMode = true;
   stopPolling();
   document.body.classList.add('manager-mode');
-  document.getElementById('public-view').style.display = 'none';
-  document.getElementById('loading-view').style.display = 'none';
+  document.getElementById('public-view').style.display    = 'none';
+  document.getElementById('loading-view').style.display   = 'none';
   document.getElementById('menu-picker-overlay').classList.remove('open');
-  document.getElementById('manager-view').style.display = 'block';
-  document.getElementById('action-btn').textContent = '✕ Exit';
-  document.getElementById('action-btn').classList.add('active');
-  document.getElementById('menu-url-input').value  = MENU_URL  || '';
-  populateNotificationsPanel();
-  switchTab('manager');
+  document.getElementById('manager-view').style.display   = 'block';
+  document.getElementById('manager-panel').style.display  = 'block';
+  document.getElementById('admin-panel').style.display    = 'none';
+  renderUserHeader();
+  switchManagerTab('edit-menu');
   updateDraftIndicator();
   updateSaveBtn();
   renderManagerCategories();
@@ -1718,16 +1791,13 @@ function exitManager() {
   isManagerMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
-  const role = currentUser?.role || 'none';
-  const isManager = role === 'manager' || role === 'admin';
-  document.getElementById('action-btn').textContent = isManager ? '⚙ Manager' : '⚙ Settings';
-  document.getElementById('action-btn').classList.remove('active');
+  renderUserHeader();
   showPublicView();
 }
 
 // ─── CONFIG SAVES ─────────────────────────────────────────────────────────────
-async function checkSupabaseStatus() {
-  const el = document.getElementById('supabase-status');
+async function checkAdminSupabaseStatus() {
+  const el = document.getElementById('admin-supabase-status');
   if (!el) return;
   if (!SUPABASE_URL) { el.textContent = '⚠️ Supabase URL not configured'; el.className = 'db-status db-status--error'; return; }
   el.textContent = 'Checking…'; el.className = 'db-status';
@@ -1751,8 +1821,8 @@ function onNotifToggle(channel) {
   if (body) body.style.display = enabled ? '' : 'none';
 }
 
-function populateNotificationsPanel() {
-  const n = NOTIFICATIONS || {};
+function _populateAdminNotificationsPanel(n) {
+  n = n || {};
   for (const channel of ['groupme', 'sms', 'discord', 'webhook']) {
     const el = document.getElementById(`notif-${channel}-enabled`);
     if (el) {
@@ -1763,16 +1833,28 @@ function populateNotificationsPanel() {
 }
 
 async function saveNotifications() {
+  const targetMenuId = _adminSwitcherState.notif.menuId;
+  if (!targetMenuId) { showToast('No menu selected.', 'info'); return; }
   const notifications = {};
   for (const channel of ['groupme', 'sms', 'discord', 'webhook']) {
     notifications[channel] = {
       enabled: !!document.getElementById(`notif-${channel}-enabled`)?.checked,
     };
   }
-
-  NOTIFICATIONS = notifications;
-  await sbPatchMenuMeta({ notifications });
-  showToast('✅ Notifications saved!', 'success');
+  // Keep global NOTIFICATIONS in sync if saving for the currently active menu
+  if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
+  try {
+    if (SUPABASE_URL && currentUser?.accessToken) {
+      await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
+        method:  'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body:    JSON.stringify({ notifications }),
+      });
+    }
+    showToast('✅ Notifications saved!', 'success');
+  } catch(e) {
+    showToast(`Failed to save notifications: ${escHtml(e.message)}`, 'error');
+  }
 }
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
@@ -1780,6 +1862,97 @@ async function saveMenuUrl() {
   MENU_URL = val; lsSet(LS_KEYS.menuUrl, MENU_URL);
   showToast('✅ Menu URL saved!', 'success');
 }
+
+// ─── ADMIN SWITCHER ───────────────────────────────────────────────────────────
+
+async function loadAdminSwitcherData() {
+  if (_adminRestaurants.length && _adminAllMenus.length) return; // already cached
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const [restRes, menuRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
+    ]);
+    if (restRes.ok) _adminRestaurants = await restRes.json();
+    if (menuRes.ok) _adminAllMenus    = await menuRes.json();
+  } catch(e) { /* non-fatal */ }
+}
+
+function _refreshAdminMenuSelect(context) {
+  const state = _adminSwitcherState[context];
+  const menuSelect = document.getElementById(`${context}-menu-select`);
+  if (!menuSelect) return;
+  const menus = _adminAllMenus.filter(m => m.restaurant_id === state.restaurantId);
+  menuSelect.innerHTML = menus.length
+    ? menus.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.name)}${m.archived ? ' (archived)' : ''}</option>`).join('')
+    : '<option value="">No menus</option>';
+  const match = menus.find(m => m.id === state.menuId);
+  state.menuId = match ? state.menuId : (menus[0]?.id || '');
+  menuSelect.value = state.menuId;
+}
+
+async function initAdminSwitcherTab(context) {
+  await loadAdminSwitcherData();
+  const restSelect = document.getElementById(`${context}-restaurant-select`);
+  if (!restSelect) return;
+  restSelect.innerHTML = _adminRestaurants.map(r =>
+    `<option value="${escHtml(r.id)}">${escHtml(r.name)}</option>`
+  ).join('') || '<option value="">No restaurants</option>';
+  // Default to current active restaurant/menu on first open
+  if (!_adminSwitcherState[context].restaurantId) {
+    _adminSwitcherState[context].restaurantId = RESTAURANT_ID || (_adminRestaurants[0]?.id || '');
+    _adminSwitcherState[context].menuId       = MENU_ID || '';
+  }
+  restSelect.value = _adminSwitcherState[context].restaurantId;
+  _refreshAdminMenuSelect(context);
+  await _loadAdminTabData(context);
+}
+
+async function onAdminSwitcherRestaurantChange(context) {
+  const restSelect = document.getElementById(`${context}-restaurant-select`);
+  if (!restSelect) return;
+  _adminSwitcherState[context].restaurantId = restSelect.value;
+  _adminSwitcherState[context].menuId = ''; // reset so _refreshAdminMenuSelect picks first menu
+  _refreshAdminMenuSelect(context);
+  await _loadAdminTabData(context);
+}
+
+async function onAdminSwitcherMenuChange(context) {
+  const menuSelect = document.getElementById(`${context}-menu-select`);
+  if (!menuSelect) return;
+  _adminSwitcherState[context].menuId = menuSelect.value;
+  await _loadAdminTabData(context);
+}
+
+async function _loadAdminTabData(context) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  if (context === 'notif') {
+    const menuId = _adminSwitcherState.notif.menuId;
+    const urlInput = document.getElementById('menu-url-input');
+    if (urlInput) urlInput.value = MENU_URL || '';
+    if (!menuId) { _populateAdminNotificationsPanel({}); return; }
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
+        { headers: sbHeaders() }
+      );
+      const [meta] = r.ok ? await r.json() : [{}];
+      _populateAdminNotificationsPanel(meta?.notifications || {});
+    } catch { _populateAdminNotificationsPanel({}); }
+  } else if (context === 'design') {
+    const restaurantId = _adminSwitcherState.design.restaurantId;
+    if (!restaurantId) { _populateAdminDesignPanel(DESIGN_DEFAULTS); return; }
+    try {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=design`,
+        { headers: sbHeaders() }
+      );
+      const [row] = r.ok ? await r.json() : [{}];
+      _populateAdminDesignPanel({ ...DESIGN_DEFAULTS, ...(row?.design || {}) });
+    } catch { _populateAdminDesignPanel(DESIGN_DEFAULTS); }
+  }
+}
+
 // ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
 function renderManagerCategories() {
   const container = document.getElementById('manager-categories');
@@ -2761,9 +2934,9 @@ document.getElementById('invite-modal-bg').addEventListener('click', e => {
 });
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
-function switchTab(name) {
-  ['manager','categories','admin','database','users'].forEach(t => {
-    const btn   = document.getElementById('tab-btn-'   + t);
+function switchManagerTab(name) {
+  ['edit-menu', 'categories', 'database'].forEach(t => {
+    const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
@@ -2774,8 +2947,19 @@ function switchTab(name) {
     const ctx = document.getElementById('categories-menu-context');
     if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
   }
-  if (name === 'admin')      { renderDesignSection(); checkSupabaseStatus(); if (currentUser?.role === 'admin') renderMenusPanel(); }
-  if (name === 'users')      { loadUsers(); }
+}
+
+function switchAdminTab(name) {
+  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users'].forEach(t => {
+    const btn   = document.getElementById('tab-btn-' + t);
+    const panel = document.getElementById('tab-panel-' + t);
+    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
+    if (panel) panel.classList.toggle('active', t === name);
+  });
+  if (name === 'admin-restaurants')   { renderMenusPanel(); }
+  if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
+  if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
+  if (name === 'admin-users')         { loadUsers(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
@@ -2958,6 +3142,7 @@ async function confirmAddRestaurant() {
   const input = document.getElementById('new-restaurant-name');
   const name  = (input?.value || '').trim();
   if (!name) return;
+  _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
   await createRestaurant(name);
   if (input) input.value = '';
   document.getElementById('add-restaurant-form').style.display = 'none';
@@ -3068,6 +3253,7 @@ async function confirmCreateMenu(restaurantId) {
   const slug = (slugInput?.value || '').trim() || slugify(name);
   const type = typeInput?.value || 'drinks';
   if (!name) return;
+  _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
   await createMenu(restaurantId, name, slug, type);
 }
 
@@ -3103,6 +3289,7 @@ async function archiveMenu(id, archived) {
       body: JSON.stringify({ archived }),
     });
     if (!r.ok) throw new Error(await r.text());
+    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
     await renderMenusPanel();
   } catch(e) {
     showToast(`Failed to ${archived ? 'archive' : 'unarchive'} menu: ${escHtml(e.message)}`, 'error');
@@ -3135,7 +3322,7 @@ function _initPreviewToolbar() {
 function _setPreviewRole(role) {
   _previewRole = role;
   if (role === 'public') {
-    if (isManagerMode) exitManager();
+    if (isManagerMode || isAdminMode) exitView();
     currentUser = null;
     applyRole('none');
     renderUserHeader();
@@ -3143,12 +3330,13 @@ function _setPreviewRole(role) {
     // Mock session — no real tokens; writes will fail gracefully
     currentUser = {
       uid: 'preview-user', email: 'preview@preview.test',
-      name: 'Preview User', role, accessibleMenuIds: [],
+      name: 'Preview User', role, accessibleMenuIds: MENU_ID ? [MENU_ID] : [],
       accessToken: null, refreshToken: null, expiresAt: 0,
     };
     applyRole(role);
     renderUserHeader();
-    if (!isManagerMode) enterManager();
+    if (role === 'admin') { if (!isAdminMode) enterAdmin(); }
+    else { if (!isManagerMode) enterManager(); }
   }
   _updatePreviewToolbar();
 }
