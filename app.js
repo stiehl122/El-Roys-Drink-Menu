@@ -1481,7 +1481,9 @@ function _pickerFocusTrap(e) {
 }
 
 // afterSelect: optional callback fired after the user picks a menu.
-async function showMenuPicker(afterSelect) {
+// opts.managerOnly: when true, filter to accessible menus only (used by manager switch).
+async function showMenuPicker(afterSelect, opts) {
+  const managerOnly = opts?.managerOnly || false;
   _pickerFocusBefore = document.activeElement;
   _pickerOnSelect    = afterSelect || null;
 
@@ -1494,10 +1496,10 @@ async function showMenuPicker(afterSelect) {
   if (SUPABASE_URL) {
     const accessibleIds = currentUser?.accessibleMenuIds;
     let url = `${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,restaurant_id&order=name.asc`;
-    // Non-admins only see non-archived menus
+    // Non-admins only see non-archived menus (admins can see archived in manager context)
     if (currentUser?.role !== 'admin') url += '&archived=eq.false';
-    // Managers only see menus they have explicit access to
-    if (currentUser?.role === 'manager' && accessibleIds?.length) {
+    // Only restrict to accessible menus when in manager context
+    if (managerOnly && currentUser?.role === 'manager' && accessibleIds?.length) {
       url += `&id=in.(${accessibleIds.join(',')})`;
     }
     try {
@@ -1579,7 +1581,7 @@ async function onSwitchMenuClick() {
     if (typeof renderUsersList   === 'function') renderUsersList();
     updateDraftIndicator();
     updateSaveBtn();
-  });
+  }, { managerOnly: true });
 }
 
 async function onPublicSwitchMenuClick() {
@@ -2704,7 +2706,8 @@ async function sendUpdate() {
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
 
   const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
-  let lines = [`🔥 DRINK MENU UPDATES — ${dateStr} ${timeStr}`, ''];
+  const menuLabel = _activeMenuName ? _activeMenuName.toUpperCase() : 'MENU';
+  let lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
   diff.forEach(s => {
     lines.push(`${s.icon} ${s.label.toUpperCase()}`);
     s.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));

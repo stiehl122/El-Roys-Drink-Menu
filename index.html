@@ -295,7 +295,7 @@
           </div>
         </div>
         <div class="config-card" style="margin-top:10px">
-          <h3>Menu Page URL <span style="font-weight:300;color:var(--muted)">(sent in GroupMe messages)</span></h3>
+          <h3>Menu Page URL <span style="font-weight:300;color:var(--muted)">(included in notifications)</span></h3>
           <div class="input-row">
             <input type="text" id="menu-url-input" placeholder="e.g. https://el-roys-drink-menu.vercel.app"/>
             <button class="btn-small" onclick="saveMenuUrl()">Save</button>
@@ -507,11 +507,11 @@
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
     <h2>PATCH NOTES PREVIEW</h2>
-    <div class="modal-sub">Only changes since the last update will be sent to GroupMe.</div>
+    <div class="modal-sub">Only changes since the last update will be sent.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND TO GROUP</button>
+      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
     </div>
   </div>
 </div>
