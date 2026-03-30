@@ -2764,7 +2764,7 @@ async function sendUpdate() {
       renderManagerCategories();
       updateDraftIndicator();
       closeModal();
-      showToast('✅ Drink menu update sent!', 'success');
+      showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
     } else if (r1.status === 401) {
       showToast('❌ Not authorized. Please sign in.', 'error');
     } else if (r1.status === 403) {
