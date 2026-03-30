@@ -93,6 +93,7 @@
     <!-- CATEGORIES PANEL: Manage category list -->
     <div class="tab-panel" id="tab-panel-categories" role="tabpanel" aria-labelledby="tab-btn-categories">
       <div class="section-label">Menu Categories</div>
+      <div class="active-menu-context" id="categories-menu-context"></div>
       <div id="catmgr-list"></div>
       <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
         <h3>New Category</h3>
@@ -308,6 +309,22 @@
 
         <div class="design-save-row">
           <button class="btn-small" onclick="saveDesign()">Save Design</button>
+        </div>
+      </div>
+
+      <!-- RESTAURANTS & MENUS MANAGEMENT -->
+      <div class="config-card" id="menus-mgmt-panel" style="display:none">
+        <h3>Restaurants &amp; Menus</h3>
+        <div id="menus-mgmt-list"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn-small" onclick="openAddRestaurantForm()">+ Add Restaurant</button>
+        </div>
+        <div id="add-restaurant-form" style="display:none;margin-top:10px">
+          <div class="input-row">
+            <input type="text" id="new-restaurant-name" placeholder="Restaurant name"/>
+            <button class="btn-small" onclick="confirmAddRestaurant()">Add</button>
+            <button class="btn-small" onclick="document.getElementById('add-restaurant-form').style.display='none'">Cancel</button>
+          </div>
         </div>
       </div>
     </div>

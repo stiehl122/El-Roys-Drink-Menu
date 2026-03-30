@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.1';
+const APP_VERSION = 'v0.7.2';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -34,6 +34,8 @@ let _recoverySessionData = null;   // set when app detects a Supabase recovery U
 let _menuPickerNeeded  = false;     // true when multiple menus exist and no slug was given
 let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
 let _activeMenuName    = '';        // display name of the currently loaded menu
+let RESTAURANT_ID      = '';        // restaurant_id for the active menu
+let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
@@ -58,6 +60,14 @@ const DEFAULT_CATEGORY_DEFS = [
   { id:'tequila',   icon:'🌶️', color:ICON_COLOR_PALETTE[1], title:'Infused Tequila',  sub:'Rotating infused marg tequila',  placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
   { id:'frozen',    icon:'🧊', color:ICON_COLOR_PALETTE[2], title:'Frozen Marg',      sub:'Current frozen margarita flavor',placeholder:'e.g. Strawberry Basil...' },
   { id:'special',   icon:'⭐', color:ICON_COLOR_PALETTE[3], title:'Monthly Specials', sub:'Featured cocktails & promos',   placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
+];
+
+const DEFAULT_FOOD_CATEGORY_DEFS = [
+  { key: 'starters', label: '🥗 Starters', icon: '🥗', color: ICON_COLOR_PALETTE[4], sub: '', placeholder: 'e.g. Chips & Salsa...' },
+  { key: 'tacos',    label: '🌮 Tacos',     icon: '🌮', color: ICON_COLOR_PALETTE[0], sub: '', placeholder: 'e.g. Al Pastor...'    },
+  { key: 'entrees',  label: '🍽 Entrees',   icon: '🍽', color: ICON_COLOR_PALETTE[1], sub: '', placeholder: 'e.g. Enchiladas...'   },
+  { key: 'sides',    label: '🫘 Sides',     icon: '🫘', color: ICON_COLOR_PALETTE[2], sub: '', placeholder: 'e.g. Mexican Rice...' },
+  { key: 'desserts', label: '🍮 Desserts',  icon: '🍮', color: ICON_COLOR_PALETTE[3], sub: '', placeholder: 'e.g. Flan...'         },
 ];
 
 let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
@@ -94,6 +104,9 @@ function defaultState() {
 }
 
 function uid() { return crypto.randomUUID(); }
+function slugify(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function lsSet(key, val) {
   try { localStorage.setItem(key, val); }
@@ -136,11 +149,11 @@ async function sbResolveMenu() {
     // Load menu by URL slug — also check for siblings in background
     const [menuRes, countRes] = await Promise.all([
       fetch(
-        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name`,
+        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id`,
         { headers: sbHeaders() }
       ),
       fetch(
-        `${SUPABASE_URL}/rest/v1/menus?select=id&limit=2`,
+        `${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`,
         { headers: sbHeaders() }
       ),
     ]);
@@ -151,8 +164,10 @@ async function sbResolveMenu() {
     if (menuRes.ok) {
       const [menu] = await menuRes.json();
       if (menu?.id) {
-        MENU_ID = menu.id;
+        MENU_ID       = menu.id;
         _activeMenuName = menu.name || '';
+        MENU_TYPE     = menu.type          || 'drinks';
+        RESTAURANT_ID = menu.restaurant_id || '';
         lsSet(LS_KEYS.menuId, MENU_ID);
         return;
       }
@@ -164,22 +179,29 @@ async function sbResolveMenu() {
 
   // No URL slug — returning visitor (MENU_ID cached) or auto-resolve
   if (MENU_ID) {
-    // Enrich cached MENU_ID: fetch name/slug (for active-menu-bar) + sibling count in parallel
+    // Enrich cached MENU_ID: fetch name/slug/type (for active-menu-bar) + sibling count in parallel
     const [nameRes, countRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&limit=2`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`, { headers: sbHeaders() }),
     ]);
     if (nameRes.ok) {
       const [menu] = await nameRes.json();
-      if (menu?.name) _activeMenuName = menu.name;
-      if (menu?.slug) {
-        const url = new URL(location.href);
-        url.searchParams.set('menu', menu.slug);
-        history.replaceState({}, '', url.toString());
-      }
-      if (!menu?.id) {
+      if (menu?.archived === true) {
+        // Cached menu was archived — clear it and fall through to picker
+        MENU_ID = ''; RESTAURANT_ID = '';
+        lsSet(LS_KEYS.menuId, '');
+      } else if (menu) {
+        if (menu.name)          _activeMenuName = menu.name;
+        if (menu.type)          MENU_TYPE       = menu.type;
+        if (menu.restaurant_id) RESTAURANT_ID   = menu.restaurant_id;
+        if (menu.slug) {
+          const url = new URL(location.href);
+          url.searchParams.set('menu', menu.slug);
+          history.replaceState({}, '', url.toString());
+        }
+      } else {
         // Cached MENU_ID is stale (menu deleted) — clear it and fall through to auto-resolve
-        MENU_ID = '';
+        MENU_ID = ''; RESTAURANT_ID = '';
         lsSet(LS_KEYS.menuId, '');
       }
     }
@@ -190,9 +212,9 @@ async function sbResolveMenu() {
     if (MENU_ID) return;
   }
 
-  // Fetch up to 2 menus to determine routing
+  // Fetch up to 2 non-archived menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name&limit=2`,
+    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id&archived=eq.false&limit=2`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
@@ -200,8 +222,10 @@ async function sbResolveMenu() {
 
   if (menus.length === 1) {
     // Single menu — auto-load and push slug to URL so it can be bookmarked
-    MENU_ID = menus[0].id;
+    MENU_ID       = menus[0].id;
     _activeMenuName = menus[0].name || '';
+    MENU_TYPE     = menus[0].type          || 'drinks';
+    RESTAURANT_ID = menus[0].restaurant_id || '';
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
     url.searchParams.set('menu', menus[0].slug);
@@ -235,7 +259,10 @@ async function sbEnsureUncategorized() {
 
 async function sbRead() {
   if (!SUPABASE_URL || !MENU_ID) return null;
-  const [catsRes, metaRes] = await Promise.all([
+  const restaurantFetch = RESTAURANT_ID
+    ? fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}&select=design`, { headers: sbHeaders() })
+    : Promise.resolve(null);
+  const [catsRes, metaRes, restRes] = await Promise.all([
     fetch(
       `${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${MENU_ID}&select=*,items(*)&order=display_order.asc`,
       { headers: sbHeaders() }
@@ -244,14 +271,20 @@ async function sbRead() {
       `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}&select=*`,
       { headers: sbHeaders() }
     ),
+    restaurantFetch,
   ]);
   if (!catsRes.ok || !metaRes.ok) throw new Error('Supabase read failed');
   const cats = await catsRes.json();
   const [meta] = await metaRes.json();
-  return { cats, meta: meta || null };
+  let restaurantDesign = null;
+  if (restRes?.ok) {
+    const [rest] = await restRes.json();
+    if (rest?.design && Object.keys(rest.design).length) restaurantDesign = rest.design;
+  }
+  return { cats, meta: meta || null, restaurantDesign };
 }
 
-function hydrateState({ cats, meta }) {
+function hydrateState({ cats, meta, restaurantDesign }) {
   const realCats = (cats || []).filter(c => c.key !== UNCATEGORIZED_ID);
   const uncatCat = (cats || []).find(c => c.key === UNCATEGORIZED_ID);
 
@@ -280,6 +313,7 @@ function hydrateState({ cats, meta }) {
           name:        i.name,
           desc:        i.desc   || '',
           recipe:      i.recipe || [],
+          price:       i.price  || '',
           eightySixed: i.is_eighty_sixed,
           onMenu:      i.on_menu,
         })),
@@ -291,7 +325,7 @@ function hydrateState({ cats, meta }) {
     menuState[UNCATEGORIZED_ID] = {
       items: (uncatCat.items || []).map(i => ({
         id: i.id, name: i.name, desc: i.desc || '',
-        recipe: i.recipe || [], eightySixed: i.is_eighty_sixed, onMenu: false,
+        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false,
       })),
       lastSent: [],
     };
@@ -305,7 +339,7 @@ function hydrateState({ cats, meta }) {
     };
     if (meta.bot_id) BOT_ID = meta.bot_id;
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
-    if (meta.design) currentDesign = { ...DESIGN_DEFAULTS, ...meta.design };
+    if (restaurantDesign) currentDesign = { ...DESIGN_DEFAULTS, ...restaurantDesign };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
   }
 }
@@ -319,10 +353,46 @@ async function sbPatchMenuMeta(update) {
   });
 }
 
+async function sbPatchRestaurantDesign(design) {
+  if (!SUPABASE_URL || !RESTAURANT_ID || !currentUser?.accessToken) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
+    method:  'PATCH',
+    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+    body:    JSON.stringify({ design }),
+  });
+}
+
 async function sbDeleteCategory(categoryUuid) {
   if (!SUPABASE_URL || !categoryUuid || !currentUser?.accessToken) return;
   await fetch(`${SUPABASE_URL}/rest/v1/categories?id=eq.${categoryUuid}`, {
     method: 'DELETE', headers: sbHeaders(),
+  });
+}
+
+async function sbSeedCategories(menuId, defs) {
+  if (!SUPABASE_URL || !menuId || !currentUser?.accessToken) return;
+  // 1. Upsert __uncategorized__ sentinel
+  await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+    method: 'POST',
+    headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify({ menu_id: menuId, key: UNCATEGORIZED_ID, label: 'Uncategorized',
+      icon: '', color: '', placeholder: '', display_order: 9999 }),
+  });
+  // 2. Bulk insert category rows
+  const rows = defs.map((c, i) => ({
+    menu_id: menuId, key: c.key, label: c.label,
+    icon: c.icon, color: c.color, placeholder: c.placeholder, display_order: i,
+  }));
+  await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+    method: 'POST',
+    headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+    body: JSON.stringify(rows),
+  });
+  // 3. Create menu_meta row (ignore if already exists)
+  await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
+    method: 'POST',
+    headers: sbHeaders({ 'Prefer': 'resolution=ignore-duplicates,return=minimal' }),
+    body: JSON.stringify({ menu_id: menuId }),
   });
 }
 
@@ -1053,7 +1123,8 @@ function renderPublicView() {
           const hasDesc   = !!(i.desc && i.desc.trim());
           const recipeIngredients = recipeArray(i.recipe);
           const hasRecipe = recipeIngredients.length > 0;
-          const hasDetail = hasDesc || hasRecipe;
+          const isFood    = MENU_TYPE === 'food';
+          const hasDetail = isFood ? false : (hasDesc || hasRecipe);
           const classes   = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
           const onClick   = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
           const detailHtml = hasDetail ? `<div class="item-detail-panel">
@@ -1063,13 +1134,19 @@ function renderPublicView() {
                   ? `<div class="detail-section"><div class="item-desc-text">${escHtml(i.desc)}</div></div>`
                   : `<div class="detail-section"><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`}
             </div>` : '';
+          const priceHtml = i.price
+            ? (isFood
+                ? `<span class="item-price-tag">${escHtml(i.price)}</span>`
+                : `<span class="item-price-badge">${escHtml(i.price)}</span>`)
+            : '';
           return `<div class="${classes}" ${onClick}>
             <div class="item-main-row">
               <div class="dot" aria-hidden="true"></div>
-              <span class="item-name-text">${escHtml(i.name)}</span>
+              <span class="item-name-text">${escHtml(i.name)}${isFood ? '' : priceHtml}</span>
               ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
               ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
             </div>
+            ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}
             ${detailHtml}
           </div>`;
         }).join('')
@@ -1256,6 +1333,8 @@ function applyRole(role) {
   document.getElementById('tab-btn-users').style.display    = isAdmin ? '' : 'none';
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
+  const menusMgmtPanel = document.getElementById('menus-mgmt-panel');
+  if (menusMgmtPanel) menusMgmtPanel.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
 }
 
@@ -1341,7 +1420,9 @@ async function showMenuPicker(afterSelect) {
   let menus = [];
   if (SUPABASE_URL) {
     const accessibleIds = currentUser?.accessibleMenuIds;
-    let url = `${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type&order=name.asc`;
+    let url = `${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,restaurant_id&order=name.asc`;
+    // Non-admins only see non-archived menus
+    if (currentUser?.role !== 'admin') url += '&archived=eq.false';
     // Managers only see menus they have explicit access to
     if (currentUser?.role === 'manager' && accessibleIds?.length) {
       url += `&id=in.(${accessibleIds.join(',')})`;
@@ -1361,7 +1442,7 @@ async function showMenuPicker(afterSelect) {
       btn.className = 'picker-menu-card';
       btn.setAttribute('aria-label', `Select ${m.name}`);
       btn.innerHTML = `<span class="picker-menu-name">${escHtml(m.name)}</span><span class="picker-menu-type">${escHtml(m.type)}</span>`;
-      btn.onclick = () => selectMenu(m.id, m.slug, m.name);
+      btn.onclick = () => selectMenu(m.id, m.slug, m.name, m.type, m.restaurant_id);
       list.appendChild(btn);
     });
     const first = list.querySelector('.picker-menu-card');
@@ -1376,9 +1457,11 @@ function closeMenuPicker() {
   _pickerFocusBefore = null;
 }
 
-function selectMenu(menuId, slug, menuName) {
-  MENU_ID = menuId;
+function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
+  MENU_ID       = menuId;
   _activeMenuName = menuName || '';
+  MENU_TYPE     = menuType     || 'drinks';
+  RESTAURANT_ID = restaurantId || '';
   lsSet(LS_KEYS.menuId, MENU_ID);
   _menuPickerNeeded = false;
   const url = new URL(location.href);
@@ -1812,7 +1895,7 @@ async function addUncategorizedItem() {
   if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
     showToast('Already in pool.', 'info'); return;
   }
-  pool.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: false });
+  pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false });
   input.value = '';
   renderUncategorizedItems();
   await persistState();
@@ -1857,8 +1940,12 @@ function renderManagerItems(catId) {
           aria-label="Item name"
           onblur="renameItem('${catId}','${item.id}',this.value)"
           onkeydown="if(event.key==='Enter')this.blur()"/></div>
+        <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
+          onblur="savePrice('${catId}','${item.id}',this.value)"
+          value="${escHtml(item.price||'')}"/>
         <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
-        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
+          style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
       </div>
@@ -1937,6 +2024,7 @@ async function persistState() {
           name:            item.name,
           desc:            item.desc           || '',
           recipe:          item.recipe         || [],
+          price:           item.price          || null,
           is_eighty_sixed: item.eightySixed    || false,
           on_menu:         item.onMenu         !== false,
           display_order:   idx,
@@ -1949,8 +2037,9 @@ async function persistState() {
           id:              item.id,
           category_id:     _uncatCategoryUuid,
           name:            item.name,
-          desc:            item.desc  || '',
+          desc:            item.desc   || '',
           recipe:          item.recipe || [],
+          price:           item.price  || null,
           is_eighty_sixed: false,
           on_menu:         false,
           display_order:   idx,
@@ -1975,8 +2064,11 @@ async function persistState() {
       _deletedItemIds.clear();
     }
 
-    // 5. Sync design + bot_id to menu_meta
-    await sbPatchMenuMeta({ design: currentDesign, bot_id: BOT_ID });
+    // 5. Sync bot_id to menu_meta; design to restaurant
+    await Promise.all([
+      sbPatchMenuMeta({ bot_id: BOT_ID }),
+      sbPatchRestaurantDesign(currentDesign),
+    ]);
 
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
@@ -2022,7 +2114,7 @@ function addItem(catId) {
         const [uncatItem] = menuState[UNCATEGORIZED_ID].items.splice(uncatIdx, 1);
         menuState[catId].items.push({ ...uncatItem, onMenu: true });
       } else {
-        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], eightySixed: false, onMenu: true });
+        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: true });
       }
     }
   }
@@ -2190,6 +2282,13 @@ async function saveDesc(catId, itemId, val) {
     if (btn) btn.classList.toggle('has-desc', !!desc);
     await persistState();
   }
+}
+
+async function savePrice(catId, itemId, val) {
+  const item = findItem(catId, itemId);
+  if (!item) return;
+  const price = val.trim();
+  if (item.price !== price) { item.price = price; await persistState(); }
 }
 
 function removeItem(catId, itemId) {
@@ -2486,7 +2585,7 @@ async function loadUsers() {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
       const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?select=id,name&order=created_at.asc`,
+        `${SUPABASE_URL}/rest/v1/menus?select=id,name&archived=eq.false&order=created_at.asc`,
         { headers: sbHeaders() }
       );
       if (menusRes.ok) window._adminMenuList = await menusRes.json();
@@ -2670,8 +2769,12 @@ function switchTab(name) {
     if (panel) panel.classList.toggle('active', t === name);
   });
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
-  if (name === 'categories') { renderCategoriesTab(); }
-  if (name === 'admin')      { renderDesignSection(); checkSupabaseStatus(); }
+  if (name === 'categories') {
+    renderCategoriesTab();
+    const ctx = document.getElementById('categories-menu-context');
+    if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+  }
+  if (name === 'admin')      { renderDesignSection(); checkSupabaseStatus(); if (currentUser?.role === 'admin') renderMenusPanel(); }
   if (name === 'users')      { loadUsers(); }
 }
 
@@ -2777,6 +2880,240 @@ setInterval(() => {
 
 // ─── PREVIEW ROLE-SWITCHER TOOLBAR ───────────────────────────────────────────
 let _previewRole = null; // tracks active mock role; null = using real session
+
+// ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
+
+async function renderMenusPanel() {
+  const listEl = document.getElementById('menus-mgmt-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<p class="db-empty">Loading…</p>';
+  try {
+    const [restRes, menuRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,slug&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
+    ]);
+    if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
+    const restaurants = await restRes.json();
+    const allMenus    = await menuRes.json();
+    const byRestaurant = {};
+    allMenus.forEach(m => {
+      if (!byRestaurant[m.restaurant_id]) byRestaurant[m.restaurant_id] = [];
+      byRestaurant[m.restaurant_id].push(m);
+    });
+    if (!restaurants.length) {
+      listEl.innerHTML = '<p class="db-empty">No restaurants yet.</p>';
+      return;
+    }
+    listEl.innerHTML = '';
+    restaurants.forEach(r => {
+      const menus = byRestaurant[r.id] || [];
+      const row = document.createElement('div');
+      row.className = 'restaurant-row';
+      row.id = 'restaurant-row-' + escHtml(r.id);
+      const chipsHtml = menus.map(m => `
+        <div class="menu-chip${m.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(m.id)}">
+          <span>${escHtml(m.name)}</span>
+          <span class="menu-type-badge">${escHtml(m.type || 'drinks')}</span>
+          <button class="btn-small" onclick="openRenameMenuForm('${escHtml(m.id)}','${escHtml(m.name)}')">Rename</button>
+          <button class="btn-small" onclick="archiveMenu('${escHtml(m.id)}',${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
+        </div>`).join('');
+      row.innerHTML = `
+        <div class="restaurant-header">
+          <span class="restaurant-name" id="restaurant-name-${escHtml(r.id)}">${escHtml(r.name)}</span>
+          <button class="btn-small" onclick="openRenameRestaurantForm('${escHtml(r.id)}','${escHtml(r.name)}')">Rename</button>
+        </div>
+        <div class="restaurant-menus" id="restaurant-menus-${escHtml(r.id)}">
+          ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">No menus yet.</span>'}
+        </div>
+        <div class="add-menu-form" id="add-menu-form-${escHtml(r.id)}" style="display:none">
+          <div class="input-row">
+            <input type="text" class="new-menu-name" placeholder="Menu name"
+              oninput="syncMenuSlug(this)" id="new-menu-name-${escHtml(r.id)}"/>
+            <input type="text" class="new-menu-slug" placeholder="slug" id="new-menu-slug-${escHtml(r.id)}"
+              oninput="this.dataset.manuallyEdited='1'"/>
+            <select id="new-menu-type-${escHtml(r.id)}">
+              <option value="drinks">Drinks</option>
+              <option value="food">Food</option>
+            </select>
+            <button class="btn-small" onclick="confirmCreateMenu('${escHtml(r.id)}')">Add</button>
+            <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(r.id)}').style.display='none'">Cancel</button>
+          </div>
+        </div>
+        <div style="padding:6px 14px 10px">
+          <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(r.id)}').style.display='';document.getElementById('new-menu-name-${escHtml(r.id)}').focus()">+ Add Menu</button>
+        </div>`;
+      listEl.appendChild(row);
+    });
+  } catch(e) {
+    listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
+  }
+}
+
+function openAddRestaurantForm() {
+  const form = document.getElementById('add-restaurant-form');
+  if (form) { form.style.display = ''; document.getElementById('new-restaurant-name').focus(); }
+}
+
+async function confirmAddRestaurant() {
+  const input = document.getElementById('new-restaurant-name');
+  const name  = (input?.value || '').trim();
+  if (!name) return;
+  await createRestaurant(name);
+  if (input) input.value = '';
+  document.getElementById('add-restaurant-form').style.display = 'none';
+}
+
+async function createRestaurant(name) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ name, slug: slugify(name) }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await renderMenusPanel();
+  } catch(e) {
+    showToast(`Failed to create restaurant: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+function openRenameRestaurantForm(id, currentName) {
+  const nameEl = document.getElementById('restaurant-name-' + id);
+  if (!nameEl) return;
+  const parent = nameEl.closest('.restaurant-header');
+  nameEl.style.display = 'none';
+  const existing = parent.querySelector('.rename-restaurant-input');
+  if (existing) return;
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = currentName; inp.className = 'rename-restaurant-input catmgr-input';
+  inp.style.flex = '1';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-small'; saveBtn.textContent = 'Save';
+  saveBtn.onclick = async () => {
+    const newName = inp.value.trim();
+    if (newName && newName !== currentName) await renameRestaurant(id, newName);
+    else await renderMenusPanel();
+  };
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-small'; cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => renderMenusPanel();
+  parent.insertBefore(inp, nameEl.nextSibling);
+  parent.insertBefore(saveBtn, inp.nextSibling);
+  parent.insertBefore(cancelBtn, saveBtn.nextSibling);
+  inp.focus();
+}
+
+async function renameRestaurant(id, name) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await renderMenusPanel();
+  } catch(e) {
+    showToast(`Failed to rename restaurant: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+function openRenameMenuForm(id, currentName) {
+  const chip = document.getElementById('menu-chip-' + id);
+  if (!chip) return;
+  const nameSpan = chip.querySelector('span');
+  nameSpan.style.display = 'none';
+  const existing = chip.querySelector('.rename-menu-input');
+  if (existing) return;
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = currentName; inp.className = 'rename-menu-input catmgr-input';
+  inp.style.width = '100px';
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-small'; saveBtn.textContent = 'Save';
+  saveBtn.onclick = async () => {
+    const newName = inp.value.trim();
+    if (newName && newName !== currentName) await renameMenu(id, newName);
+    else await renderMenusPanel();
+  };
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-small'; cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => renderMenusPanel();
+  chip.insertBefore(inp, nameSpan.nextSibling);
+  chip.insertBefore(saveBtn, inp.nextSibling);
+  chip.insertBefore(cancelBtn, saveBtn.nextSibling);
+  inp.focus();
+}
+
+async function renameMenu(id, name) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await renderMenusPanel();
+  } catch(e) {
+    showToast(`Failed to rename menu: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+async function confirmCreateMenu(restaurantId) {
+  const nameInput = document.getElementById('new-menu-name-' + restaurantId);
+  const slugInput = document.getElementById('new-menu-slug-' + restaurantId);
+  const typeInput = document.getElementById('new-menu-type-' + restaurantId);
+  const name = (nameInput?.value || '').trim();
+  const slug = (slugInput?.value || '').trim() || slugify(name);
+  const type = typeInput?.value || 'drinks';
+  if (!name) return;
+  await createMenu(restaurantId, name, slug, type);
+}
+
+async function createMenu(restaurantId, name, slug, type) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ restaurant_id: restaurantId, name, slug, type }),
+    });
+    if (r.status === 409) {
+      showToast('Slug already taken for this restaurant — edit the slug and try again.', 'error');
+      return;
+    }
+    if (!r.ok) throw new Error(await r.text());
+    const [menu] = await r.json();
+    const defs = type === 'food' ? DEFAULT_FOOD_CATEGORY_DEFS : DEFAULT_CATEGORY_DEFS.map(c => ({ key: c.id, label: c.title || c.label, icon: c.icon, color: c.color, placeholder: c.placeholder || '' }));
+    await sbSeedCategories(menu.id, defs);
+    await renderMenusPanel();
+    showToast(`✅ Menu "${name}" created.`, 'success');
+  } catch(e) {
+    showToast(`Failed to create menu: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+async function archiveMenu(id, archived) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ archived }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await renderMenusPanel();
+  } catch(e) {
+    showToast(`Failed to ${archived ? 'archive' : 'unarchive'} menu: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+function syncMenuSlug(nameInput) {
+  const form = nameInput.closest('.add-menu-form');
+  const slugInput = form?.querySelector('.new-menu-slug');
+  if (slugInput && !slugInput.dataset.manuallyEdited) slugInput.value = slugify(nameInput.value);
+}
 
 function _initPreviewToolbar() {
   if (!IS_PREVIEW) return;

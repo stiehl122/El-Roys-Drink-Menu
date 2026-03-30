@@ -511,3 +511,22 @@
 .notif-help p:last-child { margin-bottom: 0; }
 .notif-help code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; color: var(--text); }
 .notif-help-note { font-style: italic; }
+
+/* ─── CATEGORIES CONTEXT ─────────────────────────────────────────────────── */
+.active-menu-context { font-size: 12px; color: var(--ember); font-family: var(--font-heading); letter-spacing: 0.5px; margin-bottom: 10px; }
+
+/* ─── PRICE FIELDS ───────────────────────────────────────────────────────── */
+.item-price-tag   { display: block; font-size: 13px; font-weight: 600; color: var(--ember); margin-top: 2px; }
+.item-price-badge { font-size: 11px; color: var(--muted); margin-left: 6px; }
+.item-price-row   { padding: 0 0 4px 20px; }
+.price-input      { width: 72px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 4px 7px; text-align: right; }
+
+/* ─── MENUS MANAGEMENT PANEL ─────────────────────────────────────────────── */
+.restaurant-row    { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+.restaurant-header { display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: var(--surface); }
+.restaurant-name   { font-family: var(--font-heading); font-size: 13px; letter-spacing: 0.5px; color: var(--text); flex: 1; }
+.restaurant-menus  { padding: 8px 14px 4px; display: flex; flex-wrap: wrap; gap: 7px; }
+.menu-chip         { display: inline-flex; align-items: center; gap: 5px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; font-size: 12px; color: var(--text); }
+.menu-chip.is-archived { opacity: 0.45; text-decoration: line-through; }
+.menu-type-badge   { font-size: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.add-menu-form     { padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg); }
