@@ -18,6 +18,7 @@ export default async function handler(req, res) {
 
   // Fetch per-menu enabled flags from menu_meta.notifications
   let notifications = {};
+  let restaurantId = null;
   try {
     const r = await fetch(
       `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menu_id}&select=notifications`,
@@ -29,6 +30,39 @@ export default async function handler(req, res) {
     }
   } catch(e) {}
 
+  // Look up the restaurant_id for this menu, then fetch per-restaurant env var config
+  let notifConfig = {};
+  try {
+    const menuR = await fetch(
+      `${sbUrl}/rest/v1/menus?id=eq.${menu_id}&select=restaurant_id`,
+      { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+    );
+    if (menuR.ok) {
+      const [menu] = await menuR.json();
+      restaurantId = menu?.restaurant_id;
+    }
+    if (restaurantId) {
+      const restR = await fetch(
+        `${sbUrl}/rest/v1/restaurants?id=eq.${restaurantId}&select=notifications_config`,
+        { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+      );
+      if (restR.ok) {
+        const [rest] = await restR.json();
+        notifConfig = rest?.notifications_config || {};
+      }
+    }
+  } catch(e) {}
+
+  // Helper: resolve an env var key from per-restaurant config, falling back to the global default
+  const envVal = (channelKey, field, globalDefault) => {
+    const key = notifConfig[channelKey]?.[field];
+    if (key && typeof key === 'string') {
+      const val = process.env[key];
+      if (val) return val;
+    }
+    return globalDefault ? process.env[globalDefault] : undefined;
+  };
+
   const MAX_LEN = 1000;
   const safeText = text.length > MAX_LEN
     ? text.slice(0, MAX_LEN - 16) + '... (truncated)'
@@ -38,7 +72,7 @@ export default async function handler(req, res) {
 
   // ── GroupMe ──────────────────────────────────────────────────────────────────
   const gmEnabled = notifications.groupme?.enabled;
-  const gmBotId   = process.env.GROUPME_BOT_ID;
+  const gmBotId   = envVal('groupme', 'env_key', 'GROUPME_BOT_ID');
   if (gmEnabled && gmBotId) {
     try {
       const r = await fetch('https://api.groupme.com/v3/bots/post', {
@@ -57,10 +91,10 @@ export default async function handler(req, res) {
   // ── Twilio SMS ────────────────────────────────────────────────────────────────
   const smsEnabled = notifications.sms?.enabled;
   if (smsEnabled) {
-    const sid      = process.env.TWILIO_ACCOUNT_SID;
-    const authTok  = process.env.TWILIO_AUTH_TOKEN;
-    const fromNum  = process.env.TWILIO_FROM_NUMBER;
-    const toNums   = (process.env.TWILIO_TO_NUMBERS || '')
+    const sid      = envVal('sms', 'env_key_sid',   'TWILIO_ACCOUNT_SID');
+    const authTok  = envVal('sms', 'env_key_token', 'TWILIO_AUTH_TOKEN');
+    const fromNum  = envVal('sms', 'env_key_from',  'TWILIO_FROM_NUMBER');
+    const toNums   = (envVal('sms', 'env_key_to',   'TWILIO_TO_NUMBERS') || '')
       .split(',').map(s => s.trim()).filter(Boolean);
     if (!sid || !authTok || !fromNum) {
       results.sms = 'error:TWILIO env vars not configured';
@@ -94,7 +128,7 @@ export default async function handler(req, res) {
 
   // ── Discord ───────────────────────────────────────────────────────────────────
   const discEnabled    = notifications.discord?.enabled;
-  const discWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  const discWebhookUrl = envVal('discord', 'env_key', 'DISCORD_WEBHOOK_URL');
   if (discEnabled && discWebhookUrl) {
     try {
       const r = await fetch(discWebhookUrl, {
@@ -112,11 +146,11 @@ export default async function handler(req, res) {
 
   // ── Generic Webhook ───────────────────────────────────────────────────────────
   const whEnabled = notifications.webhook?.enabled;
-  const whUrl     = process.env.GENERIC_WEBHOOK_URL;
+  const whUrl     = envVal('webhook', 'env_key_url',    'GENERIC_WEBHOOK_URL');
   if (whEnabled && whUrl) {
     try {
       const headers = { 'Content-Type': 'application/json' };
-      const secret  = process.env.GENERIC_WEBHOOK_SECRET;
+      const secret  = envVal('webhook', 'env_key_secret', 'GENERIC_WEBHOOK_SECRET');
       if (secret) headers['X-Webhook-Secret'] = secret;
       const r = await fetch(whUrl, {
         method:  'POST',

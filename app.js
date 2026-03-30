@@ -112,6 +112,9 @@ function slugify(name) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Escape a string for safe embedding inside an inline JS string within an HTML attribute.
+// Uses JSON.stringify (which handles quotes/backslashes) then HTML-escapes the result.
+function escAttrJs(s) { return escHtml(JSON.stringify(String(s))); }
 function lsSet(key, val) {
   try { localStorage.setItem(key, val); }
   catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
@@ -1346,8 +1349,10 @@ function renderUserHeader() {
     : (parts[0]?.[0] || '?').toUpperCase();
   const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
 
-  // Access to the manager panel requires either admin role or explicit menu access
-  const hasMenuAccess = isAdmin || (currentUser?.accessibleMenuIds || []).includes(MENU_ID);
+  // Access to the manager panel requires either admin role or explicit menu access.
+  // Show the button if the manager has access to ANY menu (MENU_ID may not be set yet).
+  const accessibleIds = currentUser?.accessibleMenuIds || [];
+  const hasMenuAccess = isAdmin || accessibleIds.length > 0;
 
   document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
   document.getElementById('user-chip').style.display  = signedIn ? '' : 'none';
@@ -1564,8 +1569,9 @@ async function onSwitchMenuClick() {
     try {
       const data = await sbRead();
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
-      else menuState = defaultState();
-    } catch(e) { menuState = defaultState(); }
+      else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    applyDesign(currentDesign);
     await sbEnsureUncategorized();
     renderManagerCategories();
     if (typeof renderCatManager  === 'function') renderCatManager();
@@ -1582,8 +1588,9 @@ async function onPublicSwitchMenuClick() {
     try {
       const data = await sbRead();
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
-      else menuState = defaultState();
-    } catch(e) { menuState = defaultState(); }
+      else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    applyDesign(currentDesign);
     renderPublicView();
     updateLastUpdatedLabel();
   });
@@ -1757,13 +1764,12 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
-  const isAdmin    = currentUser?.role === 'admin';
-  const multiMenu  = isAdmin ? _hasMultipleMenus : (currentUser?.accessibleMenuIds?.length || 0) > 1;
-  if (!MENU_ID || (multiMenu && !_managerMenuPicked)) {
-    showMenuPicker(() => { _managerMenuPicked = true; enterManager(); });
+  if (!MENU_ID) {
+    showToast('Select a menu from the public view first.', 'info');
     return;
   }
   // Check that the user actually has access to the loaded menu
+  const isAdmin   = currentUser?.role === 'admin';
   const hasAccess = isAdmin || (currentUser?.accessibleMenuIds || []).includes(MENU_ID);
   if (!hasAccess) {
     showToast('You don\'t have manager access to this menu.', 'error');
@@ -1800,10 +1806,14 @@ async function checkAdminSupabaseStatus() {
   const el = document.getElementById('admin-supabase-status');
   if (!el) return;
   if (!SUPABASE_URL) { el.textContent = '⚠️ Supabase URL not configured'; el.className = 'db-status db-status--error'; return; }
+  if (!SUPABASE_ANON_KEY) { el.textContent = '⚠️ Supabase key not configured'; el.className = 'db-status db-status--error'; return; }
   el.textContent = 'Checking…'; el.className = 'db-status';
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/`, { headers: { 'apikey': SUPABASE_ANON_KEY } });
-    if (res.ok || res.status === 200 || res.status === 404) {
+    // Ping the restaurants table (lightweight, always accessible via RLS SELECT)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id&limit=1`, {
+      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+    });
+    if (res.ok || res.status === 200) {
       el.textContent = '✓ Connected'; el.className = 'db-status db-status--ok';
     } else {
       el.textContent = `✗ Unreachable (${res.status})`; el.className = 'db-status db-status--error';
@@ -1856,6 +1866,50 @@ async function saveNotifications() {
     showToast(`Failed to save notifications: ${escHtml(e.message)}`, 'error');
   }
 }
+function _populateNotifCredKeys(cfg) {
+  cfg = cfg || {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  set('notif-cred-groupme',        cfg.groupme?.env_key);
+  set('notif-cred-discord',        cfg.discord?.env_key);
+  set('notif-cred-sms-sid',        cfg.sms?.env_key_sid);
+  set('notif-cred-sms-token',      cfg.sms?.env_key_token);
+  set('notif-cred-sms-from',       cfg.sms?.env_key_from);
+  set('notif-cred-sms-to',         cfg.sms?.env_key_to);
+  set('notif-cred-webhook-url',    cfg.webhook?.env_key_url);
+  set('notif-cred-webhook-secret', cfg.webhook?.env_key_secret);
+}
+
+async function saveNotifCredKeys() {
+  const restaurantId = _adminSwitcherState.notif.restaurantId;
+  if (!restaurantId) { showToast('No restaurant selected.', 'info'); return; }
+  const val = id => (document.getElementById(id)?.value || '').trim();
+  const notifications_config = {};
+  if (val('notif-cred-groupme'))        notifications_config.groupme = { env_key: val('notif-cred-groupme') };
+  if (val('notif-cred-discord'))        notifications_config.discord = { env_key: val('notif-cred-discord') };
+  const sms = {};
+  if (val('notif-cred-sms-sid'))   sms.env_key_sid   = val('notif-cred-sms-sid');
+  if (val('notif-cred-sms-token')) sms.env_key_token  = val('notif-cred-sms-token');
+  if (val('notif-cred-sms-from'))  sms.env_key_from   = val('notif-cred-sms-from');
+  if (val('notif-cred-sms-to'))    sms.env_key_to     = val('notif-cred-sms-to');
+  if (Object.keys(sms).length) notifications_config.sms = sms;
+  const wh = {};
+  if (val('notif-cred-webhook-url'))    wh.env_key_url    = val('notif-cred-webhook-url');
+  if (val('notif-cred-webhook-secret')) wh.env_key_secret = val('notif-cred-webhook-secret');
+  if (Object.keys(wh).length) notifications_config.webhook = wh;
+  try {
+    if (SUPABASE_URL && currentUser?.accessToken) {
+      await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
+        method: 'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ notifications_config }),
+      });
+    }
+    showToast('Credential keys saved!', 'success');
+  } catch(e) {
+    showToast(`Failed to save credential keys: ${escHtml(e.message)}`, 'error');
+  }
+}
+
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
   if (!val) { showToast('Enter a URL first.', 'info'); return; }
@@ -1927,18 +1981,32 @@ async function onAdminSwitcherMenuChange(context) {
 async function _loadAdminTabData(context) {
   if (!SUPABASE_URL || !currentUser?.accessToken) return;
   if (context === 'notif') {
-    const menuId = _adminSwitcherState.notif.menuId;
+    const menuId       = _adminSwitcherState.notif.menuId;
+    const restaurantId = _adminSwitcherState.notif.restaurantId;
     const urlInput = document.getElementById('menu-url-input');
     if (urlInput) urlInput.value = MENU_URL || '';
-    if (!menuId) { _populateAdminNotificationsPanel({}); return; }
-    try {
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
-        { headers: sbHeaders() }
-      );
-      const [meta] = r.ok ? await r.json() : [{}];
-      _populateAdminNotificationsPanel(meta?.notifications || {});
-    } catch { _populateAdminNotificationsPanel({}); }
+    if (!menuId) { _populateAdminNotificationsPanel({}); }
+    else {
+      try {
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
+          { headers: sbHeaders() }
+        );
+        const [meta] = r.ok ? await r.json() : [{}];
+        _populateAdminNotificationsPanel(meta?.notifications || {});
+      } catch { _populateAdminNotificationsPanel({}); }
+    }
+    // Load per-restaurant credential keys
+    if (restaurantId) {
+      try {
+        const r = await fetch(
+          `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=notifications_config`,
+          { headers: sbHeaders() }
+        );
+        const [rest] = r.ok ? await r.json() : [{}];
+        _populateNotifCredKeys(rest?.notifications_config || {});
+      } catch { _populateNotifCredKeys({}); }
+    } else { _populateNotifCredKeys({}); }
   } else if (context === 'design') {
     const restaurantId = _adminSwitcherState.design.restaurantId;
     if (!restaurantId) { _populateAdminDesignPanel(DESIGN_DEFAULTS); return; }
@@ -3098,13 +3166,15 @@ async function renderMenusPanel() {
         <div class="menu-chip${m.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(m.id)}">
           <span>${escHtml(m.name)}</span>
           <span class="menu-type-badge">${escHtml(m.type || 'drinks')}</span>
-          <button class="btn-small" onclick="openRenameMenuForm('${escHtml(m.id)}','${escHtml(m.name)}')">Rename</button>
-          <button class="btn-small" onclick="archiveMenu('${escHtml(m.id)}',${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
+          <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(m.id)},${escAttrJs(m.name)})">Rename</button>
+          <button class="btn-small" onclick="archiveMenu(${escAttrJs(m.id)},${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
+          <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(m.id)},${escAttrJs(m.name)})">Delete</button>
         </div>`).join('');
       row.innerHTML = `
         <div class="restaurant-header">
           <span class="restaurant-name" id="restaurant-name-${escHtml(r.id)}">${escHtml(r.name)}</span>
-          <button class="btn-small" onclick="openRenameRestaurantForm('${escHtml(r.id)}','${escHtml(r.name)}')">Rename</button>
+          <button class="btn-small" onclick="openRenameRestaurantForm(${escAttrJs(r.id)},${escAttrJs(r.name)})">Rename</button>
+          <button class="btn-small btn-danger" onclick="confirmDeleteRestaurant(${escAttrJs(r.id)},${escAttrJs(r.name)})">Delete</button>
         </div>
         <div class="restaurant-menus" id="restaurant-menus-${escHtml(r.id)}">
           ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">No menus yet.</span>'}
@@ -3195,9 +3265,10 @@ async function renameRestaurant(id, name) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, slug: slugify(name) }),
     });
     if (!r.ok) throw new Error(await r.text());
+    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
     await renderMenusPanel();
   } catch(e) {
     showToast(`Failed to rename restaurant: ${escHtml(e.message)}`, 'error');
@@ -3236,9 +3307,10 @@ async function renameMenu(id, name) {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, slug: slugify(name) }),
     });
     if (!r.ok) throw new Error(await r.text());
+    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
     await renderMenusPanel();
   } catch(e) {
     showToast(`Failed to rename menu: ${escHtml(e.message)}`, 'error');
@@ -3293,6 +3365,56 @@ async function archiveMenu(id, archived) {
     await renderMenusPanel();
   } catch(e) {
     showToast(`Failed to ${archived ? 'archive' : 'unarchive'} menu: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+async function confirmDeleteMenu(id, name) {
+  if (!confirm(`Permanently delete menu "${name}"?\n\nThis will remove all its categories, items, and metadata. This cannot be undone.`)) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    _adminRestaurants = []; _adminAllMenus = [];
+    // If the deleted menu was the active one, clear it
+    if (id === MENU_ID) { MENU_ID = ''; RESTAURANT_ID = ''; lsSet(LS_KEYS.menuId, ''); }
+    await renderMenusPanel();
+    showToast(`Menu "${name}" deleted.`, 'success');
+  } catch(e) {
+    showToast(`Failed to delete menu: ${escHtml(e.message)}`, 'error');
+  }
+}
+
+async function confirmDeleteRestaurant(id, name) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  // Check if restaurant has any non-archived menus
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/menus?restaurant_id=eq.${encodeURIComponent(id)}&select=id,name,archived`,
+      { headers: sbHeaders() }
+    );
+    if (r.ok) {
+      const menus = await r.json();
+      if (menus.length > 0) {
+        const menuNames = menus.map(m => m.name).join(', ');
+        showToast(`Delete all menus first (${menuNames}).`, 'error');
+        return;
+      }
+    }
+  } catch(e) {}
+  if (!confirm(`Permanently delete restaurant "${name}"?\n\nThis cannot be undone.`)) return;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    _adminRestaurants = []; _adminAllMenus = [];
+    if (id === RESTAURANT_ID) { RESTAURANT_ID = ''; }
+    await renderMenusPanel();
+    showToast(`Restaurant "${name}" deleted.`, 'success');
+  } catch(e) {
+    showToast(`Failed to delete restaurant: ${escHtml(e.message)}`, 'error');
   }
 }
 

@@ -390,8 +390,8 @@
   .prune-item-cat { font-size: .78rem; color: var(--muted); white-space: nowrap; }
   .prune-del-btn { padding: 2px 8px; font-size: .9rem; line-height: 1; flex-shrink: 0; }
   .prune-empty { color: var(--muted); font-size: .88rem; padding: .5rem 0 .25rem; margin: 0; }
-  .btn-danger { background: var(--fire) !important; color: var(--cream) !important; border-color: var(--fire) !important; }
-  .btn-danger:hover { background: var(--ember) !important; border-color: var(--ember) !important; }
+  .btn-danger { background: var(--danger-bg) !important; color: var(--red) !important; border-color: var(--danger-border) !important; }
+  .btn-danger:hover { background: var(--red) !important; color: var(--cream) !important; border-color: var(--red) !important; }
 
   /* ── COLLAPSE ALL ROW ── */
   .collapse-all-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-bottom: 8px; }
@@ -514,6 +514,9 @@
 .notif-help p:last-child { margin-bottom: 0; }
 .notif-help code { background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; font-size: 11px; color: var(--text); }
 .notif-help-note { font-style: italic; }
+.notif-cred-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.notif-cred-label { font-size: 12px; color: var(--muted); min-width: 130px; flex-shrink: 0; }
+.notif-cred-input { flex: 1; font-size: 12px; font-family: monospace; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 
 /* ─── CATEGORIES CONTEXT ─────────────────────────────────────────────────── */
 .active-menu-context { font-size: 12px; color: var(--ember); font-family: var(--font-heading); letter-spacing: 0.5px; margin-bottom: 10px; }
