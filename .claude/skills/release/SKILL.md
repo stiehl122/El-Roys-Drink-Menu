@@ -1,18 +1,20 @@
 ---
 name: release
-description: Bump APP_VERSION in app.js, commit, push, and open a PR with release notes. Invoke with /release <new-version> (e.g., /release v0.5.6).
+description: Ensure APP_VERSION matches the branch, commit, push, and open a PR with release notes. Invoke with /release.
 disable-model-invocation: true
 ---
 
-Arguments: $ARGUMENTS (the target version, e.g. "v0.5.6")
-
 Steps:
-1. Parse the target version from $ARGUMENTS. If none provided, ask the user.
-2. Run /verify to confirm the current state is clean (syntax pass, version noted).
-3. Update `APP_VERSION` on line 2 of `app.js` to the new version string.
-4. Run `node --check app.js` to confirm no syntax errors were introduced.
-5. Stage: `git add app.js`
-6. Commit: `git commit -m "chore(release): bump APP_VERSION to <version>"`
-7. Push: `git push`
-8. Create PR: `gh pr create --title "release: <version>" --body "$(git log main..HEAD --oneline | sed 's/^/- /')"` — summarize commits as bullet points.
-9. Report the PR URL for review and merge.
+1. Read the current branch name via `git branch --show-current`.
+2. Read `APP_VERSION` from line 2 of `app.js`.
+3. If `APP_VERSION` already matches the branch name, skip to step 6. Otherwise, update `APP_VERSION` on line 2 of `app.js` to match the branch name.
+4. Run `node --check app.js` to confirm no syntax errors.
+5. Stage and commit: `git add app.js && git commit -m "chore(release): bump APP_VERSION to <version>"`
+6. Push: `git push`
+7. Collect the full commit log since main: `git log main..HEAD --oneline`
+8. Search commit messages for GitHub issue references (e.g. `#123`). Also check the diff for any issue references: `git diff main..HEAD`.
+9. Create PR with `gh pr create`. The PR body must include:
+   - A **Summary** section with bullet points from the commit log.
+   - A **Issues Addressed** section listing any referenced issues as `Closes #N` or `Fixes #N`. If no issues are referenced, write "None" in this section.
+   - A **Test plan** section with a checklist for verifying the release.
+10. Report the PR URL.
