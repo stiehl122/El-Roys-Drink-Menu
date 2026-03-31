@@ -42,6 +42,7 @@ let _activeMenuName    = '';        // display name of the currently loaded menu
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
+let _visibilityHandler = null;      // Page Visibility API handler for smart polling
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
@@ -1089,7 +1090,8 @@ function showPublicViewWithError(msg) {
 function startPolling() {
   stopPolling();
   if (!SUPABASE_URL || !MENU_ID) return;
-  syncInterval = setInterval(async () => {
+
+  const pollCycle = async () => {
     if (isManagerMode) return;
     try {
       const data = await sbRead();
@@ -1122,11 +1124,33 @@ function startPolling() {
         if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
       }
     }
-  }, 60000);
+  };
+
+  // Start the 10-second polling interval (only while tab is visible)
+  const startInterval = () => { syncInterval = setInterval(pollCycle, 10000); };
+
+  if (document.visibilityState === 'visible') startInterval();
+
+  _visibilityHandler = () => {
+    if (document.visibilityState === 'visible') {
+      // Tab became visible — poll immediately and restart the interval
+      pollCycle();
+      if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+      startInterval();
+    } else {
+      // Tab hidden — stop polling to save bandwidth
+      if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    }
+  };
+  document.addEventListener('visibilitychange', _visibilityHandler);
 }
 
 function stopPolling() {
   if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+  if (_visibilityHandler) {
+    document.removeEventListener('visibilitychange', _visibilityHandler);
+    _visibilityHandler = null;
+  }
 }
 
 function getLastUpdatedTs() {
