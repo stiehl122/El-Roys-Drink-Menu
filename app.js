@@ -373,6 +373,63 @@ function hydrateState({ cats, meta, restaurantDesign }) {
   }
 }
 
+function getCategoryStateSnapshot() {
+  return JSON.stringify(CATEGORY_DEFS.map(cat => ({
+    id: cat.id,
+    state: menuState[cat.id] || { items: [], lastSent: [] },
+  })));
+}
+
+function getDesignSnapshot() {
+  return JSON.stringify(currentDesign);
+}
+
+function getFeaturedSnapshot() {
+  return JSON.stringify(_featuredGroups.map(group => ({
+    id: group.id,
+    slots: group.slots.map(slot => ({
+      id: slot.id,
+      itemId: slot.itemId,
+      name: slot.item?.name || '',
+      eightySixed: !!slot.item?.eightySixed,
+      price: slot.item?.price || '',
+      desc: slot.item?.desc || '',
+      sellNote: slot.sellNote || '',
+    })),
+  })));
+}
+
+async function refreshFeaturedForActiveMenu() {
+  _featuredGroups = MENU_ID ? await sbReadFeatured(MENU_ID) : [];
+  return _featuredGroups;
+}
+
+async function loadActiveMenuState(options = {}) {
+  const {
+    fallbackToDefault = true,
+    includeFeatured = true,
+    persistCache = true,
+  } = options;
+  try {
+    const data = await sbRead();
+    if (data) {
+      hydrateState(data);
+      if (persistCache) lsSet(LS_KEYS.menuCache, JSON.stringify(data));
+    } else if (fallbackToDefault) {
+      menuState = defaultState();
+      currentDesign = { ...DESIGN_DEFAULTS };
+    }
+  } catch (e) {
+    if (fallbackToDefault) {
+      menuState = defaultState();
+      currentDesign = { ...DESIGN_DEFAULTS };
+    } else {
+      throw e;
+    }
+  }
+  if (includeFeatured) await refreshFeaturedForActiveMenu();
+}
+
 async function sbPatchMenuMeta(update) {
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
   const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
@@ -599,6 +656,23 @@ function applyDesign(design) {
   document.title = [brand, title].filter(Boolean).join(' | ') || 'Current Menu';
 }
 
+function renderPublicViews() {
+  renderPublicView();
+  updateLastUpdatedLabel();
+}
+
+function refreshManagerViews() {
+  renderManagerCategories();
+  renderFeaturedTab();
+  renderOffMenuSection();
+}
+
+function refreshCategoryAdminViews() {
+  renderCategoriesTab();
+  refreshManagerViews();
+  renderPublicView();
+}
+
 function renderDesignSection() {
   _populateAdminDesignPanel(currentDesign);
 }
@@ -762,7 +836,7 @@ async function saveDesign() {
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
 function refreshAllViews() {
-  renderCategoriesTab(); renderManagerCategories(); renderFeaturedTab(); renderPublicView(); renderOffMenuSection();
+  refreshCategoryAdminViews();
 }
 
 function getNextCategoryColor() {
@@ -1012,12 +1086,7 @@ async function init() {
     // Multiple menus, no slug — show picker; load menu after selection
     applyDesign(currentDesign);
     showMenuPicker(async () => {
-      try {
-        const data = await sbRead();
-        if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
-        else menuState = defaultState();
-      } catch(e) { menuState = defaultState(); }
-      _featuredGroups = await sbReadFeatured(MENU_ID);
+      await loadActiveMenuState();
       applyDesign(currentDesign);
       showPublicView();
     });
@@ -1033,14 +1102,7 @@ async function init() {
     showPublicView();
   } else {
     try {
-      const data = await sbRead();
-      if (data) {
-        hydrateState(data);
-        lsSet(LS_KEYS.menuCache, JSON.stringify(data));
-      } else {
-        menuState = defaultState();
-      }
-      _featuredGroups = await sbReadFeatured(MENU_ID);
+      await loadActiveMenuState();
       applyDesign(currentDesign);
       showPublicView();
     } catch(e) {
@@ -1165,24 +1227,23 @@ function startPolling() {
   const pollCycle = async () => {
     if (isManagerMode) return;
     try {
+      const oldTs = menuState._meta?.lastUpdatedTs;
+      const oldCats = getCategoryStateSnapshot();
+      const oldDesign = getDesignSnapshot();
+      const oldFeatured = getFeaturedSnapshot();
       const data = await sbRead();
       if (!data) return;
-
-      const beforeCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
-      const oldTs      = menuState._meta?.lastUpdatedTs;
-      const oldDesign  = JSON.stringify(currentDesign);
-
       hydrateState(data);
       lsSet(LS_KEYS.menuCache, JSON.stringify(data));
-      _featuredGroups = await sbReadFeatured(MENU_ID);
+      const newTs = menuState._meta?.lastUpdatedTs;
+      if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
 
-      const afterCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
-      const newTs     = menuState._meta?.lastUpdatedTs;
-      const newDesign = JSON.stringify(currentDesign);
+      const afterCats = getCategoryStateSnapshot();
+      const newDesign = getDesignSnapshot();
+      const newFeatured = getFeaturedSnapshot();
 
-      if (afterCats !== beforeCats || newTs !== oldTs) {
-        renderPublicView();
-        updateLastUpdatedLabel();
+      if (afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured) {
+        renderPublicViews();
       }
       if (newDesign !== oldDesign) applyDesign(currentDesign);
 
@@ -1282,99 +1343,109 @@ function renderFooter() {
   }
 }
 
+function renderFeaturedPublicSection() {
+  const featuredEl = document.getElementById('featured-public-section');
+  if (!featuredEl) return;
+  const hasSlots = _featuredGroups.some(g => g.slots.length > 0);
+  if (!hasSlots) {
+    featuredEl.style.display = 'none';
+    featuredEl.innerHTML = '';
+    return;
+  }
+  featuredEl.style.display = '';
+  featuredEl.innerHTML = _featuredGroups
+    .filter(g => g.slots.length)
+    .map(group => {
+      const slotsHtml = group.slots.map(slot => {
+        const is86 = slot.item?.eightySixed;
+        const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+        const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
+        const sellNoteHtml = (currentUser && slot.sellNote)
+          ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
+          : '';
+        return `<div class="${classes}">
+          <div class="featured-slot-main">
+            <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
+            ${priceHtml}
+            ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+          </div>
+          ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
+          ${sellNoteHtml}
+        </div>`;
+      }).join('');
+      return `<div class="featured-group">
+        <div class="featured-group-name">${escHtml(group.name)}</div>
+        ${slotsHtml}
+      </div>`;
+    }).join('');
+}
+
+function buildPublicItemHtml(item) {
+  const is86 = !!item.eightySixed;
+  const hasDesc = !!(item.desc && item.desc.trim());
+  const recipeIngredients = recipeArray(item.recipe);
+  const hasRecipe = recipeIngredients.length > 0;
+  const isFood = MENU_TYPE === 'food';
+  const hasDetail = isFood ? false : (hasDesc || hasRecipe);
+  const classes = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
+  const onClick = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
+  const detailHtml = hasDetail ? `<div class="item-detail-panel">
+      ${hasDesc && hasRecipe
+        ? `<div class="detail-section"><div class="detail-label">Description</div><div class="item-desc-text">${escHtml(item.desc)}</div></div><div class="detail-section detail-section--bordered"><div class="detail-label">Recipe</div><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`
+        : hasDesc
+          ? `<div class="detail-section"><div class="item-desc-text">${escHtml(item.desc)}</div></div>`
+          : `<div class="detail-section"><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`}
+    </div>` : '';
+  const priceHtml = item.price
+    ? (isFood
+        ? `<span class="item-price-tag">${escHtml(item.price)}</span>`
+        : `<span class="item-price-badge">${escHtml(item.price)}</span>`)
+    : '';
+  return `<div class="${classes}" ${onClick}>
+    <div class="item-main-row">
+      <div class="dot" aria-hidden="true"></div>
+      <span class="item-name-text">${escHtml(item.name)}${isFood ? '' : priceHtml}</span>
+      ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
+      ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
+    </div>
+    ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}
+    ${detailHtml}
+  </div>`;
+}
+
+function buildPublicCategorySection(cat, state, lastSentCats) {
+  const section = document.createElement('div');
+  section.id = 'pub-section-' + cat.id;
+  const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
+  section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
+  const onMenuItems = state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu');
+  if (!onMenuItems.length && state.items.every(i => i.onMenu === false || i.visibility === 'off_menu')) return null;
+  const itemsHtml = onMenuItems.length
+    ? onMenuItems.map(buildPublicItemHtml).join('')
+    : `<div class="empty-menu">Nothing here yet — check back soon.</div>`;
+  section.innerHTML = `
+    <div class="menu-section-header collapsible-header" role="button" tabindex="0"
+         aria-expanded="${isCollapsed ? 'false' : 'true'}"
+         onclick="togglePublicCategory('${escHtml(cat.id)}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${escHtml(cat.id)}')}">
+      <div class="menu-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
+      <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
+      <span class="category-chevron">›</span>
+    </div>
+    <div class="menu-items">${itemsHtml}</div>`;
+  return section;
+}
+
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
 function renderPublicView() {
   const container = document.getElementById('public-categories');
   container.innerHTML = '';
-
-  // Render featured section
-  const featuredEl = document.getElementById('featured-public-section');
-  if (featuredEl) {
-    const hasSlots = _featuredGroups.some(g => g.slots.length > 0);
-    if (hasSlots) {
-      featuredEl.style.display = '';
-      featuredEl.innerHTML = _featuredGroups.filter(g => g.slots.length).map(group => {
-        const slotsHtml = group.slots.map(slot => {
-          const is86 = slot.item?.eightySixed;
-          const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
-          const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
-          // sell_note is NEVER shown to unauthenticated users
-          const sellNoteHtml = (currentUser && slot.sellNote) ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>` : '';
-          return `<div class="${classes}">
-            <div class="featured-slot-main">
-              <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
-              ${priceHtml}
-              ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
-            </div>
-            ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
-            ${sellNoteHtml}
-          </div>`;
-        }).join('');
-        return `<div class="featured-group">
-          <div class="featured-group-name">${escHtml(group.name)}</div>
-          ${slotsHtml}
-        </div>`;
-      }).join('');
-    } else {
-      featuredEl.style.display = 'none';
-      featuredEl.innerHTML = '';
-    }
-  }
-
+  renderFeaturedPublicSection();
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
   CATEGORY_DEFS.forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
-    const section = document.createElement('div');
-    section.id = 'pub-section-' + cat.id;
-    const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
-    section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
-    const onMenuItems = state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu');
-    if (!onMenuItems.length && state.items.every(i => i.onMenu === false || i.visibility === 'off_menu')) return;
-    const itemsHtml = onMenuItems.length
-      ? onMenuItems.map(i => {
-          const is86      = !!i.eightySixed;
-          const hasDesc   = !!(i.desc && i.desc.trim());
-          const recipeIngredients = recipeArray(i.recipe);
-          const hasRecipe = recipeIngredients.length > 0;
-          const isFood    = MENU_TYPE === 'food';
-          const hasDetail = isFood ? false : (hasDesc || hasRecipe);
-          const classes   = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
-          const onClick   = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
-          const detailHtml = hasDetail ? `<div class="item-detail-panel">
-              ${hasDesc && hasRecipe
-                ? `<div class="detail-section"><div class="detail-label">Description</div><div class="item-desc-text">${escHtml(i.desc)}</div></div><div class="detail-section detail-section--bordered"><div class="detail-label">Recipe</div><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`
-                : hasDesc
-                  ? `<div class="detail-section"><div class="item-desc-text">${escHtml(i.desc)}</div></div>`
-                  : `<div class="detail-section"><div class="item-desc-text">${escHtml(recipeIngredients.join(', '))}</div></div>`}
-            </div>` : '';
-          const priceHtml = i.price
-            ? (isFood
-                ? `<span class="item-price-tag">${escHtml(i.price)}</span>`
-                : `<span class="item-price-badge">${escHtml(i.price)}</span>`)
-            : '';
-          return `<div class="${classes}" ${onClick}>
-            <div class="item-main-row">
-              <div class="dot" aria-hidden="true"></div>
-              <span class="item-name-text">${escHtml(i.name)}${isFood ? '' : priceHtml}</span>
-              ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
-              ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
-            </div>
-            ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}
-            ${detailHtml}
-          </div>`;
-        }).join('')
-      : `<div class="empty-menu">Nothing here yet — check back soon.</div>`;
-    section.innerHTML = `
-      <div class="menu-section-header collapsible-header" role="button" tabindex="0"
-           aria-expanded="${isCollapsed ? 'false' : 'true'}"
-           onclick="togglePublicCategory('${escHtml(cat.id)}')"
-           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();togglePublicCategory('${escHtml(cat.id)}')}">
-        <div class="menu-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
-        <div><div class="menu-section-title">${escHtml(cat.title)}</div><div class="menu-section-sub">${escHtml(cat.sub || '')}</div></div>
-        <span class="category-chevron">›</span>
-      </div>
-      <div class="menu-items">${itemsHtml}</div>`;
-    container.appendChild(section);
+    const section = buildPublicCategorySection(cat, state, lastSentCats);
+    if (section) container.appendChild(section);
   });
   updateCollapseAllBtn();
 }
@@ -1745,15 +1816,10 @@ async function onSwitchMenuClick() {
   showMenuPicker(async () => {
     // Reload menu data into the manager view for the newly selected menu
     _uncatCategoryUuid = null;
-    try {
-      const data = await sbRead();
-      if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
-      else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
-    } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
-    _featuredGroups = await sbReadFeatured(MENU_ID);
+    await loadActiveMenuState();
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
-    renderManagerCategories();
+    refreshManagerViews();
     if (typeof renderCatManager  === 'function') renderCatManager();
     if (typeof renderDatabase    === 'function') renderDatabase();
     if (typeof renderUsersList   === 'function') renderUsersList();
@@ -1765,15 +1831,9 @@ async function onSwitchMenuClick() {
 async function onPublicSwitchMenuClick() {
   showMenuPicker(async () => {
     // Reload public view for the newly selected menu
-    try {
-      const data = await sbRead();
-      if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
-      else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
-    } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
-    _featuredGroups = await sbReadFeatured(MENU_ID);
+    await loadActiveMenuState();
     applyDesign(currentDesign);
-    renderPublicView();
-    updateLastUpdatedLabel();
+    renderPublicViews();
   });
 }
 
@@ -2281,32 +2341,11 @@ function renderUncategorizedItems() {
     return;
   }
   items.forEach(item => {
-    const hasDesc   = !!(item.desc && item.desc.trim());
-    const hasRecipe = recipeArray(item.recipe).length > 0;
     const wrapper = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
-    wrapper.innerHTML = `
-      <div class="current-item">
-        <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
-        <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
-        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
-      </div>
-      <div class="desc-row" id="desc-row-${item.id}">
-        <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
-          onblur="saveDesc('${UNCATEGORIZED_ID}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
-      </div>
-      <div class="recipe-row" id="recipe-row-${item.id}">
-        <div class="recipe-ingredient-list" id="recipe-list-${item.id}"></div>
-        <div class="add-ingredient-area">
-          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text"
-            placeholder="Add ingredient..."
-            onkeydown="handleIngredientKeydown(event,'${UNCATEGORIZED_ID}','${item.id}')"/>
-          <button class="add-ingredient-btn" onclick="addIngredient('${UNCATEGORIZED_ID}','${item.id}')">+</button>
-        </div>
-      </div>`;
+    wrapper.innerHTML = buildUncategorizedItemHtml(item);
     listEl.appendChild(wrapper);
-    renderRecipeIngredients(UNCATEGORIZED_ID, item.id);
   });
 }
 
@@ -2335,6 +2374,70 @@ function toggleManagerCategory(catId) {
   }
 }
 
+function buildRecipeListHtml(catId, itemId, ingredients) {
+  return ingredients.map((ing, idx) =>
+    `<div class="ingredient-row">
+      <span class="ingredient-text">${escHtml(ing)}</span>
+      <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})" aria-label="Remove ingredient">×</button>
+    </div>`
+  ).join('');
+}
+
+function buildManagerItemEditorHtml(item, catId, itemId, ingredients) {
+  return `<div class="desc-row" id="desc-row-${itemId}">
+      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it..."
+        onblur="saveDesc('${catId}','${itemId}',this.value)">${escHtml(item.desc || '')}</textarea>
+    </div>
+    <div class="recipe-row" id="recipe-row-${itemId}">
+      <div class="recipe-ingredient-list" id="recipe-list-${itemId}">${buildRecipeListHtml(catId, itemId, ingredients)}</div>
+      <div class="add-ingredient-area">
+        <input class="add-ingredient-input" id="ingredient-input-${itemId}" type="text"
+          placeholder="Add ingredient..."
+          onkeydown="handleIngredientKeydown(event,'${catId}','${itemId}')"/>
+        <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${itemId}')">+</button>
+      </div>
+    </div>`;
+}
+
+function buildUncategorizedItemHtml(item) {
+  const ingredients = recipeArray(item.recipe);
+  const hasDesc = !!(item.desc && item.desc.trim());
+  const hasRecipe = ingredients.length > 0;
+  return `<div class="current-item">
+      <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+    </div>
+    ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
+}
+
+function buildManagerItemHtml(item, catId, lastSentNames) {
+  const ingredients = recipeArray(item.recipe);
+  const isNew = !lastSentNames.has(item.name.trim().toLowerCase());
+  const is86 = !!item.eightySixed;
+  const hasDesc = !!(item.desc && item.desc.trim());
+  const hasRecipe = ingredients.length > 0;
+  const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
+  const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
+  return `<div class="${rowClass}">
+      <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
+      <div class="item-name"><input type="text" value="${escHtml(item.name)}"
+        aria-label="Item name"
+        onblur="renameItem('${catId}','${item.id}',this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
+        onblur="savePrice('${catId}','${item.id}',this.value)"
+        value="${escHtml(item.price||'')}"/>
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
+        style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
+      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
+      <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
+    </div>
+    ${buildManagerItemEditorHtml(item, catId, item.id, ingredients)}`;
+}
+
 function renderManagerItems(catId) {
   const state = menuState[catId] || { items: [], lastSent: [] };
   const lastSentNames = new Set(state.lastSent.filter(i => i.onMenu !== false).map(i => i.name.trim().toLowerCase()));
@@ -2349,58 +2452,38 @@ function renderManagerItems(catId) {
     return;
   }
   visibleItems.forEach(item => {
-    const isNew    = !lastSentNames.has(item.name.trim().toLowerCase());
-    const is86     = !!item.eightySixed;
-    const hasDesc   = !!(item.desc && item.desc.trim());
-    const hasRecipe = recipeArray(item.recipe).length > 0;
     const wrapper  = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
-    const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
-    const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
-    wrapper.innerHTML = `
-      <div class="${rowClass}">
-        <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
-        <div class="item-name"><input type="text" value="${escHtml(item.name)}"
-          aria-label="Item name"
-          onblur="renameItem('${catId}','${item.id}',this.value)"
-          onkeydown="if(event.key==='Enter')this.blur()"/></div>
-        <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
-          onblur="savePrice('${catId}','${item.id}',this.value)"
-          value="${escHtml(item.price||'')}"/>
-        <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
-        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
-          style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
-        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-        <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
-        <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
-      </div>
-      <div class="desc-row" id="desc-row-${item.id}">
-        <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it..."
-          onblur="saveDesc('${catId}','${item.id}',this.value)">${escHtml(item.desc || '')}</textarea>
-      </div>
-      <div class="recipe-row" id="recipe-row-${item.id}">
-        <div class="recipe-ingredient-list" id="recipe-list-${item.id}"></div>
-        <div class="add-ingredient-area">
-          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text"
-            placeholder="Add ingredient..."
-            onkeydown="handleIngredientKeydown(event,'${catId}','${item.id}')"/>
-          <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${item.id}')">+</button>
-        </div>
-      </div>`;
+    wrapper.innerHTML = buildManagerItemHtml(item, catId, lastSentNames);
     listEl.appendChild(wrapper);
-    renderRecipeIngredients(catId, item.id);
   });
 }
 
-async function persistState() {
-  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
-  try {
-    // 1. Upsert existing categories (those with a DB UUID)
-    const catRows = CATEGORY_DEFS
-      .filter(c => c._uuid)
-      .map((c, idx) => ({
-        id:            c._uuid,
+function buildCategoryUpsertRows() {
+  return CATEGORY_DEFS
+    .map((c, idx) => ({ c, idx }))
+    .filter(({ c }) => c._uuid)
+    .map(({ c, idx }) => ({
+      id:            c._uuid,
+      menu_id:       MENU_ID,
+      key:           c.id,
+      label:         c.title,
+      icon:          c.icon        || '',
+      color:         c.color       || '',
+      sub:           c.sub         || '',
+      placeholder:   c.placeholder || '',
+      display_order: idx,
+    }));
+}
+
+async function insertNewCategories() {
+  for (const [idx, c] of CATEGORY_DEFS.entries()) {
+    if (c._uuid) continue;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+      method:  'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body:    JSON.stringify({
         menu_id:       MENU_ID,
         key:           c.id,
         label:         c.title,
@@ -2408,8 +2491,76 @@ async function persistState() {
         color:         c.color       || '',
         sub:           c.sub         || '',
         placeholder:   c.placeholder || '',
-        display_order: CATEGORY_DEFS.indexOf(c),
-      }));
+        display_order: idx,
+      }),
+    });
+    if (r.ok) { const [row] = await r.json(); c._uuid = row.id; }
+  }
+}
+
+function buildItemUpsertRows() {
+  const itemRows = [];
+  CATEGORY_DEFS.forEach(cat => {
+    if (!cat._uuid) return;
+    (menuState[cat.id]?.items || []).forEach((item, idx) => {
+      itemRows.push({
+        id:              item.id,
+        category_id:     cat._uuid,
+        name:            item.name,
+        desc:            item.desc           || '',
+        recipe:          item.recipe         || [],
+        price:           item.price          || null,
+        is_eighty_sixed: item.eightySixed    || false,
+        on_menu:         item.onMenu         !== false,
+        visibility:      item.visibility     || 'public',
+        display_order:   idx,
+      });
+    });
+  });
+  if (_uncatCategoryUuid) {
+    (menuState[UNCATEGORIZED_ID]?.items || []).forEach((item, idx) => {
+      itemRows.push({
+        id:              item.id,
+        category_id:     _uncatCategoryUuid,
+        name:            item.name,
+        desc:            item.desc   || '',
+        recipe:          item.recipe || [],
+        price:           item.price  || null,
+        is_eighty_sixed: false,
+        on_menu:         false,
+        visibility:      item.visibility || 'public',
+        display_order:   idx,
+      });
+    });
+  }
+  return itemRows;
+}
+
+async function flushDeletedItems() {
+  if (!_deletedItemIds.size) return;
+  const ids = [..._deletedItemIds].map(id => `"${id}"`).join(',');
+  await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${ids})`, {
+    method: 'DELETE', headers: sbHeaders(),
+  });
+  _deletedItemIds.clear();
+}
+
+function finalizePersistStatus(ok) {
+  const syncEl = document.getElementById('sync-status');
+  if (!syncEl) return;
+  if (ok) {
+    syncEl.textContent = '';
+    syncEl.className = '';
+  } else {
+    syncEl.textContent = '⚠️ Cloud sync failed';
+    syncEl.className = 'sync-error';
+  }
+}
+
+async function persistState() {
+  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
+  try {
+    const catRows = buildCategoryUpsertRows();
     if (catRows.length) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
         method:  'POST',
@@ -2419,61 +2570,9 @@ async function persistState() {
       if (!r.ok) throw new Error(`category upsert: ${r.status}`);
     }
 
-    // 2. Insert new categories (no UUID yet) and capture their generated IDs
-    for (const c of CATEGORY_DEFS) {
-      if (c._uuid) continue;
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-        method:  'POST',
-        headers: sbHeaders({ 'Prefer': 'return=representation' }),
-        body:    JSON.stringify({
-          menu_id:       MENU_ID,
-          key:           c.id,
-          label:         c.title,
-          icon:          c.icon        || '',
-          color:         c.color       || '',
-          sub:           c.sub         || '',
-          placeholder:   c.placeholder || '',
-          display_order: CATEGORY_DEFS.indexOf(c),
-        }),
-      });
-      if (r.ok) { const [row] = await r.json(); c._uuid = row.id; }
-    }
+    await insertNewCategories();
 
-    // 3. Upsert all items
-    const itemRows = [];
-    CATEGORY_DEFS.forEach(cat => {
-      if (!cat._uuid) return;
-      (menuState[cat.id]?.items || []).forEach((item, idx) => {
-        itemRows.push({
-          id:              item.id,
-          category_id:     cat._uuid,
-          name:            item.name,
-          desc:            item.desc           || '',
-          recipe:          item.recipe         || [],
-          price:           item.price          || null,
-          is_eighty_sixed: item.eightySixed    || false,
-          on_menu:         item.onMenu         !== false,
-          visibility:      item.visibility     || 'public',
-          display_order:   idx,
-        });
-      });
-    });
-    if (_uncatCategoryUuid) {
-      (menuState[UNCATEGORIZED_ID]?.items || []).forEach((item, idx) => {
-        itemRows.push({
-          id:              item.id,
-          category_id:     _uncatCategoryUuid,
-          name:            item.name,
-          desc:            item.desc   || '',
-          recipe:          item.recipe || [],
-          price:           item.price  || null,
-          is_eighty_sixed: false,
-          on_menu:         false,
-          visibility:      item.visibility || 'public',
-          display_order:   idx,
-        });
-      });
-    }
+    const itemRows = buildItemUpsertRows();
     if (itemRows.length) {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
         method:  'POST',
@@ -2483,27 +2582,17 @@ async function persistState() {
       if (!r.ok) throw new Error(`items upsert: ${r.status}`);
     }
 
-    // 4. Delete pruned items
-    if (_deletedItemIds.size) {
-      const ids = [..._deletedItemIds].map(id => `"${id}"`).join(',');
-      await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${ids})`, {
-        method: 'DELETE', headers: sbHeaders(),
-      });
-      _deletedItemIds.clear();
-    }
+    await flushDeletedItems();
 
-    // 5. Sync bot_id to menu_meta; design to restaurant
     await Promise.all([
       sbPatchMenuMeta({ bot_id: BOT_ID }),
       sbPatchRestaurantDesign(currentDesign),
     ]);
 
-    const syncEl = document.getElementById('sync-status');
-    if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
+    finalizePersistStatus(true);
     return true;
   } catch(e) {
-    const syncEl = document.getElementById('sync-status');
-    if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
+    finalizePersistStatus(false);
     showToast('⚠️ Cloud save failed.', 'error');
     return false;
   }
@@ -2522,8 +2611,7 @@ async function saveMenu() {
     updateLastUpdatedLabel();
     showToast('✅ Menu saved!', 'success');
   } catch(e) {
-    const syncEl = document.getElementById('sync-status');
-    if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
+    finalizePersistStatus(false);
     showToast('⚠️ Cloud save failed.', 'error');
   }
 }
@@ -2533,6 +2621,7 @@ function addItem(catId) {
   const name = input.value.trim();
   if (!name) return;
   const nameLower = name.toLowerCase();
+  let movedFromUncategorized = false;
   if (!menuState[catId]) menuState[catId] = { items: [], lastSent: [] };
   const alreadyOnMenu = menuState[catId].items.find(
     i => i.onMenu !== false && i.name.toLowerCase() === nameLower
@@ -2550,6 +2639,7 @@ function addItem(catId) {
       if (uncatIdx !== -1) {
         const [uncatItem] = menuState[UNCATEGORIZED_ID].items.splice(uncatIdx, 1);
         menuState[catId].items.push({ ...uncatItem, onMenu: true });
+        movedFromUncategorized = true;
       } else {
         menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: true });
       }
@@ -2559,6 +2649,7 @@ function addItem(catId) {
   hideAutocomplete(catId);
   invalidateDiff();
   renderManagerItems(catId);
+  if (movedFromUncategorized) renderUncategorizedItems();
   input.focus();
   updateDraftIndicator();
 }
@@ -2566,18 +2657,28 @@ function addItem(catId) {
 // ─── AUTOCOMPLETE ─────────────────────────────────────────────────────────────
 let _acIdx = -1;
 
+function getAutocompleteIndex(catId) {
+  const categoryItems = menuState[catId]?.items || [];
+  const uncategorizedItems = menuState[UNCATEGORIZED_ID]?.items || [];
+  return {
+    categoryItems,
+    uncategorizedItems,
+    categoryNames: new Set(categoryItems.map(i => i.name.trim().toLowerCase())),
+  };
+}
+
 function showAutocomplete(catId) {
   const val = document.getElementById('new-input-' + catId).value.trim();
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
   if (!val) { hideAutocomplete(catId); return; }
   const valLower = val.toLowerCase();
-  const catMatches = (menuState[catId]?.items || []).filter(
+  const { categoryItems, uncategorizedItems, categoryNames } = getAutocompleteIndex(catId);
+  const catMatches = categoryItems.filter(
     i => i.onMenu === false && i.name.toLowerCase().startsWith(valLower)
   );
-  const catNames = new Set((menuState[catId]?.items || []).map(i => i.name.trim().toLowerCase()));
-  const uncatMatches = (menuState[UNCATEGORIZED_ID]?.items || []).filter(
-    i => i.name.toLowerCase().startsWith(valLower) && !catNames.has(i.name.trim().toLowerCase())
+  const uncatMatches = uncategorizedItems.filter(
+    i => i.name.toLowerCase().startsWith(valLower) && !categoryNames.has(i.name.trim().toLowerCase())
   );
   const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
@@ -2682,12 +2783,7 @@ function renderRecipeIngredients(catId, itemId) {
   const list = document.getElementById('recipe-list-' + itemId);
   if (!list) return;
   const ingredients = recipeArray(item.recipe);
-  list.innerHTML = ingredients.map((ing, idx) =>
-    `<div class="ingredient-row">
-      <span class="ingredient-text">${escHtml(ing)}</span>
-      <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})" aria-label="Remove ingredient">×</button>
-    </div>`
-  ).join('');
+  list.innerHTML = buildRecipeListHtml(catId, itemId, ingredients);
 }
 
 async function addIngredient(catId, itemId) {
@@ -2872,52 +2968,98 @@ function restoreLabel(catId) {
   return 'Back in Stock';
 }
 
-function computeDiff() {
-  const results = [];
-  CATEGORY_DEFS.forEach(cat => {
-    const state = menuState[cat.id] || { items: [], lastSent: [] };
-    const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
-    const eightySixed = [], restored = [];
-    const eightySixedNames = new Set(), restoredNames = new Set();
-    state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu').forEach(item => {
-      const nameLow = item.name.trim().toLowerCase();
-      const prev = lastByName.get(nameLow);
-      if (prev && prev.onMenu !== false) {
-        if (!prev.eightySixed &&  item.eightySixed) { eightySixed.push(item.name.trim()); eightySixedNames.add(nameLow); }
-        if ( prev.eightySixed && !item.eightySixed) { restored.push(item.name.trim());    restoredNames.add(nameLow); }
-      }
-    });
-    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed && i.visibility !== 'off_menu').map(i => i.name.trim()).filter(Boolean);
-    const lastNames    = state.lastSent.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
-    const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
-    const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
-    const added   = currentNames.filter(n => !lastSet.has(n.toLowerCase())   && !restoredNames.has(n.toLowerCase()));
-    const removed = lastNames.filter(n   => !currentSet.has(n.toLowerCase()) && !eightySixedNames.has(n.toLowerCase()));
-    if (added.length || removed.length || eightySixed.length || restored.length) {
-      results.push({ id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored });
+function computeCategoryDiff(cat) {
+  const state = menuState[cat.id] || { items: [], lastSent: [] };
+  const lastByName = new Map();
+  const currentNames = [];
+  const lastNames = [];
+  const currentSet = new Set();
+  const lastSet = new Set();
+  const eightySixed = [];
+  const restored = [];
+  const eightySixedNames = new Set();
+  const restoredNames = new Set();
+
+  state.lastSent.forEach(item => {
+    const trimmed = item.name.trim();
+    const key = trimmed.toLowerCase();
+    lastByName.set(key, item);
+    if (item.onMenu !== false && !item.eightySixed && trimmed) {
+      lastNames.push(trimmed);
+      lastSet.add(key);
     }
   });
 
-  // Featured items diff
-  const currentFeaturedIds = new Set();
-  const featuredAdded = [], featuredRemoved = [];
-  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.add(s.itemId); }));
-  currentFeaturedIds.forEach(id => { if (!_lastSentFeaturedIds.has(id)) {
-    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
-    if (slot?.item) featuredAdded.push(slot.item.name);
-  }});
-  _lastSentFeaturedIds.forEach(id => { if (!currentFeaturedIds.has(id)) {
-    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
-    featuredRemoved.push(slot?.item?.name || '(removed item)');
-  }});
-  if (featuredAdded.length || featuredRemoved.length) {
-    results.push({ id: '__featured__', icon: '⭐', label: 'Featured', added: featuredAdded, removed: featuredRemoved, eightySixed: [], restored: [] });
-  }
+  state.items.forEach(item => {
+    const trimmed = item.name.trim();
+    const key = trimmed.toLowerCase();
+    const isVisible = item.onMenu !== false && item.visibility !== 'off_menu';
+    const prev = lastByName.get(key);
+    if (isVisible && prev && prev.onMenu !== false) {
+      if (!prev.eightySixed && item.eightySixed) { eightySixed.push(trimmed); eightySixedNames.add(key); }
+      if (prev.eightySixed && !item.eightySixed) { restored.push(trimmed); restoredNames.add(key); }
+    }
+    if (isVisible && !item.eightySixed && trimmed) {
+      currentNames.push(trimmed);
+      currentSet.add(key);
+    }
+  });
 
+  const added = currentNames.filter(n => !lastSet.has(n.toLowerCase()) && !restoredNames.has(n.toLowerCase()));
+  const removed = lastNames.filter(n => !currentSet.has(n.toLowerCase()) && !eightySixedNames.has(n.toLowerCase()));
+  if (!added.length && !removed.length && !eightySixed.length && !restored.length) return null;
+  return { id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored };
+}
+
+function computeFeaturedDiff() {
+  const featuredByItemId = new Map();
+  const currentFeaturedIds = new Set();
+  _featuredGroups.forEach(group => {
+    group.slots.forEach(slot => {
+      if (!slot.item) return;
+      currentFeaturedIds.add(slot.itemId);
+      featuredByItemId.set(slot.itemId, slot);
+    });
+  });
+  const featuredAdded = [];
+  const featuredRemoved = [];
+  currentFeaturedIds.forEach(id => {
+    if (!_lastSentFeaturedIds.has(id)) {
+      const slot = featuredByItemId.get(id);
+      if (slot?.item) featuredAdded.push(slot.item.name);
+    }
+  });
+  _lastSentFeaturedIds.forEach(id => {
+    if (!currentFeaturedIds.has(id)) {
+      const slot = featuredByItemId.get(id);
+      featuredRemoved.push(slot?.item?.name || '(removed item)');
+    }
+  });
+  if (!featuredAdded.length && !featuredRemoved.length) return null;
+  return { id: '__featured__', icon: '⭐', label: 'Featured', added: featuredAdded, removed: featuredRemoved, eightySixed: [], restored: [] };
+}
+
+function computeDiff() {
+  const results = [];
+  CATEGORY_DEFS.forEach(cat => {
+    const diff = computeCategoryDiff(cat);
+    if (diff) results.push(diff);
+  });
+  const featuredDiff = computeFeaturedDiff();
+  if (featuredDiff) results.push(featuredDiff);
   return results;
 }
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
+function buildPreviewBlockHtml(section) {
+  let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
+  section.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
+  section.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
+  section.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
+  section.restored.forEach(n    => { html += `<div class="preview-line add"><span>↩</span> ${restoreLabel(section.id)}: ${escHtml(n)}</div>`; });
+  return html;
+}
+
 function openPreview() {
   const diff = getCachedDiff();
   const content = document.getElementById('preview-content');
@@ -2931,12 +3073,7 @@ function openPreview() {
     diff.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
-      let html = `<div class="preview-cat">${escHtml(s.icon)} ${escHtml(s.label)}</div>`;
-      s.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
-      s.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
-      s.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
-      s.restored.forEach(n    => { html += `<div class="preview-line add"><span>↩</span> ${restoreLabel(s.id)}: ${escHtml(n)}</div>`; });
-      block.innerHTML = html;
+      block.innerHTML = buildPreviewBlockHtml(s);
       content.appendChild(block);
     });
   }
@@ -2945,27 +3082,70 @@ function openPreview() {
 function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
 
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
-async function sendUpdate() {
-  const diff = getCachedDiff();
-  if (!diff.length) { closeModal(); return; }
-
+function buildPatchMessage(diff) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
-
   const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
   const menuLabel = _activeMenuName ? _activeMenuName.toUpperCase() : 'MENU';
-  let lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
-  diff.forEach(s => {
-    lines.push(`${s.icon} ${s.label.toUpperCase()}`);
-    s.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));
-    s.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
-    s.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
-    s.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(s.id)}: ${cleanName(n)}`));
+  const lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
+  diff.forEach(section => {
+    lines.push(`${section.icon} ${section.label.toUpperCase()}`);
+    section.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));
+    section.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
+    section.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
+    section.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
     lines.push('');
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
-  const patchMessage = lines.join('\n').trim();
+  return lines.join('\n').trim();
+}
+
+function snapshotLastSentState() {
+  const lastSentState = {};
+  CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
+  return lastSentState;
+}
+
+function getCurrentFeaturedIds() {
+  const ids = [];
+  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) ids.push(s.itemId); }));
+  return ids;
+}
+
+function applySentState(diff, ts) {
+  CATEGORY_DEFS.forEach(cat => {
+    if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({ ...i }));
+  });
+  menuState._meta = {
+    ...(menuState._meta || {}),
+    lastUpdatedTs: ts.toString(),
+    lastSentTs: ts.toString(),
+    lastSentCategories: diff.map(d => d.id),
+  };
+  lsSet(LS_KEYS.lastUpdated, ts.toString());
+  invalidateDiff();
+}
+
+async function logUpdate(diff, patchMessage) {
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
+    method: 'POST',
+    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+    body: JSON.stringify({
+      menu_id:   MENU_ID,
+      user_id:   currentUser.uid,
+      user_name: currentUser.name || currentUser.email || '',
+      diff:      diff,
+      message:   patchMessage,
+    }),
+  }).catch(() => {});
+}
+
+async function sendUpdate() {
+  const diff = getCachedDiff();
+  if (!diff.length) { closeModal(); return; }
+  const patchMessage = buildPatchMessage(diff);
 
   if (patchMessage.length > 1000) {
     showToast('Update is long and will be truncated.', 'info');
@@ -2987,25 +3167,11 @@ async function sendUpdate() {
 
     if (r1.status === 202 || r1.status === 207) {
       const ts = Date.now();
-      CATEGORY_DEFS.forEach(cat => {
-        if (menuState[cat.id]) menuState[cat.id].lastSent = (menuState[cat.id].items || []).map(i => ({...i}));
-      });
-      menuState._meta = {
-        ...(menuState._meta || {}),
-        lastUpdatedTs:      ts.toString(),
-        lastSentTs:         ts.toString(),
-        lastSentCategories: diff.map(d => d.id),
-      };
-      lsSet(LS_KEYS.lastUpdated, ts.toString());
-      invalidateDiff();
+      applySentState(diff, ts);
       const persisted = await persistState();
       if (!persisted) throw new Error('persist failed');
-      // Build last_sent_state snapshot for diff computation on next load
-      const lastSentState = {};
-      CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
-      // Snapshot featured item IDs
-      const currentFeaturedIds = [];
-      _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.push(s.itemId); }));
+      const lastSentState = snapshotLastSentState();
+      const currentFeaturedIds = getCurrentFeaturedIds();
       _lastSentFeaturedIds = new Set(currentFeaturedIds);
       await sbPatchMenuMeta({
         last_updated_ts:      ts,
@@ -3017,20 +3183,7 @@ async function sendUpdate() {
       updateLastUpdatedLabel();
       renderManagerCategories();
       updateDraftIndicator();
-      // Log update to audit trail (fire-and-forget)
-      if (SUPABASE_URL && currentUser?.accessToken) {
-        fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
-          method: 'POST',
-          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify({
-            menu_id:   MENU_ID,
-            user_id:   currentUser.uid,
-            user_name: currentUser.name || currentUser.email || '',
-            diff:      diff,
-            message:   patchMessage,
-          }),
-        }).catch(() => {}); // silent failure — audit log is non-critical
-      }
+      logUpdate(diff, patchMessage);
       closeModal();
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
     } else if (r1.status === 401) {
@@ -3114,6 +3267,29 @@ async function loadUsers() {
   }
 }
 
+function summarizeHistoryDiff(diff) {
+  const summaryParts = [];
+  const totalAdded = diff.reduce((n, s) => n + (s.added?.length || 0), 0);
+  const totalRemoved = diff.reduce((n, s) => n + (s.removed?.length || 0), 0);
+  const total86 = diff.reduce((n, s) => n + (s.eightySixed?.length || 0), 0);
+  const totalRestored = diff.reduce((n, s) => n + (s.restored?.length || 0), 0);
+  if (totalAdded) summaryParts.push(`+${totalAdded} added`);
+  if (totalRemoved) summaryParts.push(`-${totalRemoved} removed`);
+  if (total86) summaryParts.push(`${total86} 86'd`);
+  if (totalRestored) summaryParts.push(`${totalRestored} restored`);
+  return summaryParts.join(', ') || 'No item changes';
+}
+
+function buildHistoryDetailHtml(diff) {
+  return diff.map(s =>
+    `<div class="history-cat"><strong>${escHtml(s.icon || '')} ${escHtml(s.label || '')}</strong></div>` +
+    (s.added || []).map(n => `<div class="history-line history-add">+ ${escHtml(n)}</div>`).join('') +
+    (s.removed || []).map(n => `<div class="history-line history-remove">- ${escHtml(n)}</div>`).join('') +
+    (s.eightySixed || []).map(n => `<div class="history-line history-remove">86'd: ${escHtml(n)}</div>`).join('') +
+    (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('')
+  ).join('');
+}
+
 async function renderUpdateHistory() {
   const wrap = document.getElementById('update-history-wrap');
   if (!wrap) return;
@@ -3140,24 +3316,8 @@ async function renderUpdateHistory() {
       const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
       const diff = log.diff || [];
-      const summaryParts = [];
-      const totalAdded = diff.reduce((n, s) => n + (s.added?.length || 0), 0);
-      const totalRemoved = diff.reduce((n, s) => n + (s.removed?.length || 0), 0);
-      const total86 = diff.reduce((n, s) => n + (s.eightySixed?.length || 0), 0);
-      const totalRestored = diff.reduce((n, s) => n + (s.restored?.length || 0), 0);
-      if (totalAdded) summaryParts.push(`+${totalAdded} added`);
-      if (totalRemoved) summaryParts.push(`-${totalRemoved} removed`);
-      if (total86) summaryParts.push(`${total86} 86'd`);
-      if (totalRestored) summaryParts.push(`${totalRestored} restored`);
-      const summary = summaryParts.join(', ') || 'No item changes';
-
-      const detailHtml = diff.map(s =>
-        `<div class="history-cat"><strong>${escHtml(s.icon || '')} ${escHtml(s.label || '')}</strong></div>` +
-        (s.added || []).map(n => `<div class="history-line history-add">+ ${escHtml(n)}</div>`).join('') +
-        (s.removed || []).map(n => `<div class="history-line history-remove">- ${escHtml(n)}</div>`).join('') +
-        (s.eightySixed || []).map(n => `<div class="history-line history-remove">86'd: ${escHtml(n)}</div>`).join('') +
-        (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('')
-      ).join('');
+      const summary = summarizeHistoryDiff(diff);
+      const detailHtml = buildHistoryDetailHtml(diff);
 
       return `<div class="history-entry">
         <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
@@ -3250,27 +3410,41 @@ function renderMenuAccessForUser(userId) {
   if (el) el.innerHTML = buildMenuAccessHTML(u);
 }
 
+async function patchUser(payload) {
+  const r = await fetch('/api/users', {
+    method: 'PATCH',
+    headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new Error((await r.json()).error || 'Request failed.');
+  return r;
+}
+
+function updateUserRoleBadge(select, role) {
+  const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
+  if (!badge) return;
+  const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
+  badge.className = `user-role-badge user-role-badge--${role}`;
+  badge.textContent = label[role] || role;
+}
+
+function updateAdminUserCache(userId, update) {
+  const user = window._adminUserList?.find(u => u.id === userId);
+  if (user) Object.assign(user, update);
+}
+
 async function saveUserRole(userId) {
   const select = document.getElementById(`user-role-${userId}`);
   if (!select) return;
   const role = select.value;
   try {
-    const r = await fetch('/api/users', {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, role }),
-    });
-    if (!r.ok) { showToast((await r.json()).error || 'Failed to update role.', 'error'); return; }
+    await patchUser({ userId, role });
     showToast('Role updated.', 'success');
-    const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
-    if (badge) {
-      const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
-      badge.className = `user-role-badge user-role-badge--${role}`;
-      badge.textContent = label[role] || role;
-    }
+    updateAdminUserCache(userId, { role });
+    updateUserRoleBadge(select, role);
     renderMenuAccessForUser(userId);
   } catch (e) {
-    showToast('Network error.', 'error');
+    showToast(e.message || 'Network error.', 'error');
   }
 }
 
@@ -3278,20 +3452,11 @@ async function saveMenuAccess(userId) {
   const checkboxes = document.querySelectorAll(`.user-menu-access-cb[data-user="${userId}"]`);
   const menuAccess = [...checkboxes].filter(cb => cb.checked).map(cb => cb.dataset.menu);
   try {
-    const r = await fetch('/api/users', {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, menuAccess }),
-    });
-    if (!r.ok) { showToast((await r.json()).error || 'Failed to update access.', 'error'); return; }
-    // Update local cache
-    if (window._adminUserList) {
-      const u = window._adminUserList.find(u => u.id === userId);
-      if (u) u.menuAccess = menuAccess;
-    }
+    await patchUser({ userId, menuAccess });
+    updateAdminUserCache(userId, { menuAccess });
     showToast('Menu access updated.', 'success');
   } catch (e) {
-    showToast('Network error.', 'error');
+    showToast(e.message || 'Network error.', 'error');
   }
 }
 
@@ -3299,15 +3464,11 @@ async function saveUserName(userId) {
   const input = document.getElementById(`user-name-${userId}`);
   if (!input) return;
   try {
-    const r = await fetch('/api/users', {
-      method: 'PATCH',
-      headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, name: input.value }),
-    });
-    if (!r.ok) { showToast((await r.json()).error || 'Failed to update name.', 'error'); return; }
+    await patchUser({ userId, name: input.value });
+    updateAdminUserCache(userId, { name: input.value });
     showToast('Name updated.', 'success');
   } catch (e) {
-    showToast('Network error.', 'error');
+    showToast(e.message || 'Network error.', 'error');
   }
 }
 
@@ -3372,22 +3533,26 @@ function renderFeaturedTab() {
   }).join('');
 }
 
+function getFeatureableMatches(groupId, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const group = _featuredGroups.find(g => g.id === groupId);
+  const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
+  const matches = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.items || []).forEach(item => {
+      if (item.onMenu === false || existingItemIds.has(item.id) || !item.name.toLowerCase().includes(q)) return;
+      matches.push({ id: item.id, name: item.name, cat: cat.title, visibility: item.visibility });
+    });
+  });
+  return matches;
+}
+
 function filterFeaturedPicker(groupId, query) {
   const list = document.getElementById('featured-picker-' + groupId);
   if (!list) return;
-  const q = query.trim().toLowerCase();
-  if (!q) { list.innerHTML = ''; return; }
-
-  const group = _featuredGroups.find(g => g.id === groupId);
-  const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
-
-  // Search all items including off-menu
-  const matches = [];
-  CATEGORY_DEFS.forEach(cat => {
-    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && !existingItemIds.has(i.id) && i.name.toLowerCase().includes(q))
-      .forEach(i => matches.push({ id: i.id, name: i.name, cat: cat.title, visibility: i.visibility }));
-  });
-
+  const matches = getFeatureableMatches(groupId, query);
+  if (!query.trim()) { list.innerHTML = ''; return; }
   list.innerHTML = matches.slice(0, 8).map(m =>
     `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
       ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(m.cat)}</span>
@@ -3407,7 +3572,7 @@ async function addFeaturedSlot(groupId, itemId) {
       body: JSON.stringify({ featured_group_id: groupId, item_id: itemId, display_order: nextOrder }),
     });
     if (!r.ok) throw new Error('insert failed');
-    _featuredGroups = await sbReadFeatured(MENU_ID);
+    await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
     invalidateDiff();
@@ -3421,7 +3586,7 @@ async function removeFeaturedSlot(slotId, groupId) {
     await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
       method: 'DELETE', headers: sbHeaders(),
     });
-    _featuredGroups = await sbReadFeatured(MENU_ID);
+    await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
     invalidateDiff();
@@ -3454,7 +3619,7 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
       fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${a.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: b.displayOrder }) }),
       fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${b.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: a.displayOrder }) }),
     ]);
-    _featuredGroups = await sbReadFeatured(MENU_ID);
+    await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
   } catch(e) { showToast('Failed to reorder.', 'error'); }
@@ -3480,15 +3645,17 @@ function checkFeaturedConfirmation() {
 async function confirmFeaturedToday() {
   const now = new Date().toISOString();
   try {
+    const requests = [];
     for (const group of _featuredGroups) {
       for (const slot of group.slots) {
-        await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slot.id}`, {
+        requests.push(fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slot.id}`, {
           method: 'PATCH',
           headers: sbHeaders({ 'Prefer': 'return=minimal' }),
           body: JSON.stringify({ confirmed_at: now, confirmed_by: currentUser?.uid || null }),
-        });
+        }));
       }
     }
+    await Promise.all(requests);
     sessionStorage.setItem('featured_confirmed', '1');
     const banner = document.getElementById('featured-confirm-banner');
     if (banner) banner.style.display = 'none';
@@ -3633,41 +3800,73 @@ function setDbFilter(key, value) {
   renderDatabaseTab();
 }
 
+function buildDatabaseRows() {
+  const rows = [];
+  let totalItems = 0;
+
+  CATEGORY_DEFS.forEach(cat => {
+    const all = (menuState[cat.id]?.items || []);
+    totalItems += all.length;
+    all.forEach(item => {
+      rows.push({
+        name: item.name,
+        category: cat.title,
+        recipe: recipeArray(item.recipe),
+        onMenu: item.onMenu,
+        eightySixed: !!item.eightySixed,
+      });
+    });
+  });
+  (menuState[UNCATEGORIZED_ID]?.items || []).forEach(item => {
+    rows.push({
+      name: item.name,
+      category: 'Uncategorized',
+      recipe: recipeArray(item.recipe),
+      onMenu: false,
+      eightySixed: false,
+    });
+    totalItems++;
+  });
+  return { rows, totalItems };
+}
+
+function filterDatabaseRows(rows, query) {
+  let filtered = rows;
+  if (dbFilters.recipe === 'yes') filtered = filtered.filter(r => r.recipe.length > 0);
+  if (dbFilters.recipe === 'no')  filtered = filtered.filter(r => r.recipe.length === 0);
+  if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu);
+  if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu);
+  if (query) {
+    filtered = filtered.filter(r =>
+      r.name.toLowerCase().includes(query) ||
+      r.category.toLowerCase().includes(query) ||
+      r.recipe.some(ing => ing.toLowerCase().includes(query))
+    );
+  }
+  return filtered.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function buildDatabaseTableHtml(rows) {
+  return `
+    <table class="db-table">
+      <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td class="db-name">${escHtml(r.name)}</td>
+          <td class="db-cat">${escHtml(r.category)}</td>
+          <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
+          <td>${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
 function renderDatabaseTab() {
   const wrap = document.getElementById('db-table-wrap');
   try {
     const query = (document.getElementById('db-search').value || '').toLowerCase().trim();
-    const rows = [];
-    let totalItems = 0;
-
-    CATEGORY_DEFS.forEach(cat => {
-      const all = (menuState[cat.id]?.items || []);
-      totalItems += all.length;
-      all.forEach(item => {
-        const recipe = recipeArray(item.recipe);
-        rows.push({ name: item.name, category: cat.title, recipe, onMenu: item.onMenu, eightySixed: !!item.eightySixed });
-      });
-    });
-    (menuState[UNCATEGORIZED_ID]?.items || []).forEach(item => {
-      const recipe = recipeArray(item.recipe);
-      rows.push({ name: item.name, category: 'Uncategorized', recipe, onMenu: false, eightySixed: false });
-      totalItems++;
-    });
-
-    let filtered = rows;
-    if (dbFilters.recipe === 'yes') filtered = filtered.filter(r => r.recipe.length > 0);
-    if (dbFilters.recipe === 'no')  filtered = filtered.filter(r => r.recipe.length === 0);
-    if (dbFilters.status === 'on')  filtered = filtered.filter(r => r.onMenu);
-    if (dbFilters.status === 'off') filtered = filtered.filter(r => !r.onMenu);
-    if (query) {
-      filtered = filtered.filter(r =>
-        r.name.toLowerCase().includes(query) ||
-        r.category.toLowerCase().includes(query) ||
-        r.recipe.some(ing => ing.toLowerCase().includes(query))
-      );
-    }
-
-    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    const { rows, totalItems } = buildDatabaseRows();
+    const filtered = filterDatabaseRows(rows, query);
 
     if (!filtered.length) {
       wrap.innerHTML = totalItems === 0
@@ -3676,18 +3875,7 @@ function renderDatabaseTab() {
       return;
     }
 
-    wrap.innerHTML = `
-      <table class="db-table">
-        <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
-        <tbody>${filtered.map(r => `
-          <tr>
-            <td class="db-name">${escHtml(r.name)}</td>
-            <td class="db-cat">${escHtml(r.category)}</td>
-            <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
-            <td>${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
+    wrap.innerHTML = buildDatabaseTableHtml(filtered);
   } catch(e) {
     wrap.innerHTML = `<p class="db-empty db-error">Error rendering database: ${escHtml(String(e))}</p>`;
   }
@@ -3728,25 +3916,75 @@ let _previewRole = null; // tracks active mock role; null = using real session
 
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
 
+async function fetchRestaurantMenuIndex() {
+  const [restRes, menuRes] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,slug&order=name.asc`, { headers: sbHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
+  ]);
+  if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
+  const restaurants = await restRes.json();
+  const allMenus = await menuRes.json();
+  _adminRestaurants = restaurants;
+  _adminAllMenus = allMenus;
+  return { restaurants, allMenus };
+}
+
+function groupMenusByRestaurant(allMenus) {
+  return allMenus.reduce((acc, menu) => {
+    if (!acc[menu.restaurant_id]) acc[menu.restaurant_id] = [];
+    acc[menu.restaurant_id].push(menu);
+    return acc;
+  }, {});
+}
+
+function buildMenuChipHtml(menu) {
+  return `<div class="menu-chip${menu.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(menu.id)}">
+    <span>${escHtml(menu.name)}</span>
+    <span class="menu-type-badge">${escHtml(menu.type || 'drinks')}</span>
+    <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(menu.id)},${escAttrJs(menu.name)})">Rename</button>
+    <button class="btn-small" onclick="archiveMenu(${escAttrJs(menu.id)},${!menu.archived})">${menu.archived ? 'Unarchive' : 'Archive'}</button>
+    <button class="btn-small" onclick="duplicateMenu(${escAttrJs(menu.id)},${escAttrJs(menu.name)},${escAttrJs(menu.restaurant_id)},${escAttrJs(menu.type || 'drinks')})">Duplicate</button>
+    <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(menu.id)},${escAttrJs(menu.name)})">Delete</button>
+  </div>`;
+}
+
+function buildRestaurantRowHtml(restaurant, menus) {
+  const chipsHtml = menus.map(buildMenuChipHtml).join('');
+  return `
+    <div class="restaurant-header">
+      <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      <button class="btn-small" onclick="openRenameRestaurantForm(${escAttrJs(restaurant.id)},${escAttrJs(restaurant.name)})">Rename</button>
+      <button class="btn-small btn-danger" onclick="confirmDeleteRestaurant(${escAttrJs(restaurant.id)},${escAttrJs(restaurant.name)})">Delete</button>
+    </div>
+    <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
+      ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">No menus yet.</span>'}
+    </div>
+    <div class="add-menu-form" id="add-menu-form-${escHtml(restaurant.id)}" style="display:none">
+      <div class="input-row">
+        <input type="text" class="new-menu-name" placeholder="Menu name"
+          oninput="syncMenuSlug(this)" id="new-menu-name-${escHtml(restaurant.id)}"/>
+        <input type="text" class="new-menu-slug" placeholder="slug" id="new-menu-slug-${escHtml(restaurant.id)}"
+          oninput="this.dataset.manuallyEdited='1'"/>
+        <select id="new-menu-type-${escHtml(restaurant.id)}">
+          <option value="drinks">Drinks</option>
+          <option value="food">Food</option>
+        </select>
+        <button class="btn-small" onclick="confirmCreateMenu('${escHtml(restaurant.id)}')">Add</button>
+        <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(restaurant.id)}').style.display='none'">Cancel</button>
+      </div>
+    </div>
+    <div style="padding:6px 14px 10px">
+      <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(restaurant.id)}').style.display='';document.getElementById('new-menu-name-${escHtml(restaurant.id)}').focus()">+ Add Menu</button>
+    </div>`;
+}
+
 async function renderMenusPanel() {
   const listEl = document.getElementById('menus-mgmt-list');
   if (!listEl) return;
   listEl.innerHTML = '<p class="db-empty">Loading…</p>';
   try {
-    const [restRes, menuRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,slug&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
-    ]);
-    if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
-    const restaurants = await restRes.json();
-    const allMenus    = await menuRes.json();
-    _adminRestaurants = restaurants;
-    _adminAllMenus = allMenus;
-    const byRestaurant = {};
-    allMenus.forEach(m => {
-      if (!byRestaurant[m.restaurant_id]) byRestaurant[m.restaurant_id] = [];
-      byRestaurant[m.restaurant_id].push(m);
-    });
+    const { restaurants, allMenus } = await fetchRestaurantMenuIndex();
+    const byRestaurant = groupMenusByRestaurant(allMenus);
     if (!restaurants.length) {
       listEl.innerHTML = '<p class="db-empty">No restaurants yet.</p>';
       return;
@@ -3757,46 +3995,68 @@ async function renderMenusPanel() {
       const row = document.createElement('div');
       row.className = 'restaurant-row';
       row.id = 'restaurant-row-' + escHtml(r.id);
-      const chipsHtml = menus.map(m => `
-        <div class="menu-chip${m.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(m.id)}">
-          <span>${escHtml(m.name)}</span>
-          <span class="menu-type-badge">${escHtml(m.type || 'drinks')}</span>
-          <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(m.id)},${escAttrJs(m.name)})">Rename</button>
-          <button class="btn-small" onclick="archiveMenu(${escAttrJs(m.id)},${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
-          <button class="btn-small" onclick="duplicateMenu(${escAttrJs(m.id)},${escAttrJs(m.name)},${escAttrJs(m.restaurant_id)},${escAttrJs(m.type || 'drinks')})">Duplicate</button>
-          <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(m.id)},${escAttrJs(m.name)})">Delete</button>
-        </div>`).join('');
-      row.innerHTML = `
-        <div class="restaurant-header">
-          <span class="restaurant-name" id="restaurant-name-${escHtml(r.id)}">${escHtml(r.name)}</span>
-          <button class="btn-small" onclick="openRenameRestaurantForm(${escAttrJs(r.id)},${escAttrJs(r.name)})">Rename</button>
-          <button class="btn-small btn-danger" onclick="confirmDeleteRestaurant(${escAttrJs(r.id)},${escAttrJs(r.name)})">Delete</button>
-        </div>
-        <div class="restaurant-menus" id="restaurant-menus-${escHtml(r.id)}">
-          ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">No menus yet.</span>'}
-        </div>
-        <div class="add-menu-form" id="add-menu-form-${escHtml(r.id)}" style="display:none">
-          <div class="input-row">
-            <input type="text" class="new-menu-name" placeholder="Menu name"
-              oninput="syncMenuSlug(this)" id="new-menu-name-${escHtml(r.id)}"/>
-            <input type="text" class="new-menu-slug" placeholder="slug" id="new-menu-slug-${escHtml(r.id)}"
-              oninput="this.dataset.manuallyEdited='1'"/>
-            <select id="new-menu-type-${escHtml(r.id)}">
-              <option value="drinks">Drinks</option>
-              <option value="food">Food</option>
-            </select>
-            <button class="btn-small" onclick="confirmCreateMenu('${escHtml(r.id)}')">Add</button>
-            <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(r.id)}').style.display='none'">Cancel</button>
-          </div>
-        </div>
-        <div style="padding:6px 14px 10px">
-          <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(r.id)}').style.display='';document.getElementById('new-menu-name-${escHtml(r.id)}').focus()">+ Add Menu</button>
-        </div>`;
+      row.innerHTML = buildRestaurantRowHtml(r, menus);
       listEl.appendChild(row);
     });
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
   }
+}
+
+async function createDuplicateMenuShell(restaurantId, newName, slug, menuType) {
+  const menuRes = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
+    method: 'POST',
+    headers: sbHeaders({ 'Prefer': 'return=representation' }),
+    body: JSON.stringify({ restaurant_id: restaurantId, name: newName.trim(), slug, type: menuType }),
+  });
+  if (menuRes.status === 409) throw new Error('Slug already taken — choose a different name.');
+  if (!menuRes.ok) throw new Error(await menuRes.text());
+  const [newMenu] = await menuRes.json();
+  return newMenu;
+}
+
+async function fetchSourceCategories(menuId) {
+  const catsRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${encodeURIComponent(menuId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+  if (!catsRes.ok) throw new Error('Failed to fetch categories');
+  return catsRes.json();
+}
+
+async function fetchItemsForCategory(categoryId, label) {
+  const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${encodeURIComponent(categoryId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+  if (!itemsRes.ok) throw new Error('Failed to fetch items for: ' + label);
+  return itemsRes.json();
+}
+
+async function copyMenuCategoriesAndItems(srcCats, newMenuId) {
+  for (const cat of srcCats) {
+    const { id: _id, menu_id: _mid, created_at: _ca, ...catFields } = cat;
+    const newCatRes = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ ...catFields, menu_id: newMenuId }),
+    });
+    if (!newCatRes.ok) throw new Error('Failed to copy category: ' + cat.label);
+    const [newCat] = await newCatRes.json();
+    const items = await fetchItemsForCategory(cat.id, cat.label);
+    if (!items.length) continue;
+    const newItems = items.map(it => {
+      const { id: _iid, category_id: _cid, created_at: _ica, ...fields } = it;
+      return { ...fields, category_id: newCat.id, is_eighty_sixed: false, is_draft: false, on_menu: true };
+    });
+    const bulkRes = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(newItems),
+    });
+    if (!bulkRes.ok) throw new Error('Failed to copy items for: ' + cat.label);
+  }
+}
+
+async function rollbackDuplicateMenu(newMenuId) {
+  if (!newMenuId) return;
+  await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(newMenuId)}`, {
+    method: 'DELETE', headers: sbHeaders(),
+  }).catch(() => {});
 }
 
 async function duplicateMenu(menuId, menuName, restaurantId, menuType) {
@@ -3807,67 +4067,20 @@ async function duplicateMenu(menuId, menuName, restaurantId, menuType) {
   showToast('Duplicating menu…', 'info');
   let newMenuId = null;
   try {
-    // Step 1: Create new menu
-    const menuRes = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ restaurant_id: restaurantId, name: newName.trim(), slug, type: menuType }),
-    });
-    if (menuRes.status === 409) { showToast('Slug already taken — choose a different name.', 'error'); return; }
-    if (!menuRes.ok) throw new Error(await menuRes.text());
-    const [newMenu] = await menuRes.json();
+    const newMenu = await createDuplicateMenuShell(restaurantId, newName, slug, menuType);
     newMenuId = newMenu.id;
-
-    // Step 2: Fetch source categories
-    const catsRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${encodeURIComponent(menuId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
-    if (!catsRes.ok) throw new Error('Failed to fetch categories');
-    const srcCats = await catsRes.json();
-
-    // Step 3 & 4: Deep-copy categories and their items
-    for (const cat of srcCats) {
-      const { id: _id, menu_id: _mid, created_at: _ca, ...catFields } = cat;
-      const newCatRes = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-        method: 'POST',
-        headers: sbHeaders({ 'Prefer': 'return=representation' }),
-        body: JSON.stringify({ ...catFields, menu_id: newMenuId }),
-      });
-      if (!newCatRes.ok) throw new Error('Failed to copy category: ' + cat.label);
-      const [newCat] = await newCatRes.json();
-
-      const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${encodeURIComponent(cat.id)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
-      if (!itemsRes.ok) throw new Error('Failed to fetch items for: ' + cat.label);
-      const items = await itemsRes.json();
-      if (items.length) {
-        const newItems = items.map(it => {
-          const { id: _iid, category_id: _cid, created_at: _ica, ...fields } = it;
-          return { ...fields, category_id: newCat.id, is_eighty_sixed: false, is_draft: false, on_menu: true };
-        });
-        const bulkRes = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
-          method: 'POST',
-          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify(newItems),
-        });
-        if (!bulkRes.ok) throw new Error('Failed to copy items for: ' + cat.label);
-      }
-    }
-
-    // Step 5: Create menu_meta
+    const srcCats = await fetchSourceCategories(menuId);
+    await copyMenuCategoriesAndItems(srcCats, newMenuId);
     await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
       method: 'POST',
       headers: sbHeaders({ 'Prefer': 'return=minimal' }),
       body: JSON.stringify({ menu_id: newMenuId }),
     });
-
-    // Step 6: Refresh and notify
     _adminRestaurants = []; _adminAllMenus = [];
     await renderMenusPanel();
     showToast('Menu duplicated!', 'success');
   } catch(e) {
-    if (newMenuId) {
-      await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(newMenuId)}`, {
-        method: 'DELETE', headers: sbHeaders(),
-      }).catch(() => {});
-    }
+    await rollbackDuplicateMenu(newMenuId);
     showToast(`Failed to duplicate menu: ${escHtml(e.message)}`, 'error');
   }
 }
@@ -3902,30 +4115,57 @@ async function createRestaurant(name) {
   }
 }
 
+function openInlineRenameForm(options) {
+  const {
+    existingSelector,
+    inputClassName,
+    inputValue,
+    inputStyle = {},
+    anchorEl,
+    insertTarget,
+    onSave,
+    onCancel,
+  } = options;
+  if (!anchorEl || !insertTarget) return;
+  anchorEl.style.display = 'none';
+  const existing = insertTarget.querySelector(existingSelector);
+  if (existing) return;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = inputValue;
+  input.className = inputClassName;
+  Object.assign(input.style, inputStyle);
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn-small';
+  saveBtn.textContent = 'Save';
+  saveBtn.onclick = () => onSave(input.value.trim());
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn-small';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = onCancel;
+  insertTarget.insertBefore(input, anchorEl.nextSibling);
+  insertTarget.insertBefore(saveBtn, input.nextSibling);
+  insertTarget.insertBefore(cancelBtn, saveBtn.nextSibling);
+  input.focus();
+}
+
 function openRenameRestaurantForm(id, currentName) {
   const nameEl = document.getElementById('restaurant-name-' + id);
   if (!nameEl) return;
   const parent = nameEl.closest('.restaurant-header');
-  nameEl.style.display = 'none';
-  const existing = parent.querySelector('.rename-restaurant-input');
-  if (existing) return;
-  const inp = document.createElement('input');
-  inp.type = 'text'; inp.value = currentName; inp.className = 'rename-restaurant-input catmgr-input';
-  inp.style.flex = '1';
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn-small'; saveBtn.textContent = 'Save';
-  saveBtn.onclick = async () => {
-    const newName = inp.value.trim();
-    if (newName && newName !== currentName) await renameRestaurant(id, newName);
-    else await renderMenusPanel();
-  };
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn-small'; cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = () => renderMenusPanel();
-  parent.insertBefore(inp, nameEl.nextSibling);
-  parent.insertBefore(saveBtn, inp.nextSibling);
-  parent.insertBefore(cancelBtn, saveBtn.nextSibling);
-  inp.focus();
+  openInlineRenameForm({
+    existingSelector: '.rename-restaurant-input',
+    inputClassName: 'rename-restaurant-input catmgr-input',
+    inputValue: currentName,
+    inputStyle: { flex: '1' },
+    anchorEl: nameEl,
+    insertTarget: parent,
+    onSave: async newName => {
+      if (newName && newName !== currentName) await renameRestaurant(id, newName);
+      else await renderMenusPanel();
+    },
+    onCancel: () => renderMenusPanel(),
+  });
 }
 
 async function renameRestaurant(id, name) {
@@ -3948,26 +4188,19 @@ function openRenameMenuForm(id, currentName) {
   const chip = document.getElementById('menu-chip-' + id);
   if (!chip) return;
   const nameSpan = chip.querySelector('span');
-  nameSpan.style.display = 'none';
-  const existing = chip.querySelector('.rename-menu-input');
-  if (existing) return;
-  const inp = document.createElement('input');
-  inp.type = 'text'; inp.value = currentName; inp.className = 'rename-menu-input catmgr-input';
-  inp.style.width = '100px';
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn-small'; saveBtn.textContent = 'Save';
-  saveBtn.onclick = async () => {
-    const newName = inp.value.trim();
-    if (newName && newName !== currentName) await renameMenu(id, newName);
-    else await renderMenusPanel();
-  };
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn-small'; cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = () => renderMenusPanel();
-  chip.insertBefore(inp, nameSpan.nextSibling);
-  chip.insertBefore(saveBtn, inp.nextSibling);
-  chip.insertBefore(cancelBtn, saveBtn.nextSibling);
-  inp.focus();
+  openInlineRenameForm({
+    existingSelector: '.rename-menu-input',
+    inputClassName: 'rename-menu-input catmgr-input',
+    inputValue: currentName,
+    inputStyle: { width: '100px' },
+    anchorEl: nameSpan,
+    insertTarget: chip,
+    onSave: async newName => {
+      if (newName && newName !== currentName) await renameMenu(id, newName);
+      else await renderMenusPanel();
+    },
+    onCancel: () => renderMenusPanel(),
+  });
 }
 
 async function renameMenu(id, name) {

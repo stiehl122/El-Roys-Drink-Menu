@@ -7,10 +7,10 @@ A zero-dependency web app that powers the live menu for El Roy's — supports bo
 ## Architecture
 
 - **Three files:** `index.html` (HTML structure), `style.css` (styles), `app.js` (logic). No build step, no bundler, and no package manager.
-- **Firebase Realtime Database** — cloud sync for menu state and configuration across devices.
-- **localStorage fallback** — used when Firebase is unavailable (offline-capable).
-- **GroupMe Bot API** — sends formatted patch-note messages to a group chat.
-- **Supabase** — authentication (email/password) and role management (`none`, `manager`, `admin`).
+- **Supabase PostgREST** — primary cloud read/write path for menus, categories, items, design settings, featured groups, and update history.
+- **localStorage fallback** — used for cached menu state, timestamps, and auth/session persistence when network reads fail or the app is offline.
+- **GroupMe Bot API** — one possible downstream notification channel, always called server-side through Vercel routes.
+- **Supabase Auth + role API** — email/password auth in the client, with role and menu-access enforcement provided by `/api/role` and `/api/users`.
 - **Vercel API routes** — five serverless endpoints required for full functionality:
   - `/api/config` — serves Supabase credentials to the client
   - `/api/role` — looks up the authenticated user's role and profile
@@ -19,6 +19,12 @@ A zero-dependency web app that powers the live menu for El Roy's — supports bo
   - `/api/users` — admin-only user management (list users, update roles, manage menu access)
 - `api/_auth.js` is a shared auth helper imported by the API routes; the underscore prefix intentionally excludes it from Vercel's routing.
 - Full functionality requires Vercel (or equivalent serverless) deployment for the API routes. Plain static hosting will not support authenticated writes or notification sending.
+- **`app.js` organization** — still section-banner based, but large sections now lean on helper layers for:
+  - active-menu loading (`loadActiveMenuState`, `refreshFeaturedForActiveMenu`)
+  - render fan-out (`renderPublicViews`, `refreshManagerViews`, `refreshCategoryAdminViews`)
+  - public/manager markup builders (`buildPublicItemHtml`, `buildManagerItemHtml`, `buildRecipeListHtml`)
+  - persistence/diff helpers (`buildCategoryUpsertRows`, `buildItemUpsertRows`, `computeCategoryDiff`, `computeFeaturedDiff`)
+  - admin CRUD helpers (`patchUser`, `fetchRestaurantMenuIndex`, `copyMenuCategoriesAndItems`, `openInlineRenameForm`)
 
 ## Menu Categories
 
@@ -42,7 +48,7 @@ New accounts start with `role: none` and require admin promotion before they can
 
 ## Key Behaviors to Preserve
 
-- **Save vs. Send Update:** `Save` persists to Firebase silently. `Send Update` saves *and* fires a GroupMe message + updates the "Last Updated" header timestamp.
+- **Save vs. Send Update:** `Save` persists the current menu state to Supabase silently. `Send Update` saves *and* fires notifications + updates the "Last Updated" header timestamp.
 - **Draft indicators:** A green dot on an item means it has been added/changed but not yet announced via Send Update.
 - **86'd items:** Remain visible on the public menu with a strikethrough and "86'D" badge; toggled per item in manager mode.
 - **Item descriptions:** Optional, expandable via a `›` icon on the public view; editable via `📝` in manager mode.
@@ -58,32 +64,21 @@ New accounts start with `role: none` and require admin promotion before they can
 
 ## Code Map
 
-**`app.js` (~3,350 lines)** — section headers use `// ─── SECTION ───` banners:
+**`app.js` (~4,300 lines)** — section headers use `// ─── SECTION ───` banners, with most large sections now split by helper functions inside the same file:
 
 | Lines | Section | Key functions |
 |---|---|---|
-| 1-100 | Config & constants | `APP_VERSION`, `LS_KEYS`, `CATEGORY_DEFS`, `DESIGN_DEFAULTS` |
-| 101-134 | Menu state & helpers | `defaultState()`, `findItem()`, `invalidateDiff()` |
-| 135-402 | Supabase data layer | `hydrateState()`, Firebase read/write, state sync |
-| 403-686 | Design & config | `applyDesign()`, `renderDesignSection()`, logo upload, font selects |
-| 687-869 | Category management | `renderCategoriesTab()`, `toggleCategoryEdit()`, `toggleAddCategoryForm()` |
-| 870-1039 | Init & boot | `DOMContentLoaded` listener, auth bootstrap, menu load |
-| 1040-1140 | Auto-refresh polling | `startPolling()`, `stopPolling()`, `updateLastUpdatedLabel()` |
-| 1141-1236 | Public view | `renderPublicView()`, `renderFooter()`, collapse/expand |
-| 1237-1381 | Supabase auth (REST) | Token refresh, `_applySession()`, `renderUserHeader()`, `applyRole()` |
-| 1382-1449 | Auth overlay | `openAuthOverlay()`, `renderAuthScreen()`, `signOut()` |
-| 1450-1757 | Menu picker | `openMenuPicker()`, `closeMenuPicker()`, `selectMenu()` |
-| 1758-1815 | Manager mode | `enterManager()`, `exitManager()` |
-| 1816-1955 | Notifications & admin switcher | `onNotifToggle()`, `_refreshAdminMenuSelect()` |
-| 1956-2301 | Manager item editing | `renderManagerItems()`, `addItem()`, `removeItem()`, `renameItem()` |
-| 2302-2361 | Autocomplete | `showAutocomplete()`, `hideAutocomplete()` |
-| 2362-2551 | 86 toggle, descriptions, recipes | `toggle86()`, `toggleItemDesc()`, `toggleItemRecipe()` |
-| 2552-2601 | Draft indicators & diff | `updateDraftIndicator()`, `computeDiff()` |
-| 2602-2711 | Preview & send update | `openPreview()`, `closeModal()`, send GroupMe message |
-| 2712-2752 | Toast | `showToast()` |
-| 2753-2935 | User management | `renderUsersTab()`, `buildMenuAccessHTML()`, invite modal |
-| 2936-3066 | Tab switching & keyboard | `switchManagerTab()`, `switchAdminTab()` |
-| 3068-3352 | Restaurant & menu management | `openAddRestaurantForm()`, `openRenameMenuForm()`, slug sync |
+| 1-143 | Config & state helpers | `APP_VERSION`, `LS_KEYS`, `defaultState()`, `invalidateDiff()`, `getCachedDiff()` |
+| 144-531 | Supabase data layer | `sbResolveMenu()`, `sbRead()`, `hydrateState()`, `loadActiveMenuState()`, `refreshFeaturedForActiveMenu()` |
+| 532-848 | Design & category helpers | `applyDesign()`, `renderPublicViews()`, `refreshManagerViews()`, `renderCategoriesTab()` |
+| 849-1221 | Init, session restore, public boot | `init()`, `_tryHandleRecoveryCallback()`, `_tryRestoreSession()`, `showPublicView()` |
+| 1222-1487 | Polling + public rendering | `startPolling()`, `renderFeaturedPublicSection()`, `buildPublicCategorySection()`, `renderPublicView()` |
+| 1488-1930 | Auth, overlays, menu picker | `_applySession()`, `renderUserHeader()`, `openAuthOverlay()`, `showMenuPicker()` |
+| 1931-2208 | Manager/admin entry + switchers | `enterManager()`, `enterAdmin()`, `initAdminSwitcherTab()`, `_loadAdminTabData()` |
+| 2209-2909 | Manager editing, persistence, diff | `renderManagerItems()`, `buildManagerItemHtml()`, `persistState()`, `computeDiff()` |
+| 2910-3091 | Preview, send update, toast | `openPreview()`, `sendUpdate()`, `showToast()` |
+| 3092-3728 | User, history, featured, tabs, database | `patchUser()`, `renderUpdateHistory()`, `renderFeaturedTab()`, `renderDatabaseTab()` |
+| 3729-4143 | Restaurant/menu admin + preview toolbar | `fetchRestaurantMenuIndex()`, `duplicateMenu()`, `openInlineRenameForm()`, `_initPreviewToolbar()` |
 
 **`index.html` (~506 lines)** — major DOM regions:
 
@@ -107,7 +102,7 @@ New accounts start with `role: none` and require admin promotion before they can
 - **Required Vercel environment variables:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service-role key is used server-side by the API routes; it is never sent to the client.
 - **Test in-browser** — for full functionality, deploy to Vercel and use the live URL. Local testing without the API routes will run in read-only / offline mode.
 - Keep Supabase auth and role-check flows intact when modifying authentication logic.
-- Preserve offline/localStorage fallback behavior when touching Firebase sync code.
+- Preserve offline/localStorage fallback behavior when touching Supabase read/write sync code.
 - **Use CSS custom properties for colors.** All colors in `style.css` must use `var(--*)` references — no hardcoded hex values. New colors should be declared as semantic variables in `:root` (and `body.manager-mode` where the value differs in manager view) before being referenced.
 - **Accessibility conventions:** Interactive elements follow WAI-ARIA patterns throughout. The tab bar uses a full ARIA tab widget (`role="tablist"`, `role="tab"`, `aria-selected`, `role="tabpanel"`). Collapsible category headers have `role="button"`, `aria-expanded`, and keyboard (Enter/Space) support. The auth overlay is a focus-trapped `role="dialog"`. The toast uses `role="status" aria-live="polite"`. The user chip dropdown syncs `aria-expanded` and moves focus on open/close. Preserve these attributes when touching the relevant elements.
 
