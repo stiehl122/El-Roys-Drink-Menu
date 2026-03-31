@@ -1,6 +1,3 @@
-# Local notification config — contains API keys/secrets, never commit
-lib/config/notifications.json
-
 # macOS
 .DS_Store
 .vercel
