@@ -16,12 +16,28 @@ export default async function handler(req, res) {
   const { id: uid } = await userRes.json();
   if (!uid) return res.status(401).json({ error: 'Invalid token' });
 
-  // Read role + name with service key (bypasses RLS)
+  // Read role + name from profiles
   const roleRes = await fetch(
     `${sbUrl}/rest/v1/profiles?id=eq.${uid}&select=role,name`,
     { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
   );
   if (!roleRes.ok) return res.status(500).json({ error: 'Failed to fetch role' });
   const [profile] = await roleRes.json();
-  res.json({ role: profile?.role || 'none', name: profile?.name || '' });
+  const role = profile?.role || 'none';
+
+  // For managers, return the list of menu IDs they have explicit access to.
+  // Admins have access to all menus — return an empty array (the client treats admin as all-access).
+  let accessibleMenuIds = [];
+  if (role === 'manager') {
+    const accessRes = await fetch(
+      `${sbUrl}/rest/v1/menu_access?user_id=eq.${uid}&select=menu_id`,
+      { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+    );
+    if (accessRes.ok) {
+      const rows = await accessRes.json();
+      accessibleMenuIds = rows.map(r => r.menu_id);
+    }
+  }
+
+  res.json({ role, name: profile?.name || '', accessibleMenuIds });
 }
