@@ -760,7 +760,7 @@ async function saveDesign() {
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
 function refreshAllViews() {
-  renderCategoriesTab(); renderManagerCategories(); renderPublicView(); renderOffMenuSection();
+  renderCategoriesTab(); renderManagerCategories(); renderFeaturedTab(); renderPublicView(); renderOffMenuSection();
 }
 
 function getNextCategoryColor() {
@@ -3472,7 +3472,7 @@ function editFeaturedFromBanner() {
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
   sessionStorage.setItem('featured_confirmed', '1');
-  switchManagerTab('featured');
+  switchManagerTab('edit-menu');
 }
 
 // ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
@@ -3565,20 +3565,19 @@ async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
-  ['edit-menu', 'categories', 'database', 'featured'].forEach(t => {
+  ['edit-menu', 'categories', 'database'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
-  if (name === 'edit-menu')   { renderOffMenuSection(); }
+  if (name === 'edit-menu')   { renderFeaturedTab(); renderOffMenuSection(); }
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
   if (name === 'categories') {
     renderCategoriesTab();
     const ctx = document.getElementById('categories-menu-context');
     if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
   }
-  if (name === 'featured') { renderFeaturedTab(); }
 }
 
 function switchAdminTab(name) {

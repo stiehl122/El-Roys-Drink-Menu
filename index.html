@@ -86,12 +86,12 @@
         <button class="tab-btn active" id="tab-btn-edit-menu"  role="tab" aria-selected="true"  aria-controls="tab-panel-edit-menu"  onclick="switchManagerTab('edit-menu')">MANAGER</button>
         <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchManagerTab('categories')">CATEGORIES</button>
         <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchManagerTab('database')">DATABASE</button>
-        <button class="tab-btn"        id="tab-btn-featured"  role="tab" aria-selected="false" aria-controls="tab-panel-featured"  onclick="switchManagerTab('featured')">FEATURED</button>
       </div>
 
       <!-- EDIT MENU TAB -->
       <div class="tab-panel active" id="tab-panel-edit-menu" role="tabpanel" aria-labelledby="tab-btn-edit-menu">
         <div class="section-label">Edit Menu</div>
+        <div id="featured-mgr-wrap"></div>
         <div id="manager-categories"></div>
         <div class="btn-row">
           <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
@@ -169,11 +169,6 @@
         </div>
       </div>
 
-      <!-- FEATURED TAB -->
-      <div class="tab-panel" id="tab-panel-featured" role="tabpanel" aria-labelledby="tab-btn-featured">
-        <div class="section-label">Featured Items</div>
-        <div id="featured-mgr-wrap"></div>
-      </div>
     </div><!-- /manager-panel -->
 
     <!-- ADMIN PANEL: Restaurants, Notifications, Design, Users -->
