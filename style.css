@@ -537,9 +537,72 @@
 .menu-type-badge   { font-size: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .add-menu-form     { padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg); }
 
+/* ─── OFF-MENU VISIBILITY ─────────────────────────────────────────────────── */
+.current-item.is-off-menu { opacity: 0.6; }
+.current-item.is-off-menu .item-name input { font-style: italic; }
+.visibility-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 2px 4px; border-radius: 4px; opacity: 0.7; transition: opacity 0.15s; }
+.visibility-btn:hover { opacity: 1; background: var(--hover-bg, rgba(255,255,255,0.08)); }
+.visibility-btn.is-off-menu { opacity: 1; color: var(--muted); }
+
+/* ─── UPDATE HISTORY ──────────────────────────────────────────────────────── */
+.update-history-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.history-entry { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+.history-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; color: var(--text); flex-wrap: wrap; }
+.history-header:hover { background: var(--surface); }
+.history-date { color: var(--muted); white-space: nowrap; }
+.history-user { font-weight: 600; white-space: nowrap; }
+.history-summary { flex: 1; color: var(--muted); font-size: 11px; }
+.history-chevron { transition: transform 0.15s; font-size: 14px; color: var(--muted); }
+.history-entry.expanded .history-chevron { transform: rotate(90deg); }
+.history-detail { display: none; padding: 0 10px 8px; font-size: 11px; }
+.history-entry.expanded .history-detail { display: block; }
+.history-cat { font-size: 12px; margin-top: 4px; }
+.history-line { padding-left: 12px; }
+.history-add { color: var(--green, #4caf50); }
+.history-remove { color: var(--red, #f44336); }
+
 /* ─── ADMIN PANEL ─────────────────────────────────────────────────────────── */
 .admin-status-bar  { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; margin-bottom: 4px; }
 .btn-tiny          { padding: 3px 8px; font-size: 11px; }
 .admin-context-switcher { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 0 8px; margin-bottom: 2px; border-bottom: 1px solid var(--border); }
 .switcher-label    { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
 .switcher-select   { flex: 1; min-width: 120px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; padding: 5px 8px; font-family: var(--font-body); }
+
+/* ─── FEATURED SECTION ────────────────────────────────────────────────────── */
+#featured-public-section { padding: 0 16px; }
+.featured-group { margin-bottom: 16px; }
+.featured-group-name { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--ember); margin-bottom: 8px; display: block; }
+.featured-slot { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.featured-slot:last-child { border-bottom: none; }
+.featured-slot.is-eighty-sixed .featured-slot-name { text-decoration: line-through; opacity: 0.5; }
+.featured-slot-main { display: flex; align-items: center; gap: 8px; }
+.featured-slot-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.featured-price { font-size: 12px; color: var(--muted); background: var(--surface); padding: 1px 6px; border-radius: 4px; }
+.featured-slot-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.featured-sell-note { font-size: 11px; color: var(--ember); font-style: italic; margin-top: 2px; }
+
+/* Featured confirm banner */
+.featured-confirm-banner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--ember); border-radius: 8px; margin: 8px 0; font-size: 13px; color: var(--text); flex-wrap: wrap; }
+
+/* Featured manager tab */
+.featured-mgr-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+.featured-mgr-group-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.featured-mgr-group-name { font-weight: 700; font-size: 14px; color: var(--text); }
+.featured-count { font-size: 12px; color: var(--muted); }
+.featured-mgr-slot { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+.featured-mgr-slot:last-child { border-bottom: none; }
+.featured-mgr-slot-name { flex: 1; font-size: 13px; color: var(--text); }
+.featured-sell-note-input { flex: 1; font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; color: var(--text); font-family: var(--font-body); }
+.featured-add-row { margin-top: 8px; position: relative; }
+.featured-add-input { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; color: var(--text); font-family: var(--font-body); box-sizing: border-box; }
+.featured-picker-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 0 0 6px 6px; max-height: 160px; overflow-y: auto; z-index: 50; }
+.featured-picker-item { padding: 6px 8px; cursor: pointer; font-size: 12px; color: var(--text); }
+.featured-picker-item:hover { background: rgba(255,255,255,0.08); }
+.featured-picker-cat { color: var(--muted); font-size: 10px; }
+.featured-picker-offmenu { font-size: 10px; color: var(--ember); font-style: italic; }
+.featured-picker-empty { padding: 6px 8px; color: var(--muted); font-size: 12px; }
+
+/* Featured admin */
+.featured-admin-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+.featured-admin-group-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.featured-admin-menu-label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); margin-right: 10px; }

@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.3';
+const APP_VERSION = 'v0.7.4';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -15,6 +15,7 @@ const LS_KEYS = {
   expiresAt:    'hf_sb_expires_at',
   uid:          'hf_sb_uid',
   email:        'hf_sb_email',
+  lsSchemaVersion: 'hf_ls_schema_version',
 };
 
 let BOT_ID        = '';
@@ -41,9 +42,14 @@ let _activeMenuName    = '';        // display name of the currently loaded menu
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
+let _visibilityHandler = null;      // Page Visibility API handler for smart polling
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
+
+let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
+let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
+let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -144,6 +150,20 @@ function sbHeaders(extra = {}) {
     'Content-Type':  'application/json',
     ...extra,
   };
+}
+
+async function sbFetchOrThrow(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.ok) return res;
+  let detail = '';
+  try { detail = (await res.text()).trim(); } catch (_) { /* ignore */ }
+  throw new Error(detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`);
+}
+
+async function sbReadJsonOrThrow(url, options = {}) {
+  const res = await sbFetchOrThrow(url, options);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 // Resolve which menu to load based on ?menu={slug}, localStorage cache, or
@@ -323,6 +343,7 @@ function hydrateState({ cats, meta, restaurantDesign }) {
           price:       i.price  || '',
           eightySixed: i.is_eighty_sixed,
           onMenu:      i.on_menu,
+          visibility:  i.visibility || 'public',
         })),
       lastSent: lastSentState[c.key] || [],
     };
@@ -332,7 +353,7 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     menuState[UNCATEGORIZED_ID] = {
       items: (uncatCat.items || []).map(i => ({
         id: i.id, name: i.name, desc: i.desc || '',
-        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false,
+        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false, visibility: i.visibility || 'public',
       })),
       lastSent: [],
     };
@@ -348,25 +369,77 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
     if (restaurantDesign) currentDesign = { ...DESIGN_DEFAULTS, ...restaurantDesign };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
+    if (meta.last_sent_featured) _lastSentFeaturedIds = new Set(meta.last_sent_featured);
   }
 }
 
 async function sbPatchMenuMeta(update) {
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
     method:  'PATCH',
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify(update),
   });
+  if (!r.ok) throw new Error(`menu_meta patch: ${r.status}`);
 }
 
 async function sbPatchRestaurantDesign(design) {
   if (!SUPABASE_URL || !RESTAURANT_ID || !currentUser?.accessToken) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
     method:  'PATCH',
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify({ design }),
   });
+  if (!r.ok) throw new Error(`restaurant patch: ${r.status}`);
+}
+
+async function sbReadFeatured(menuId) {
+  if (!SUPABASE_URL || !menuId) return [];
+  try {
+    // 1. Get featured groups linked to this menu
+    const mgRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&select=display_order,featured_groups(id,name)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    );
+    if (!mgRes.ok) return [];
+    const menuGroups = await mgRes.json();
+    if (!menuGroups.length) return [];
+
+    // 2. Get slots for those groups with item details
+    const groupIds = menuGroups.map(mg => mg.featured_groups.id);
+    const slotsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    );
+    if (!slotsRes.ok) return [];
+    const allSlots = await slotsRes.json();
+
+    // 3. Assemble into structured groups
+    return menuGroups.map(mg => ({
+      id: mg.featured_groups.id,
+      name: mg.featured_groups.name,
+      displayOrder: mg.display_order,
+      slots: allSlots
+        .filter(s => s.featured_group_id === mg.featured_groups.id)
+        .map(s => ({
+          id: s.id,
+          itemId: s.item_id,
+          sellNote: s.sell_note || '',
+          displayOrder: s.display_order,
+          confirmedAt: s.confirmed_at,
+          confirmedBy: s.confirmed_by,
+          item: s.items ? {
+            id: s.items.id,
+            name: s.items.name,
+            price: s.items.price || '',
+            visibility: s.items.visibility || 'public',
+            eightySixed: s.items.is_eighty_sixed,
+            desc: s.items.desc || '',
+          } : null,
+        }))
+        .filter(s => s.item !== null), // exclude slots whose items were deleted
+    }));
+  } catch(e) { return []; }
 }
 
 async function sbDeleteCategory(categoryUuid) {
@@ -689,7 +762,7 @@ async function saveDesign() {
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
 function refreshAllViews() {
-  renderCategoriesTab(); renderManagerCategories(); renderPublicView();
+  renderCategoriesTab(); renderManagerCategories(); renderFeaturedTab(); renderPublicView(); renderOffMenuSection();
 }
 
 function getNextCategoryColor() {
@@ -881,7 +954,49 @@ async function loadSupabaseConfig() {
   } catch(e) {}
 }
 
+function migrateLocalStorage() {
+  try {
+    if ((localStorage.getItem(LS_KEYS.lsSchemaVersion) || '0') >= '1') return;
+
+    const OLD_CATS = {
+      beer: 'Beer', canned: 'Canned', cocktails: 'Cocktails',
+      tequila: 'Tequila', frozen: 'Frozen', special: 'Special'
+    };
+    const oldRaw = localStorage.getItem('menuItems') || localStorage.getItem('menuData');
+    const hasFirebaseAuth = Object.keys(localStorage).some(k => k.startsWith('firebase:'));
+    const oldBotId = localStorage.getItem('bot_id') || localStorage.getItem('groupme_config');
+
+    if (!oldRaw && !hasFirebaseAuth && !oldBotId) {
+      localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+      return;
+    }
+
+    if (oldRaw) {
+      const oldData = JSON.parse(oldRaw);
+      const cats = Object.entries(OLD_CATS).map(([key, label]) => ({
+        id: crypto.randomUUID(), key, label,
+        items: (Array.isArray(oldData[key]) ? oldData[key] : []).map(it => ({
+          name: it.name || '', desc: it.desc || '', recipe: it.recipe || '',
+          price: it.price || '', is86: !!it.is86
+        }))
+      }));
+      const meta = { lastUpdated: localStorage.getItem('lastUpdated') || '' };
+      if (oldBotId) meta.botId = oldBotId;
+      localStorage.setItem(LS_KEYS.menuCache, JSON.stringify({ cats, meta }));
+    }
+
+    // Clean up old keys
+    ['menuItems', 'menuData', 'bot_id', 'groupme_config', 'lastUpdated'].forEach(k => localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k => k.startsWith('firebase:')).forEach(k => localStorage.removeItem(k));
+    localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+  } catch (_) {
+    localStorage.clear();
+    localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+  }
+}
+
 async function init() {
+  migrateLocalStorage();
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
 
@@ -902,6 +1017,7 @@ async function init() {
         if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
         else menuState = defaultState();
       } catch(e) { menuState = defaultState(); }
+      _featuredGroups = await sbReadFeatured(MENU_ID);
       applyDesign(currentDesign);
       showPublicView();
     });
@@ -924,6 +1040,7 @@ async function init() {
       } else {
         menuState = defaultState();
       }
+      _featuredGroups = await sbReadFeatured(MENU_ID);
       applyDesign(currentDesign);
       showPublicView();
     } catch(e) {
@@ -1044,7 +1161,8 @@ function showPublicViewWithError(msg) {
 function startPolling() {
   stopPolling();
   if (!SUPABASE_URL || !MENU_ID) return;
-  syncInterval = setInterval(async () => {
+
+  const pollCycle = async () => {
     if (isManagerMode) return;
     try {
       const data = await sbRead();
@@ -1056,6 +1174,7 @@ function startPolling() {
 
       hydrateState(data);
       lsSet(LS_KEYS.menuCache, JSON.stringify(data));
+      _featuredGroups = await sbReadFeatured(MENU_ID);
 
       const afterCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       const newTs     = menuState._meta?.lastUpdatedTs;
@@ -1077,11 +1196,33 @@ function startPolling() {
         if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
       }
     }
-  }, 60000);
+  };
+
+  // Start the 10-second polling interval (only while tab is visible)
+  const startInterval = () => { syncInterval = setInterval(pollCycle, 10000); };
+
+  if (document.visibilityState === 'visible') startInterval();
+
+  _visibilityHandler = () => {
+    if (document.visibilityState === 'visible') {
+      // Tab became visible — poll immediately and restart the interval
+      pollCycle();
+      if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+      startInterval();
+    } else {
+      // Tab hidden — stop polling to save bandwidth
+      if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    }
+  };
+  document.addEventListener('visibilitychange', _visibilityHandler);
 }
 
 function stopPolling() {
   if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+  if (_visibilityHandler) {
+    document.removeEventListener('visibilitychange', _visibilityHandler);
+    _visibilityHandler = null;
+  }
 }
 
 function getLastUpdatedTs() {
@@ -1145,6 +1286,41 @@ function renderFooter() {
 function renderPublicView() {
   const container = document.getElementById('public-categories');
   container.innerHTML = '';
+
+  // Render featured section
+  const featuredEl = document.getElementById('featured-public-section');
+  if (featuredEl) {
+    const hasSlots = _featuredGroups.some(g => g.slots.length > 0);
+    if (hasSlots) {
+      featuredEl.style.display = '';
+      featuredEl.innerHTML = _featuredGroups.filter(g => g.slots.length).map(group => {
+        const slotsHtml = group.slots.map(slot => {
+          const is86 = slot.item?.eightySixed;
+          const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+          const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
+          // sell_note is NEVER shown to unauthenticated users
+          const sellNoteHtml = (currentUser && slot.sellNote) ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>` : '';
+          return `<div class="${classes}">
+            <div class="featured-slot-main">
+              <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
+              ${priceHtml}
+              ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+            </div>
+            ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
+            ${sellNoteHtml}
+          </div>`;
+        }).join('');
+        return `<div class="featured-group">
+          <div class="featured-group-name">${escHtml(group.name)}</div>
+          ${slotsHtml}
+        </div>`;
+      }).join('');
+    } else {
+      featuredEl.style.display = 'none';
+      featuredEl.innerHTML = '';
+    }
+  }
+
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
   CATEGORY_DEFS.forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
@@ -1152,7 +1328,8 @@ function renderPublicView() {
     section.id = 'pub-section-' + cat.id;
     const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
     section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
-    const onMenuItems = state.items.filter(i => i.onMenu !== false);
+    const onMenuItems = state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu');
+    if (!onMenuItems.length && state.items.every(i => i.onMenu === false || i.visibility === 'off_menu')) return;
     const itemsHtml = onMenuItems.length
       ? onMenuItems.map(i => {
           const is86      = !!i.eightySixed;
@@ -1573,6 +1750,7 @@ async function onSwitchMenuClick() {
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
       else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
     } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    _featuredGroups = await sbReadFeatured(MENU_ID);
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
     renderManagerCategories();
@@ -1592,6 +1770,7 @@ async function onPublicSwitchMenuClick() {
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
       else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
     } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    _featuredGroups = await sbReadFeatured(MENU_ID);
     applyDesign(currentDesign);
     renderPublicView();
     updateLastUpdatedLabel();
@@ -1793,6 +1972,7 @@ function enterManager() {
   updateSaveBtn();
   renderManagerCategories();
   updateActiveMenuBar(_activeMenuName);
+  checkFeaturedConfirmation();
 }
 
 function exitManager() {
@@ -1857,11 +2037,12 @@ async function saveNotifications() {
   if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
   try {
     if (SUPABASE_URL && currentUser?.accessToken) {
-      await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
         method:  'PATCH',
         headers: sbHeaders({ 'Prefer': 'return=minimal' }),
         body:    JSON.stringify({ notifications }),
       });
+      if (!r.ok) throw new Error(`notifications patch: ${r.status}`);
     }
     showToast('✅ Notifications saved!', 'success');
   } catch(e) {
@@ -1900,11 +2081,12 @@ async function saveNotifCredKeys() {
   if (Object.keys(wh).length) notifications_config.webhook = wh;
   try {
     if (SUPABASE_URL && currentUser?.accessToken) {
-      await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
         method: 'PATCH',
         headers: sbHeaders({ 'Prefer': 'return=minimal' }),
         body: JSON.stringify({ notifications_config }),
       });
+      if (!r.ok) throw new Error(`credential keys patch: ${r.status}`);
     }
     showToast('Credential keys saved!', 'success');
   } catch(e) {
@@ -2175,7 +2357,7 @@ function renderManagerItems(catId) {
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
     const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
-    const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+    const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
     wrapper.innerHTML = `
       <div class="${rowClass}">
         <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
@@ -2190,6 +2372,7 @@ function renderManagerItems(catId) {
         <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
           style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+        <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
@@ -2270,6 +2453,7 @@ async function persistState() {
           price:           item.price          || null,
           is_eighty_sixed: item.eightySixed    || false,
           on_menu:         item.onMenu         !== false,
+          visibility:      item.visibility     || 'public',
           display_order:   idx,
         });
       });
@@ -2285,6 +2469,7 @@ async function persistState() {
           price:           item.price  || null,
           is_eighty_sixed: false,
           on_menu:         false,
+          visibility:      item.visibility || 'public',
           display_order:   idx,
         });
       });
@@ -2315,23 +2500,32 @@ async function persistState() {
 
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
+    return true;
   } catch(e) {
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
     showToast('⚠️ Cloud save failed.', 'error');
+    return false;
   }
 }
 
 async function saveMenu() {
   const ts = Date.now();
-  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-  lsSet(LS_KEYS.lastUpdated, ts.toString());
-  await persistState();
-  await sbPatchMenuMeta({ last_updated_ts: ts });
-  _dirty = false;
-  updateSaveBtn();
-  updateLastUpdatedLabel();
-  showToast('✅ Menu saved!', 'success');
+  try {
+    const persisted = await persistState();
+    if (!persisted) return;
+    await sbPatchMenuMeta({ last_updated_ts: ts });
+    menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
+    lsSet(LS_KEYS.lastUpdated, ts.toString());
+    _dirty = false;
+    updateSaveBtn();
+    updateLastUpdatedLabel();
+    showToast('✅ Menu saved!', 'success');
+  } catch(e) {
+    const syncEl = document.getElementById('sync-status');
+    if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
+    showToast('⚠️ Cloud save failed.', 'error');
+  }
 }
 
 function addItem(catId) {
@@ -2388,7 +2582,7 @@ function showAutocomplete(catId) {
   const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
-    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
+    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}',${escAttrJs(r.name)})">${escHtml(r.name)}</div>`
   ).join('');
   list.classList.add('open');
 }
@@ -2445,6 +2639,17 @@ function toggle86(catId, itemId) {
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
+}
+
+function toggleVisibility(catId, itemId) {
+  const item = findItem(catId, itemId);
+  if (!item) return;
+  item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu';
+  invalidateDiff();
+  renderManagerItems(catId);
+  renderOffMenuSection();
+  updateDraftIndicator();
+  showToast(item.visibility === 'off_menu' ? `"${item.name}" moved off menu` : `"${item.name}" made public`, 'info');
 }
 
 // ─── DESCRIPTION ──────────────────────────────────────────────────────────────
@@ -2577,6 +2782,30 @@ function renderPruneSection() {
     </div>`).join('');
 }
 
+function renderOffMenuSection() {
+  const section = document.getElementById('off-menu-section');
+  if (!section) return;
+  section.style.display = isManagerMode ? '' : 'none';
+  const wrap = document.getElementById('off-menu-items-wrap');
+  if (!wrap) return;
+  const allOffMenu = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && i.visibility === 'off_menu').forEach(item => {
+      allOffMenu.push({ catId: cat.id, catTitle: cat.title, name: item.name, id: item.id });
+    });
+  });
+  if (!allOffMenu.length) {
+    wrap.innerHTML = '<p class="prune-empty">No off-menu items.</p>';
+    return;
+  }
+  wrap.innerHTML = allOffMenu.map(({ catId, catTitle, name, id }) => `
+    <div class="prune-item">
+      <span class="prune-item-name">${escHtml(name)}</span>
+      <span class="prune-item-cat">${escHtml(catTitle)}</span>
+      <button class="btn-small" onclick="toggleVisibility('${escHtml(catId)}','${escHtml(id)}')">Make Public</button>
+    </div>`).join('');
+}
+
 async function pruneSingleItem(catId, itemName) {
   if (currentUser?.role !== 'admin') return;
   if (!menuState[catId]) return;
@@ -2588,6 +2817,7 @@ async function pruneSingleItem(catId, itemName) {
   );
   await persistState();
   renderPruneSection();
+  renderOffMenuSection();
   showToast(`✅ "${itemName}" permanently deleted.`, 'success');
 }
 
@@ -2601,6 +2831,7 @@ async function pruneRemoved(catId) {
   });
   await persistState();
   renderPruneSection();
+  renderOffMenuSection();
   showToast('✅ Off-menu items permanently deleted.', 'success');
 }
 
@@ -2648,7 +2879,7 @@ function computeDiff() {
     const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
     const eightySixed = [], restored = [];
     const eightySixedNames = new Set(), restoredNames = new Set();
-    state.items.filter(i => i.onMenu !== false).forEach(item => {
+    state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu').forEach(item => {
       const nameLow = item.name.trim().toLowerCase();
       const prev = lastByName.get(nameLow);
       if (prev && prev.onMenu !== false) {
@@ -2656,7 +2887,7 @@ function computeDiff() {
         if ( prev.eightySixed && !item.eightySixed) { restored.push(item.name.trim());    restoredNames.add(nameLow); }
       }
     });
-    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
+    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed && i.visibility !== 'off_menu').map(i => i.name.trim()).filter(Boolean);
     const lastNames    = state.lastSent.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
     const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
@@ -2666,6 +2897,23 @@ function computeDiff() {
       results.push({ id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored });
     }
   });
+
+  // Featured items diff
+  const currentFeaturedIds = new Set();
+  const featuredAdded = [], featuredRemoved = [];
+  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.add(s.itemId); }));
+  currentFeaturedIds.forEach(id => { if (!_lastSentFeaturedIds.has(id)) {
+    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
+    if (slot?.item) featuredAdded.push(slot.item.name);
+  }});
+  _lastSentFeaturedIds.forEach(id => { if (!currentFeaturedIds.has(id)) {
+    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
+    featuredRemoved.push(slot?.item?.name || '(removed item)');
+  }});
+  if (featuredAdded.length || featuredRemoved.length) {
+    results.push({ id: '__featured__', icon: '⭐', label: 'Featured', added: featuredAdded, removed: featuredRemoved, eightySixed: [], restored: [] });
+  }
+
   return results;
 }
 
@@ -2750,19 +2998,39 @@ async function sendUpdate() {
       };
       lsSet(LS_KEYS.lastUpdated, ts.toString());
       invalidateDiff();
-      await persistState();
+      const persisted = await persistState();
+      if (!persisted) throw new Error('persist failed');
       // Build last_sent_state snapshot for diff computation on next load
       const lastSentState = {};
       CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
+      // Snapshot featured item IDs
+      const currentFeaturedIds = [];
+      _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.push(s.itemId); }));
+      _lastSentFeaturedIds = new Set(currentFeaturedIds);
       await sbPatchMenuMeta({
         last_updated_ts:      ts,
         last_sent_ts:         ts,
         last_sent_state:      lastSentState,
         last_sent_categories: diff.map(d => d.id),
+        last_sent_featured:   currentFeaturedIds,
       });
       updateLastUpdatedLabel();
       renderManagerCategories();
       updateDraftIndicator();
+      // Log update to audit trail (fire-and-forget)
+      if (SUPABASE_URL && currentUser?.accessToken) {
+        fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
+          method: 'POST',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({
+            menu_id:   MENU_ID,
+            user_id:   currentUser.uid,
+            user_name: currentUser.name || currentUser.email || '',
+            diff:      diff,
+            message:   patchMessage,
+          }),
+        }).catch(() => {}); // silent failure — audit log is non-critical
+      }
       closeModal();
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
     } else if (r1.status === 401) {
@@ -2843,6 +3111,66 @@ async function loadUsers() {
     renderUsersTab(users);
   } catch (e) {
     wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
+  }
+}
+
+async function renderUpdateHistory() {
+  const wrap = document.getElementById('update-history-wrap');
+  if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
+
+  // Determine which menu to show history for — use the admin switcher if available
+  const menuId = _adminSwitcherState.notif?.menuId || MENU_ID;
+  if (!menuId) { wrap.innerHTML = '<p class="db-empty">Select a menu to view history.</p>'; return; }
+
+  wrap.innerHTML = '<p class="db-empty">Loading\u2026</p>';
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${menuId}&select=*&order=created_at.desc&limit=20`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) throw new Error('fetch failed');
+    const logs = await r.json();
+    if (!logs.length) {
+      wrap.innerHTML = '<p class="db-empty">No updates sent yet for this menu.</p>';
+      return;
+    }
+    wrap.innerHTML = logs.map(log => {
+      const d = new Date(log.created_at);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const diff = log.diff || [];
+      const summaryParts = [];
+      const totalAdded = diff.reduce((n, s) => n + (s.added?.length || 0), 0);
+      const totalRemoved = diff.reduce((n, s) => n + (s.removed?.length || 0), 0);
+      const total86 = diff.reduce((n, s) => n + (s.eightySixed?.length || 0), 0);
+      const totalRestored = diff.reduce((n, s) => n + (s.restored?.length || 0), 0);
+      if (totalAdded) summaryParts.push(`+${totalAdded} added`);
+      if (totalRemoved) summaryParts.push(`-${totalRemoved} removed`);
+      if (total86) summaryParts.push(`${total86} 86'd`);
+      if (totalRestored) summaryParts.push(`${totalRestored} restored`);
+      const summary = summaryParts.join(', ') || 'No item changes';
+
+      const detailHtml = diff.map(s =>
+        `<div class="history-cat"><strong>${escHtml(s.icon || '')} ${escHtml(s.label || '')}</strong></div>` +
+        (s.added || []).map(n => `<div class="history-line history-add">+ ${escHtml(n)}</div>`).join('') +
+        (s.removed || []).map(n => `<div class="history-line history-remove">- ${escHtml(n)}</div>`).join('') +
+        (s.eightySixed || []).map(n => `<div class="history-line history-remove">86'd: ${escHtml(n)}</div>`).join('') +
+        (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('')
+      ).join('');
+
+      return `<div class="history-entry">
+        <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
+          <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
+          <span class="history-summary">${escHtml(summary)}</span>
+          <span class="history-chevron">\u203A</span>
+        </div>
+        <div class="history-detail">${detailHtml}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = `<p class="db-empty db-error">Failed to load history.</p>`;
   }
 }
 
@@ -3004,6 +3332,265 @@ document.getElementById('invite-modal-bg').addEventListener('click', e => {
   if (e.target === document.getElementById('invite-modal-bg')) closeInviteModal();
 });
 
+// ─── FEATURED ITEMS ──────────────────────────────────────────────────────────
+
+function renderFeaturedTab() {
+  const wrap = document.getElementById('featured-mgr-wrap');
+  if (!wrap) return;
+
+  if (!_featuredGroups.length) {
+    wrap.innerHTML = '<p class="db-empty">No featured groups linked to this menu. Ask an admin to create one in the Admin panel.</p>';
+    return;
+  }
+
+  wrap.innerHTML = _featuredGroups.map(group => {
+    const slotCount = group.slots.length;
+    const slotsHtml = group.slots.map((slot, idx) => `
+      <div class="featured-mgr-slot" data-slot-id="${escHtml(slot.id)}">
+        <span class="featured-mgr-slot-name">${escHtml(slot.item?.name || '(deleted)')}</span>
+        <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
+          value="${escHtml(slot.sellNote)}"
+          onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''}>&#8593;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''}>&#8595;</button>
+        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})">&#215;</button>
+      </div>`).join('');
+
+    return `<div class="featured-mgr-group">
+      <div class="featured-mgr-group-header">
+        <span class="featured-mgr-group-name">${escHtml(group.name)}</span>
+        <span class="featured-count">${slotCount} / 5</span>
+      </div>
+      ${slotsHtml}
+      ${slotCount < 5 ? `
+        <div class="featured-add-row">
+          <input type="text" class="featured-add-input" id="featured-add-${escHtml(group.id)}"
+            placeholder="Search items to feature…" oninput="filterFeaturedPicker(${escAttrJs(group.id)},this.value)"/>
+          <div class="featured-picker-list" id="featured-picker-${escHtml(group.id)}"></div>
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterFeaturedPicker(groupId, query) {
+  const list = document.getElementById('featured-picker-' + groupId);
+  if (!list) return;
+  const q = query.trim().toLowerCase();
+  if (!q) { list.innerHTML = ''; return; }
+
+  const group = _featuredGroups.find(g => g.id === groupId);
+  const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
+
+  // Search all items including off-menu
+  const matches = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && !existingItemIds.has(i.id) && i.name.toLowerCase().includes(q))
+      .forEach(i => matches.push({ id: i.id, name: i.name, cat: cat.title, visibility: i.visibility }));
+  });
+
+  list.innerHTML = matches.slice(0, 8).map(m =>
+    `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
+      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(m.cat)}</span>
+      ${m.visibility === 'off_menu' ? '<span class="featured-picker-offmenu">off-menu</span>' : ''}
+    </div>`
+  ).join('') || '<div class="featured-picker-empty">No matches</div>';
+}
+
+async function addFeaturedSlot(groupId, itemId) {
+  try {
+    const group = _featuredGroups.find(g => g.id === groupId);
+    if (!group || group.slots.length >= 5) { showToast('Max 5 featured items per group.', 'info'); return; }
+    const nextOrder = group.slots.length;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/featured_slots`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ featured_group_id: groupId, item_id: itemId, display_order: nextOrder }),
+    });
+    if (!r.ok) throw new Error('insert failed');
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+    invalidateDiff();
+    updateDraftIndicator();
+    showToast('Item featured!', 'success');
+  } catch(e) { showToast('Failed to add featured item.', 'error'); }
+}
+
+async function removeFeaturedSlot(slotId, groupId) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+    invalidateDiff();
+    updateDraftIndicator();
+    showToast('Featured item removed.', 'success');
+  } catch(e) { showToast('Failed to remove.', 'error'); }
+}
+
+async function saveFeaturedSellNote(slotId, note) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
+      method: 'PATCH',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ sell_note: note }),
+    });
+  } catch(e) {}
+}
+
+async function moveFeaturedSlot(groupId, slotId, direction) {
+  const group = _featuredGroups.find(g => g.id === groupId);
+  if (!group) return;
+  const idx = group.slots.findIndex(s => s.id === slotId);
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= group.slots.length) return;
+  // Swap display_order values
+  const a = group.slots[idx], b = group.slots[newIdx];
+  try {
+    await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${a.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: b.displayOrder }) }),
+      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${b.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: a.displayOrder }) }),
+    ]);
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+  } catch(e) { showToast('Failed to reorder.', 'error'); }
+}
+
+// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
+
+function checkFeaturedConfirmation() {
+  if (sessionStorage.getItem('featured_confirmed')) return;
+  const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
+    if (!s.confirmedAt) return true;
+    const confirmed = new Date(s.confirmedAt);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return confirmed < today;
+  }));
+  if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
+
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = '';
+}
+
+async function confirmFeaturedToday() {
+  const now = new Date().toISOString();
+  try {
+    for (const group of _featuredGroups) {
+      for (const slot of group.slots) {
+        await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slot.id}`, {
+          method: 'PATCH',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ confirmed_at: now, confirmed_by: currentUser?.uid || null }),
+        });
+      }
+    }
+    sessionStorage.setItem('featured_confirmed', '1');
+    const banner = document.getElementById('featured-confirm-banner');
+    if (banner) banner.style.display = 'none';
+    showToast('Featured items confirmed for today!', 'success');
+  } catch(e) { showToast('Failed to confirm.', 'error'); }
+}
+
+function editFeaturedFromBanner() {
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = 'none';
+  sessionStorage.setItem('featured_confirmed', '1');
+  switchManagerTab('edit-menu');
+}
+
+// ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
+
+async function renderFeaturedAdmin() {
+  const wrap = document.getElementById('featured-admin-wrap');
+  if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = '<p class="db-empty">Loading…</p>';
+  try {
+    if (!_adminAllMenus.length) await loadAdminSwitcherData();
+    const [groups, links] = await Promise.all([
+      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?select=id,name&order=name.asc`, { headers: sbHeaders() }),
+      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?select=menu_id,featured_group_id`, { headers: sbHeaders() }),
+    ]);
+
+    if (!groups.length) {
+      wrap.innerHTML = '<p class="db-empty">No featured groups yet.</p>';
+      return;
+    }
+
+    // Get all menus for the link checkboxes
+    const allMenus = _adminAllMenus || [];
+
+    wrap.innerHTML = groups.map(g => {
+      const linkedMenuIds = new Set(links.filter(l => l.featured_group_id === g.id).map(l => l.menu_id));
+      const menuCheckboxes = allMenus.map(m =>
+        `<label class="featured-admin-menu-label"><input type="checkbox" ${linkedMenuIds.has(m.id) ? 'checked' : ''} onchange="toggleFeaturedGroupMenu(${escAttrJs(g.id)},${escAttrJs(m.id)},this.checked)"/> ${escHtml(m.name)}</label>`
+      ).join('');
+      return `<div class="featured-admin-group">
+        <div class="featured-admin-group-header">
+          <strong>${escHtml(g.name)}</strong>
+          <button class="btn-small btn-danger" onclick="deleteFeaturedGroup(${escAttrJs(g.id)})">Delete</button>
+        </div>
+        <div class="featured-admin-menus">${menuCheckboxes || '<span class="hint">No menus available</span>'}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('renderFeaturedAdmin failed:', e);
+    const errorMsg = e.message || String(e) || 'Unknown error';
+    wrap.innerHTML = `<p class="db-empty db-error">Failed to load featured groups: ${escHtml(errorMsg)}</p>`;
+  }
+}
+
+async function addFeaturedGroup() {
+  const input = document.getElementById('new-featured-group-name');
+  const name = input?.value?.trim();
+  if (!name) return;
+  try {
+    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
+      method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ name }),
+    });
+    input.value = '';
+    await renderFeaturedAdmin();
+    showToast('Featured group created!', 'success');
+  } catch(e) { showToast(e.message || 'Failed to create group.', 'error'); }
+}
+
+async function deleteFeaturedGroup(groupId) {
+  if (!confirm('Delete this featured group? This removes it from all menus.')) return;
+  try {
+    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${groupId}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    await renderFeaturedAdmin();
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderPublicView();
+    showToast('Group deleted.', 'success');
+  } catch(e) { showToast(e.message || 'Failed to delete.', 'error'); }
+}
+
+async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
+  try {
+    if (checked) {
+      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups`, {
+        method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ menu_id: menuId, featured_group_id: groupId, display_order: 0 }),
+      });
+    } else {
+      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&featured_group_id=eq.${groupId}`, {
+        method: 'DELETE', headers: sbHeaders(),
+      });
+    }
+    await renderFeaturedAdmin();
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderPublicView();
+  } catch(e) { showToast(e.message || 'Failed to update.', 'error'); }
+}
+
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
   ['edit-menu', 'categories', 'database'].forEach(t => {
@@ -3012,6 +3599,7 @@ function switchManagerTab(name) {
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
+  if (name === 'edit-menu')   { renderFeaturedTab(); renderOffMenuSection(); }
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
   if (name === 'categories') {
     renderCategoriesTab();
@@ -3021,7 +3609,7 @@ function switchManagerTab(name) {
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users'].forEach(t => {
+  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
@@ -3031,6 +3619,8 @@ function switchAdminTab(name) {
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
   if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
   if (name === 'admin-users')         { loadUsers(); }
+  if (name === 'admin-featured')      { renderFeaturedAdmin(); }
+  if (name === 'admin-history')       { renderUpdateHistory(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
@@ -3150,6 +3740,8 @@ async function renderMenusPanel() {
     if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
     const restaurants = await restRes.json();
     const allMenus    = await menuRes.json();
+    _adminRestaurants = restaurants;
+    _adminAllMenus = allMenus;
     const byRestaurant = {};
     allMenus.forEach(m => {
       if (!byRestaurant[m.restaurant_id]) byRestaurant[m.restaurant_id] = [];
@@ -3171,6 +3763,7 @@ async function renderMenusPanel() {
           <span class="menu-type-badge">${escHtml(m.type || 'drinks')}</span>
           <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(m.id)},${escAttrJs(m.name)})">Rename</button>
           <button class="btn-small" onclick="archiveMenu(${escAttrJs(m.id)},${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
+          <button class="btn-small" onclick="duplicateMenu(${escAttrJs(m.id)},${escAttrJs(m.name)},${escAttrJs(m.restaurant_id)},${escAttrJs(m.type || 'drinks')})">Duplicate</button>
           <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(m.id)},${escAttrJs(m.name)})">Delete</button>
         </div>`).join('');
       row.innerHTML = `
@@ -3203,6 +3796,79 @@ async function renderMenusPanel() {
     });
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
+  }
+}
+
+async function duplicateMenu(menuId, menuName, restaurantId, menuType) {
+  const newName = prompt('Name for the copy:', menuName + ' (Copy)');
+  if (!newName?.trim()) return;
+  const slug = slugify(newName.trim());
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  showToast('Duplicating menu…', 'info');
+  let newMenuId = null;
+  try {
+    // Step 1: Create new menu
+    const menuRes = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ restaurant_id: restaurantId, name: newName.trim(), slug, type: menuType }),
+    });
+    if (menuRes.status === 409) { showToast('Slug already taken — choose a different name.', 'error'); return; }
+    if (!menuRes.ok) throw new Error(await menuRes.text());
+    const [newMenu] = await menuRes.json();
+    newMenuId = newMenu.id;
+
+    // Step 2: Fetch source categories
+    const catsRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${encodeURIComponent(menuId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+    if (!catsRes.ok) throw new Error('Failed to fetch categories');
+    const srcCats = await catsRes.json();
+
+    // Step 3 & 4: Deep-copy categories and their items
+    for (const cat of srcCats) {
+      const { id: _id, menu_id: _mid, created_at: _ca, ...catFields } = cat;
+      const newCatRes = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+        method: 'POST',
+        headers: sbHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify({ ...catFields, menu_id: newMenuId }),
+      });
+      if (!newCatRes.ok) throw new Error('Failed to copy category: ' + cat.label);
+      const [newCat] = await newCatRes.json();
+
+      const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${encodeURIComponent(cat.id)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+      if (!itemsRes.ok) throw new Error('Failed to fetch items for: ' + cat.label);
+      const items = await itemsRes.json();
+      if (items.length) {
+        const newItems = items.map(it => {
+          const { id: _iid, category_id: _cid, created_at: _ica, ...fields } = it;
+          return { ...fields, category_id: newCat.id, is_eighty_sixed: false, is_draft: false, on_menu: true };
+        });
+        const bulkRes = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+          method: 'POST',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify(newItems),
+        });
+        if (!bulkRes.ok) throw new Error('Failed to copy items for: ' + cat.label);
+      }
+    }
+
+    // Step 5: Create menu_meta
+    await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ menu_id: newMenuId }),
+    });
+
+    // Step 6: Refresh and notify
+    _adminRestaurants = []; _adminAllMenus = [];
+    await renderMenusPanel();
+    showToast('Menu duplicated!', 'success');
+  } catch(e) {
+    if (newMenuId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(newMenuId)}`, {
+        method: 'DELETE', headers: sbHeaders(),
+      }).catch(() => {});
+    }
+    showToast(`Failed to duplicate menu: ${escHtml(e.message)}`, 'error');
   }
 }
 

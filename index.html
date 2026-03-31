@@ -52,6 +52,7 @@
       <button id="collapse-all-btn" class="collapse-all-btn" onclick="toggleAllCategories()">Collapse All</button>
       <button id="public-switch-menu-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
     </div>
+    <div id="featured-public-section" style="display:none;"></div>
     <div id="public-categories"></div>
     <footer id="menu-footer">
       <span id="footer-version"></span>
@@ -73,6 +74,12 @@
       <button class="btn-small" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch</button>
     </div>
 
+    <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
+      <span>Today's featured items haven't been confirmed yet.</span>
+      <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
+      <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
+    </div>
+
     <!-- MANAGER PANEL: Edit Menu, Categories, Database -->
     <div id="manager-panel" style="display:none">
       <div class="tab-bar" role="tablist" id="manager-tab-bar">
@@ -84,12 +91,20 @@
       <!-- EDIT MENU TAB -->
       <div class="tab-panel active" id="tab-panel-edit-menu" role="tabpanel" aria-labelledby="tab-btn-edit-menu">
         <div class="section-label">Edit Menu</div>
+        <div id="featured-mgr-wrap"></div>
         <div id="manager-categories"></div>
         <div class="btn-row">
           <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
           <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
         </div>
         <div id="sync-status"></div>
+        <div id="off-menu-section" class="prune-section" style="display:none;">
+          <div class="prune-section-header">
+            <div class="section-label prune-section-label">Off Menu Items</div>
+          </div>
+          <p class="hint">Staff-only items hidden from the public menu. Visible to managers and admins.</p>
+          <div id="off-menu-items-wrap"></div>
+        </div>
       </div>
 
       <!-- CATEGORIES TAB -->
@@ -153,6 +168,7 @@
           <div id="prune-items-wrap"></div>
         </div>
       </div>
+
     </div><!-- /manager-panel -->
 
     <!-- ADMIN PANEL: Restaurants, Notifications, Design, Users -->
@@ -166,6 +182,8 @@
         <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
         <button class="tab-btn"        id="tab-btn-admin-design"        role="tab" aria-selected="false" aria-controls="tab-panel-admin-design"        onclick="switchAdminTab('admin-design')">DESIGN</button>
         <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
+        <button class="tab-btn"        id="tab-btn-admin-featured"      role="tab" aria-selected="false" aria-controls="tab-panel-admin-featured"      onclick="switchAdminTab('admin-featured')">FEATURED</button>
+        <button class="tab-btn"        id="tab-btn-admin-history"       role="tab" aria-selected="false" aria-controls="tab-panel-admin-history"       onclick="switchAdminTab('admin-history')">HISTORY</button>
       </div>
 
       <!-- RESTAURANTS SUB-PANEL -->
@@ -397,6 +415,21 @@
           <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
         </div>
         <div id="users-list"></div>
+      </div>
+      <!-- FEATURED SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-featured" role="tabpanel" aria-labelledby="tab-btn-admin-featured">
+        <div class="section-label">Featured Groups</div>
+        <div id="featured-admin-wrap"></div>
+        <div class="input-row" style="margin-top:6px">
+          <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
+          <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
+        </div>
+      </div>
+
+      <!-- HISTORY SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-history" role="tabpanel" aria-labelledby="tab-btn-admin-history">
+        <div class="section-label">Update History</div>
+        <div id="update-history-wrap"></div>
       </div>
     </div><!-- /admin-panel -->
 
