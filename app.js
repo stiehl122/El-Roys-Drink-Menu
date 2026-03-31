@@ -48,6 +48,7 @@ let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 
 let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
+let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
 let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
@@ -368,6 +369,7 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
     if (restaurantDesign) currentDesign = { ...DESIGN_DEFAULTS, ...restaurantDesign };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
+    if (meta.last_sent_featured) _lastSentFeaturedIds = new Set(meta.last_sent_featured);
   }
 }
 
@@ -2895,6 +2897,23 @@ function computeDiff() {
       results.push({ id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored });
     }
   });
+
+  // Featured items diff
+  const currentFeaturedIds = new Set();
+  const featuredAdded = [], featuredRemoved = [];
+  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.add(s.itemId); }));
+  currentFeaturedIds.forEach(id => { if (!_lastSentFeaturedIds.has(id)) {
+    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
+    if (slot?.item) featuredAdded.push(slot.item.name);
+  }});
+  _lastSentFeaturedIds.forEach(id => { if (!currentFeaturedIds.has(id)) {
+    const slot = _featuredGroups.flatMap(g => g.slots).find(s => s.itemId === id);
+    featuredRemoved.push(slot?.item?.name || '(removed item)');
+  }});
+  if (featuredAdded.length || featuredRemoved.length) {
+    results.push({ id: '__featured__', icon: '⭐', label: 'Featured', added: featuredAdded, removed: featuredRemoved, eightySixed: [], restored: [] });
+  }
+
   return results;
 }
 
@@ -2984,11 +3003,16 @@ async function sendUpdate() {
       // Build last_sent_state snapshot for diff computation on next load
       const lastSentState = {};
       CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
+      // Snapshot featured item IDs
+      const currentFeaturedIds = [];
+      _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) currentFeaturedIds.push(s.itemId); }));
+      _lastSentFeaturedIds = new Set(currentFeaturedIds);
       await sbPatchMenuMeta({
         last_updated_ts:      ts,
         last_sent_ts:         ts,
         last_sent_state:      lastSentState,
         last_sent_categories: diff.map(d => d.id),
+        last_sent_featured:   currentFeaturedIds,
       });
       updateLastUpdatedLabel();
       renderManagerCategories();
@@ -3386,6 +3410,8 @@ async function addFeaturedSlot(groupId, itemId) {
     _featuredGroups = await sbReadFeatured(MENU_ID);
     renderFeaturedTab();
     renderPublicView();
+    invalidateDiff();
+    updateDraftIndicator();
     showToast('Item featured!', 'success');
   } catch(e) { showToast('Failed to add featured item.', 'error'); }
 }
@@ -3398,6 +3424,8 @@ async function removeFeaturedSlot(slotId, groupId) {
     _featuredGroups = await sbReadFeatured(MENU_ID);
     renderFeaturedTab();
     renderPublicView();
+    invalidateDiff();
+    updateDraftIndicator();
     showToast('Featured item removed.', 'success');
   } catch(e) { showToast('Failed to remove.', 'error'); }
 }
