@@ -36,3 +36,19 @@ export async function requireRole(req, ...roles) {
 
   return { uid, role: profile.role };
 }
+
+export async function requireMenuAccess(uid, role, menuId) {
+  const sbUrl     = process.env.SUPABASE_URL;
+  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sbUrl || !sbService) throw { status: 500, message: 'Server misconfigured' };
+  if (!menuId) throw { status: 400, message: 'Missing menu_id' };
+  if (role === 'admin') return;
+
+  const accessRes = await fetch(
+    `${sbUrl}/rest/v1/menu_access?user_id=eq.${uid}&menu_id=eq.${menuId}&select=menu_id&limit=1`,
+    { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+  );
+  if (!accessRes.ok) throw { status: 500, message: 'Failed to verify menu access' };
+  const rows = await accessRes.json();
+  if (!rows.length) throw { status: 403, message: 'Forbidden' };
+}

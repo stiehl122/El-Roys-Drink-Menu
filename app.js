@@ -353,20 +353,22 @@ function hydrateState({ cats, meta, restaurantDesign }) {
 
 async function sbPatchMenuMeta(update) {
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
     method:  'PATCH',
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify(update),
   });
+  if (!r.ok) throw new Error(`menu_meta patch: ${r.status}`);
 }
 
 async function sbPatchRestaurantDesign(design) {
   if (!SUPABASE_URL || !RESTAURANT_ID || !currentUser?.accessToken) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
     method:  'PATCH',
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify({ design }),
   });
+  if (!r.ok) throw new Error(`restaurant patch: ${r.status}`);
 }
 
 async function sbDeleteCategory(categoryUuid) {
@@ -1857,11 +1859,12 @@ async function saveNotifications() {
   if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
   try {
     if (SUPABASE_URL && currentUser?.accessToken) {
-      await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
         method:  'PATCH',
         headers: sbHeaders({ 'Prefer': 'return=minimal' }),
         body:    JSON.stringify({ notifications }),
       });
+      if (!r.ok) throw new Error(`notifications patch: ${r.status}`);
     }
     showToast('✅ Notifications saved!', 'success');
   } catch(e) {
@@ -1900,11 +1903,12 @@ async function saveNotifCredKeys() {
   if (Object.keys(wh).length) notifications_config.webhook = wh;
   try {
     if (SUPABASE_URL && currentUser?.accessToken) {
-      await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
         method: 'PATCH',
         headers: sbHeaders({ 'Prefer': 'return=minimal' }),
         body: JSON.stringify({ notifications_config }),
       });
+      if (!r.ok) throw new Error(`credential keys patch: ${r.status}`);
     }
     showToast('Credential keys saved!', 'success');
   } catch(e) {
@@ -2315,23 +2319,32 @@ async function persistState() {
 
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = ''; syncEl.className = ''; }
+    return true;
   } catch(e) {
     const syncEl = document.getElementById('sync-status');
     if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
     showToast('⚠️ Cloud save failed.', 'error');
+    return false;
   }
 }
 
 async function saveMenu() {
   const ts = Date.now();
-  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-  lsSet(LS_KEYS.lastUpdated, ts.toString());
-  await persistState();
-  await sbPatchMenuMeta({ last_updated_ts: ts });
-  _dirty = false;
-  updateSaveBtn();
-  updateLastUpdatedLabel();
-  showToast('✅ Menu saved!', 'success');
+  try {
+    const persisted = await persistState();
+    if (!persisted) return;
+    await sbPatchMenuMeta({ last_updated_ts: ts });
+    menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
+    lsSet(LS_KEYS.lastUpdated, ts.toString());
+    _dirty = false;
+    updateSaveBtn();
+    updateLastUpdatedLabel();
+    showToast('✅ Menu saved!', 'success');
+  } catch(e) {
+    const syncEl = document.getElementById('sync-status');
+    if (syncEl) { syncEl.textContent = '⚠️ Cloud sync failed'; syncEl.className = 'sync-error'; }
+    showToast('⚠️ Cloud save failed.', 'error');
+  }
 }
 
 function addItem(catId) {
@@ -2388,7 +2401,7 @@ function showAutocomplete(catId) {
   const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
   list.innerHTML = matches.map(r =>
-    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}','${escHtml(r.name)}')">${escHtml(r.name)}</div>`
+    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}',${escAttrJs(r.name)})">${escHtml(r.name)}</div>`
   ).join('');
   list.classList.add('open');
 }
@@ -2750,7 +2763,8 @@ async function sendUpdate() {
       };
       lsSet(LS_KEYS.lastUpdated, ts.toString());
       invalidateDiff();
-      await persistState();
+      const persisted = await persistState();
+      if (!persisted) throw new Error('persist failed');
       // Build last_sent_state snapshot for diff computation on next load
       const lastSentState = {};
       CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
