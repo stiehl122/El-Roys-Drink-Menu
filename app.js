@@ -325,6 +325,7 @@ function hydrateState({ cats, meta, restaurantDesign }) {
           price:       i.price  || '',
           eightySixed: i.is_eighty_sixed,
           onMenu:      i.on_menu,
+          visibility:  i.visibility || 'public',
         })),
       lastSent: lastSentState[c.key] || [],
     };
@@ -334,7 +335,7 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     menuState[UNCATEGORIZED_ID] = {
       items: (uncatCat.items || []).map(i => ({
         id: i.id, name: i.name, desc: i.desc || '',
-        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false,
+        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false, visibility: i.visibility || 'public',
       })),
       lastSent: [],
     };
@@ -693,7 +694,7 @@ async function saveDesign() {
 
 // ─── CATEGORY MANAGEMENT ─────────────────────────────────────────────────────
 function refreshAllViews() {
-  renderCategoriesTab(); renderManagerCategories(); renderPublicView();
+  renderCategoriesTab(); renderManagerCategories(); renderPublicView(); renderOffMenuSection();
 }
 
 function getNextCategoryColor() {
@@ -1221,7 +1222,8 @@ function renderPublicView() {
     section.id = 'pub-section-' + cat.id;
     const isCollapsed = lastSentCats ? !lastSentCats.includes(cat.id) : false;
     section.className = 'menu-section' + (isCollapsed ? ' collapsed' : '');
-    const onMenuItems = state.items.filter(i => i.onMenu !== false);
+    const onMenuItems = state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu');
+    if (!onMenuItems.length && state.items.every(i => i.onMenu === false || i.visibility === 'off_menu')) return;
     const itemsHtml = onMenuItems.length
       ? onMenuItems.map(i => {
           const is86      = !!i.eightySixed;
@@ -2246,7 +2248,7 @@ function renderManagerItems(catId) {
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
     const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
-    const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+    const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
     wrapper.innerHTML = `
       <div class="${rowClass}">
         <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
@@ -2261,6 +2263,7 @@ function renderManagerItems(catId) {
         <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
           style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+        <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
       </div>
       <div class="desc-row" id="desc-row-${item.id}">
@@ -2341,6 +2344,7 @@ async function persistState() {
           price:           item.price          || null,
           is_eighty_sixed: item.eightySixed    || false,
           on_menu:         item.onMenu         !== false,
+          visibility:      item.visibility     || 'public',
           display_order:   idx,
         });
       });
@@ -2356,6 +2360,7 @@ async function persistState() {
           price:           item.price  || null,
           is_eighty_sixed: false,
           on_menu:         false,
+          visibility:      item.visibility || 'public',
           display_order:   idx,
         });
       });
@@ -2527,6 +2532,17 @@ function toggle86(catId, itemId) {
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
 }
 
+function toggleVisibility(catId, itemId) {
+  const item = findItem(catId, itemId);
+  if (!item) return;
+  item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu';
+  invalidateDiff();
+  renderManagerItems(catId);
+  renderOffMenuSection();
+  updateDraftIndicator();
+  showToast(item.visibility === 'off_menu' ? `"${item.name}" moved off menu` : `"${item.name}" made public`, 'info');
+}
+
 // ─── DESCRIPTION ──────────────────────────────────────────────────────────────
 function toggleItemDesc(itemId) {
   const row = document.getElementById('desc-row-' + itemId);
@@ -2657,6 +2673,30 @@ function renderPruneSection() {
     </div>`).join('');
 }
 
+function renderOffMenuSection() {
+  const section = document.getElementById('off-menu-section');
+  if (!section) return;
+  section.style.display = isManagerMode ? '' : 'none';
+  const wrap = document.getElementById('off-menu-items-wrap');
+  if (!wrap) return;
+  const allOffMenu = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && i.visibility === 'off_menu').forEach(item => {
+      allOffMenu.push({ catId: cat.id, catTitle: cat.title, name: item.name, id: item.id });
+    });
+  });
+  if (!allOffMenu.length) {
+    wrap.innerHTML = '<p class="prune-empty">No off-menu items.</p>';
+    return;
+  }
+  wrap.innerHTML = allOffMenu.map(({ catId, catTitle, name, id }) => `
+    <div class="prune-item">
+      <span class="prune-item-name">${escHtml(name)}</span>
+      <span class="prune-item-cat">${escHtml(catTitle)}</span>
+      <button class="btn-small" onclick="toggleVisibility('${escHtml(catId)}','${escHtml(id)}')">Make Public</button>
+    </div>`).join('');
+}
+
 async function pruneSingleItem(catId, itemName) {
   if (currentUser?.role !== 'admin') return;
   if (!menuState[catId]) return;
@@ -2668,6 +2708,7 @@ async function pruneSingleItem(catId, itemName) {
   );
   await persistState();
   renderPruneSection();
+  renderOffMenuSection();
   showToast(`✅ "${itemName}" permanently deleted.`, 'success');
 }
 
@@ -2681,6 +2722,7 @@ async function pruneRemoved(catId) {
   });
   await persistState();
   renderPruneSection();
+  renderOffMenuSection();
   showToast('✅ Off-menu items permanently deleted.', 'success');
 }
 
@@ -2728,7 +2770,7 @@ function computeDiff() {
     const lastByName = new Map(state.lastSent.map(i => [i.name.trim().toLowerCase(), i]));
     const eightySixed = [], restored = [];
     const eightySixedNames = new Set(), restoredNames = new Set();
-    state.items.filter(i => i.onMenu !== false).forEach(item => {
+    state.items.filter(i => i.onMenu !== false && i.visibility !== 'off_menu').forEach(item => {
       const nameLow = item.name.trim().toLowerCase();
       const prev = lastByName.get(nameLow);
       if (prev && prev.onMenu !== false) {
@@ -2736,7 +2778,7 @@ function computeDiff() {
         if ( prev.eightySixed && !item.eightySixed) { restored.push(item.name.trim());    restoredNames.add(nameLow); }
       }
     });
-    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
+    const currentNames = state.items.filter(i => i.onMenu !== false && !i.eightySixed && i.visibility !== 'off_menu').map(i => i.name.trim()).filter(Boolean);
     const lastNames    = state.lastSent.filter(i => i.onMenu !== false && !i.eightySixed).map(i => i.name.trim()).filter(Boolean);
     const currentSet   = new Set(currentNames.map(n => n.toLowerCase()));
     const lastSet      = new Set(lastNames.map(n => n.toLowerCase()));
@@ -3093,6 +3135,7 @@ function switchManagerTab(name) {
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
+  if (name === 'edit-menu')   { renderOffMenuSection(); }
   if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
   if (name === 'categories') {
     renderCategoriesTab();
