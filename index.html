@@ -52,6 +52,7 @@
       <button id="collapse-all-btn" class="collapse-all-btn" onclick="toggleAllCategories()">Collapse All</button>
       <button id="public-switch-menu-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
     </div>
+    <div id="featured-public-section" style="display:none;"></div>
     <div id="public-categories"></div>
     <footer id="menu-footer">
       <span id="footer-version"></span>
@@ -73,12 +74,19 @@
       <button class="btn-small" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch</button>
     </div>
 
+    <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
+      <span>Today's featured items haven't been confirmed yet.</span>
+      <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
+      <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
+    </div>
+
     <!-- MANAGER PANEL: Edit Menu, Categories, Database -->
     <div id="manager-panel" style="display:none">
       <div class="tab-bar" role="tablist" id="manager-tab-bar">
         <button class="tab-btn active" id="tab-btn-edit-menu"  role="tab" aria-selected="true"  aria-controls="tab-panel-edit-menu"  onclick="switchManagerTab('edit-menu')">MANAGER</button>
         <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchManagerTab('categories')">CATEGORIES</button>
         <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchManagerTab('database')">DATABASE</button>
+        <button class="tab-btn"        id="tab-btn-featured"  role="tab" aria-selected="false" aria-controls="tab-panel-featured"  onclick="switchManagerTab('featured')">FEATURED</button>
       </div>
 
       <!-- EDIT MENU TAB -->
@@ -160,6 +168,12 @@
           <div id="prune-items-wrap"></div>
         </div>
       </div>
+
+      <!-- FEATURED TAB -->
+      <div class="tab-panel" id="tab-panel-featured" role="tabpanel" aria-labelledby="tab-btn-featured">
+        <div class="section-label">Featured Items</div>
+        <div id="featured-mgr-wrap"></div>
+      </div>
     </div><!-- /manager-panel -->
 
     <!-- ADMIN PANEL: Restaurants, Notifications, Design, Users -->
@@ -187,6 +201,14 @@
             <input type="text" id="new-restaurant-name" placeholder="Restaurant name"/>
             <button class="btn-small" onclick="confirmAddRestaurant()">Add</button>
             <button class="btn-small" onclick="document.getElementById('add-restaurant-form').style.display='none'">Cancel</button>
+          </div>
+        </div>
+        <div id="featured-admin-section" style="margin-top:16px;border-top:1px solid var(--border);padding-top:8px;">
+          <div class="section-label">Featured Groups</div>
+          <div id="featured-admin-wrap"></div>
+          <div class="input-row" style="margin-top:6px">
+            <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
+            <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
           </div>
         </div>
         <div id="update-history-section" class="update-history-section">

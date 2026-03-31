@@ -47,6 +47,9 @@ let _managerMenuPicked = false;     // true after manager explicitly picks a men
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 
+let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
+let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
+
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
   'rgba(245,210,66,0.22)',
@@ -372,6 +375,55 @@ async function sbPatchRestaurantDesign(design) {
     body:    JSON.stringify({ design }),
   });
   if (!r.ok) throw new Error(`restaurant patch: ${r.status}`);
+}
+
+async function sbReadFeatured(menuId) {
+  if (!SUPABASE_URL || !menuId) return [];
+  try {
+    // 1. Get featured groups linked to this menu
+    const mgRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&select=display_order,featured_groups(id,name)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    );
+    if (!mgRes.ok) return [];
+    const menuGroups = await mgRes.json();
+    if (!menuGroups.length) return [];
+
+    // 2. Get slots for those groups with item details
+    const groupIds = menuGroups.map(mg => mg.featured_groups.id);
+    const slotsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    );
+    if (!slotsRes.ok) return [];
+    const allSlots = await slotsRes.json();
+
+    // 3. Assemble into structured groups
+    return menuGroups.map(mg => ({
+      id: mg.featured_groups.id,
+      name: mg.featured_groups.name,
+      displayOrder: mg.display_order,
+      slots: allSlots
+        .filter(s => s.featured_group_id === mg.featured_groups.id)
+        .map(s => ({
+          id: s.id,
+          itemId: s.item_id,
+          sellNote: s.sell_note || '',
+          displayOrder: s.display_order,
+          confirmedAt: s.confirmed_at,
+          confirmedBy: s.confirmed_by,
+          item: s.items ? {
+            id: s.items.id,
+            name: s.items.name,
+            price: s.items.price || '',
+            visibility: s.items.visibility || 'public',
+            eightySixed: s.items.is_eighty_sixed,
+            desc: s.items.desc || '',
+          } : null,
+        }))
+        .filter(s => s.item !== null), // exclude slots whose items were deleted
+    }));
+  } catch(e) { return []; }
 }
 
 async function sbDeleteCategory(categoryUuid) {
@@ -949,6 +1001,7 @@ async function init() {
         if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
         else menuState = defaultState();
       } catch(e) { menuState = defaultState(); }
+      _featuredGroups = await sbReadFeatured(MENU_ID);
       applyDesign(currentDesign);
       showPublicView();
     });
@@ -971,6 +1024,7 @@ async function init() {
       } else {
         menuState = defaultState();
       }
+      _featuredGroups = await sbReadFeatured(MENU_ID);
       applyDesign(currentDesign);
       showPublicView();
     } catch(e) {
@@ -1104,6 +1158,7 @@ function startPolling() {
 
       hydrateState(data);
       lsSet(LS_KEYS.menuCache, JSON.stringify(data));
+      _featuredGroups = await sbReadFeatured(MENU_ID);
 
       const afterCats = JSON.stringify(CATEGORY_DEFS.map(c => menuState[c.id]));
       const newTs     = menuState._meta?.lastUpdatedTs;
@@ -1215,6 +1270,41 @@ function renderFooter() {
 function renderPublicView() {
   const container = document.getElementById('public-categories');
   container.innerHTML = '';
+
+  // Render featured section
+  const featuredEl = document.getElementById('featured-public-section');
+  if (featuredEl) {
+    const hasSlots = _featuredGroups.some(g => g.slots.length > 0);
+    if (hasSlots) {
+      featuredEl.style.display = '';
+      featuredEl.innerHTML = _featuredGroups.filter(g => g.slots.length).map(group => {
+        const slotsHtml = group.slots.map(slot => {
+          const is86 = slot.item?.eightySixed;
+          const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+          const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
+          // sell_note is NEVER shown to unauthenticated users
+          const sellNoteHtml = (currentUser && slot.sellNote) ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>` : '';
+          return `<div class="${classes}">
+            <div class="featured-slot-main">
+              <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
+              ${priceHtml}
+              ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+            </div>
+            ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
+            ${sellNoteHtml}
+          </div>`;
+        }).join('');
+        return `<div class="featured-group">
+          <div class="featured-group-name">${escHtml(group.name)}</div>
+          ${slotsHtml}
+        </div>`;
+      }).join('');
+    } else {
+      featuredEl.style.display = 'none';
+      featuredEl.innerHTML = '';
+    }
+  }
+
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
   CATEGORY_DEFS.forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
@@ -1644,6 +1734,7 @@ async function onSwitchMenuClick() {
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
       else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
     } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    _featuredGroups = await sbReadFeatured(MENU_ID);
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
     renderManagerCategories();
@@ -1663,6 +1754,7 @@ async function onPublicSwitchMenuClick() {
       if (data) { hydrateState(data); lsSet(LS_KEYS.menuCache, JSON.stringify(data)); }
       else { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
     } catch(e) { menuState = defaultState(); currentDesign = { ...DESIGN_DEFAULTS }; }
+    _featuredGroups = await sbReadFeatured(MENU_ID);
     applyDesign(currentDesign);
     renderPublicView();
     updateLastUpdatedLabel();
@@ -1864,6 +1956,7 @@ function enterManager() {
   updateSaveBtn();
   renderManagerCategories();
   updateActiveMenuBar(_activeMenuName);
+  checkFeaturedConfirmation();
 }
 
 function exitManager() {
@@ -3201,9 +3294,262 @@ document.getElementById('invite-modal-bg').addEventListener('click', e => {
   if (e.target === document.getElementById('invite-modal-bg')) closeInviteModal();
 });
 
+// ─── FEATURED ITEMS ──────────────────────────────────────────────────────────
+
+function renderFeaturedTab() {
+  const wrap = document.getElementById('featured-mgr-wrap');
+  if (!wrap) return;
+
+  if (!_featuredGroups.length) {
+    wrap.innerHTML = '<p class="db-empty">No featured groups linked to this menu. Ask an admin to create one in the Admin panel.</p>';
+    return;
+  }
+
+  wrap.innerHTML = _featuredGroups.map(group => {
+    const slotCount = group.slots.length;
+    const slotsHtml = group.slots.map((slot, idx) => `
+      <div class="featured-mgr-slot" data-slot-id="${escHtml(slot.id)}">
+        <span class="featured-mgr-slot-name">${escHtml(slot.item?.name || '(deleted)')}</span>
+        <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
+          value="${escHtml(slot.sellNote)}"
+          onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''}>&#8593;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''}>&#8595;</button>
+        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})">&#215;</button>
+      </div>`).join('');
+
+    return `<div class="featured-mgr-group">
+      <div class="featured-mgr-group-header">
+        <span class="featured-mgr-group-name">${escHtml(group.name)}</span>
+        <span class="featured-count">${slotCount} / 5</span>
+      </div>
+      ${slotsHtml}
+      ${slotCount < 5 ? `
+        <div class="featured-add-row">
+          <input type="text" class="featured-add-input" id="featured-add-${escHtml(group.id)}"
+            placeholder="Search items to feature…" oninput="filterFeaturedPicker(${escAttrJs(group.id)},this.value)"/>
+          <div class="featured-picker-list" id="featured-picker-${escHtml(group.id)}"></div>
+        </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function filterFeaturedPicker(groupId, query) {
+  const list = document.getElementById('featured-picker-' + groupId);
+  if (!list) return;
+  const q = query.trim().toLowerCase();
+  if (!q) { list.innerHTML = ''; return; }
+
+  const group = _featuredGroups.find(g => g.id === groupId);
+  const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
+
+  // Search all items including off-menu
+  const matches = [];
+  CATEGORY_DEFS.forEach(cat => {
+    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && !existingItemIds.has(i.id) && i.name.toLowerCase().includes(q))
+      .forEach(i => matches.push({ id: i.id, name: i.name, cat: cat.title, visibility: i.visibility }));
+  });
+
+  list.innerHTML = matches.slice(0, 8).map(m =>
+    `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
+      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(m.cat)}</span>
+      ${m.visibility === 'off_menu' ? '<span class="featured-picker-offmenu">off-menu</span>' : ''}
+    </div>`
+  ).join('') || '<div class="featured-picker-empty">No matches</div>';
+}
+
+async function addFeaturedSlot(groupId, itemId) {
+  try {
+    const group = _featuredGroups.find(g => g.id === groupId);
+    if (!group || group.slots.length >= 5) { showToast('Max 5 featured items per group.', 'info'); return; }
+    const nextOrder = group.slots.length;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/featured_slots`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ featured_group_id: groupId, item_id: itemId, display_order: nextOrder }),
+    });
+    if (!r.ok) throw new Error('insert failed');
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+    showToast('Item featured!', 'success');
+  } catch(e) { showToast('Failed to add featured item.', 'error'); }
+}
+
+async function removeFeaturedSlot(slotId, groupId) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+    showToast('Featured item removed.', 'success');
+  } catch(e) { showToast('Failed to remove.', 'error'); }
+}
+
+async function saveFeaturedSellNote(slotId, note) {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
+      method: 'PATCH',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ sell_note: note }),
+    });
+  } catch(e) {}
+}
+
+async function moveFeaturedSlot(groupId, slotId, direction) {
+  const group = _featuredGroups.find(g => g.id === groupId);
+  if (!group) return;
+  const idx = group.slots.findIndex(s => s.id === slotId);
+  if (idx < 0) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= group.slots.length) return;
+  // Swap display_order values
+  const a = group.slots[idx], b = group.slots[newIdx];
+  try {
+    await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${a.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: b.displayOrder }) }),
+      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${b.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: a.displayOrder }) }),
+    ]);
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderFeaturedTab();
+    renderPublicView();
+  } catch(e) { showToast('Failed to reorder.', 'error'); }
+}
+
+// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
+
+function checkFeaturedConfirmation() {
+  if (sessionStorage.getItem('featured_confirmed')) return;
+  const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
+    if (!s.confirmedAt) return true;
+    const confirmed = new Date(s.confirmedAt);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return confirmed < today;
+  }));
+  if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
+
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = '';
+}
+
+async function confirmFeaturedToday() {
+  const now = new Date().toISOString();
+  try {
+    for (const group of _featuredGroups) {
+      for (const slot of group.slots) {
+        await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slot.id}`, {
+          method: 'PATCH',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ confirmed_at: now, confirmed_by: currentUser?.uid || null }),
+        });
+      }
+    }
+    sessionStorage.setItem('featured_confirmed', '1');
+    const banner = document.getElementById('featured-confirm-banner');
+    if (banner) banner.style.display = 'none';
+    showToast('Featured items confirmed for today!', 'success');
+  } catch(e) { showToast('Failed to confirm.', 'error'); }
+}
+
+function editFeaturedFromBanner() {
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = 'none';
+  sessionStorage.setItem('featured_confirmed', '1');
+  switchManagerTab('featured');
+}
+
+// ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
+
+async function renderFeaturedAdmin() {
+  const wrap = document.getElementById('featured-admin-wrap');
+  if (!wrap) return;
+  wrap.innerHTML = '<p class="db-empty">Loading…</p>';
+  try {
+    const [gRes, mgRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/featured_groups?select=*&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups?select=*`, { headers: sbHeaders() }),
+    ]);
+    if (!gRes.ok || !mgRes.ok) throw new Error('fetch');
+    const groups = await gRes.json();
+    const links = await mgRes.json();
+
+    if (!groups.length) {
+      wrap.innerHTML = '<p class="db-empty">No featured groups yet.</p>';
+      return;
+    }
+
+    // Get all menus for the link checkboxes
+    const allMenus = _adminAllMenus || [];
+
+    wrap.innerHTML = groups.map(g => {
+      const linkedMenuIds = new Set(links.filter(l => l.featured_group_id === g.id).map(l => l.menu_id));
+      const menuCheckboxes = allMenus.map(m =>
+        `<label class="featured-admin-menu-label"><input type="checkbox" ${linkedMenuIds.has(m.id) ? 'checked' : ''} onchange="toggleFeaturedGroupMenu(${escAttrJs(g.id)},${escAttrJs(m.id)},this.checked)"/> ${escHtml(m.name)}</label>`
+      ).join('');
+      return `<div class="featured-admin-group">
+        <div class="featured-admin-group-header">
+          <strong>${escHtml(g.name)}</strong>
+          <button class="btn-small btn-danger" onclick="deleteFeaturedGroup(${escAttrJs(g.id)})">Delete</button>
+        </div>
+        <div class="featured-admin-menus">${menuCheckboxes || '<span class="hint">No menus available</span>'}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = '<p class="db-empty db-error">Failed to load featured groups.</p>';
+  }
+}
+
+async function addFeaturedGroup() {
+  const input = document.getElementById('new-featured-group-name');
+  const name = input?.value?.trim();
+  if (!name) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_groups`, {
+      method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ name }),
+    });
+    input.value = '';
+    renderFeaturedAdmin();
+    showToast('Featured group created!', 'success');
+  } catch(e) { showToast('Failed to create group.', 'error'); }
+}
+
+async function deleteFeaturedGroup(groupId) {
+  if (!confirm('Delete this featured group? This removes it from all menus.')) return;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${groupId}`, {
+      method: 'DELETE', headers: sbHeaders(),
+    });
+    renderFeaturedAdmin();
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderPublicView();
+    showToast('Group deleted.', 'success');
+  } catch(e) { showToast('Failed to delete.', 'error'); }
+}
+
+async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
+  try {
+    if (checked) {
+      await fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups`, {
+        method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ menu_id: menuId, featured_group_id: groupId, display_order: 0 }),
+      });
+    } else {
+      await fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&featured_group_id=eq.${groupId}`, {
+        method: 'DELETE', headers: sbHeaders(),
+      });
+    }
+    _featuredGroups = await sbReadFeatured(MENU_ID);
+    renderPublicView();
+  } catch(e) { showToast('Failed to update.', 'error'); }
+}
+
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
-  ['edit-menu', 'categories', 'database'].forEach(t => {
+  ['edit-menu', 'categories', 'database', 'featured'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
@@ -3216,6 +3562,7 @@ function switchManagerTab(name) {
     const ctx = document.getElementById('categories-menu-context');
     if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
   }
+  if (name === 'featured') { renderFeaturedTab(); }
 }
 
 function switchAdminTab(name) {
@@ -3225,7 +3572,7 @@ function switchAdminTab(name) {
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
-  if (name === 'admin-restaurants')   { renderMenusPanel(); renderUpdateHistory(); }
+  if (name === 'admin-restaurants')   { renderMenusPanel(); renderUpdateHistory(); renderFeaturedAdmin(); }
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
   if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
   if (name === 'admin-users')         { loadUsers(); }
