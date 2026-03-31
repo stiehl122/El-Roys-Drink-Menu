@@ -3252,6 +3252,7 @@ async function renderMenusPanel() {
           <span class="menu-type-badge">${escHtml(m.type || 'drinks')}</span>
           <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(m.id)},${escAttrJs(m.name)})">Rename</button>
           <button class="btn-small" onclick="archiveMenu(${escAttrJs(m.id)},${!m.archived})">${m.archived ? 'Unarchive' : 'Archive'}</button>
+          <button class="btn-small" onclick="duplicateMenu(${escAttrJs(m.id)},${escAttrJs(m.name)},${escAttrJs(m.restaurant_id)},${escAttrJs(m.type || 'drinks')})">Duplicate</button>
           <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(m.id)},${escAttrJs(m.name)})">Delete</button>
         </div>`).join('');
       row.innerHTML = `
@@ -3284,6 +3285,79 @@ async function renderMenusPanel() {
     });
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
+  }
+}
+
+async function duplicateMenu(menuId, menuName, restaurantId, menuType) {
+  const newName = prompt('Name for the copy:', menuName + ' (Copy)');
+  if (!newName?.trim()) return;
+  const slug = slugify(newName.trim());
+  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  showToast('Duplicating menu…', 'info');
+  let newMenuId = null;
+  try {
+    // Step 1: Create new menu
+    const menuRes = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ restaurant_id: restaurantId, name: newName.trim(), slug, type: menuType }),
+    });
+    if (menuRes.status === 409) { showToast('Slug already taken — choose a different name.', 'error'); return; }
+    if (!menuRes.ok) throw new Error(await menuRes.text());
+    const [newMenu] = await menuRes.json();
+    newMenuId = newMenu.id;
+
+    // Step 2: Fetch source categories
+    const catsRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${encodeURIComponent(menuId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+    if (!catsRes.ok) throw new Error('Failed to fetch categories');
+    const srcCats = await catsRes.json();
+
+    // Step 3 & 4: Deep-copy categories and their items
+    for (const cat of srcCats) {
+      const { id: _id, menu_id: _mid, created_at: _ca, ...catFields } = cat;
+      const newCatRes = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
+        method: 'POST',
+        headers: sbHeaders({ 'Prefer': 'return=representation' }),
+        body: JSON.stringify({ ...catFields, menu_id: newMenuId }),
+      });
+      if (!newCatRes.ok) throw new Error('Failed to copy category: ' + cat.label);
+      const [newCat] = await newCatRes.json();
+
+      const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${encodeURIComponent(cat.id)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
+      if (!itemsRes.ok) throw new Error('Failed to fetch items for: ' + cat.label);
+      const items = await itemsRes.json();
+      if (items.length) {
+        const newItems = items.map(it => {
+          const { id: _iid, category_id: _cid, created_at: _ica, ...fields } = it;
+          return { ...fields, category_id: newCat.id, is_eighty_sixed: false, is_draft: false, on_menu: true };
+        });
+        const bulkRes = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+          method: 'POST',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify(newItems),
+        });
+        if (!bulkRes.ok) throw new Error('Failed to copy items for: ' + cat.label);
+      }
+    }
+
+    // Step 5: Create menu_meta
+    await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ menu_id: newMenuId }),
+    });
+
+    // Step 6: Refresh and notify
+    _adminRestaurants = []; _adminAllMenus = [];
+    await renderMenusPanel();
+    showToast('Menu duplicated!', 'success');
+  } catch(e) {
+    if (newMenuId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(newMenuId)}`, {
+        method: 'DELETE', headers: sbHeaders(),
+      }).catch(() => {});
+    }
+    showToast(`Failed to duplicate menu: ${escHtml(e.message)}`, 'error');
   }
 }
 
