@@ -2886,6 +2886,20 @@ async function sendUpdate() {
       updateLastUpdatedLabel();
       renderManagerCategories();
       updateDraftIndicator();
+      // Log update to audit trail (fire-and-forget)
+      if (SUPABASE_URL && currentUser?.accessToken) {
+        fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
+          method: 'POST',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({
+            menu_id:   MENU_ID,
+            user_id:   currentUser.uid,
+            user_name: currentUser.name || currentUser.email || '',
+            diff:      diff,
+            message:   patchMessage,
+          }),
+        }).catch(() => {}); // silent failure — audit log is non-critical
+      }
       closeModal();
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
     } else if (r1.status === 401) {
@@ -2966,6 +2980,66 @@ async function loadUsers() {
     renderUsersTab(users);
   } catch (e) {
     wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
+  }
+}
+
+async function renderUpdateHistory() {
+  const wrap = document.getElementById('update-history-wrap');
+  if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
+
+  // Determine which menu to show history for — use the admin switcher if available
+  const menuId = _adminSwitcherState.notif?.menuId || MENU_ID;
+  if (!menuId) { wrap.innerHTML = '<p class="db-empty">Select a menu to view history.</p>'; return; }
+
+  wrap.innerHTML = '<p class="db-empty">Loading\u2026</p>';
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${menuId}&select=*&order=created_at.desc&limit=20`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) throw new Error('fetch failed');
+    const logs = await r.json();
+    if (!logs.length) {
+      wrap.innerHTML = '<p class="db-empty">No updates sent yet for this menu.</p>';
+      return;
+    }
+    wrap.innerHTML = logs.map(log => {
+      const d = new Date(log.created_at);
+      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      const diff = log.diff || [];
+      const summaryParts = [];
+      const totalAdded = diff.reduce((n, s) => n + (s.added?.length || 0), 0);
+      const totalRemoved = diff.reduce((n, s) => n + (s.removed?.length || 0), 0);
+      const total86 = diff.reduce((n, s) => n + (s.eightySixed?.length || 0), 0);
+      const totalRestored = diff.reduce((n, s) => n + (s.restored?.length || 0), 0);
+      if (totalAdded) summaryParts.push(`+${totalAdded} added`);
+      if (totalRemoved) summaryParts.push(`-${totalRemoved} removed`);
+      if (total86) summaryParts.push(`${total86} 86'd`);
+      if (totalRestored) summaryParts.push(`${totalRestored} restored`);
+      const summary = summaryParts.join(', ') || 'No item changes';
+
+      const detailHtml = diff.map(s =>
+        `<div class="history-cat"><strong>${escHtml(s.icon || '')} ${escHtml(s.label || '')}</strong></div>` +
+        (s.added || []).map(n => `<div class="history-line history-add">+ ${escHtml(n)}</div>`).join('') +
+        (s.removed || []).map(n => `<div class="history-line history-remove">- ${escHtml(n)}</div>`).join('') +
+        (s.eightySixed || []).map(n => `<div class="history-line history-remove">86'd: ${escHtml(n)}</div>`).join('') +
+        (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('')
+      ).join('');
+
+      return `<div class="history-entry">
+        <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
+          <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
+          <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
+          <span class="history-summary">${escHtml(summary)}</span>
+          <span class="history-chevron">\u203A</span>
+        </div>
+        <div class="history-detail">${detailHtml}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    wrap.innerHTML = `<p class="db-empty db-error">Failed to load history.</p>`;
   }
 }
 
@@ -3151,7 +3225,7 @@ function switchAdminTab(name) {
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
-  if (name === 'admin-restaurants')   { renderMenusPanel(); }
+  if (name === 'admin-restaurants')   { renderMenusPanel(); renderUpdateHistory(); }
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
   if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
   if (name === 'admin-users')         { loadUsers(); }

@@ -544,6 +544,23 @@
 .visibility-btn:hover { opacity: 1; background: var(--hover-bg, rgba(255,255,255,0.08)); }
 .visibility-btn.is-off-menu { opacity: 1; color: var(--muted); }
 
+/* ─── UPDATE HISTORY ──────────────────────────────────────────────────────── */
+.update-history-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.history-entry { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+.history-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; font-size: 12px; color: var(--text); flex-wrap: wrap; }
+.history-header:hover { background: var(--surface); }
+.history-date { color: var(--muted); white-space: nowrap; }
+.history-user { font-weight: 600; white-space: nowrap; }
+.history-summary { flex: 1; color: var(--muted); font-size: 11px; }
+.history-chevron { transition: transform 0.15s; font-size: 14px; color: var(--muted); }
+.history-entry.expanded .history-chevron { transform: rotate(90deg); }
+.history-detail { display: none; padding: 0 10px 8px; font-size: 11px; }
+.history-entry.expanded .history-detail { display: block; }
+.history-cat { font-size: 12px; margin-top: 4px; }
+.history-line { padding-left: 12px; }
+.history-add { color: var(--green, #4caf50); }
+.history-remove { color: var(--red, #f44336); }
+
 /* ─── ADMIN PANEL ─────────────────────────────────────────────────────────── */
 .admin-status-bar  { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; margin-bottom: 4px; }
 .btn-tiny          { padding: 3px 8px; font-size: 11px; }
