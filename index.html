@@ -187,6 +187,8 @@
         <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
         <button class="tab-btn"        id="tab-btn-admin-design"        role="tab" aria-selected="false" aria-controls="tab-panel-admin-design"        onclick="switchAdminTab('admin-design')">DESIGN</button>
         <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
+        <button class="tab-btn"        id="tab-btn-admin-featured"      role="tab" aria-selected="false" aria-controls="tab-panel-admin-featured"      onclick="switchAdminTab('admin-featured')">FEATURED</button>
+        <button class="tab-btn"        id="tab-btn-admin-history"       role="tab" aria-selected="false" aria-controls="tab-panel-admin-history"       onclick="switchAdminTab('admin-history')">HISTORY</button>
       </div>
 
       <!-- RESTAURANTS SUB-PANEL -->
@@ -202,18 +204,6 @@
             <button class="btn-small" onclick="confirmAddRestaurant()">Add</button>
             <button class="btn-small" onclick="document.getElementById('add-restaurant-form').style.display='none'">Cancel</button>
           </div>
-        </div>
-        <div id="featured-admin-section" style="margin-top:16px;border-top:1px solid var(--border);padding-top:8px;">
-          <div class="section-label">Featured Groups</div>
-          <div id="featured-admin-wrap"></div>
-          <div class="input-row" style="margin-top:6px">
-            <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
-            <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
-          </div>
-        </div>
-        <div id="update-history-section" class="update-history-section">
-          <div class="section-label" style="margin-top:16px">Update History</div>
-          <div id="update-history-wrap"></div>
         </div>
       </div>
 
@@ -430,6 +420,21 @@
           <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
         </div>
         <div id="users-list"></div>
+      </div>
+      <!-- FEATURED SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-featured" role="tabpanel" aria-labelledby="tab-btn-admin-featured">
+        <div class="section-label">Featured Groups</div>
+        <div id="featured-admin-wrap"></div>
+        <div class="input-row" style="margin-top:6px">
+          <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
+          <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
+        </div>
+      </div>
+
+      <!-- HISTORY SUB-PANEL -->
+      <div class="tab-panel" id="tab-panel-admin-history" role="tabpanel" aria-labelledby="tab-btn-admin-history">
+        <div class="section-label">Update History</div>
+        <div id="update-history-wrap"></div>
       </div>
     </div><!-- /admin-panel -->
 

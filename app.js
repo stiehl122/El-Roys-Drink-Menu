@@ -3582,16 +3582,18 @@ function switchManagerTab(name) {
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users'].forEach(t => {
+  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
     if (panel) panel.classList.toggle('active', t === name);
   });
-  if (name === 'admin-restaurants')   { renderMenusPanel(); renderUpdateHistory(); renderFeaturedAdmin(); }
+  if (name === 'admin-restaurants')   { renderMenusPanel(); }
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
   if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
   if (name === 'admin-users')         { loadUsers(); }
+  if (name === 'admin-featured')      { renderFeaturedAdmin(); }
+  if (name === 'admin-history')       { renderUpdateHistory(); }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
