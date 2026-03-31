@@ -15,6 +15,7 @@ const LS_KEYS = {
   expiresAt:    'hf_sb_expires_at',
   uid:          'hf_sb_uid',
   email:        'hf_sb_email',
+  lsSchemaVersion: 'hf_ls_schema_version',
 };
 
 let BOT_ID        = '';
@@ -883,7 +884,49 @@ async function loadSupabaseConfig() {
   } catch(e) {}
 }
 
+function migrateLocalStorage() {
+  try {
+    if ((localStorage.getItem(LS_KEYS.lsSchemaVersion) || '0') >= '1') return;
+
+    const OLD_CATS = {
+      beer: 'Beer', canned: 'Canned', cocktails: 'Cocktails',
+      tequila: 'Tequila', frozen: 'Frozen', special: 'Special'
+    };
+    const oldRaw = localStorage.getItem('menuItems') || localStorage.getItem('menuData');
+    const hasFirebaseAuth = Object.keys(localStorage).some(k => k.startsWith('firebase:'));
+    const oldBotId = localStorage.getItem('bot_id') || localStorage.getItem('groupme_config');
+
+    if (!oldRaw && !hasFirebaseAuth && !oldBotId) {
+      localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+      return;
+    }
+
+    if (oldRaw) {
+      const oldData = JSON.parse(oldRaw);
+      const cats = Object.entries(OLD_CATS).map(([key, label]) => ({
+        id: crypto.randomUUID(), key, label,
+        items: (Array.isArray(oldData[key]) ? oldData[key] : []).map(it => ({
+          name: it.name || '', desc: it.desc || '', recipe: it.recipe || '',
+          price: it.price || '', is86: !!it.is86
+        }))
+      }));
+      const meta = { lastUpdated: localStorage.getItem('lastUpdated') || '' };
+      if (oldBotId) meta.botId = oldBotId;
+      localStorage.setItem(LS_KEYS.menuCache, JSON.stringify({ cats, meta }));
+    }
+
+    // Clean up old keys
+    ['menuItems', 'menuData', 'bot_id', 'groupme_config', 'lastUpdated'].forEach(k => localStorage.removeItem(k));
+    Object.keys(localStorage).filter(k => k.startsWith('firebase:')).forEach(k => localStorage.removeItem(k));
+    localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+  } catch (_) {
+    localStorage.clear();
+    localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+  }
+}
+
 async function init() {
+  migrateLocalStorage();
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
 
