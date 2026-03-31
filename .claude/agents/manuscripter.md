@@ -46,6 +46,8 @@ README.md should cover:
 
 7. **Do not hallucinate features.** Only document what exists in the codebase. If you are uncertain about a detail, flag it rather than guess.
 
+8. **Do not commit changes.** Never create git commits unless the user explicitly asks you to. Your job is to edit documentation files — committing is the user's decision.
+
 ## Output Format
 
 After completing updates, provide a brief summary:
