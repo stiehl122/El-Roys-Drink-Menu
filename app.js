@@ -151,6 +151,20 @@ function sbHeaders(extra = {}) {
   };
 }
 
+async function sbFetchOrThrow(url, options = {}) {
+  const res = await fetch(url, options);
+  if (res.ok) return res;
+  let detail = '';
+  try { detail = (await res.text()).trim(); } catch (_) { /* ignore */ }
+  throw new Error(detail ? `${res.status} ${res.statusText}: ${detail}` : `${res.status} ${res.statusText}`);
+}
+
+async function sbReadJsonOrThrow(url, options = {}) {
+  const res = await sbFetchOrThrow(url, options);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 // Resolve which menu to load based on ?menu={slug}, localStorage cache, or
 // auto-selection. Sets MENU_ID, pushes slug to URL for single-menu sites,
 // or sets _menuPickerNeeded / _invalidMenuSlug for multi-menu / bad-slug cases.
@@ -3466,15 +3480,14 @@ function editFeaturedFromBanner() {
 async function renderFeaturedAdmin() {
   const wrap = document.getElementById('featured-admin-wrap');
   if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
   wrap.innerHTML = '<p class="db-empty">Loading…</p>';
   try {
-    const [gRes, mgRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/featured_groups?select=*&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups?select=*`, { headers: sbHeaders() }),
+    if (!_adminAllMenus.length) await loadAdminSwitcherData();
+    const [groups, links] = await Promise.all([
+      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?select=id,name&order=name.asc`, { headers: sbHeaders() }),
+      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?select=menu_id,featured_group_id`, { headers: sbHeaders() }),
     ]);
-    if (!gRes.ok || !mgRes.ok) throw new Error('fetch');
-    const groups = await gRes.json();
-    const links = await mgRes.json();
 
     if (!groups.length) {
       wrap.innerHTML = '<p class="db-empty">No featured groups yet.</p>';
@@ -3498,7 +3511,9 @@ async function renderFeaturedAdmin() {
       </div>`;
     }).join('');
   } catch(e) {
-    wrap.innerHTML = '<p class="db-empty db-error">Failed to load featured groups.</p>';
+    console.error('renderFeaturedAdmin failed:', e);
+    const errorMsg = e.message || String(e) || 'Unknown error';
+    wrap.innerHTML = `<p class="db-empty db-error">Failed to load featured groups: ${escHtml(errorMsg)}</p>`;
   }
 }
 
@@ -3507,44 +3522,45 @@ async function addFeaturedGroup() {
   const name = input?.value?.trim();
   if (!name) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/featured_groups`, {
+    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
       method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
       body: JSON.stringify({ name }),
     });
     input.value = '';
-    renderFeaturedAdmin();
+    await renderFeaturedAdmin();
     showToast('Featured group created!', 'success');
-  } catch(e) { showToast('Failed to create group.', 'error'); }
+  } catch(e) { showToast(e.message || 'Failed to create group.', 'error'); }
 }
 
 async function deleteFeaturedGroup(groupId) {
   if (!confirm('Delete this featured group? This removes it from all menus.')) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${groupId}`, {
+    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${groupId}`, {
       method: 'DELETE', headers: sbHeaders(),
     });
-    renderFeaturedAdmin();
+    await renderFeaturedAdmin();
     _featuredGroups = await sbReadFeatured(MENU_ID);
     renderPublicView();
     showToast('Group deleted.', 'success');
-  } catch(e) { showToast('Failed to delete.', 'error'); }
+  } catch(e) { showToast(e.message || 'Failed to delete.', 'error'); }
 }
 
 async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
   try {
     if (checked) {
-      await fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups`, {
+      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups`, {
         method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
         body: JSON.stringify({ menu_id: menuId, featured_group_id: groupId, display_order: 0 }),
       });
     } else {
-      await fetch(`${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&featured_group_id=eq.${groupId}`, {
+      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&featured_group_id=eq.${groupId}`, {
         method: 'DELETE', headers: sbHeaders(),
       });
     }
+    await renderFeaturedAdmin();
     _featuredGroups = await sbReadFeatured(MENU_ID);
     renderPublicView();
-  } catch(e) { showToast('Failed to update.', 'error'); }
+  } catch(e) { showToast(e.message || 'Failed to update.', 'error'); }
 }
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
@@ -3695,6 +3711,8 @@ async function renderMenusPanel() {
     if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
     const restaurants = await restRes.json();
     const allMenus    = await menuRes.json();
+    _adminRestaurants = restaurants;
+    _adminAllMenus = allMenus;
     const byRestaurant = {};
     allMenus.forEach(m => {
       if (!byRestaurant[m.restaurant_id]) byRestaurant[m.restaurant_id] = [];
