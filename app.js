@@ -1634,19 +1634,21 @@ function _buildLeroyRouteFeaturedItemsHtml() {
   const featuredSlots = _featuredGroups.flatMap(group => group.slots || []).filter(slot => slot.item);
   if (!featuredSlots.length) {
     const fallbackItems = _getVisiblePublicItemsForRoute('special').slice(0, 2);
-    if (!fallbackItems.length) return '<p class="leroy-route-empty">Nothing featured right now.</p>';
+    if (!fallbackItems.length) return '<p class="ll-route-empty">Nothing featured right now.</p>';
     return fallbackItems.map((item, index) => {
       const is86 = !!item.eightySixed;
-      const classes = ['leroy-route-feature-card', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
-      return `<article class="${classes}">
-        <div class="leroy-route-feature-copy">
-          <div class="leroy-route-feature-head">
-            <h4 class="leroy-route-feature-name menu-item-name">${escHtml(item.name)}</h4>
-            ${index === 0 ? '<span class="leroy-route-feature-badge">Chef\'s Choice</span>' : ''}
+      return `<article class="ll-special-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
+        <div class="ll-item-body ${is86 ? 'll-item-body-relative' : ''}">
+          ${is86 ? '<div class="ll-86d-stamp">86\'d</div>' : ''}
+          <div class="ll-item-name-row">
+            <h3 class="ll-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</h3>
+            ${index === 0 ? '<span class="ll-chef-badge">Chef\'s Choice</span>' : ''}
           </div>
-          ${item.desc ? `<p class="leroy-route-feature-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+          ${item.desc ? `<p class="ll-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
         </div>
-        ${item.price ? `<span class="leroy-route-feature-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+        <div class="ll-item-price-col">
+          ${item.price ? `<span class="ll-special-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
+        </div>
       </article>`;
     }).join('');
   }
@@ -1654,47 +1656,61 @@ function _buildLeroyRouteFeaturedItemsHtml() {
   return featuredSlots.slice(0, 3).map((slot, index) => {
     const item = slot.item;
     const is86 = !!item?.eightySixed;
-    const classes = ['leroy-route-feature-card', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
-    return `<article class="${classes}">
-      <div class="leroy-route-feature-copy">
-        <div class="leroy-route-feature-head">
-          <h4 class="leroy-route-feature-name menu-item-name">${escHtml(item?.name || '')}</h4>
-          ${index === 0 ? '<span class="leroy-route-feature-badge">Featured</span>' : ''}
-          ${is86 ? '<span class="leroy-route-feature-badge leroy-route-feature-badge--muted">86\'d</span>' : ''}
+    return `<article class="ll-special-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
+      <div class="ll-item-body ${is86 ? 'll-item-body-relative' : ''}">
+        ${is86 ? '<div class="ll-86d-stamp">86\'d</div>' : ''}
+        <div class="ll-item-name-row">
+          <h3 class="ll-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item?.name || '')}</h3>
+          ${index === 0 ? '<span class="ll-chef-badge">Chef\'s Choice</span>' : ''}
         </div>
-        ${item?.desc ? `<p class="leroy-route-feature-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+        ${item?.desc ? `<p class="ll-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
       </div>
-      ${item?.price ? `<span class="leroy-route-feature-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+      <div class="ll-item-price-col">
+        ${item?.price ? `<span class="ll-special-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
+      </div>
     </article>`;
   }).join('');
+}
+
+function _getLeroyRouteSectionBadge(cat, layout) {
+  if (cat.id === 'special') return 'Limited Time Only';
+  if (cat.id === 'food') return 'Main Menu';
+  if (cat.id === 'sides') return 'Small Bites';
+  if (layout === 'list') return 'Small Bites';
+  return MENU_TYPE === 'food' ? 'Main Menu' : 'Bar Menu';
 }
 
 function _buildLeroyRouteCategoryHtml(cat) {
   const items = _getVisiblePublicItemsForRoute(cat.id);
   if (!items.length) return '';
+  const listishIds = new Set(['sides', 'beer', 'canned']);
+  const layout = listishIds.has(cat.id) || items.length <= 3 ? 'list' : 'grid';
   const itemsHtml = items.map(item => {
     const is86 = !!item.eightySixed;
-    const classes = ['leroy-route-item', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
-    return `<article class="${classes}">
-      <div class="leroy-route-item-main">
-        <div class="leroy-route-item-head">
-          <h4 class="leroy-route-item-name menu-item-name">${escHtml(item.name)}</h4>
-          ${item.price ? `<span class="leroy-route-item-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+    if (layout === 'list') {
+      return `<article class="ll-side-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
+        <div class="ll-side-info">
+          <span class="ll-side-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</span>
+          ${item.desc ? `<p class="ll-side-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
         </div>
-        ${item.desc ? `<p class="leroy-route-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+        ${item.price ? `<span class="ll-side-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
+      </article>`;
+    }
+    return `<article class="ll-food-item menu-item ${is86 ? 'll-food-item-86d menu-item-86d' : ''}">
+      <div class="ll-food-item-header">
+        <h3 class="ll-food-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</h3>
+        ${item.price ? `<span class="ll-food-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
       </div>
-      ${is86 ? '<span class="leroy-route-item-flag">86\'d</span>' : ''}
+      ${item.desc ? `<p class="ll-food-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+      ${is86 ? '<span class="ll-sold-out-badge">Sold Out</span>' : ''}
     </article>`;
   }).join('');
-  return `<section class="leroy-route-section menu-category" data-category="${escHtml(cat.id)}">
-    <div class="leroy-route-section-head">
-      <div>
-        <h3 class="leroy-route-section-title">${escHtml(cat.title)}</h3>
-        ${cat.sub ? `<p class="leroy-route-section-sub">${escHtml(cat.sub)}</p>` : ''}
-      </div>
-      <span class="leroy-route-section-meta">${escHtml(MENU_TYPE === 'food' ? 'Kitchen' : 'Bar')}</span>
+  return `<section class="ll-section menu-category" data-category="${escHtml(cat.id)}">
+    <div class="ll-section-header">
+      <h2 class="ll-section-title">${escHtml(cat.title)}</h2>
+      <span class="ll-section-badge">${escHtml(_getLeroyRouteSectionBadge(cat, layout))}</span>
     </div>
-    <div class="leroy-route-item-list">${itemsHtml}</div>
+    <div class="${layout === 'list' ? 'll-sides-list' : 'll-food-grid'}">${itemsHtml}</div>
   </section>`;
 }
 
@@ -1706,29 +1722,29 @@ function _renderLeroyRoutePage(container) {
 
   const timestamp = getLastUpdatedTs();
   const timestampText = timestamp ? formatUpdatedAt(timestamp, '') : 'Awaiting first update';
-  const menuNameEl = document.getElementById('leroy-route-menu-name');
+  const menuNameEl = document.getElementById('ll-route-menu-name');
   if (menuNameEl) menuNameEl.textContent = _activeMenuName || "Leroy's Lounge";
-  const statusTsEl = document.getElementById('leroy-route-status-timestamp');
+  const statusTsEl = document.getElementById('ll-route-status-timestamp');
   if (statusTsEl) statusTsEl.textContent = timestampText;
-  const footerTsEl = document.getElementById('leroy-route-footer-timestamp');
+  const footerTsEl = document.getElementById('ll-route-footer-timestamp');
   if (footerTsEl) footerTsEl.textContent = timestampText;
-  const footerVersionEl = document.getElementById('leroy-route-footer-version');
+  const footerVersionEl = document.getElementById('ll-route-footer-version');
   if (footerVersionEl) footerVersionEl.innerHTML = APP_VERSION + (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
 
-  const switchBtn = document.getElementById('leroy-route-switch-btn');
+  const switchBtn = document.getElementById('ll-route-switch-btn');
   if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
 
-  const featuredWrap = document.getElementById('leroy-route-featured');
+  const featuredWrap = document.getElementById('ll-route-specials');
   if (featuredWrap) featuredWrap.innerHTML = _buildLeroyRouteFeaturedItemsHtml();
 
-  const categoryWrap = document.getElementById('leroy-route-categories');
+  const categoryWrap = document.getElementById('ll-route-sections');
   if (categoryWrap) {
     const categoriesHtml = CATEGORY_DEFS
       .filter(cat => cat.id !== 'special')
       .map(_buildLeroyRouteCategoryHtml)
       .filter(Boolean)
       .join('');
-    categoryWrap.innerHTML = categoriesHtml || '<p class="leroy-route-empty">Nothing on the menu yet.</p>';
+    categoryWrap.innerHTML = categoriesHtml || '<p class="ll-route-empty">Nothing on the menu yet.</p>';
   }
 
   return true;
@@ -1927,6 +1943,17 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
+function _setDisplayById(id, display) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = display;
+}
+
+function _setDisplayBySelector(selector, display) {
+  document.querySelectorAll(selector).forEach(el => {
+    el.style.display = display;
+  });
+}
+
 function renderUserHeader() {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
@@ -1943,8 +1970,10 @@ function renderUserHeader() {
   const accessibleIds = currentUser?.accessibleMenuIds || [];
   const hasMenuAccess = isAdmin || accessibleIds.length > 0;
 
-  document.getElementById('signin-btn').style.display = signedIn ? 'none' : '';
-  document.getElementById('user-chip').style.display  = signedIn ? '' : 'none';
+  _setDisplayById('signin-btn', signedIn ? 'none' : '');
+  _setDisplayById('user-chip', signedIn ? '' : 'none');
+  _setDisplayBySelector('[data-route-signin]', signedIn ? 'none' : '');
+  _setDisplayBySelector('[data-route-user-chip]', signedIn ? '' : 'none');
 
   const actionBtn = document.getElementById('action-btn');
   const adminBtn  = document.getElementById('admin-btn');
@@ -1959,10 +1988,30 @@ function renderUserHeader() {
     adminBtn.classList.toggle('active', isAdminMode);
   }
 
+  _setDisplayBySelector('[data-route-manager]', (signedIn && hasMenuAccess) ? '' : 'none');
+  _setDisplayBySelector('[data-route-admin]', (signedIn && isAdmin) ? '' : 'none');
+  document.querySelectorAll('[data-route-manager]').forEach(el => {
+    el.textContent = isManagerMode ? 'Exit' : 'Manager';
+    el.classList.toggle('active', isManagerMode);
+  });
+  document.querySelectorAll('[data-route-admin]').forEach(el => {
+    el.classList.toggle('active', isAdminMode);
+  });
+
   if (signedIn) {
-    document.getElementById('user-initials').textContent      = initials;
-    document.getElementById('user-dropdown-name').textContent = name || currentUser?.email || '';
-    document.getElementById('user-dropdown-role').textContent = roleLabel;
+    const fullName = name || currentUser?.email || '';
+    const standardInitials = document.getElementById('user-initials');
+    const standardName = document.getElementById('user-dropdown-name');
+    const standardRole = document.getElementById('user-dropdown-role');
+    const routeInitials = document.getElementById('ll-user-initials');
+    const routeName = document.getElementById('ll-user-dropdown-name');
+    const routeRole = document.getElementById('ll-user-dropdown-role');
+    if (standardInitials) standardInitials.textContent = initials;
+    if (standardName) standardName.textContent = fullName;
+    if (standardRole) standardRole.textContent = roleLabel;
+    if (routeInitials) routeInitials.textContent = initials;
+    if (routeName) routeName.textContent = fullName;
+    if (routeRole) routeRole.textContent = roleLabel;
   }
 }
 
@@ -2014,34 +2063,37 @@ function exitView() {
   else if (isAdminMode) exitAdmin();
 }
 
-function toggleUserDropdown() {
-  const chip = document.getElementById('user-chip');
+function toggleUserDropdown(chipId = 'user-chip') {
+  const chip = document.getElementById(chipId);
+  if (!chip) return;
   const isOpen = chip.classList.toggle('open');
   chip.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen) {
-    const firstFocusable = document.querySelector('#user-dropdown button, #user-dropdown a');
+    const firstFocusable = chip.querySelector('button, a');
     if (firstFocusable) firstFocusable.focus();
   }
 }
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
-  const chip = document.getElementById('user-chip');
-  if (chip && !chip.contains(e.target)) {
-    chip.classList.remove('open');
-    chip.setAttribute('aria-expanded', 'false');
-  }
+  document.querySelectorAll('.user-chip, .ll-site-userchip').forEach(chip => {
+    if (!chip.contains(e.target)) {
+      chip.classList.remove('open');
+      chip.setAttribute('aria-expanded', 'false');
+    }
+  });
 });
 
 // Close dropdown on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
-  const chip = document.getElementById('user-chip');
-  if (chip && chip.classList.contains('open')) {
-    chip.classList.remove('open');
-    chip.setAttribute('aria-expanded', 'false');
-    chip.focus();
-  }
+  document.querySelectorAll('.user-chip, .ll-site-userchip').forEach(chip => {
+    if (chip.classList.contains('open')) {
+      chip.classList.remove('open');
+      chip.setAttribute('aria-expanded', 'false');
+      chip.focus();
+    }
+  });
 });
 
 // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
