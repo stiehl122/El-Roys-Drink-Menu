@@ -1,7 +1,7 @@
 import { requireRole } from './_auth.js';
 
 /**
- * Sanitizes a menu name to a safe storage path segment.
+ * Sanitizes a restaurant or menu name to a safe storage path segment.
  * Mirrors sanitizeMenuName() in app.js.
  */
 function sanitizeMenuName(name) {
@@ -22,11 +22,11 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Server misconfigured' });
   }
 
-  // ── DELETE — remove both design files for a menu ──────────────────────────
+  // ── DELETE — remove both design files for a restaurant/menu namespace ─────
   if (req.method === 'DELETE') {
-    const { menuName } = req.query;
-    const sanitized = sanitizeMenuName(menuName);
-    if (!sanitized) return res.status(400).json({ error: 'Invalid menuName' });
+    const designName = req.query.restaurantName || req.query.menuName;
+    const sanitized = sanitizeMenuName(designName);
+    if (!sanitized) return res.status(400).json({ error: 'Invalid restaurantName or menuName' });
 
     const paths = [`${sanitized}_design.html`, `${sanitized}_design.css`];
     const deleteRes = await fetch(
@@ -50,14 +50,15 @@ export default async function handler(req, res) {
 
   // ── POST — upload a design file ───────────────────────────────────────────
   if (req.method === 'POST') {
-    const { menuName, fileType } = req.body || {};
-    if (!menuName) return res.status(400).json({ error: 'Missing menuName' });
+    const { restaurantName, menuName, fileType } = req.body || {};
+    const designName = restaurantName || menuName;
+    if (!designName) return res.status(400).json({ error: 'Missing restaurantName or menuName' });
     if (!['html', 'css'].includes(fileType)) {
       return res.status(400).json({ error: 'fileType must be html or css' });
     }
 
-    const sanitized = sanitizeMenuName(menuName);
-    if (!sanitized) return res.status(400).json({ error: 'Invalid menuName' });
+    const sanitized = sanitizeMenuName(designName);
+    if (!sanitized) return res.status(400).json({ error: 'Invalid restaurantName or menuName' });
 
     // Read raw body — Vercel exposes it as req.body when Content-Type is text/*
     // For binary/form uploads, the client should send the file content as plain text

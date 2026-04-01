@@ -1,6 +1,6 @@
 ---
 name: stitch
-description: Download a Stitch project, verify the target menu exists in Supabase, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a custom public view for an El Roy's menu. Usage: /stitch <menu_name> <stitch_project_id> [screen_id]
+description: Download a Stitch project, verify the target menu exists in Supabase, resolve its restaurant, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a shared restaurant-level custom public view for El Roy's. Usage: /stitch <menu_name> <stitch_project_id> [screen_id]
 ---
 
 Arguments: $ARGUMENTS — expects `<menu_name> <stitch_project_id> [screen_id]`
@@ -30,13 +30,22 @@ Read `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the live app by fetching `/api/
 
 Query the menus table:
 ```
-GET {SUPABASE_URL}/rest/v1/menus?name=ilike.{menu_name}&select=id,name,slug,type,use_custom_design
+GET {SUPABASE_URL}/rest/v1/menus?name=ilike.{menu_name}&select=id,name,slug,type,restaurant_id
 Headers: apikey: {SUPABASE_ANON_KEY}
 ```
 
 - If **no match**: print an error and list all available menus (`GET /rest/v1/menus?select=name&archived=eq.false&order=name.asc`). Abort.
 - If **multiple matches**: show the list and ask the user to clarify.
-- If **exactly one match**: proceed with that menu's `id`, `name`, and `slug`.
+- If **exactly one match**: proceed with that menu's `id`, `name`, `slug`, and `restaurant_id`.
+
+Then resolve the restaurant:
+```
+GET {SUPABASE_URL}/rest/v1/restaurants?id=eq.{restaurant_id}&select=id,name
+Headers: apikey: {SUPABASE_ANON_KEY}
+```
+
+- If the restaurant cannot be resolved: print an error and abort.
+- Otherwise proceed using the restaurant's name for all file naming and output paths.
 
 ---
 
@@ -72,16 +81,16 @@ Use the Stitch MCP tools in this order:
 
 ## Step 4 — Save raw files
 
-Compute `sanitized_menu_name`:
-- Lowercase the menu name
+Compute `sanitized_restaurant_name`:
+- Lowercase the restaurant name
 - Replace runs of non-alphanumeric characters with `_`
 - Strip leading/trailing underscores
 
-Create directory: `designs/{sanitized_menu_name}/`
+Create directory: `designs/{sanitized_restaurant_name}/`
 
 Write raw Stitch output:
-- `designs/{sanitized_menu_name}/raw_screen.html` — the raw HTML from Stitch
-- `designs/{sanitized_menu_name}/raw_screen.css` — the raw CSS from Stitch
+- `designs/{sanitized_restaurant_name}/raw_screen.html` — the raw HTML from Stitch
+- `designs/{sanitized_restaurant_name}/raw_screen.css` — the raw CSS from Stitch
 
 ---
 
@@ -117,8 +126,8 @@ These classes should be added to existing elements without removing existing cla
 ## Step 6 — Write melded output
 
 Write the melded files:
-- `designs/{sanitized_menu_name}/{sanitized_menu_name}_design.html`
-- `designs/{sanitized_menu_name}/{sanitized_menu_name}_design.css`
+- `designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.html`
+- `designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.css`
 
 These are the files to upload via the Admin Design tab.
 
@@ -129,16 +138,17 @@ These are the files to upload via the Admin Design tab.
 Print a summary:
 ```
 ✓ Menu verified: "{menu_name}" (ID: {menu_id})
+✓ Restaurant resolved: "{restaurant_name}" (ID: {restaurant_id})
 ✓ Stitch project downloaded: {stitch_project_id} / screen {screen_id}
 ✓ Raw files saved:
-    designs/{sanitized}/raw_screen.html
-    designs/{sanitized}/raw_screen.css
+    designs/{sanitized_restaurant_name}/raw_screen.html
+    designs/{sanitized_restaurant_name}/raw_screen.css
 ✓ Melded output saved:
-    designs/{sanitized}/{sanitized}_design.html
-    designs/{sanitized}/{sanitized}_design.css
+    designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.html
+    designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.css
 
 Next steps:
 1. Review the melded files to verify the design looks correct.
-2. Go to Admin → Design tab, select "{menu_name}", and upload the .html and .css files.
+2. Go to Admin → Design tab, select "{restaurant_name}", and upload the .html and .css files.
 3. Toggle "Use Custom Design" on to activate it for the public view.
 ```

@@ -11,7 +11,7 @@ A zero-dependency web app that powers the live menu for El Roy's — supports bo
 - **localStorage fallback** — used for cached menu state, timestamps, and auth/session persistence when network reads fail or the app is offline.
 - **GroupMe Bot API** — one possible downstream notification channel, always called server-side through Vercel routes.
 - **Supabase Auth + role API** — email/password auth in the client, with role and menu-access enforcement provided by `/api/role` and `/api/users`.
-- **Supabase Storage** — `menu-designs` bucket stores per-menu custom HTML/CSS design files. Files are public-read, admin-write (via RLS). File naming: `{sanitized_menu_name}_design.html` and `{sanitized_menu_name}_design.css` where sanitized = lowercase with runs of non-alphanumeric chars replaced by `_`.
+- **Supabase Storage** — `menu-designs` bucket stores per-restaurant custom HTML/CSS design files. Files are public-read, admin-write (via RLS). File naming: `{sanitized_restaurant_name}_design.html` and `{sanitized_restaurant_name}_design.css` where sanitized = lowercase with runs of non-alphanumeric chars replaced by `_`.
 - **Vercel API routes** — six serverless endpoints required for full functionality:
   - `/api/config` — serves Supabase credentials to the client
   - `/api/role` — looks up the authenticated user's role and profile
@@ -62,7 +62,7 @@ New accounts start with `role: none` and require admin promotion before they can
 - **Auth wizard:** The sign-in overlay is a four-screen wizard: **Sign In** (email/password), **Sign Up** (first name, last name, email, password), **Forgot Password** (sends Supabase reset email via `POST /auth/v1/recover`), and **Reset Password** (in-app screen, reached when the app detects `#type=recovery&access_token=...` in the URL hash on load; updates password via `PUT /auth/v1/user`). Google OAuth and SMS OTP are not present.
 - **Recovery token handling:** The recovery session data (`access_token`, etc.) is stored only in the in-memory variable `_recoverySessionData` and is cleared when the overlay is closed. It is never written to localStorage or any persistent store.
 - **Sign-up flow:** New accounts are created with `role: none`. An admin must promote the account to `manager` or `admin` via the Admin tab (or the Supabase dashboard) before the user can edit the menu.
-- **Custom Design:** Admins can enable a per-menu custom design by uploading `{sanitized}_design.html` and `{sanitized}_design.css` to Supabase Storage and toggling `use_custom_design` on via the Admin Design tab. When enabled, `renderPublicView()` fetches and injects the custom HTML/CSS instead of building the DOM from `CATEGORY_DEFS`. Falls back to the default renderer if files are unavailable or fail to load. Custom CSS is removed when entering manager or admin mode to prevent bleed. Use `/stitch` to download a Stitch project and meld it into the correct format.
+- **Custom Design:** Admins can enable a per-restaurant custom design by uploading `{sanitized}_design.html` and `{sanitized}_design.css` to Supabase Storage and toggling `restaurants.use_custom_design` on via the Admin Design tab. When enabled, `renderPublicView()` fetches and injects the custom HTML/CSS instead of building the DOM from `CATEGORY_DEFS`. Falls back to the default renderer if files are unavailable or fail to load. Custom CSS is removed when entering manager or admin mode to prevent bleed. Use `/stitch` to download a Stitch project and meld it into the correct format.
 - **Public menu footer:** The footer on the public menu view displays the app version (`APP_VERSION` constant in `app.js:2`) and the last-updated timestamp. On Vercel preview deployments, it also shows a `PREVIEW` badge (detected via `IS_PREVIEW`, which checks that the hostname ends with `.vercel.app` but is not exactly `el-roys-drink-menu.vercel.app`). **`APP_VERSION` must be updated for every release, including patch releases (e.g. `v0.6` → `v0.6.1`).**
 
 ## Code Map
@@ -112,11 +112,11 @@ New accounts start with `role: none` and require admin promotion before they can
 
 ## Custom Design / Stitch Workflow
 
-Per-menu custom designs replace the default `renderPublicView()` output with uploaded HTML/CSS files served from Supabase Storage.
+Per-restaurant custom designs replace the default `renderPublicView()` output with uploaded HTML/CSS files served from Supabase Storage.
 
 ### Flag lifecycle
 
-1. `menus.use_custom_design` defaults to `false`. Toggle it via Admin → Design tab → "Use Custom Design" checkbox.
+1. `restaurants.use_custom_design` defaults to `false`. Toggle it via Admin → Design tab → "Use Custom Design" checkbox for the selected restaurant.
 2. When `true`, `renderPublicView()` fetches `{sanitized}_design.html` and `{sanitized}_design.css` from the `menu-designs` bucket and renders them inside `#public-categories`. Falls back to the default renderer on any fetch error.
 3. Custom CSS is injected as `<style id="custom-design-style">` and removed when entering manager or admin mode.
 
@@ -130,13 +130,13 @@ Examples: `"Happy Hour"` → `"happy_hour"`, `"El Roy's"` → `"el_roy_s"`
 
 Run `/stitch <menu_name> <stitch_project_id> [screen_id]` to:
 
-1. Verify the named menu exists in Supabase
+1. Verify the named menu exists in Supabase and resolve its restaurant
 2. Download the Stitch project/screen via the Stitch MCP tools
-3. Save raw files to `designs/{sanitized}/`
+3. Save raw files to `designs/{sanitized_restaurant_name}/`
 4. Meld the HTML/CSS (strip scripts, scope CSS to `#public-categories`, add semantic data-binding classes)
-5. Write `{sanitized}_design.html` / `.css` ready for upload
+5. Write `{sanitized_restaurant_name}_design.html` / `.css` ready for upload
 
-After running `/stitch`, upload the melded files via Admin → Design tab, then toggle "Use Custom Design" on.
+After running `/stitch`, upload the melded files via Admin → Design tab for that restaurant, then toggle "Use Custom Design" on.
 
 ### Re-melding
 
@@ -167,8 +167,8 @@ El-Roys-Drink-Menu/
 │   ├── fonts/                  # Self-hosted font files + fonts.css
 │   └── images/
 │       └── hf-logo.png        # Default logo asset
-├── designs/              # Per-menu custom design files (raw Stitch downloads + melded output)
-│   └── {sanitized_menu_name}/
+├── designs/              # Per-restaurant custom design files (raw Stitch downloads + melded output)
+│   └── {sanitized_restaurant_name}/
 │       ├── raw_screen.html       # Raw Stitch export (preserved for re-meld)
 │       ├── raw_screen.css
 │       ├── {name}_design.html    # Melded output — upload to Supabase Storage

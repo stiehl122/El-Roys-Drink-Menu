@@ -39,10 +39,11 @@ let _recoverySessionData = null;   // set when app detects a Supabase recovery U
 let _menuPickerNeeded  = false;     // true when multiple menus exist and no slug was given
 let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
 let _activeMenuName    = '';        // display name of the currently loaded menu
+let _activeRestaurantName = '';     // display name of the currently loaded restaurant
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
-let _useCustomDesign   = false;     // true when active menu has use_custom_design enabled
+let _useCustomDesign   = false;     // true when active restaurant has use_custom_design enabled
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
@@ -181,7 +182,7 @@ async function sbResolveMenu() {
     // Load menu by URL slug — also check for siblings in background
     const [menuRes, countRes] = await Promise.all([
       fetch(
-        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id,use_custom_design`,
+        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id`,
         { headers: sbHeaders() }
       ),
       fetch(
@@ -200,7 +201,7 @@ async function sbResolveMenu() {
         _activeMenuName  = menu.name || '';
         MENU_TYPE        = menu.type          || 'drinks';
         RESTAURANT_ID    = menu.restaurant_id || '';
-        _useCustomDesign = !!menu.use_custom_design;
+        _activeRestaurantName = '';
         lsSet(LS_KEYS.menuId, MENU_ID);
         return;
       }
@@ -214,7 +215,7 @@ async function sbResolveMenu() {
   if (MENU_ID) {
     // Enrich cached MENU_ID: fetch name/slug/type (for active-menu-bar) + sibling count in parallel
     const [nameRes, countRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived,use_custom_design`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived`, { headers: sbHeaders() }),
       fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`, { headers: sbHeaders() }),
     ]);
     if (nameRes.ok) {
@@ -222,12 +223,15 @@ async function sbResolveMenu() {
       if (menu?.archived === true) {
         // Cached menu was archived — clear it and fall through to picker
         MENU_ID = ''; RESTAURANT_ID = '';
+        _activeMenuName = '';
+        _activeRestaurantName = '';
+        _useCustomDesign = false;
         lsSet(LS_KEYS.menuId, '');
       } else if (menu) {
         if (menu.name)          _activeMenuName  = menu.name;
         if (menu.type)          MENU_TYPE        = menu.type;
         if (menu.restaurant_id) RESTAURANT_ID    = menu.restaurant_id;
-        _useCustomDesign = !!menu.use_custom_design;
+        _activeRestaurantName = '';
         if (menu.slug) {
           const url = new URL(location.href);
           url.searchParams.set('menu', menu.slug);
@@ -236,6 +240,9 @@ async function sbResolveMenu() {
       } else {
         // Cached MENU_ID is stale (menu deleted) — clear it and fall through to auto-resolve
         MENU_ID = ''; RESTAURANT_ID = '';
+        _activeMenuName = '';
+        _activeRestaurantName = '';
+        _useCustomDesign = false;
         lsSet(LS_KEYS.menuId, '');
       }
     }
@@ -248,7 +255,7 @@ async function sbResolveMenu() {
 
   // Fetch up to 2 non-archived menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id,use_custom_design&archived=eq.false&limit=2`,
+    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id&archived=eq.false&limit=2`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
@@ -260,7 +267,7 @@ async function sbResolveMenu() {
     _activeMenuName  = menus[0].name || '';
     MENU_TYPE        = menus[0].type          || 'drinks';
     RESTAURANT_ID    = menus[0].restaurant_id || '';
-    _useCustomDesign = !!menus[0].use_custom_design;
+    _activeRestaurantName = '';
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
     url.searchParams.set('menu', menus[0].slug);
@@ -295,7 +302,7 @@ async function sbEnsureUncategorized() {
 async function sbRead() {
   if (!SUPABASE_URL || !MENU_ID) return null;
   const restaurantFetch = RESTAURANT_ID
-    ? fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}&select=design`, { headers: sbHeaders() })
+    ? fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}&select=id,name,design,use_custom_design`, { headers: sbHeaders() })
     : Promise.resolve(null);
   const [catsRes, metaRes, restRes] = await Promise.all([
     fetch(
@@ -311,15 +318,15 @@ async function sbRead() {
   if (!catsRes.ok || !metaRes.ok) throw new Error('Supabase read failed');
   const cats = await catsRes.json();
   const [meta] = await metaRes.json();
-  let restaurantDesign = null;
+  let restaurant = null;
   if (restRes?.ok) {
     const [rest] = await restRes.json();
-    if (rest?.design && Object.keys(rest.design).length) restaurantDesign = rest.design;
+    if (rest) restaurant = rest;
   }
-  return { cats, meta: meta || null, restaurantDesign };
+  return { cats, meta: meta || null, restaurant };
 }
 
-function hydrateState({ cats, meta, restaurantDesign }) {
+function hydrateState({ cats, meta, restaurant }) {
   const realCats = (cats || []).filter(c => c.key !== UNCATEGORIZED_ID);
   const uncatCat = (cats || []).find(c => c.key === UNCATEGORIZED_ID);
 
@@ -367,6 +374,12 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     };
   }
 
+  _activeRestaurantName = restaurant?.name || '';
+  _useCustomDesign = !!restaurant?.use_custom_design;
+  currentDesign = restaurant?.design && Object.keys(restaurant.design).length
+    ? { ...DESIGN_DEFAULTS, ...restaurant.design }
+    : { ...DESIGN_DEFAULTS };
+
   if (meta) {
     menuState._meta = {
       lastUpdatedTs:      meta.last_updated_ts?.toString()  || '',
@@ -375,7 +388,6 @@ function hydrateState({ cats, meta, restaurantDesign }) {
     };
     if (meta.bot_id) BOT_ID = meta.bot_id;
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
-    if (restaurantDesign) currentDesign = { ...DESIGN_DEFAULTS, ...restaurantDesign };
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
     if (meta.last_sent_featured) _lastSentFeaturedIds = new Set(meta.last_sent_featured);
   }
@@ -426,11 +438,13 @@ async function loadActiveMenuState(options = {}) {
     } else if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
+      _useCustomDesign = false;
     }
   } catch (e) {
     if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
+      _useCustomDesign = false;
     } else {
       throw e;
     }
@@ -1468,7 +1482,7 @@ function _renderDefaultPublicView() {
 
 async function _renderCustomDesignView() {
   const container = document.getElementById('public-categories');
-  const sanitized = sanitizeMenuName(_activeMenuName);
+  const sanitized = sanitizeMenuName(_activeRestaurantName);
   if (!sanitized) { _renderDefaultPublicView(); return; }
 
   const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
@@ -1837,6 +1851,7 @@ function closeMenuPicker() {
 function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   MENU_ID       = menuId;
   _activeMenuName = menuName || '';
+  _activeRestaurantName = '';
   MENU_TYPE     = menuType     || 'drinks';
   RESTAURANT_ID = restaurantId || '';
   lsSet(LS_KEYS.menuId, MENU_ID);
@@ -2223,8 +2238,8 @@ async function loadAdminSwitcherData() {
   if (!SUPABASE_URL || !currentUser?.accessToken) return;
   try {
     const [restRes, menuRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
     ]);
     if (restRes.ok) _adminRestaurants = await restRes.json();
     if (menuRes.ok) _adminAllMenus    = await menuRes.json();
@@ -2254,10 +2269,10 @@ async function initAdminSwitcherTab(context) {
   // Default to current active restaurant/menu on first open
   if (!_adminSwitcherState[context].restaurantId) {
     _adminSwitcherState[context].restaurantId = RESTAURANT_ID || (_adminRestaurants[0]?.id || '');
-    _adminSwitcherState[context].menuId       = MENU_ID || '';
+    _adminSwitcherState[context].menuId       = context === 'notif' ? (MENU_ID || '') : '';
   }
   restSelect.value = _adminSwitcherState[context].restaurantId;
-  _refreshAdminMenuSelect(context);
+  if (context !== 'design') _refreshAdminMenuSelect(context);
   await _loadAdminTabData(context);
 }
 
@@ -2265,8 +2280,10 @@ async function onAdminSwitcherRestaurantChange(context) {
   const restSelect = document.getElementById(`${context}-restaurant-select`);
   if (!restSelect) return;
   _adminSwitcherState[context].restaurantId = restSelect.value;
-  _adminSwitcherState[context].menuId = ''; // reset so _refreshAdminMenuSelect picks first menu
-  _refreshAdminMenuSelect(context);
+  if (context !== 'design') {
+    _adminSwitcherState[context].menuId = ''; // reset so _refreshAdminMenuSelect picks first menu
+    _refreshAdminMenuSelect(context);
+  }
   await _loadAdminTabData(context);
 }
 
@@ -2308,38 +2325,45 @@ async function _loadAdminTabData(context) {
     } else { _populateNotifCredKeys({}); }
   } else if (context === 'design') {
     const restaurantId = _adminSwitcherState.design.restaurantId;
-    if (!restaurantId) { _populateAdminDesignPanel(DESIGN_DEFAULTS); return; }
+    if (!restaurantId) {
+      _populateAdminDesignPanel(DESIGN_DEFAULTS);
+      _renderCustomDesignControls(null);
+      return;
+    }
     try {
       const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=design`,
+        `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=id,name,design,use_custom_design`,
         { headers: sbHeaders() }
       );
       const [row] = r.ok ? await r.json() : [{}];
       _populateAdminDesignPanel({ ...DESIGN_DEFAULTS, ...(row?.design || {}) });
-    } catch { _populateAdminDesignPanel(DESIGN_DEFAULTS); }
-    // Render custom design controls for the selected menu
-    const menuId = _adminSwitcherState.design.menuId;
-    if (menuId) {
-      const menuRow = _adminAllMenus.find(m => m.id === menuId);
-      _renderCustomDesignControls(menuRow);
-    } else {
-      const sec = document.getElementById('custom-design-section');
-      if (sec) sec.innerHTML = '';
+      const entry = _adminRestaurants.find(rest => rest.id === restaurantId);
+      if (entry) entry.use_custom_design = !!row?.use_custom_design;
+      _renderCustomDesignControls(row);
+    } catch {
+      _populateAdminDesignPanel(DESIGN_DEFAULTS);
+      const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
+      _renderCustomDesignControls(restaurantRow || null);
+    }
+    const sec = document.getElementById('custom-design-section');
+    if (sec && !sec.innerHTML.trim()) {
+      const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
+      _renderCustomDesignControls(restaurantRow || null);
     }
   }
 }
 
 // ─── CUSTOM DESIGN ADMIN CONTROLS ────────────────────────────────────────────
 
-function _renderCustomDesignControls(menuRow) {
+function _renderCustomDesignControls(restaurantRow) {
   const sec = document.getElementById('custom-design-section');
   if (!sec) return;
-  if (!menuRow) { sec.innerHTML = ''; return; }
+  if (!restaurantRow) { sec.innerHTML = ''; return; }
 
-  const sanitized = sanitizeMenuName(menuRow.name);
+  const sanitized = sanitizeMenuName(restaurantRow.name);
   const htmlFile  = sanitized ? `${sanitized}_design.html` : '—';
   const cssFile   = sanitized ? `${sanitized}_design.css`  : '—';
-  const checked   = menuRow.use_custom_design ? 'checked' : '';
+  const checked   = restaurantRow.use_custom_design ? 'checked' : '';
 
   sec.innerHTML = `
     <div class="config-card" style="margin-top:14px;">
@@ -2348,7 +2372,7 @@ function _renderCustomDesignControls(menuRow) {
         <label for="custom-design-toggle">Use Custom Design</label>
         <input type="checkbox" id="custom-design-toggle" ${checked}
           onchange="toggleCustomDesign(this.checked)"
-          aria-label="Use custom design for this menu"/>
+          aria-label="Use custom design for this restaurant"/>
       </div>
       <div class="custom-design-file-status">
         <div class="custom-design-file-row">
@@ -2379,11 +2403,11 @@ function _renderCustomDesignControls(menuRow) {
 }
 
 async function toggleCustomDesign(checked) {
-  const menuId = _adminSwitcherState.design.menuId;
-  if (!menuId || !SUPABASE_URL || !currentUser?.accessToken) return;
+  const restaurantId = _adminSwitcherState.design.restaurantId;
+  if (!restaurantId || !SUPABASE_URL || !currentUser?.accessToken) return;
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(menuId)}`,
+      `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`,
       {
         method: 'PATCH',
         headers: sbHeaders({ 'Prefer': 'return=minimal' }),
@@ -2391,11 +2415,9 @@ async function toggleCustomDesign(checked) {
       }
     );
     if (!r.ok) throw new Error(await r.text());
-    // Keep _adminAllMenus in sync
-    const entry = _adminAllMenus.find(m => m.id === menuId);
+    const entry = _adminRestaurants.find(rest => rest.id === restaurantId);
     if (entry) entry.use_custom_design = checked;
-    // Update live flag if this is the active menu
-    if (menuId === MENU_ID) {
+    if (restaurantId === RESTAURANT_ID) {
       _useCustomDesign = checked;
       renderPublicViews();
     }
@@ -2409,9 +2431,9 @@ async function toggleCustomDesign(checked) {
 }
 
 async function uploadCustomDesignFile(fileType) {
-  const menuId = _adminSwitcherState.design.menuId;
-  const menuRow = _adminAllMenus.find(m => m.id === menuId);
-  if (!menuRow) return;
+  const restaurantId = _adminSwitcherState.design.restaurantId;
+  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
+  if (!restaurantRow) return;
 
   const input = document.getElementById(`custom-design-upload-${fileType}`);
   const file = input?.files?.[0];
@@ -2432,7 +2454,7 @@ async function uploadCustomDesignFile(fileType) {
         'Authorization': `Bearer ${currentUser.accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ menuName: menuRow.name, fileType, content }),
+      body: JSON.stringify({ restaurantName: restaurantRow.name, fileType, content }),
     });
     if (!r.ok) {
       const { error } = await r.json().catch(() => ({}));
@@ -2447,14 +2469,14 @@ async function uploadCustomDesignFile(fileType) {
 }
 
 async function removeCustomDesign() {
-  const menuId = _adminSwitcherState.design.menuId;
-  const menuRow = _adminAllMenus.find(m => m.id === menuId);
-  if (!menuRow) return;
-  if (!confirm(`Remove custom design files for "${menuRow.name}" and disable custom design?`)) return;
+  const restaurantId = _adminSwitcherState.design.restaurantId;
+  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
+  if (!restaurantRow) return;
+  if (!confirm(`Remove custom design files for restaurant "${restaurantRow.name}" and disable custom design?`)) return;
 
   try {
     const r = await fetch(
-      `/api/design-upload?menuName=${encodeURIComponent(menuRow.name)}`,
+      `/api/design-upload?restaurantName=${encodeURIComponent(restaurantRow.name)}`,
       {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${currentUser.accessToken}` },
@@ -2476,11 +2498,11 @@ async function removeCustomDesign() {
 }
 
 async function _refreshCustomDesignStatus() {
-  const menuId = _adminSwitcherState.design.menuId;
-  const menuRow = _adminAllMenus.find(m => m.id === menuId);
-  if (!menuRow || !SUPABASE_URL) return;
+  const restaurantId = _adminSwitcherState.design.restaurantId;
+  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
+  if (!restaurantRow || !SUPABASE_URL) return;
 
-  const sanitized = sanitizeMenuName(menuRow.name);
+  const sanitized = sanitizeMenuName(restaurantRow.name);
   if (!sanitized) return;
 
   const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
@@ -4516,7 +4538,14 @@ async function confirmDeleteMenu(id, name) {
     if (!r.ok) throw new Error(await r.text());
     _adminRestaurants = []; _adminAllMenus = [];
     // If the deleted menu was the active one, clear it
-    if (id === MENU_ID) { MENU_ID = ''; RESTAURANT_ID = ''; lsSet(LS_KEYS.menuId, ''); }
+    if (id === MENU_ID) {
+      MENU_ID = '';
+      RESTAURANT_ID = '';
+      _activeMenuName = '';
+      _activeRestaurantName = '';
+      _useCustomDesign = false;
+      lsSet(LS_KEYS.menuId, '');
+    }
     await renderMenusPanel();
     showToast(`Menu "${name}" deleted.`, 'success');
   } catch(e) {
@@ -4548,7 +4577,11 @@ async function confirmDeleteRestaurant(id, name) {
     });
     if (!r.ok) throw new Error(await r.text());
     _adminRestaurants = []; _adminAllMenus = [];
-    if (id === RESTAURANT_ID) { RESTAURANT_ID = ''; }
+    if (id === RESTAURANT_ID) {
+      RESTAURANT_ID = '';
+      _activeRestaurantName = '';
+      _useCustomDesign = false;
+    }
     await renderMenusPanel();
     showToast(`Restaurant "${name}" deleted.`, 'success');
   } catch(e) {
