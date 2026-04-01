@@ -250,6 +250,19 @@ function primeSiteRestaurantMenu(restaurant) {
   history.replaceState({}, '', url.toString());
 }
 
+function getCustomDesignAssetPaths(restaurantName) {
+  const sanitized = sanitizeMenuName(restaurantName);
+  if (!sanitized) return null;
+  const basePath = `/designs/${sanitized}`;
+  return {
+    sanitized,
+    htmlFile: `${sanitized}_design.html`,
+    cssFile: `${sanitized}_design.css`,
+    htmlUrl: `${basePath}/${sanitized}_design.html`,
+    cssUrl: `${basePath}/${sanitized}_design.css`,
+  };
+}
+
 function showPickerPage() {
   document.body.classList.add('is-site-picker');
   document.getElementById('site-picker-view')?.removeAttribute('hidden');
@@ -1617,21 +1630,20 @@ async function _renderCustomDesignView() {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
   const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
-  const sanitized = sanitizeMenuName(_activeRestaurantName);
-  if (!_restaurantCustomDesignEnabled || !sanitized || !SUPABASE_URL || !container) {
+  const assetPaths = getCustomDesignAssetPaths(_activeRestaurantName);
+  if (!_restaurantCustomDesignEnabled || !assetPaths || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
     return;
   }
 
-  const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
   container.innerHTML = '<div class="custom-design-loading"><div class="spinner"></div></div>';
 
   try {
     const ts = Date.now(); // cache-bust so stale CDN copies don't persist after upload
     const [htmlRes, cssRes] = await Promise.all([
-      fetch(`${baseUrl}/${sanitized}_design.html?v=${ts}`),
-      fetch(`${baseUrl}/${sanitized}_design.css?v=${ts}`),
+      fetch(`${assetPaths.htmlUrl}?v=${ts}`),
+      fetch(`${assetPaths.cssUrl}?v=${ts}`),
     ]);
     if (!htmlRes.ok) throw new Error(`HTML not found (${htmlRes.status})`);
 
@@ -2526,47 +2538,30 @@ function _renderCustomDesignControls(restaurantRow) {
   if (!sec) return;
   if (!restaurantRow) { sec.innerHTML = ''; return; }
 
-  const sanitized = sanitizeMenuName(restaurantRow.name);
-  const htmlFile  = sanitized ? `${sanitized}_design.html` : '—';
-  const cssFile   = sanitized ? `${sanitized}_design.css`  : '—';
+  const assetPaths = getCustomDesignAssetPaths(restaurantRow.name);
   const checked   = restaurantRow.use_custom_design ? 'checked' : '';
 
   sec.innerHTML = `
     <div class="config-card" style="margin-top:14px;">
       <div class="section-label" style="margin-bottom:10px;">Primary Public Design</div>
-      <p class="config-hint" style="margin-bottom:12px;">Upload the restaurant's custom HTML and CSS here. Public rendering tries these files first and falls back to the default accordion renderer only when they are missing or disabled.</p>
+      <p class="config-hint" style="margin-bottom:12px;">Public rendering reads the restaurant design directly from the repo-hosted files below. This control only decides whether the app should use that custom design or fall back to the default accordion renderer.</p>
       <div class="custom-design-toggle-row">
         <label for="custom-design-toggle">Use Custom Design</label>
         <input type="checkbox" id="custom-design-toggle" ${checked}
           onchange="toggleCustomDesign(this.checked)"
           aria-label="Use custom design for this restaurant"/>
       </div>
-      <div class="custom-design-file-status">
+      <div class="custom-design-file-targets">
         <div class="custom-design-file-row">
-          <span class="custom-design-file-name">${escHtml(htmlFile)}</span>
-          <span id="custom-design-html-status" class="custom-design-status-badge">checking…</span>
+          <span class="custom-design-file-label">HTML</span>
+          <code class="custom-design-file-name">${escHtml(assetPaths?.htmlUrl || '—')}</code>
         </div>
         <div class="custom-design-file-row">
-          <span class="custom-design-file-name">${escHtml(cssFile)}</span>
-          <span id="custom-design-css-status" class="custom-design-status-badge">checking…</span>
+          <span class="custom-design-file-label">CSS</span>
+          <code class="custom-design-file-name">${escHtml(assetPaths?.cssUrl || '—')}</code>
         </div>
-      </div>
-      <div class="custom-design-upload-row">
-        <label class="design-label" style="min-width:40px;">HTML</label>
-        <input type="file" id="custom-design-upload-html" accept=".html,text/html" style="flex:1;min-width:0;"/>
-        <button class="btn-small" onclick="uploadCustomDesignFile('html')">Upload</button>
-      </div>
-      <div class="custom-design-upload-row" style="margin-top:6px;">
-        <label class="design-label" style="min-width:40px;">CSS</label>
-        <input type="file" id="custom-design-upload-css" accept=".css,text/css" style="flex:1;min-width:0;"/>
-        <button class="btn-small" onclick="uploadCustomDesignFile('css')">Upload</button>
-      </div>
-      <div style="margin-top:10px;">
-        <button class="btn-small btn-danger" onclick="removeCustomDesign()">Remove Custom Design</button>
       </div>
     </div>`;
-
-  _refreshCustomDesignStatus();
 }
 
 async function toggleCustomDesign(checked) {
@@ -2594,99 +2589,6 @@ async function toggleCustomDesign(checked) {
     // Revert checkbox
     const cb = document.getElementById('custom-design-toggle');
     if (cb) cb.checked = !checked;
-  }
-}
-
-async function uploadCustomDesignFile(fileType) {
-  const restaurantId = _adminSwitcherState.design.restaurantId;
-  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
-  if (!restaurantRow) return;
-
-  const input = document.getElementById(`custom-design-upload-${fileType}`);
-  const file = input?.files?.[0];
-  if (!file) { showToast(`No ${fileType.toUpperCase()} file selected`, 'error'); return; }
-
-  let content;
-  try {
-    content = await file.text();
-  } catch {
-    showToast('Could not read file', 'error');
-    return;
-  }
-
-  try {
-    const r = await fetch('/api/design-upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${currentUser.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ restaurantName: restaurantRow.name, fileType, content }),
-    });
-    if (!r.ok) {
-      const { error } = await r.json().catch(() => ({}));
-      throw new Error(error || r.status);
-    }
-    showToast(`${fileType.toUpperCase()} uploaded`, 'success');
-    if (input) input.value = '';
-    _refreshCustomDesignStatus();
-  } catch (e) {
-    showToast(`Upload failed: ${e.message}`, 'error');
-  }
-}
-
-async function removeCustomDesign() {
-  const restaurantId = _adminSwitcherState.design.restaurantId;
-  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
-  if (!restaurantRow) return;
-  if (!confirm(`Remove custom design files for restaurant "${restaurantRow.name}" and disable custom design?`)) return;
-
-  try {
-    const r = await fetch(
-      `/api/design-upload?restaurantName=${encodeURIComponent(restaurantRow.name)}`,
-      {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${currentUser.accessToken}` },
-      }
-    );
-    if (!r.ok) {
-      const { error } = await r.json().catch(() => ({}));
-      throw new Error(error || r.status);
-    }
-    // Disable the flag
-    await toggleCustomDesign(false);
-    const cb = document.getElementById('custom-design-toggle');
-    if (cb) cb.checked = false;
-    _refreshCustomDesignStatus();
-    showToast('Custom design removed', 'success');
-  } catch (e) {
-    showToast(`Remove failed: ${e.message}`, 'error');
-  }
-}
-
-async function _refreshCustomDesignStatus() {
-  const restaurantId = _adminSwitcherState.design.restaurantId;
-  const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
-  if (!restaurantRow || !SUPABASE_URL) return;
-
-  const sanitized = sanitizeMenuName(restaurantRow.name);
-  if (!sanitized) return;
-
-  const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
-  const [htmlRes, cssRes] = await Promise.all([
-    fetch(`${baseUrl}/${sanitized}_design.html`, { method: 'HEAD' }),
-    fetch(`${baseUrl}/${sanitized}_design.css`,  { method: 'HEAD' }),
-  ]);
-
-  const htmlBadge = document.getElementById('custom-design-html-status');
-  const cssBadge  = document.getElementById('custom-design-css-status');
-  if (htmlBadge) {
-    htmlBadge.textContent  = htmlRes.ok ? 'Uploaded' : 'Not found';
-    htmlBadge.className    = `custom-design-status-badge ${htmlRes.ok ? 'status-ok' : 'status-missing'}`;
-  }
-  if (cssBadge) {
-    cssBadge.textContent  = cssRes.ok ? 'Uploaded' : 'Not found';
-    cssBadge.className    = `custom-design-status-badge ${cssRes.ok ? 'status-ok' : 'status-missing'}`;
   }
 }
 
