@@ -1,12 +1,12 @@
 ---
 name: stitch
-description: Download a Stitch project, verify the target menu exists in Supabase, resolve its restaurant, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a shared restaurant-level custom public view for El Roy's. Usage: /stitch <menu_name> <stitch_project_id> [screen_id]
+description: Download a Stitch project, verify the target restaurant exists in Supabase, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a shared restaurant-level custom public view for El Roy's. Usage: /stitch <restaurant_name> <stitch_project_id> [screen_id]
 ---
 
-Arguments: $ARGUMENTS — expects `<menu_name> <stitch_project_id> [screen_id]`
+Arguments: $ARGUMENTS — expects `<restaurant_name> <stitch_project_id> [screen_id]`
 
 Parse arguments from `$ARGUMENTS`:
-- `menu_name` — the El Roy's menu name (may be multiple words; everything before the last 1–2 space-separated tokens that look like IDs)
+- `restaurant_name` — the restaurant name (may be multiple words; everything before the last 1–2 space-separated tokens that look like IDs)
 - `stitch_project_id` — numeric Stitch project ID (e.g. `4044680601076201931`)
 - `screen_id` — optional screen ID within the project
 
@@ -14,38 +14,29 @@ Parse arguments from `$ARGUMENTS`:
 
 ## Step 1 — Parse & validate arguments
 
-Split `$ARGUMENTS`. The last token that is numeric is the `stitch_project_id`. If two numeric tokens are present, the second-to-last is the `stitch_project_id` and the last is the `screen_id`. Everything before is the `menu_name`.
+Split `$ARGUMENTS`. The last token that is numeric is the `stitch_project_id`. If two numeric tokens are present, the second-to-last is the `stitch_project_id` and the last is the `screen_id`. Everything before is the `restaurant_name`.
 
 If fewer than 2 tokens are present, print usage and abort:
 ```
-Usage: /stitch <menu_name> <stitch_project_id> [screen_id]
-Example: /stitch "Happy Hour" 4044680601076201931
+Usage: /stitch <restaurant_name> <stitch_project_id> [screen_id]
+Example: /stitch "Leroy's Lounge" 4044680601076201931
 ```
 
 ---
 
-## Step 2 — Verify the menu exists in Supabase
+## Step 2 — Verify the restaurant exists in Supabase
 
 Read `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the live app by fetching `/api/config` (GET request to the Vercel deployment URL, or read from environment). If not available, instruct the user to ensure they are on a deployed branch.
 
-Query the menus table:
+Query the restaurants table:
 ```
-GET {SUPABASE_URL}/rest/v1/menus?name=ilike.{menu_name}&select=id,name,slug,type,restaurant_id
+GET {SUPABASE_URL}/rest/v1/restaurants?name=ilike.{restaurant_name}&select=id,name
 Headers: apikey: {SUPABASE_ANON_KEY}
 ```
 
-- If **no match**: print an error and list all available menus (`GET /rest/v1/menus?select=name&archived=eq.false&order=name.asc`). Abort.
+- If **no match**: print an error and list all available restaurants (`GET /rest/v1/restaurants?select=name&order=name.asc`). Abort.
 - If **multiple matches**: show the list and ask the user to clarify.
-- If **exactly one match**: proceed with that menu's `id`, `name`, `slug`, and `restaurant_id`.
-
-Then resolve the restaurant:
-```
-GET {SUPABASE_URL}/rest/v1/restaurants?id=eq.{restaurant_id}&select=id,name
-Headers: apikey: {SUPABASE_ANON_KEY}
-```
-
-- If the restaurant cannot be resolved: print an error and abort.
-- Otherwise proceed using the restaurant's name for all file naming and output paths.
+- If **exactly one match**: proceed with that restaurant's `id` and `name` for all file naming and output paths.
 
 ---
 
@@ -137,8 +128,7 @@ These are the files to upload via the Admin Design tab.
 
 Print a summary:
 ```
-✓ Menu verified: "{menu_name}" (ID: {menu_id})
-✓ Restaurant resolved: "{restaurant_name}" (ID: {restaurant_id})
+✓ Restaurant verified: "{restaurant_name}" (ID: {restaurant_id})
 ✓ Stitch project downloaded: {stitch_project_id} / screen {screen_id}
 ✓ Raw files saved:
     designs/{sanitized_restaurant_name}/raw_screen.html

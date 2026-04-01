@@ -1,0 +1,9 @@
+.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }
+.neon-glow {
+    box-shadow: 0 0 15px rgba(145, 255, 137, 0.3)
+    }
+.wood-grain-overlay {
+    background-image: linear-gradient(rgba(19, 19, 19, 0.9), rgba(19, 19, 19, 0.9)), url(https://lh3.googleusercontent.com/aida-public/AB6AXuBu-iSG2wjckehtBRU54KWLhM8Zxln_7rABYkEOmSRc2yYxjrm_yRrFKI0RHFUW_E3KGuGtoQ9vrQ5IGObCxab8fVUXRx77PDV9PZCna50nxk2GDc0jAZxf0v6VbpM7QyD92555mCyjyu2eeVLJk5WBiH8fGB1bLfXr-47nNh5P9LmZ-xnhbpIM4v02sENOgAD0NCEDAfc_qDqBpbMdlHALH9qefQF8lfw_ls24vDH4OqwyLDsUl-L4A_Tba9TDmEyrGkUwno9Hcu13)
+    }

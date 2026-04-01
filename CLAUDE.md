@@ -128,9 +128,9 @@ Examples: `"Happy Hour"` → `"happy_hour"`, `"El Roy's"` → `"el_roy_s"`
 
 ### `/stitch` skill
 
-Run `/stitch <menu_name> <stitch_project_id> [screen_id]` to:
+Run `/stitch <restaurant_name> <stitch_project_id> [screen_id]` to:
 
-1. Verify the named menu exists in Supabase and resolve its restaurant
+1. Verify the named restaurant exists in Supabase
 2. Download the Stitch project/screen via the Stitch MCP tools
 3. Save raw files to `designs/{sanitized_restaurant_name}/`
 4. Meld the HTML/CSS (strip scripts, scope CSS to `#public-categories`, add semantic data-binding classes)

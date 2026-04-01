@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800&amp;family=Work+Sans:wght@400;500&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">tailwind.config = {darkMode: "class", theme: {extend: {colors: {"on-surface-variant": "#d4c5ab", "tertiary-fixed-dim": "#00e639", "on-tertiary-container": "#006313", "inverse-surface": "#e5e2e1", "surface-dim": "#131313", "error-container": "#93000a", "inverse-primary": "#785900", "surface-bright": "#393939", "primary-fixed-dim": "#fabd00", primary: "#ffe4af", "surface-container-high": "#2a2a2a", tertiary: "#91ff89", "surface-container-highest": "#353535", "on-error": "#690005", "on-error-container": "#ffdad6", "on-tertiary": "#003907", "on-secondary-container": "#ff9a8a", "surface-tint": "#fabd00", "tertiary-fixed": "#72ff70", "secondary-fixed": "#ffdad4", "on-tertiary-fixed": "#002203", "on-secondary-fixed-variant": "#920703", "secondary-container": "#920703", "on-background": "#e5e2e1", "on-surface": "#e5e2e1", "on-secondary": "#690000", error: "#ffb4ab", background: "#131313", "surface-container": "#20201f", "primary-fixed": "#ffdf9e", "on-primary-container": "#6d5100", surface: "#131313", outline: "#9c8f78", "on-secondary-fixed": "#410000", "secondary-fixed-dim": "#ffb4a8", "surface-variant": "#353535", "surface-container-low": "#1c1b1b", secondary: "#ffb4a8", "surface-container-lowest": "#0e0e0e", "outline-variant": "#4f4632", "on-primary-fixed": "#261a00", "tertiary-container": "#00ea3b", "on-primary": "#3f2e00", "inverse-on-surface": "#313030", "primary-container": "#ffc107", "on-tertiary-fixed-variant": "#00530e", "on-primary-fixed-variant": "#5b4300"}, fontFamily: {headline: ["Epilogue"], body: ["Work Sans"], label: ["Space Grotesk"], display: "Epilogue"}, borderRadius: {DEFAULT: "0.5rem", lg: "1rem", xl: "1.5rem", full: "9999px"}}}};</script>
+<style>.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }
+.neon-glow {
+    box-shadow: 0 0 15px rgba(145, 255, 137, 0.3)
+    }
+.wood-grain-overlay {
+    background-image: linear-gradient(rgba(19, 19, 19, 0.9), rgba(19, 19, 19, 0.9)), url(https://lh3.googleusercontent.com/aida-public/AB6AXuBu-iSG2wjckehtBRU54KWLhM8Zxln_7rABYkEOmSRc2yYxjrm_yRrFKI0RHFUW_E3KGuGtoQ9vrQ5IGObCxab8fVUXRx77PDV9PZCna50nxk2GDc0jAZxf0v6VbpM7QyD92555mCyjyu2eeVLJk5WBiH8fGB1bLfXr-47nNh5P9LmZ-xnhbpIM4v02sENOgAD0NCEDAfc_qDqBpbMdlHALH9qefQF8lfw_ls24vDH4OqwyLDsUl-L4A_Tba9TDmEyrGkUwno9Hcu13)
+    }</style>
+</head>
+<body class="bg-surface text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container" data-mode="connect">
+<!-- Header / TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-zinc-950/60 backdrop-blur-xl border-b border-white/5 transition-all">
+<div class="flex justify-between items-center px-6 py-4 max-w-screen-2xl mx-auto">
+<div class="flex items-center gap-4">
+<img alt="Leroy's Lounge Logo" class="h-10 w-auto" src="https://lh3.googleusercontent.com/aida/ADBb0uiU4gyclhNYrHU-PeC5OhX_kXLflEk29MUNHPuDi7j-9vq5CjWL7Ez-mF4BAiVBNzbOPcc6-FwDF0-ZHmPqRxEroSfhF0hGg4YFRabQebtTcVEpYF7ya1fbibU2sDEbQE7i001h4r_bqE6q_oxB8gCCVil9qGw_fdmza3hQKvY-iKJqPWg1zSHzRUQcU0sPuoD6RoKVJcxnfLFE6cnaiHzXDlMPWl2QIra3QqAqx83_bkuUj5BZaS0H64Pqgow8h1qIgwdLt0G3mQc"/>
+<span class="text-3xl font-bold tracking-tighter text-amber-200 font-headline uppercase hidden sm:inline">Leroy's Lounge</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4">
+<button class="text-zinc-400 font-medium hover:text-amber-100 transition-colors duration-300 font-label text-sm tracking-widest uppercase">Login</button>
+<span class="material-symbols-outlined text-amber-200 cursor-pointer hover:scale-95 active:opacity-80 transition-all" data-icon="account_circle">account_circle</span>
+<span class="material-symbols-outlined text-amber-200 cursor-pointer hover:scale-95 active:opacity-80 transition-all" data-icon="settings">settings</span>
+</div>
+</div>
+</div>
+</header>
+<main class="pt-32 pb-24 px-6 max-w-4xl mx-auto">
+<!-- Kitchen Status & Timestamp Section -->
+<div class="mb-12 space-y-4">
+<div class="flex items-center gap-3 bg-surface-container-low p-5 rounded-lg border border-primary/20 shadow-lg shadow-tertiary/5">
+<div class="relative flex h-4 w-4">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-tertiary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-4 w-4 bg-tertiary neon-glow"></span>
+</div>
+<p class="font-label text-sm font-bold uppercase tracking-[0.2em] text-tertiary">Kitchen Status: Live &amp; Service Active</p>
+</div>
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-[14px] text-zinc-500" data-icon="schedule">schedule</span>
+<p class="font-label text-[11px] uppercase tracking-widest text-zinc-500">Menu last updated: <span id="current-timestamp">November 18, 2024 - 10:45 PM</span></p>
+</div>
+</div>
+<!-- Section: Specials -->
+<section class="mb-20" id="specials">
+<div class="flex items-baseline justify-between border-b border-outline-variant/20 pb-4 mb-8">
+<h2 class="font-headline text-4xl font-extrabold tracking-tighter text-primary italic uppercase">Specials</h2>
+<span class="font-label text-xs tracking-widest text-on-surface-variant uppercase">Limited Time Only</span>
+</div>
+<div class="space-y-12">
+<!-- Special Item 1 -->
+<div class="group flex flex-col md:flex-row md:items-start justify-between gap-4">
+<div class="max-w-xl">
+<div class="flex items-center gap-3 mb-1">
+<h3 class="font-headline text-2xl text-on-surface group-hover:text-primary transition-colors">The Midnight Double</h3>
+<span class="font-label text-xs bg-primary-container/10 text-primary-fixed px-2 py-0.5 rounded border border-primary/20 uppercase tracking-tighter">Chef's Choice</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed">Two 4oz smash patties, aged white cheddar, caramelized bourbon onions, and our secret 'After Hours' sauce on a toasted brioche bun.</p>
+</div>
+<div class="text-right">
+<span class="font-label text-xl text-primary font-bold tracking-tight">$18.50</span>
+</div>
+</div>
+<!-- Special Item 2 (86'd) -->
+<div class="group flex flex-col md:flex-row md:items-start justify-between gap-4 opacity-40 grayscale">
+<div class="max-w-xl relative">
+<div class="absolute -left-4 top-1/2 -translate-y-1/2 -rotate-12 border-2 border-error px-4 py-1 rounded-sm text-error font-headline font-black text-2xl uppercase tracking-widest pointer-events-none">86'd</div>
+<div class="flex items-center gap-3 mb-1">
+<h3 class="font-headline text-2xl text-on-surface line-through decoration-error/50">Smoked Brisket Poutine</h3>
+</div>
+<p class="text-on-surface-variant leading-relaxed">Hand-cut fries, Wisconsin cheese curds, 12-hour smoked brisket, and dark ale gravy.</p>
+</div>
+<div class="text-right">
+<span class="font-label text-xl text-on-surface-variant font-bold tracking-tight">$16.00</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Food -->
+<section class="mb-20" id="food">
+<div class="flex items-baseline justify-between border-b border-outline-variant/20 pb-4 mb-8">
+<h2 class="font-headline text-4xl font-extrabold tracking-tighter text-primary italic uppercase">Food</h2>
+<span class="font-label text-xs tracking-widest text-on-surface-variant uppercase">Main Menu</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-12">
+<!-- Food Item 1 -->
+<div class="group">
+<div class="flex justify-between items-baseline mb-2">
+<h3 class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">Lounge Burger</h3>
+<span class="font-label text-lg text-primary">$14.00</span>
+</div>
+<p class="text-sm text-on-surface-variant">Classic beef patty, lettuce, tomato, onion, pickle, American cheese. Simple, perfect.</p>
+</div>
+<!-- Food Item 2 -->
+<div class="group">
+<div class="flex justify-between items-baseline mb-2">
+<h3 class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">Nashville Hot Wings</h3>
+<span class="font-label text-lg text-primary">$12.50</span>
+</div>
+<p class="text-sm text-on-surface-variant">Six jumbo wings tossed in our signature cayenne oil. Served with house ranch and pickles.</p>
+</div>
+<!-- Food Item 3 -->
+<div class="group">
+<div class="flex justify-between items-baseline mb-2">
+<h3 class="font-headline text-xl text-on-surface group-hover:text-primary transition-colors">Grilled Cheese &amp; Tomato</h3>
+<span class="font-label text-lg text-primary">$10.00</span>
+</div>
+<p class="text-sm text-on-surface-variant">Sourdough bread with a three-cheese blend. Served with a cup of smoky tomato soup.</p>
+</div>
+<!-- Food Item 4 (Sold Out) -->
+<div class="group relative opacity-50">
+<div class="flex justify-between items-baseline mb-2">
+<h3 class="font-headline text-xl text-on-surface line-through">Fish &amp; Chips</h3>
+<span class="font-label text-lg text-on-surface-variant">$17.00</span>
+</div>
+<p class="text-sm text-on-surface-variant">Beer-battered cod, malt vinegar fries, and house slaw. Sold out for the night.</p>
+<span class="absolute right-0 top-8 font-label text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded uppercase tracking-widest">Sold Out</span>
+</div>
+</div>
+</section>
+<!-- Section: Sides -->
+<section class="mb-20" id="sides">
+<div class="flex items-baseline justify-between border-b border-outline-variant/20 pb-4 mb-8">
+<h2 class="font-headline text-4xl font-extrabold tracking-tighter text-primary italic uppercase">Sides</h2>
+<span class="font-label text-xs tracking-widest text-on-surface-variant uppercase">Small Bites</span>
+</div>
+<div class="space-y-6">
+<!-- Side Item 1 -->
+<div class="flex justify-between items-center py-2 border-b border-white/5">
+<div>
+<span class="font-label text-lg uppercase tracking-tight text-on-surface">Truffle Parm Fries</span>
+<p class="text-xs text-on-surface-variant">Hand-cut, tossed in truffle oil and aged parmesan.</p>
+</div>
+<span class="font-label text-lg text-primary">$7.00</span>
+</div>
+<!-- Side Item 2 -->
+<div class="flex justify-between items-center py-2 border-b border-white/5">
+<div>
+<span class="font-label text-lg uppercase tracking-tight text-on-surface">Onion Rings</span>
+<p class="text-xs text-on-surface-variant">Beer-battered and fried until golden brown.</p>
+</div>
+<span class="font-label text-lg text-primary">$6.00</span>
+</div>
+<!-- Side Item 3 -->
+<div class="flex justify-between items-center py-2 border-b border-white/5">
+<div>
+<span class="font-label text-lg uppercase tracking-tight text-on-surface">House Slaw</span>
+<p class="text-xs text-on-surface-variant">Cabbage blend with a tangy cider dressing.</p>
+</div>
+<span class="font-label text-lg text-primary">$4.00</span>
+</div>
+</div>
+</section>
+<!-- Aesthetic Texture Element -->
+<div class="mt-24 p-8 bg-surface-container-low rounded-lg border border-outline-variant/5 text-center wood-grain-overlay">
+<p class="font-label text-xs tracking-[0.3em] text-on-surface-variant uppercase mb-4">Leroy</p>
+<p class="font-body text-sm text-on-surface-variant italic">"Leroy was conceived, born and nursed in bars. His mom home schooled him at the bar. He likes hamburgers, chili and french fries. It was time to open his own place."</p>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-zinc-950 py-12 border-t border-white/5">
+<div class="flex flex-col md:flex-row justify-between items-center px-8 w-full max-w-screen-2xl mx-auto gap-8">
+<div class="flex flex-col items-center md:items-start">
+<span class="text-lg font-bold text-amber-200 font-headline uppercase tracking-tighter">Leroy's Lounge</span>
+<p class="font-body text-[10px] text-zinc-500 mt-2 uppercase tracking-widest">© 2024 Leroy's Lounge | 86'd items updated live</p>
+<p class="font-label text-[10px] uppercase tracking-[0.2em] text-zinc-600 mt-1">Menu last updated: November 18, 2024 - 10:45 PM</p>
+</div>
+<div class="flex gap-8">
+<a class="text-zinc-500 hover:text-zinc-300 font-label text-xs uppercase tracking-widest transition-opacity duration-200 hover:underline decoration-amber-500/50" href="#">Kitchen Portal</a>
+<a class="text-zinc-500 hover:text-zinc-300 font-label text-xs uppercase tracking-widest transition-opacity duration-200 hover:underline decoration-amber-500/50" href="#">Allergens</a>
+</div>
+</div>
+</footer>
+</body></html>
