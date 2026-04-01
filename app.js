@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.0';
+const APP_VERSION = 'v0.8.1';
 const RESTAURANTS = {
   LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
   ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
@@ -51,6 +51,7 @@ let _activeMenuName    = '';        // display name of the currently loaded menu
 let _activeRestaurantName = '';     // display name of the currently loaded restaurant
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
+let _siteRestaurant    = null;      // restaurant implied by the current pathname
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _restaurantCustomDesignEnabled = true; // cached restaurants.use_custom_design for the active restaurant
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
@@ -102,6 +103,10 @@ const KNOWN_MENU_ORDER = [
 ];
 const LEGACY_MENU_SLUG_ALIASES = {
   'el-roys': MENUS.ELROYS_DRINKS.slug,
+};
+const SITE_PATHS = {
+  [RESTAURANTS.LEROYS.id]: '/leroyslounge',
+  [RESTAURANTS.ELROYS.id]: '/elroyscantina',
 };
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
@@ -171,6 +176,10 @@ function knownRestaurantList() {
   return [RESTAURANTS.LEROYS, RESTAURANTS.ELROYS];
 }
 
+function knownMenuList() {
+  return [MENUS.LEROYS_DRINKS, MENUS.LEROYS_FOOD, MENUS.ELROYS_DRINKS, MENUS.ELROYS_FOOD];
+}
+
 function sortKnownRestaurants(restaurants) {
   return [...restaurants].sort((a, b) => KNOWN_RESTAURANT_ORDER.indexOf(a.id) - KNOWN_RESTAURANT_ORDER.indexOf(b.id));
 }
@@ -181,6 +190,101 @@ function sortKnownMenus(menus) {
 
 function normalizeKnownMenuSlug(slug) {
   return LEGACY_MENU_SLUG_ALIASES[slug] || slug;
+}
+
+function getRestaurantById(id) {
+  return knownRestaurantList().find(restaurant => restaurant.id === id) || null;
+}
+
+function getMenuTypeLabel(menuType) {
+  return (menuType || '').toLowerCase() === 'food' ? 'Food' : 'Drinks';
+}
+
+function formatMenuDisplayName(menuName, menuType, restaurantId) {
+  const restaurantName = getRestaurantById(restaurantId)?.name || '';
+  const typeLabel = getMenuTypeLabel(menuType);
+  if (restaurantName) return `${restaurantName} ${typeLabel}`;
+  return menuName || typeLabel;
+}
+
+function setActiveMenuContext(menuName, menuType, restaurantId) {
+  MENU_TYPE = menuType || 'drinks';
+  RESTAURANT_ID = restaurantId || '';
+  _activeRestaurantName = getRestaurantById(RESTAURANT_ID)?.name || '';
+  _activeMenuName = formatMenuDisplayName(menuName, MENU_TYPE, RESTAURANT_ID);
+}
+
+function getSiteRestaurantFromPath(pathname = window.location.pathname) {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  if (
+    normalizedPath === SITE_PATHS[RESTAURANTS.LEROYS.id] ||
+    normalizedPath === `${SITE_PATHS[RESTAURANTS.LEROYS.id]}.html` ||
+    normalizedPath === `${SITE_PATHS[RESTAURANTS.LEROYS.id]}/index.html`
+  ) return RESTAURANTS.LEROYS;
+  if (
+    normalizedPath === SITE_PATHS[RESTAURANTS.ELROYS.id] ||
+    normalizedPath === `${SITE_PATHS[RESTAURANTS.ELROYS.id]}.html` ||
+    normalizedPath === `${SITE_PATHS[RESTAURANTS.ELROYS.id]}/index.html`
+  ) return RESTAURANTS.ELROYS;
+  return null;
+}
+
+function isRootSitePath(pathname = window.location.pathname) {
+  return (pathname.replace(/\/+$/, '') || '/') === '/';
+}
+
+function getDefaultMenuForRestaurant(restaurant) {
+  if (!restaurant?.id) return MENUS.ELROYS_DRINKS;
+  return knownMenuList().find(menu => (
+    menu.restaurantId === restaurant.id && menu.type === 'drinks'
+  )) || MENUS.ELROYS_DRINKS;
+}
+
+function primeSiteRestaurantMenu(restaurant) {
+  const preferredMenu = getDefaultMenuForRestaurant(restaurant);
+  MENU_ID = preferredMenu.id;
+  lsSet(LS_KEYS.menuId, MENU_ID);
+  setActiveMenuContext(preferredMenu.name, preferredMenu.type, preferredMenu.restaurantId);
+  const url = new URL(location.href);
+  url.searchParams.set('menu', preferredMenu.slug);
+  history.replaceState({}, '', url.toString());
+}
+
+function showPickerPage() {
+  document.body.classList.add('is-site-picker');
+  document.getElementById('site-picker-view')?.removeAttribute('hidden');
+  const appShell = document.getElementById('app-shell');
+  if (appShell) appShell.style.display = 'none';
+  document.getElementById('auth-overlay')?.classList.remove('open');
+  document.getElementById('menu-picker-overlay')?.classList.remove('open');
+  document.title = 'Choose a Restaurant | Current Menu';
+}
+
+function showAppShell() {
+  document.body.classList.remove('is-site-picker');
+  document.getElementById('site-picker-view')?.setAttribute('hidden', 'hidden');
+  const appShell = document.getElementById('app-shell');
+  if (appShell) appShell.style.display = '';
+}
+
+function isDedicatedRestaurantPage() {
+  return !!_siteRestaurant;
+}
+
+function _setRestaurantPublicMode(active) {
+  document.body.classList.toggle('restaurant-public-site', !!active);
+}
+
+function _togglePublicShellMode(mode) {
+  const siteWrapper = document.getElementById('restaurant-site-wrapper');
+  const defaultShell = document.getElementById('public-default-shell');
+  const useSiteWrapper = mode === 'site' && !!siteWrapper;
+  if (siteWrapper) {
+    if (useSiteWrapper) siteWrapper.removeAttribute('hidden');
+    else siteWrapper.setAttribute('hidden', 'hidden');
+  }
+  if (defaultShell) defaultShell.style.display = useSiteWrapper ? 'none' : '';
+  _setRestaurantPublicMode(useSiteWrapper);
 }
 
 // ─── SUPABASE DATA LAYER ──────────────────────────────────────────────────────
@@ -233,10 +337,7 @@ async function sbResolveMenu() {
       const [menu] = await menuRes.json();
       if (menu?.id) {
         MENU_ID          = menu.id;
-        _activeMenuName  = menu.name || '';
-        MENU_TYPE        = menu.type          || 'drinks';
-        RESTAURANT_ID    = menu.restaurant_id || '';
-        _activeRestaurantName = '';
+        setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '');
         lsSet(LS_KEYS.menuId, MENU_ID);
         if (rawSlug && rawSlug !== slug) {
           const url = new URL(location.href);
@@ -264,10 +365,7 @@ async function sbResolveMenu() {
         _restaurantCustomDesignEnabled = true;
         lsSet(LS_KEYS.menuId, '');
       } else if (menu) {
-        if (menu.name)          _activeMenuName  = menu.name;
-        if (menu.type)          MENU_TYPE        = menu.type;
-        if (menu.restaurant_id) RESTAURANT_ID    = menu.restaurant_id;
-        _activeRestaurantName = '';
+        setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID);
         if (menu.slug) {
           const url = new URL(location.href);
           url.searchParams.set('menu', menu.slug);
@@ -304,10 +402,7 @@ async function sbResolveMenu() {
 
   if (defaultMenu) {
     MENU_ID          = defaultMenu.id;
-    _activeMenuName  = defaultMenu.name || '';
-    MENU_TYPE        = defaultMenu.type          || 'drinks';
-    RESTAURANT_ID    = defaultMenu.restaurant_id || '';
-    _activeRestaurantName = '';
+    setActiveMenuContext(defaultMenu.name || '', defaultMenu.type || 'drinks', defaultMenu.restaurant_id || '');
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
     url.searchParams.set('menu', defaultMenu.slug);
@@ -1129,9 +1224,19 @@ function migrateLocalStorage() {
 }
 
 async function init() {
+  _siteRestaurant = getSiteRestaurantFromPath();
+  if (isRootSitePath()) {
+    showPickerPage();
+    return;
+  }
+  showAppShell();
   migrateLocalStorage();
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
+
+  if (_siteRestaurant && !new URLSearchParams(location.search).get('menu')) {
+    primeSiteRestaurantMenu(_siteRestaurant);
+  }
 
   await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
 
@@ -1254,6 +1359,7 @@ async function _tryRestoreSession() {
 function showPublicView() {
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('public-view').style.display = 'block';
+  _togglePublicShellMode('default');
   const switchBtn = document.getElementById('public-switch-menu-btn');
   if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
   updateLastUpdatedLabel();
@@ -1264,6 +1370,7 @@ function showPublicView() {
 function showPublicViewWithError(msg) {
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('public-view').style.display = 'block';
+  _togglePublicShellMode('default');
   const el = document.getElementById('public-error');
   el.textContent = msg;
   el.classList.add('visible');
@@ -1506,9 +1613,13 @@ function _renderDefaultPublicView() {
 }
 
 async function _renderCustomDesignView() {
-  const container = document.getElementById('public-categories');
+  const fallbackContainer = document.getElementById('public-categories');
+  const siteWrapper = document.getElementById('restaurant-site-wrapper');
+  const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
+  const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
   const sanitized = sanitizeMenuName(_activeRestaurantName);
-  if (!_restaurantCustomDesignEnabled || !sanitized || !SUPABASE_URL) {
+  if (!_restaurantCustomDesignEnabled || !sanitized || !SUPABASE_URL || !container) {
+    _togglePublicShellMode('default');
     _renderDefaultPublicView();
     return;
   }
@@ -1531,16 +1642,25 @@ async function _renderCustomDesignView() {
     if (cssContent) {
       style = document.createElement('style');
       style.id = 'custom-design-style';
-      style.textContent = cssContent;
+      style.textContent = renderIntoSiteWrapper
+        ? cssContent.replace(/#public-categories\b/g, '#restaurant-site-wrapper')
+        : cssContent;
       document.head.appendChild(style);
     }
 
     container.innerHTML = await htmlRes.text();
-    renderFeaturedPublicSection();
-    updateCollapseAllBtn();
+    if (renderIntoSiteWrapper) {
+      _togglePublicShellMode('site');
+    } else {
+      _togglePublicShellMode('default');
+      renderFeaturedPublicSection();
+      updateCollapseAllBtn();
+    }
   } catch (e) {
     console.warn('[custom-design] Falling back to default:', e.message);
     document.getElementById('custom-design-style')?.remove();
+    if (siteWrapper) siteWrapper.innerHTML = '';
+    _togglePublicShellMode('default');
     _renderDefaultPublicView();
   }
 }
@@ -1738,6 +1858,7 @@ function onAdminBtnClick() {
 
 function enterAdmin() {
   document.getElementById('custom-design-style')?.remove();
+  _togglePublicShellMode('default');
   if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
   isAdminMode = true;
   stopPolling();
@@ -1757,6 +1878,7 @@ function exitAdmin() {
   isAdminMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
+  _setRestaurantPublicMode(false);
   renderUserHeader();
   showPublicView();
 }
@@ -1871,8 +1993,9 @@ async function showMenuPicker(afterSelect, opts) {
       sectionMenus.forEach(m => {
         const btn = document.createElement('button');
         btn.className = 'picker-menu-card';
-        btn.setAttribute('aria-label', `Select ${m.name}`);
-        btn.innerHTML = `<span class="picker-menu-name">${escHtml(m.type === 'food' ? 'Food' : 'Drinks')}</span><span class="picker-menu-type">${escHtml(m.type)}</span>`;
+        const menuLabel = formatMenuDisplayName(m.name, m.type, m.restaurant_id);
+        btn.setAttribute('aria-label', `Select ${menuLabel}`);
+        btn.innerHTML = `<span class="picker-menu-name">${escHtml(menuLabel)}</span><span class="picker-menu-type">${escHtml(getMenuTypeLabel(m.type))}</span>`;
         btn.onclick = () => selectMenu(m.id, m.slug, m.name, m.type, m.restaurant_id);
         cards.appendChild(btn);
       });
@@ -1894,29 +2017,27 @@ function closeMenuPicker() {
 
 function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   MENU_ID       = menuId;
-  _activeMenuName = menuName || '';
-  _activeRestaurantName = '';
-  MENU_TYPE     = menuType     || 'drinks';
-  RESTAURANT_ID = restaurantId || '';
+  setActiveMenuContext(menuName || '', menuType || 'drinks', restaurantId || '');
   lsSet(LS_KEYS.menuId, MENU_ID);
   const url = new URL(location.href);
   url.searchParams.set('menu', slug);
   history.replaceState({}, '', url.toString());
   closeMenuPicker();
-  updateActiveMenuBar(menuName);
+  updateActiveMenuBar();
   renderUserHeader();
   const cb = _pickerOnSelect;
   _pickerOnSelect = null;
   if (cb) cb();
 }
 
-function updateActiveMenuBar(name) {
+function updateActiveMenuBar() {
   const bar       = document.getElementById('active-menu-bar');
   const nameEl    = document.getElementById('active-menu-name');
   const switchBtn = document.getElementById('switch-menu-btn');
   if (!bar) return;
-  if (name) nameEl.textContent = name;
-  bar.style.display = name ? '' : 'none';
+  const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
+  if (displayName) nameEl.textContent = displayName;
+  bar.style.display = displayName ? '' : 'none';
   // Show "Switch" only when the user has access to more than one menu
   const role          = currentUser?.role;
   const accessibleIds = currentUser?.accessibleMenuIds || [];
@@ -2118,6 +2239,7 @@ function signOut() {
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
   document.getElementById('custom-design-style')?.remove();
+  _togglePublicShellMode('default');
   if (!MENU_ID) {
     showToast('Select a menu from the public view first.', 'info');
     return;
@@ -2144,7 +2266,7 @@ function enterManager() {
   updateDraftIndicator();
   updateSaveBtn();
   renderManagerCategories();
-  updateActiveMenuBar(_activeMenuName);
+  updateActiveMenuBar();
   checkFeaturedConfirmation();
 }
 
@@ -2152,6 +2274,7 @@ function exitManager() {
   isManagerMode = false;
   document.body.classList.remove('manager-mode');
   document.getElementById('manager-view').style.display = 'none';
+  _setRestaurantPublicMode(false);
   renderUserHeader();
   showPublicView();
 }
@@ -2295,7 +2418,7 @@ function _refreshAdminMenuSelect(context) {
   if (!menuSelect) return;
   const menus = _adminAllMenus.filter(m => m.restaurant_id === state.restaurantId);
   menuSelect.innerHTML = menus.length
-    ? menus.map(m => `<option value="${escHtml(m.id)}">${escHtml(m.name)}${m.archived ? ' (archived)' : ''}</option>`).join('')
+    ? menus.map(m => `<option value="${escHtml(m.id)}">${escHtml(formatMenuDisplayName(m.name, m.type, m.restaurant_id))}${m.archived ? ' (archived)' : ''}</option>`).join('')
     : '<option value="">No menus</option>';
   const match = menus.find(m => m.id === state.menuId);
   state.menuId = match ? state.menuId : (menus[0]?.id || '');
@@ -3467,27 +3590,32 @@ async function sendUpdate() {
       body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
     });
 
-    if (r1.status === 202 || r1.status === 207) {
-      const ts = Date.now();
-      applySentState(diff, ts);
-      const persisted = await persistState();
-      if (!persisted) throw new Error('persist failed');
-      const lastSentState = snapshotLastSentState();
-      const currentFeaturedIds = getCurrentFeaturedIds();
-      _lastSentFeaturedIds = new Set(currentFeaturedIds);
-      await sbPatchMenuMeta({
-        last_updated_ts:      ts,
-        last_sent_ts:         ts,
-        last_sent_state:      lastSentState,
-        last_sent_categories: diff.map(d => d.id),
-        last_sent_featured:   currentFeaturedIds,
-      });
-      updateLastUpdatedLabel();
-      renderManagerCategories();
-      updateDraftIndicator();
-      logUpdate(diff, patchMessage);
-      closeModal();
+    if (r1.status >= 200 && r1.status < 300) {
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
+      const ts = Date.now();
+      closeModal();
+      try {
+        applySentState(diff, ts);
+        const persisted = await persistState();
+        if (!persisted) throw new Error('persist failed');
+        const lastSentState = snapshotLastSentState();
+        const currentFeaturedIds = getCurrentFeaturedIds();
+        _lastSentFeaturedIds = new Set(currentFeaturedIds);
+        await sbPatchMenuMeta({
+          last_updated_ts:      ts,
+          last_sent_ts:         ts,
+          last_sent_state:      lastSentState,
+          last_sent_categories: diff.map(d => d.id),
+          last_sent_featured:   currentFeaturedIds,
+        });
+        updateLastUpdatedLabel();
+        renderManagerCategories();
+        updateDraftIndicator();
+        logUpdate(diff, patchMessage);
+      } catch (syncError) {
+        console.warn('sendUpdate post-send sync failed:', syncError);
+        showToast('⚠️  Update sent but local cache failed to sync', 'warning');
+      }
     } else if (r1.status === 401) {
       showToast('❌ Not authorized. Please sign in.', 'error');
     } else if (r1.status === 403) {
@@ -3695,7 +3823,7 @@ function buildMenuAccessHTML(u) {
     return `<label class="user-menu-access-label">
       <input type="checkbox" class="user-menu-access-cb"
              data-user="${escHtml(u.id)}" data-menu="${escHtml(m.id)}" ${checked}/>
-      ${escHtml(m.name)}
+      ${escHtml(formatMenuDisplayName(m.name, m.type, m.restaurant_id))}
     </label>`;
   }).join('');
   return `<div class="user-menu-access-row">
@@ -3997,7 +4125,7 @@ async function renderFeaturedAdmin() {
     wrap.innerHTML = groups.map(g => {
       const linkedMenuIds = new Set(links.filter(l => l.featured_group_id === g.id).map(l => l.menu_id));
       const menuCheckboxes = allMenus.map(m =>
-        `<label class="featured-admin-menu-label"><input type="checkbox" ${linkedMenuIds.has(m.id) ? 'checked' : ''} onchange="toggleFeaturedGroupMenu(${escAttrJs(g.id)},${escAttrJs(m.id)},this.checked)"/> ${escHtml(m.name)}</label>`
+        `<label class="featured-admin-menu-label"><input type="checkbox" ${linkedMenuIds.has(m.id) ? 'checked' : ''} onchange="toggleFeaturedGroupMenu(${escAttrJs(g.id)},${escAttrJs(m.id)},this.checked)"/> ${escHtml(formatMenuDisplayName(m.name, m.type, m.restaurant_id))}</label>`
       ).join('');
       return `<div class="featured-admin-group">
         <div class="featured-admin-group-header">
@@ -4241,8 +4369,8 @@ function groupMenusByRestaurant(allMenus) {
 
 function buildMenuChipHtml(menu) {
   return `<div class="menu-chip${menu.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(menu.id)}">
-    <span>${escHtml(menu.name)}</span>
-    <span class="menu-type-badge">${escHtml(menu.type || 'drinks')}</span>
+    <span>${escHtml(formatMenuDisplayName(menu.name, menu.type, menu.restaurant_id))}</span>
+    <span class="menu-type-badge">${escHtml(getMenuTypeLabel(menu.type))}</span>
     ${menu.archived ? '<span class="menu-type-badge">archived</span>' : ''}
   </div>`;
 }

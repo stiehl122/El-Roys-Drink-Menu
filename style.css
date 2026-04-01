@@ -59,6 +59,29 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 80px; transition: background 0.3s, color 0.3s; }
   .wrapper { width: 100%; max-width: 560px; position: relative; z-index: 1; }
+  body.is-site-picker { justify-content: center; padding: 24px 16px; }
+  .site-picker-view { width: 100%; max-width: 560px; }
+  .site-picker-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 32px 24px; text-align: center; box-shadow: 0 18px 48px rgba(26,32,44,0.12); }
+  .site-picker-kicker { color: var(--ember); font-size: 12px; font-family: var(--font-accent); letter-spacing: 1px; text-transform: uppercase; }
+  .site-picker-title { font-family: var(--font-heading); font-size: 40px; line-height: 0.95; margin: 10px 0 24px; }
+  .site-picker-actions { display: flex; flex-direction: column; gap: 12px; }
+  .site-picker-link { display: block; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; color: var(--text); text-decoration: none; font-size: 18px; font-weight: 700; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
+  .site-picker-link:hover, .site-picker-link:focus { border-color: var(--ember); box-shadow: 0 10px 24px rgba(26,32,44,0.12); outline: none; transform: translateY(-1px); }
+  #restaurant-site-wrapper[hidden] { display: none !important; }
+  body.route-restaurant #app-shell { max-width: none; }
+  body.route-restaurant .wrapper { max-width: none; }
+  body.route-restaurant #public-view { width: 100%; }
+  body.route-restaurant #restaurant-site-wrapper { width: 100%; min-height: 100vh; }
+  body.route-restaurant.restaurant-public-site { padding: 0; }
+  body.route-restaurant.restaurant-public-site header { position: fixed; top: 12px; right: 12px; left: auto; margin: 0; padding: 0; background: transparent; box-shadow: none; border-radius: 0; z-index: 60; pointer-events: none; }
+  body.route-restaurant.restaurant-public-site .hf-logo,
+  body.route-restaurant.restaurant-public-site .logo-mark,
+  body.route-restaurant.restaurant-public-site header h1,
+  body.route-restaurant.restaurant-public-site .header-sub { display: none !important; }
+  body.route-restaurant.restaurant-public-site .header-action-group,
+  body.route-restaurant.restaurant-public-site .header-signin-btn,
+  body.route-restaurant.restaurant-public-site .user-chip { position: static; pointer-events: auto; }
+  body.route-restaurant.restaurant-public-site .header-action-group { gap: 8px; }
 
   /* ── HEADER ── */
   header { background: var(--teal); margin: 0 -16px; padding: 24px 24px 20px; text-align: center; margin-bottom: 22px; position: relative; border-radius: 0 0 22px 22px; box-shadow: 0 6px 24px rgba(18,133,120,0.28); }
@@ -232,6 +255,7 @@
   .toast.show { transform: translateX(-50%) translateY(0); }
   .toast.success { border-color: var(--green); color: var(--green); }
   .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.warning { border-color: var(--gold); color: var(--gold); }
   .toast.info { border-color: var(--ember); color: var(--ember); }
   .toast.show:has(.toast-undo-btn) { display: flex; align-items: center; gap: 10px; white-space: normal; }
   .toast-undo-btn { background: none; border: 1px solid currentColor; border-radius: 6px; color: inherit; font-family: var(--font-body); font-size: 12px; font-weight: 600; padding: 3px 9px; cursor: pointer; flex-shrink: 0; letter-spacing: 0.5px; text-transform: uppercase; transition: background 0.15s; }
