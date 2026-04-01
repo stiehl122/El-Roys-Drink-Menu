@@ -1,5 +1,15 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.5';
+const APP_VERSION = 'v0.8.0';
+const RESTAURANTS = {
+  LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
+  ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
+};
+const MENUS = {
+  LEROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000020', restaurantId: RESTAURANTS.LEROYS.id, type: 'drinks', slug: 'leroys-lounge-drinks', name: "Leroy's Lounge Drinks" },
+  LEROYS_FOOD: { id: '00000000-0000-0000-0000-000000000021', restaurantId: RESTAURANTS.LEROYS.id, type: 'food', slug: 'leroys-lounge-food', name: "Leroy's Lounge Food" },
+  ELROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000002', restaurantId: RESTAURANTS.ELROYS.id, type: 'drinks', slug: 'el-roys-cantina-drinks', name: "El Roy's Cantina Drinks" },
+  ELROYS_FOOD: { id: '00000000-0000-0000-0000-000000000003', restaurantId: RESTAURANTS.ELROYS.id, type: 'food', slug: 'el-roys-cantina-food', name: "El Roy's Cantina Food" },
+};
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -36,14 +46,13 @@ let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
-let _menuPickerNeeded  = false;     // true when multiple menus exist and no slug was given
 let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
 let _activeMenuName    = '';        // display name of the currently loaded menu
 let _activeRestaurantName = '';     // display name of the currently loaded restaurant
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
-let _useCustomDesign   = false;     // true when active restaurant has use_custom_design enabled
+let _restaurantCustomDesignEnabled = true; // cached restaurants.use_custom_design for the active restaurant
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
@@ -83,6 +92,17 @@ const DEFAULT_FOOD_CATEGORY_DEFS = [
 ];
 
 let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
+
+const KNOWN_RESTAURANT_ORDER = [RESTAURANTS.LEROYS.id, RESTAURANTS.ELROYS.id];
+const KNOWN_MENU_ORDER = [
+  MENUS.LEROYS_DRINKS.id,
+  MENUS.LEROYS_FOOD.id,
+  MENUS.ELROYS_DRINKS.id,
+  MENUS.ELROYS_FOOD.id,
+];
+const LEGACY_MENU_SLUG_ALIASES = {
+  'el-roys': MENUS.ELROYS_DRINKS.slug,
+};
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
@@ -147,6 +167,22 @@ function sanitizeMenuName(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
+function knownRestaurantList() {
+  return [RESTAURANTS.LEROYS, RESTAURANTS.ELROYS];
+}
+
+function sortKnownRestaurants(restaurants) {
+  return [...restaurants].sort((a, b) => KNOWN_RESTAURANT_ORDER.indexOf(a.id) - KNOWN_RESTAURANT_ORDER.indexOf(b.id));
+}
+
+function sortKnownMenus(menus) {
+  return [...menus].sort((a, b) => KNOWN_MENU_ORDER.indexOf(a.id) - KNOWN_MENU_ORDER.indexOf(b.id));
+}
+
+function normalizeKnownMenuSlug(slug) {
+  return LEGACY_MENU_SLUG_ALIASES[slug] || slug;
+}
+
 // ─── SUPABASE DATA LAYER ──────────────────────────────────────────────────────
 
 function sbHeaders(extra = {}) {
@@ -173,26 +209,25 @@ async function sbReadJsonOrThrow(url, options = {}) {
 }
 
 // Resolve which menu to load based on ?menu={slug}, localStorage cache, or
-// auto-selection. Sets MENU_ID, pushes slug to URL for single-menu sites,
-// or sets _menuPickerNeeded / _invalidMenuSlug for multi-menu / bad-slug cases.
+// the hardcoded default order. Sets MENU_ID and normalizes legacy slugs.
 async function sbResolveMenu() {
-  const slug = new URLSearchParams(location.search).get('menu');
+  const rawSlug = new URLSearchParams(location.search).get('menu');
+  const slug = normalizeKnownMenuSlug(rawSlug);
 
   if (slug) {
-    // Load menu by URL slug — also check for siblings in background
-    const [menuRes, countRes] = await Promise.all([
+    const [menuRes, allMenusRes] = await Promise.all([
       fetch(
         `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id`,
         { headers: sbHeaders() }
       ),
       fetch(
-        `${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`,
+        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`,
         { headers: sbHeaders() }
       ),
     ]);
-    if (countRes.ok) {
-      const siblings = await countRes.json();
-      if (siblings.length > 1) _hasMultipleMenus = true;
+    if (allMenusRes.ok) {
+      const siblings = await allMenusRes.json();
+      _hasMultipleMenus = siblings.filter(menu => !menu.archived).length > 1;
     }
     if (menuRes.ok) {
       const [menu] = await menuRes.json();
@@ -203,29 +238,30 @@ async function sbResolveMenu() {
         RESTAURANT_ID    = menu.restaurant_id || '';
         _activeRestaurantName = '';
         lsSet(LS_KEYS.menuId, MENU_ID);
+        if (rawSlug && rawSlug !== slug) {
+          const url = new URL(location.href);
+          url.searchParams.set('menu', slug);
+          history.replaceState({}, '', url.toString());
+        }
         return;
       }
     }
-    // Slug present but not found
-    _invalidMenuSlug = slug;
+    _invalidMenuSlug = rawSlug || slug;
     return;
   }
 
-  // No URL slug — returning visitor (MENU_ID cached) or auto-resolve
   if (MENU_ID) {
-    // Enrich cached MENU_ID: fetch name/slug/type (for active-menu-bar) + sibling count in parallel
-    const [nameRes, countRes] = await Promise.all([
+    const [nameRes, allMenusRes] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,archived`, { headers: sbHeaders() }),
     ]);
     if (nameRes.ok) {
       const [menu] = await nameRes.json();
       if (menu?.archived === true) {
-        // Cached menu was archived — clear it and fall through to picker
         MENU_ID = ''; RESTAURANT_ID = '';
         _activeMenuName = '';
         _activeRestaurantName = '';
-        _useCustomDesign = false;
+        _restaurantCustomDesignEnabled = true;
         lsSet(LS_KEYS.menuId, '');
       } else if (menu) {
         if (menu.name)          _activeMenuName  = menu.name;
@@ -238,43 +274,44 @@ async function sbResolveMenu() {
           history.replaceState({}, '', url.toString());
         }
       } else {
-        // Cached MENU_ID is stale (menu deleted) — clear it and fall through to auto-resolve
         MENU_ID = ''; RESTAURANT_ID = '';
         _activeMenuName = '';
         _activeRestaurantName = '';
-        _useCustomDesign = false;
+        _restaurantCustomDesignEnabled = true;
         lsSet(LS_KEYS.menuId, '');
       }
     }
-    if (countRes.ok) {
-      const siblings = await countRes.json();
-      if (siblings.length > 1) _hasMultipleMenus = true;
+    if (allMenusRes.ok) {
+      const siblings = await allMenusRes.json();
+      _hasMultipleMenus = siblings.filter(menu => !menu.archived).length > 1;
     }
     if (MENU_ID) return;
   }
 
-  // Fetch up to 2 non-archived menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id&archived=eq.false&limit=2`,
+    `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,slug,name,type,restaurant_id,archived`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
-  const menus = await res.json();
+  const menus = sortKnownMenus((await res.json()).filter(menu => !menu.archived));
+  _hasMultipleMenus = menus.length > 1;
 
-  if (menus.length === 1) {
-    // Single menu — auto-load and push slug to URL so it can be bookmarked
-    MENU_ID          = menus[0].id;
-    _activeMenuName  = menus[0].name || '';
-    MENU_TYPE        = menus[0].type          || 'drinks';
-    RESTAURANT_ID    = menus[0].restaurant_id || '';
+  let defaultMenu = menus.find(menu => menu.id === MENUS.ELROYS_DRINKS.id);
+  if (!defaultMenu && currentUser?.role === 'manager') {
+    defaultMenu = menus.find(menu => (currentUser.accessibleMenuIds || []).includes(menu.id));
+  }
+  if (!defaultMenu) defaultMenu = menus[0];
+
+  if (defaultMenu) {
+    MENU_ID          = defaultMenu.id;
+    _activeMenuName  = defaultMenu.name || '';
+    MENU_TYPE        = defaultMenu.type          || 'drinks';
+    RESTAURANT_ID    = defaultMenu.restaurant_id || '';
     _activeRestaurantName = '';
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
-    url.searchParams.set('menu', menus[0].slug);
+    url.searchParams.set('menu', defaultMenu.slug);
     history.replaceState({}, '', url.toString());
-  } else if (menus.length > 1) {
-    _menuPickerNeeded  = true;
-    _hasMultipleMenus  = true;
   }
 }
 
@@ -375,7 +412,7 @@ function hydrateState({ cats, meta, restaurant }) {
   }
 
   _activeRestaurantName = restaurant?.name || '';
-  _useCustomDesign = !!restaurant?.use_custom_design;
+  _restaurantCustomDesignEnabled = restaurant?.use_custom_design !== false;
   currentDesign = restaurant?.design && Object.keys(restaurant.design).length
     ? { ...DESIGN_DEFAULTS, ...restaurant.design }
     : { ...DESIGN_DEFAULTS };
@@ -438,13 +475,13 @@ async function loadActiveMenuState(options = {}) {
     } else if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
-      _useCustomDesign = false;
+      _restaurantCustomDesignEnabled = true;
     }
   } catch (e) {
     if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
-      _useCustomDesign = false;
+      _restaurantCustomDesignEnabled = true;
     } else {
       throw e;
     }
@@ -1104,14 +1141,6 @@ async function init() {
     menuState = defaultState();
     applyDesign(currentDesign);
     showPublicViewWithError(`⚠️ Menu "${escHtml(_invalidMenuSlug)}" not found.`);
-  } else if (_menuPickerNeeded) {
-    // Multiple menus, no slug — show picker; load menu after selection
-    applyDesign(currentDesign);
-    showMenuPicker(async () => {
-      await loadActiveMenuState();
-      applyDesign(currentDesign);
-      showPublicView();
-    });
   } else if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
     const cached = localStorage.getItem(LS_KEYS.menuCache);
@@ -1460,11 +1489,7 @@ function buildPublicCategorySection(cat, state, lastSentCats) {
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
 async function renderPublicView() {
-  if (_useCustomDesign) {
-    await _renderCustomDesignView();
-    return;
-  }
-  _renderDefaultPublicView();
+  await _renderCustomDesignView();
 }
 
 function _renderDefaultPublicView() {
@@ -1483,7 +1508,10 @@ function _renderDefaultPublicView() {
 async function _renderCustomDesignView() {
   const container = document.getElementById('public-categories');
   const sanitized = sanitizeMenuName(_activeRestaurantName);
-  if (!sanitized) { _renderDefaultPublicView(); return; }
+  if (!_restaurantCustomDesignEnabled || !sanitized || !SUPABASE_URL) {
+    _renderDefaultPublicView();
+    return;
+  }
 
   const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
   container.innerHTML = '<div class="custom-design-loading"><div class="spinner"></div></div>';
@@ -1810,31 +1838,47 @@ async function showMenuPicker(afterSelect, opts) {
 
   let menus = [];
   if (SUPABASE_URL) {
-    const accessibleIds = currentUser?.accessibleMenuIds;
-    let url = `${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,restaurant_id&order=name.asc`;
-    // Non-admins only see non-archived menus (admins can see archived in manager context)
-    if (currentUser?.role !== 'admin') url += '&archived=eq.false';
-    // Only restrict to accessible menus when in manager context
-    if (managerOnly && currentUser?.role === 'manager' && accessibleIds?.length) {
-      url += `&id=in.(${accessibleIds.join(',')})`;
-    }
+    const accessibleIds = currentUser?.accessibleMenuIds || [];
+    let url = `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`;
     try {
       const res = await fetch(url, { headers: sbHeaders() });
-      if (res.ok) menus = await res.json();
+      if (res.ok) menus = sortKnownMenus(await res.json());
     } catch(e) {}
+  }
+
+  if (currentUser?.role !== 'admin') {
+    menus = menus.filter(menu => !menu.archived);
+  }
+  if (managerOnly && currentUser?.role === 'manager') {
+    const allowed = new Set(currentUser?.accessibleMenuIds || []);
+    menus = menus.filter(menu => allowed.has(menu.id));
   }
 
   list.innerHTML = '';
   if (!menus.length) {
     list.innerHTML = '<p class="picker-empty">No menus available.</p>';
   } else {
-    menus.forEach(m => {
-      const btn = document.createElement('button');
-      btn.className = 'picker-menu-card';
-      btn.setAttribute('aria-label', `Select ${m.name}`);
-      btn.innerHTML = `<span class="picker-menu-name">${escHtml(m.name)}</span><span class="picker-menu-type">${escHtml(m.type)}</span>`;
-      btn.onclick = () => selectMenu(m.id, m.slug, m.name, m.type, m.restaurant_id);
-      list.appendChild(btn);
+    knownRestaurantList().forEach(restaurant => {
+      const sectionMenus = menus.filter(menu => menu.restaurant_id === restaurant.id);
+      if (!sectionMenus.length) return;
+
+      const group = document.createElement('section');
+      group.className = 'picker-restaurant-group';
+      group.innerHTML = `<div class="section-label" style="margin-bottom:10px;">${escHtml(restaurant.name)}</div>`;
+
+      const cards = document.createElement('div');
+      cards.className = 'picker-menu-group';
+      sectionMenus.forEach(m => {
+        const btn = document.createElement('button');
+        btn.className = 'picker-menu-card';
+        btn.setAttribute('aria-label', `Select ${m.name}`);
+        btn.innerHTML = `<span class="picker-menu-name">${escHtml(m.type === 'food' ? 'Food' : 'Drinks')}</span><span class="picker-menu-type">${escHtml(m.type)}</span>`;
+        btn.onclick = () => selectMenu(m.id, m.slug, m.name, m.type, m.restaurant_id);
+        cards.appendChild(btn);
+      });
+
+      group.appendChild(cards);
+      list.appendChild(group);
     });
     const first = list.querySelector('.picker-menu-card');
     if (first) setTimeout(() => first.focus(), 0);
@@ -1855,7 +1899,6 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   MENU_TYPE     = menuType     || 'drinks';
   RESTAURANT_ID = restaurantId || '';
   lsSet(LS_KEYS.menuId, MENU_ID);
-  _menuPickerNeeded = false;
   const url = new URL(location.href);
   url.searchParams.set('menu', slug);
   history.replaceState({}, '', url.toString());
@@ -2238,11 +2281,11 @@ async function loadAdminSwitcherData() {
   if (!SUPABASE_URL || !currentUser?.accessToken) return;
   try {
     const [restRes, menuRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id,name,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
     ]);
-    if (restRes.ok) _adminRestaurants = await restRes.json();
-    if (menuRes.ok) _adminAllMenus    = await menuRes.json();
+    if (restRes.ok) _adminRestaurants = sortKnownRestaurants(await restRes.json());
+    if (menuRes.ok) _adminAllMenus    = sortKnownMenus(await menuRes.json());
   } catch(e) { /* non-fatal */ }
 }
 
@@ -2367,7 +2410,8 @@ function _renderCustomDesignControls(restaurantRow) {
 
   sec.innerHTML = `
     <div class="config-card" style="margin-top:14px;">
-      <div class="section-label" style="margin-bottom:10px;">Custom Design</div>
+      <div class="section-label" style="margin-bottom:10px;">Primary Public Design</div>
+      <p class="config-hint" style="margin-bottom:12px;">Upload the restaurant's custom HTML and CSS here. Public rendering tries these files first and falls back to the default accordion renderer only when they are missing or disabled.</p>
       <div class="custom-design-toggle-row">
         <label for="custom-design-toggle">Use Custom Design</label>
         <input type="checkbox" id="custom-design-toggle" ${checked}
@@ -2418,7 +2462,7 @@ async function toggleCustomDesign(checked) {
     const entry = _adminRestaurants.find(rest => rest.id === restaurantId);
     if (entry) entry.use_custom_design = checked;
     if (restaurantId === RESTAURANT_ID) {
-      _useCustomDesign = checked;
+      _restaurantCustomDesignEnabled = checked;
       renderPublicViews();
     }
     showToast(checked ? 'Custom design enabled' : 'Custom design disabled', 'success');
@@ -4176,12 +4220,12 @@ let _previewRole = null; // tracks active mock role; null = using real session
 
 async function fetchRestaurantMenuIndex() {
   const [restRes, menuRes] = await Promise.all([
-    fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name,slug&order=name.asc`, { headers: sbHeaders() }),
-    fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id,name,slug,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
+    fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
   ]);
   if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
-  const restaurants = await restRes.json();
-  const allMenus = await menuRes.json();
+  const restaurants = sortKnownRestaurants(await restRes.json());
+  const allMenus = sortKnownMenus(await menuRes.json());
   _adminRestaurants = restaurants;
   _adminAllMenus = allMenus;
   return { restaurants, allMenus };
@@ -4199,10 +4243,7 @@ function buildMenuChipHtml(menu) {
   return `<div class="menu-chip${menu.archived ? ' is-archived' : ''}" id="menu-chip-${escHtml(menu.id)}">
     <span>${escHtml(menu.name)}</span>
     <span class="menu-type-badge">${escHtml(menu.type || 'drinks')}</span>
-    <button class="btn-small" onclick="openRenameMenuForm(${escAttrJs(menu.id)},${escAttrJs(menu.name)})">Rename</button>
-    <button class="btn-small" onclick="archiveMenu(${escAttrJs(menu.id)},${!menu.archived})">${menu.archived ? 'Unarchive' : 'Archive'}</button>
-    <button class="btn-small" onclick="duplicateMenu(${escAttrJs(menu.id)},${escAttrJs(menu.name)},${escAttrJs(menu.restaurant_id)},${escAttrJs(menu.type || 'drinks')})">Duplicate</button>
-    <button class="btn-small btn-danger" onclick="confirmDeleteMenu(${escAttrJs(menu.id)},${escAttrJs(menu.name)})">Delete</button>
+    ${menu.archived ? '<span class="menu-type-badge">archived</span>' : ''}
   </div>`;
 }
 
@@ -4211,28 +4252,9 @@ function buildRestaurantRowHtml(restaurant, menus) {
   return `
     <div class="restaurant-header">
       <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
-      <button class="btn-small" onclick="openRenameRestaurantForm(${escAttrJs(restaurant.id)},${escAttrJs(restaurant.name)})">Rename</button>
-      <button class="btn-small btn-danger" onclick="confirmDeleteRestaurant(${escAttrJs(restaurant.id)},${escAttrJs(restaurant.name)})">Delete</button>
     </div>
     <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
-      ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">No menus yet.</span>'}
-    </div>
-    <div class="add-menu-form" id="add-menu-form-${escHtml(restaurant.id)}" style="display:none">
-      <div class="input-row">
-        <input type="text" class="new-menu-name" placeholder="Menu name"
-          oninput="syncMenuSlug(this)" id="new-menu-name-${escHtml(restaurant.id)}"/>
-        <input type="text" class="new-menu-slug" placeholder="slug" id="new-menu-slug-${escHtml(restaurant.id)}"
-          oninput="this.dataset.manuallyEdited='1'"/>
-        <select id="new-menu-type-${escHtml(restaurant.id)}">
-          <option value="drinks">Drinks</option>
-          <option value="food">Food</option>
-        </select>
-        <button class="btn-small" onclick="confirmCreateMenu('${escHtml(restaurant.id)}')">Add</button>
-        <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(restaurant.id)}').style.display='none'">Cancel</button>
-      </div>
-    </div>
-    <div style="padding:6px 14px 10px">
-      <button class="btn-small" onclick="document.getElementById('add-menu-form-${escHtml(restaurant.id)}').style.display='';document.getElementById('new-menu-name-${escHtml(restaurant.id)}').focus()">+ Add Menu</button>
+      ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">Expected menus are missing from the database.</span>'}
     </div>`;
 }
 
@@ -4244,355 +4266,22 @@ async function renderMenusPanel() {
     const { restaurants, allMenus } = await fetchRestaurantMenuIndex();
     const byRestaurant = groupMenusByRestaurant(allMenus);
     if (!restaurants.length) {
-      listEl.innerHTML = '<p class="db-empty">No restaurants yet.</p>';
+      listEl.innerHTML = '<p class="db-empty">The hardcoded restaurants are missing from the database.</p>';
       return;
     }
     listEl.innerHTML = '';
-    restaurants.forEach(r => {
-      const menus = byRestaurant[r.id] || [];
+    knownRestaurantList().forEach(knownRestaurant => {
+      const restaurant = restaurants.find(r => r.id === knownRestaurant.id) || knownRestaurant;
+      const menus = sortKnownMenus(byRestaurant[knownRestaurant.id] || []);
       const row = document.createElement('div');
       row.className = 'restaurant-row';
-      row.id = 'restaurant-row-' + escHtml(r.id);
-      row.innerHTML = buildRestaurantRowHtml(r, menus);
+      row.id = 'restaurant-row-' + escHtml(knownRestaurant.id);
+      row.innerHTML = buildRestaurantRowHtml(restaurant, menus);
       listEl.appendChild(row);
     });
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
   }
-}
-
-async function createDuplicateMenuShell(restaurantId, newName, slug, menuType) {
-  const menuRes = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'return=representation' }),
-    body: JSON.stringify({ restaurant_id: restaurantId, name: newName.trim(), slug, type: menuType }),
-  });
-  if (menuRes.status === 409) throw new Error('Slug already taken — choose a different name.');
-  if (!menuRes.ok) throw new Error(await menuRes.text());
-  const [newMenu] = await menuRes.json();
-  return newMenu;
-}
-
-async function fetchSourceCategories(menuId) {
-  const catsRes = await fetch(`${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${encodeURIComponent(menuId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
-  if (!catsRes.ok) throw new Error('Failed to fetch categories');
-  return catsRes.json();
-}
-
-async function fetchItemsForCategory(categoryId, label) {
-  const itemsRes = await fetch(`${SUPABASE_URL}/rest/v1/items?category_id=eq.${encodeURIComponent(categoryId)}&select=*&order=display_order.asc`, { headers: sbHeaders() });
-  if (!itemsRes.ok) throw new Error('Failed to fetch items for: ' + label);
-  return itemsRes.json();
-}
-
-async function copyMenuCategoriesAndItems(srcCats, newMenuId) {
-  for (const cat of srcCats) {
-    const { id: _id, menu_id: _mid, created_at: _ca, ...catFields } = cat;
-    const newCatRes = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ ...catFields, menu_id: newMenuId }),
-    });
-    if (!newCatRes.ok) throw new Error('Failed to copy category: ' + cat.label);
-    const [newCat] = await newCatRes.json();
-    const items = await fetchItemsForCategory(cat.id, cat.label);
-    if (!items.length) continue;
-    const newItems = items.map(it => {
-      const { id: _iid, category_id: _cid, created_at: _ica, ...fields } = it;
-      return { ...fields, category_id: newCat.id, is_eighty_sixed: false, is_draft: false, on_menu: true };
-    });
-    const bulkRes = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify(newItems),
-    });
-    if (!bulkRes.ok) throw new Error('Failed to copy items for: ' + cat.label);
-  }
-}
-
-async function rollbackDuplicateMenu(newMenuId) {
-  if (!newMenuId) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(newMenuId)}`, {
-    method: 'DELETE', headers: sbHeaders(),
-  }).catch(() => {});
-}
-
-async function duplicateMenu(menuId, menuName, restaurantId, menuType) {
-  const newName = prompt('Name for the copy:', menuName + ' (Copy)');
-  if (!newName?.trim()) return;
-  const slug = slugify(newName.trim());
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  showToast('Duplicating menu…', 'info');
-  let newMenuId = null;
-  try {
-    const newMenu = await createDuplicateMenuShell(restaurantId, newName, slug, menuType);
-    newMenuId = newMenu.id;
-    const srcCats = await fetchSourceCategories(menuId);
-    await copyMenuCategoriesAndItems(srcCats, newMenuId);
-    await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ menu_id: newMenuId }),
-    });
-    _adminRestaurants = []; _adminAllMenus = [];
-    await renderMenusPanel();
-    showToast('Menu duplicated!', 'success');
-  } catch(e) {
-    await rollbackDuplicateMenu(newMenuId);
-    showToast(`Failed to duplicate menu: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-function openAddRestaurantForm() {
-  const form = document.getElementById('add-restaurant-form');
-  if (form) { form.style.display = ''; document.getElementById('new-restaurant-name').focus(); }
-}
-
-async function confirmAddRestaurant() {
-  const input = document.getElementById('new-restaurant-name');
-  const name  = (input?.value || '').trim();
-  if (!name) return;
-  _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
-  await createRestaurant(name);
-  if (input) input.value = '';
-  document.getElementById('add-restaurant-form').style.display = 'none';
-}
-
-async function createRestaurant(name) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ name, slug: slugify(name) }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    await renderMenusPanel();
-  } catch(e) {
-    showToast(`Failed to create restaurant: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-function openInlineRenameForm(options) {
-  const {
-    existingSelector,
-    inputClassName,
-    inputValue,
-    inputStyle = {},
-    anchorEl,
-    insertTarget,
-    onSave,
-    onCancel,
-  } = options;
-  if (!anchorEl || !insertTarget) return;
-  anchorEl.style.display = 'none';
-  const existing = insertTarget.querySelector(existingSelector);
-  if (existing) return;
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = inputValue;
-  input.className = inputClassName;
-  Object.assign(input.style, inputStyle);
-  const saveBtn = document.createElement('button');
-  saveBtn.className = 'btn-small';
-  saveBtn.textContent = 'Save';
-  saveBtn.onclick = () => onSave(input.value.trim());
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn-small';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = onCancel;
-  insertTarget.insertBefore(input, anchorEl.nextSibling);
-  insertTarget.insertBefore(saveBtn, input.nextSibling);
-  insertTarget.insertBefore(cancelBtn, saveBtn.nextSibling);
-  input.focus();
-}
-
-function openRenameRestaurantForm(id, currentName) {
-  const nameEl = document.getElementById('restaurant-name-' + id);
-  if (!nameEl) return;
-  const parent = nameEl.closest('.restaurant-header');
-  openInlineRenameForm({
-    existingSelector: '.rename-restaurant-input',
-    inputClassName: 'rename-restaurant-input catmgr-input',
-    inputValue: currentName,
-    inputStyle: { flex: '1' },
-    anchorEl: nameEl,
-    insertTarget: parent,
-    onSave: async newName => {
-      if (newName && newName !== currentName) await renameRestaurant(id, newName);
-      else await renderMenusPanel();
-    },
-    onCancel: () => renderMenusPanel(),
-  });
-}
-
-async function renameRestaurant(id, name) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ name, slug: slugify(name) }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
-    await renderMenusPanel();
-  } catch(e) {
-    showToast(`Failed to rename restaurant: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-function openRenameMenuForm(id, currentName) {
-  const chip = document.getElementById('menu-chip-' + id);
-  if (!chip) return;
-  const nameSpan = chip.querySelector('span');
-  openInlineRenameForm({
-    existingSelector: '.rename-menu-input',
-    inputClassName: 'rename-menu-input catmgr-input',
-    inputValue: currentName,
-    inputStyle: { width: '100px' },
-    anchorEl: nameSpan,
-    insertTarget: chip,
-    onSave: async newName => {
-      if (newName && newName !== currentName) await renameMenu(id, newName);
-      else await renderMenusPanel();
-    },
-    onCancel: () => renderMenusPanel(),
-  });
-}
-
-async function renameMenu(id, name) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ name, slug: slugify(name) }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
-    await renderMenusPanel();
-  } catch(e) {
-    showToast(`Failed to rename menu: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-async function confirmCreateMenu(restaurantId) {
-  const nameInput = document.getElementById('new-menu-name-' + restaurantId);
-  const slugInput = document.getElementById('new-menu-slug-' + restaurantId);
-  const typeInput = document.getElementById('new-menu-type-' + restaurantId);
-  const name = (nameInput?.value || '').trim();
-  const slug = (slugInput?.value || '').trim() || slugify(name);
-  const type = typeInput?.value || 'drinks';
-  if (!name) return;
-  _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
-  await createMenu(restaurantId, name, slug, type);
-}
-
-async function createMenu(restaurantId, name, slug, type) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ restaurant_id: restaurantId, name, slug, type }),
-    });
-    if (r.status === 409) {
-      showToast('Slug already taken for this restaurant — edit the slug and try again.', 'error');
-      return;
-    }
-    if (!r.ok) throw new Error(await r.text());
-    const [menu] = await r.json();
-    const defs = type === 'food' ? DEFAULT_FOOD_CATEGORY_DEFS : DEFAULT_CATEGORY_DEFS.map(c => ({ key: c.id, label: c.title || c.label, icon: c.icon, color: c.color, placeholder: c.placeholder || '' }));
-    await sbSeedCategories(menu.id, defs);
-    await renderMenusPanel();
-    showToast(`✅ Menu "${name}" created.`, 'success');
-  } catch(e) {
-    showToast(`Failed to create menu: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-async function archiveMenu(id, archived) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ archived }),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    _adminRestaurants = []; _adminAllMenus = []; // invalidate switcher cache
-    await renderMenusPanel();
-  } catch(e) {
-    showToast(`Failed to ${archived ? 'archive' : 'unarchive'} menu: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-async function confirmDeleteMenu(id, name) {
-  if (!confirm(`Permanently delete menu "${name}"?\n\nThis will remove all its categories, items, and metadata. This cannot be undone.`)) return;
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(id)}`, {
-      method: 'DELETE', headers: sbHeaders(),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    _adminRestaurants = []; _adminAllMenus = [];
-    // If the deleted menu was the active one, clear it
-    if (id === MENU_ID) {
-      MENU_ID = '';
-      RESTAURANT_ID = '';
-      _activeMenuName = '';
-      _activeRestaurantName = '';
-      _useCustomDesign = false;
-      lsSet(LS_KEYS.menuId, '');
-    }
-    await renderMenusPanel();
-    showToast(`Menu "${name}" deleted.`, 'success');
-  } catch(e) {
-    showToast(`Failed to delete menu: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-async function confirmDeleteRestaurant(id, name) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  // Check if restaurant has any non-archived menus
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/menus?restaurant_id=eq.${encodeURIComponent(id)}&select=id,name,archived`,
-      { headers: sbHeaders() }
-    );
-    if (r.ok) {
-      const menus = await r.json();
-      if (menus.length > 0) {
-        const menuNames = menus.map(m => m.name).join(', ');
-        showToast(`Delete all menus first (${menuNames}).`, 'error');
-        return;
-      }
-    }
-  } catch(e) {}
-  if (!confirm(`Permanently delete restaurant "${name}"?\n\nThis cannot be undone.`)) return;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(id)}`, {
-      method: 'DELETE', headers: sbHeaders(),
-    });
-    if (!r.ok) throw new Error(await r.text());
-    _adminRestaurants = []; _adminAllMenus = [];
-    if (id === RESTAURANT_ID) {
-      RESTAURANT_ID = '';
-      _activeRestaurantName = '';
-      _useCustomDesign = false;
-    }
-    await renderMenusPanel();
-    showToast(`Restaurant "${name}" deleted.`, 'success');
-  } catch(e) {
-    showToast(`Failed to delete restaurant: ${escHtml(e.message)}`, 'error');
-  }
-}
-
-function syncMenuSlug(nameInput) {
-  const form = nameInput.closest('.add-menu-form');
-  const slugInput = form?.querySelector('.new-menu-slug');
-  if (slugInput && !slugInput.dataset.manuallyEdited) slugInput.value = slugify(nameInput.value);
 }
 
 function _initPreviewToolbar() {

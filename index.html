@@ -189,17 +189,8 @@
       <!-- RESTAURANTS SUB-PANEL -->
       <div class="tab-panel active" id="tab-panel-admin-restaurants" role="tabpanel" aria-labelledby="tab-btn-admin-restaurants">
         <div class="section-label">Restaurants &amp; Menus</div>
+        <p class="config-hint">This build is locked to Leroy's Lounge and El Roy's Cantina. Managers are assigned at the menu level across the four fixed menus.</p>
         <div id="menus-mgmt-list"></div>
-        <div class="btn-row" style="margin-top:10px">
-          <button class="btn-small" onclick="openAddRestaurantForm()">+ Add Restaurant</button>
-        </div>
-        <div id="add-restaurant-form" style="display:none;margin-top:10px">
-          <div class="input-row">
-            <input type="text" id="new-restaurant-name" placeholder="Restaurant name"/>
-            <button class="btn-small" onclick="confirmAddRestaurant()">Add</button>
-            <button class="btn-small" onclick="document.getElementById('add-restaurant-form').style.display='none'">Cancel</button>
-          </div>
-        </div>
       </div>
 
       <!-- NOTIFICATIONS SUB-PANEL -->
@@ -328,7 +319,10 @@
           <label class="switcher-label" for="design-restaurant-select">Restaurant</label>
           <select id="design-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('design')"></select>
         </div>
+        <div id="custom-design-section"></div>
         <div class="config-card">
+          <div class="section-label" style="margin-bottom:12px;">Design Tokens</div>
+          <p class="config-hint">Custom HTML/CSS is the primary public rendering path. These fields remain available as fallback branding tokens and for shared shell styling.</p>
           <div class="design-row">
             <span class="design-label">Logo</span>
             <div class="design-control">
@@ -404,7 +398,6 @@
             <button class="btn-small" onclick="saveDesign()">Save Design</button>
           </div>
         </div>
-        <div id="custom-design-section"></div>
       </div>
 
       <!-- USERS SUB-PANEL -->

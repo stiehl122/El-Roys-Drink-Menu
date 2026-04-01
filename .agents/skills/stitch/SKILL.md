@@ -18,7 +18,7 @@ Expected inputs:
 - `stitch_project_id`
 - optional `screen_id`
 
-Interpret the request flexibly. If the user writes `/stitch El Roy's 4044680601076201931`, treat that as the input. If the request is missing required values or the restaurant name is ambiguous, ask a concise follow-up.
+Interpret the request flexibly. If the user writes `/stitch El Roy's Cantina 4044680601076201931`, treat that as the input. If the request is missing required values or the restaurant name is ambiguous, ask a concise follow-up.
 
 ## Workflow
 
@@ -28,6 +28,7 @@ Identify the numeric Stitch project ID and optional numeric screen ID. Treat the
 2. Verify the restaurant exists before touching Stitch files.
 Use the live app config when available:
 - Prefer the deployed app's `/api/config` response or existing environment values for `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+- In v0.8.x, only `Leroy's Lounge` and `El Roy's Cantina` are valid targets. If the request names anything else, stop and tell the user to choose one of those two restaurants.
 - Query `restaurants` by name.
 - If there is no match, report that clearly and list available restaurant names if you can retrieve them.
 - If there are multiple plausible matches, stop and ask the user which restaurant to use.
@@ -95,7 +96,7 @@ Summarize:
 End with the operational next steps:
 1. Review the melded files.
 2. Upload the generated HTML and CSS in Admin -> Design.
-3. Toggle "Use Custom Design" on for that restaurant.
+3. Leave "Use Custom Design" enabled unless the restaurant needs to fall back to the default renderer temporarily.
 
 ## Repo-specific constraints
 

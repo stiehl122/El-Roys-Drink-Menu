@@ -10,6 +10,8 @@ Arguments: $ARGUMENTS (optional — target version and/or feature summary, e.g. 
 
 Break large planned changes into well-structured GitHub issues for `stiehl122/El-Roys-Drink-Menu`, following the project's established issue conventions. Issues are the source of truth for planned work — each one should be small enough to implement in a focused session and clearly tied to a version milestone.
 
+Current numbering reminder: **v0.8.x work uses Unit 3.x**.
+
 ## Step 1 — Gather scope
 
 Parse $ARGUMENTS for a version (e.g. `v0.8`) and a feature description.

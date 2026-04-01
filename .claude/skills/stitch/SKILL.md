@@ -1,6 +1,6 @@
 ---
 name: stitch
-description: Download a Stitch project, verify the target restaurant exists in Supabase, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a shared restaurant-level custom public view for El Roy's. Usage: /stitch <restaurant_name> <stitch_project_id> [screen_id]
+description: Download a Stitch project, verify the target restaurant exists in Supabase, meld the design with app conventions, and save output to designs/. Use when an admin has a Stitch project ready to integrate as a shared restaurant-level custom public view for Leroy's Lounge or El Roy's Cantina. Usage: /stitch <restaurant_name> <stitch_project_id> [screen_id]
 ---
 
 Arguments: $ARGUMENTS — expects `<restaurant_name> <stitch_project_id> [screen_id]`
@@ -27,6 +27,12 @@ Example: /stitch "Leroy's Lounge" 4044680601076201931
 ## Step 2 — Verify the restaurant exists in Supabase
 
 Read `SUPABASE_URL` and `SUPABASE_ANON_KEY` from the live app by fetching `/api/config` (GET request to the Vercel deployment URL, or read from environment). If not available, instruct the user to ensure they are on a deployed branch.
+
+Only these restaurant targets are valid in v0.8.x:
+- `Leroy's Lounge`
+- `El Roy's Cantina`
+
+If the requested restaurant name is anything else, abort and tell the user to pick one of those two names exactly.
 
 Query the restaurants table:
 ```
@@ -140,5 +146,5 @@ Print a summary:
 Next steps:
 1. Review the melded files to verify the design looks correct.
 2. Go to Admin → Design tab, select "{restaurant_name}", and upload the .html and .css files.
-3. Toggle "Use Custom Design" on to activate it for the public view.
+3. Leave "Use Custom Design" enabled unless the design needs to be temporarily disabled for fallback testing.
 ```

@@ -8,6 +8,12 @@ function sanitizeMenuName(name) {
   return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
 
+const ALLOWED_RESTAURANT_NAMES = new Set(["Leroy's Lounge", "El Roy's Cantina"]);
+
+function isAllowedRestaurantName(name) {
+  return ALLOWED_RESTAURANT_NAMES.has((name || '').trim());
+}
+
 export default async function handler(req, res) {
   // Auth — admin only
   try {
@@ -25,6 +31,9 @@ export default async function handler(req, res) {
   // ── DELETE — remove both design files for a restaurant/menu namespace ─────
   if (req.method === 'DELETE') {
     const designName = req.query.restaurantName || req.query.menuName;
+    if (req.query.restaurantName && !isAllowedRestaurantName(req.query.restaurantName)) {
+      return res.status(400).json({ error: 'Unknown restaurantName' });
+    }
     const sanitized = sanitizeMenuName(designName);
     if (!sanitized) return res.status(400).json({ error: 'Invalid restaurantName or menuName' });
 
@@ -53,6 +62,9 @@ export default async function handler(req, res) {
     const { restaurantName, menuName, fileType } = req.body || {};
     const designName = restaurantName || menuName;
     if (!designName) return res.status(400).json({ error: 'Missing restaurantName or menuName' });
+    if (restaurantName && !isAllowedRestaurantName(restaurantName)) {
+      return res.status(400).json({ error: 'Unknown restaurantName' });
+    }
     if (!['html', 'css'].includes(fileType)) {
       return res.status(400).json({ error: 'fileType must be html or css' });
     }
