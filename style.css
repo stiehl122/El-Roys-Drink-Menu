@@ -561,6 +561,21 @@
 .history-add { color: var(--green, #4caf50); }
 .history-remove { color: var(--red, #f44336); }
 
+/* ─── CUSTOM DESIGN ADMIN CONTROLS ───────────────────────────────────────── */
+.custom-design-toggle-row { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; }
+.custom-design-toggle-row label { font-weight: 600; color: var(--text); font-size: 13px; }
+.custom-design-file-status { display: flex; flex-direction: column; gap: 5px; padding: 6px 0; }
+.custom-design-file-row { display: flex; align-items: center; gap: 8px; }
+.custom-design-file-name { font-family: monospace; font-size: 11px; background: var(--bg); border: 1px solid var(--border); padding: 2px 7px; border-radius: 4px; color: var(--text); }
+.custom-design-status-badge { font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+.custom-design-status-badge.status-ok { background: rgba(46,204,113,0.15); color: var(--green); }
+.custom-design-status-badge.status-missing { background: rgba(231,76,60,0.12); color: var(--red); }
+.custom-design-upload-row { display: flex; align-items: center; gap: 8px; }
+.custom-design-upload-row input[type=file] { font-size: 12px; color: var(--muted); }
+
+/* ─── CUSTOM DESIGN PUBLIC LOADING ───────────────────────────────────────── */
+.custom-design-loading { display: flex; flex-direction: column; align-items: center; padding: 48px 20px; color: var(--muted); gap: 12px; }
+
 /* ─── ADMIN PANEL ─────────────────────────────────────────────────────────── */
 .admin-status-bar  { display: flex; align-items: center; gap: 8px; padding: 8px 0 4px; margin-bottom: 4px; }
 .btn-tiny          { padding: 3px 8px; font-size: 11px; }

@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.7.4';
+const APP_VERSION = 'v0.7.5';
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -42,6 +42,7 @@ let _activeMenuName    = '';        // display name of the currently loaded menu
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
+let _useCustomDesign   = false;     // true when active menu has use_custom_design enabled
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
@@ -141,6 +142,10 @@ function getCachedDiff() {
   return _diffCache;
 }
 
+function sanitizeMenuName(name) {
+  return (name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
 // ─── SUPABASE DATA LAYER ──────────────────────────────────────────────────────
 
 function sbHeaders(extra = {}) {
@@ -176,7 +181,7 @@ async function sbResolveMenu() {
     // Load menu by URL slug — also check for siblings in background
     const [menuRes, countRes] = await Promise.all([
       fetch(
-        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id`,
+        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id,use_custom_design`,
         { headers: sbHeaders() }
       ),
       fetch(
@@ -191,10 +196,11 @@ async function sbResolveMenu() {
     if (menuRes.ok) {
       const [menu] = await menuRes.json();
       if (menu?.id) {
-        MENU_ID       = menu.id;
-        _activeMenuName = menu.name || '';
-        MENU_TYPE     = menu.type          || 'drinks';
-        RESTAURANT_ID = menu.restaurant_id || '';
+        MENU_ID          = menu.id;
+        _activeMenuName  = menu.name || '';
+        MENU_TYPE        = menu.type          || 'drinks';
+        RESTAURANT_ID    = menu.restaurant_id || '';
+        _useCustomDesign = !!menu.use_custom_design;
         lsSet(LS_KEYS.menuId, MENU_ID);
         return;
       }
@@ -208,7 +214,7 @@ async function sbResolveMenu() {
   if (MENU_ID) {
     // Enrich cached MENU_ID: fetch name/slug/type (for active-menu-bar) + sibling count in parallel
     const [nameRes, countRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived,use_custom_design`, { headers: sbHeaders() }),
       fetch(`${SUPABASE_URL}/rest/v1/menus?select=id&archived=eq.false&limit=2`, { headers: sbHeaders() }),
     ]);
     if (nameRes.ok) {
@@ -218,9 +224,10 @@ async function sbResolveMenu() {
         MENU_ID = ''; RESTAURANT_ID = '';
         lsSet(LS_KEYS.menuId, '');
       } else if (menu) {
-        if (menu.name)          _activeMenuName = menu.name;
-        if (menu.type)          MENU_TYPE       = menu.type;
-        if (menu.restaurant_id) RESTAURANT_ID   = menu.restaurant_id;
+        if (menu.name)          _activeMenuName  = menu.name;
+        if (menu.type)          MENU_TYPE        = menu.type;
+        if (menu.restaurant_id) RESTAURANT_ID    = menu.restaurant_id;
+        _useCustomDesign = !!menu.use_custom_design;
         if (menu.slug) {
           const url = new URL(location.href);
           url.searchParams.set('menu', menu.slug);
@@ -241,7 +248,7 @@ async function sbResolveMenu() {
 
   // Fetch up to 2 non-archived menus to determine routing
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id&archived=eq.false&limit=2`,
+    `${SUPABASE_URL}/rest/v1/menus?select=id,slug,name,type,restaurant_id,use_custom_design&archived=eq.false&limit=2`,
     { headers: sbHeaders() }
   );
   if (!res.ok) return;
@@ -249,10 +256,11 @@ async function sbResolveMenu() {
 
   if (menus.length === 1) {
     // Single menu — auto-load and push slug to URL so it can be bookmarked
-    MENU_ID       = menus[0].id;
-    _activeMenuName = menus[0].name || '';
-    MENU_TYPE     = menus[0].type          || 'drinks';
-    RESTAURANT_ID = menus[0].restaurant_id || '';
+    MENU_ID          = menus[0].id;
+    _activeMenuName  = menus[0].name || '';
+    MENU_TYPE        = menus[0].type          || 'drinks';
+    RESTAURANT_ID    = menus[0].restaurant_id || '';
+    _useCustomDesign = !!menus[0].use_custom_design;
     lsSet(LS_KEYS.menuId, MENU_ID);
     const url = new URL(location.href);
     url.searchParams.set('menu', menus[0].slug);
@@ -656,8 +664,8 @@ function applyDesign(design) {
   document.title = [brand, title].filter(Boolean).join(' | ') || 'Current Menu';
 }
 
-function renderPublicViews() {
-  renderPublicView();
+async function renderPublicViews() {
+  await renderPublicView();
   updateLastUpdatedLabel();
 }
 
@@ -1243,7 +1251,7 @@ function startPolling() {
       const newFeatured = getFeaturedSnapshot();
 
       if (afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured) {
-        renderPublicViews();
+        await renderPublicViews();
       }
       if (newDesign !== oldDesign) applyDesign(currentDesign);
 
@@ -1437,7 +1445,15 @@ function buildPublicCategorySection(cat, state, lastSentCats) {
 }
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
-function renderPublicView() {
+async function renderPublicView() {
+  if (_useCustomDesign) {
+    await _renderCustomDesignView();
+    return;
+  }
+  _renderDefaultPublicView();
+}
+
+function _renderDefaultPublicView() {
   const container = document.getElementById('public-categories');
   container.innerHTML = '';
   renderFeaturedPublicSection();
@@ -1448,6 +1464,43 @@ function renderPublicView() {
     if (section) container.appendChild(section);
   });
   updateCollapseAllBtn();
+}
+
+async function _renderCustomDesignView() {
+  const container = document.getElementById('public-categories');
+  const sanitized = sanitizeMenuName(_activeMenuName);
+  if (!sanitized) { _renderDefaultPublicView(); return; }
+
+  const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
+  container.innerHTML = '<div class="custom-design-loading"><div class="spinner"></div></div>';
+
+  try {
+    const ts = Date.now(); // cache-bust so stale CDN copies don't persist after upload
+    const [htmlRes, cssRes] = await Promise.all([
+      fetch(`${baseUrl}/${sanitized}_design.html?v=${ts}`),
+      fetch(`${baseUrl}/${sanitized}_design.css?v=${ts}`),
+    ]);
+    if (!htmlRes.ok) throw new Error(`HTML not found (${htmlRes.status})`);
+
+    // Inject scoped CSS
+    let style = document.getElementById('custom-design-style');
+    if (style) style.remove();
+    const cssContent = cssRes.ok ? await cssRes.text() : '';
+    if (cssContent) {
+      style = document.createElement('style');
+      style.id = 'custom-design-style';
+      style.textContent = cssContent;
+      document.head.appendChild(style);
+    }
+
+    container.innerHTML = await htmlRes.text();
+    renderFeaturedPublicSection();
+    updateCollapseAllBtn();
+  } catch (e) {
+    console.warn('[custom-design] Falling back to default:', e.message);
+    document.getElementById('custom-design-style')?.remove();
+    _renderDefaultPublicView();
+  }
 }
 
 function togglePublicDesc(el) {
@@ -1642,6 +1695,7 @@ function onAdminBtnClick() {
 }
 
 function enterAdmin() {
+  document.getElementById('custom-design-style')?.remove();
   if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
   isAdminMode = true;
   stopPolling();
@@ -2005,6 +2059,7 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
+  document.getElementById('custom-design-style')?.remove();
   if (!MENU_ID) {
     showToast('Select a menu from the public view first.', 'info');
     return;
@@ -2169,7 +2224,7 @@ async function loadAdminSwitcherData() {
   try {
     const [restRes, menuRes] = await Promise.all([
       fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id,name&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
+      fetch(`${SUPABASE_URL}/rest/v1/menus?select=id,name,type,restaurant_id,archived,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
     ]);
     if (restRes.ok) _adminRestaurants = await restRes.json();
     if (menuRes.ok) _adminAllMenus    = await menuRes.json();
@@ -2262,6 +2317,187 @@ async function _loadAdminTabData(context) {
       const [row] = r.ok ? await r.json() : [{}];
       _populateAdminDesignPanel({ ...DESIGN_DEFAULTS, ...(row?.design || {}) });
     } catch { _populateAdminDesignPanel(DESIGN_DEFAULTS); }
+    // Render custom design controls for the selected menu
+    const menuId = _adminSwitcherState.design.menuId;
+    if (menuId) {
+      const menuRow = _adminAllMenus.find(m => m.id === menuId);
+      _renderCustomDesignControls(menuRow);
+    } else {
+      const sec = document.getElementById('custom-design-section');
+      if (sec) sec.innerHTML = '';
+    }
+  }
+}
+
+// ─── CUSTOM DESIGN ADMIN CONTROLS ────────────────────────────────────────────
+
+function _renderCustomDesignControls(menuRow) {
+  const sec = document.getElementById('custom-design-section');
+  if (!sec) return;
+  if (!menuRow) { sec.innerHTML = ''; return; }
+
+  const sanitized = sanitizeMenuName(menuRow.name);
+  const htmlFile  = sanitized ? `${sanitized}_design.html` : '—';
+  const cssFile   = sanitized ? `${sanitized}_design.css`  : '—';
+  const checked   = menuRow.use_custom_design ? 'checked' : '';
+
+  sec.innerHTML = `
+    <div class="config-card" style="margin-top:14px;">
+      <div class="section-label" style="margin-bottom:10px;">Custom Design</div>
+      <div class="custom-design-toggle-row">
+        <label for="custom-design-toggle">Use Custom Design</label>
+        <input type="checkbox" id="custom-design-toggle" ${checked}
+          onchange="toggleCustomDesign(this.checked)"
+          aria-label="Use custom design for this menu"/>
+      </div>
+      <div class="custom-design-file-status">
+        <div class="custom-design-file-row">
+          <span class="custom-design-file-name">${escHtml(htmlFile)}</span>
+          <span id="custom-design-html-status" class="custom-design-status-badge">checking…</span>
+        </div>
+        <div class="custom-design-file-row">
+          <span class="custom-design-file-name">${escHtml(cssFile)}</span>
+          <span id="custom-design-css-status" class="custom-design-status-badge">checking…</span>
+        </div>
+      </div>
+      <div class="custom-design-upload-row">
+        <label class="design-label" style="min-width:40px;">HTML</label>
+        <input type="file" id="custom-design-upload-html" accept=".html,text/html" style="flex:1;min-width:0;"/>
+        <button class="btn-small" onclick="uploadCustomDesignFile('html')">Upload</button>
+      </div>
+      <div class="custom-design-upload-row" style="margin-top:6px;">
+        <label class="design-label" style="min-width:40px;">CSS</label>
+        <input type="file" id="custom-design-upload-css" accept=".css,text/css" style="flex:1;min-width:0;"/>
+        <button class="btn-small" onclick="uploadCustomDesignFile('css')">Upload</button>
+      </div>
+      <div style="margin-top:10px;">
+        <button class="btn-small btn-danger" onclick="removeCustomDesign()">Remove Custom Design</button>
+      </div>
+    </div>`;
+
+  _refreshCustomDesignStatus();
+}
+
+async function toggleCustomDesign(checked) {
+  const menuId = _adminSwitcherState.design.menuId;
+  if (!menuId || !SUPABASE_URL || !currentUser?.accessToken) return;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/menus?id=eq.${encodeURIComponent(menuId)}`,
+      {
+        method: 'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ use_custom_design: checked }),
+      }
+    );
+    if (!r.ok) throw new Error(await r.text());
+    // Keep _adminAllMenus in sync
+    const entry = _adminAllMenus.find(m => m.id === menuId);
+    if (entry) entry.use_custom_design = checked;
+    // Update live flag if this is the active menu
+    if (menuId === MENU_ID) {
+      _useCustomDesign = checked;
+      renderPublicViews();
+    }
+    showToast(checked ? 'Custom design enabled' : 'Custom design disabled', 'success');
+  } catch (e) {
+    showToast('Failed to update custom design flag', 'error');
+    // Revert checkbox
+    const cb = document.getElementById('custom-design-toggle');
+    if (cb) cb.checked = !checked;
+  }
+}
+
+async function uploadCustomDesignFile(fileType) {
+  const menuId = _adminSwitcherState.design.menuId;
+  const menuRow = _adminAllMenus.find(m => m.id === menuId);
+  if (!menuRow) return;
+
+  const input = document.getElementById(`custom-design-upload-${fileType}`);
+  const file = input?.files?.[0];
+  if (!file) { showToast(`No ${fileType.toUpperCase()} file selected`, 'error'); return; }
+
+  let content;
+  try {
+    content = await file.text();
+  } catch {
+    showToast('Could not read file', 'error');
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/design-upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${currentUser.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ menuName: menuRow.name, fileType, content }),
+    });
+    if (!r.ok) {
+      const { error } = await r.json().catch(() => ({}));
+      throw new Error(error || r.status);
+    }
+    showToast(`${fileType.toUpperCase()} uploaded`, 'success');
+    if (input) input.value = '';
+    _refreshCustomDesignStatus();
+  } catch (e) {
+    showToast(`Upload failed: ${e.message}`, 'error');
+  }
+}
+
+async function removeCustomDesign() {
+  const menuId = _adminSwitcherState.design.menuId;
+  const menuRow = _adminAllMenus.find(m => m.id === menuId);
+  if (!menuRow) return;
+  if (!confirm(`Remove custom design files for "${menuRow.name}" and disable custom design?`)) return;
+
+  try {
+    const r = await fetch(
+      `/api/design-upload?menuName=${encodeURIComponent(menuRow.name)}`,
+      {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${currentUser.accessToken}` },
+      }
+    );
+    if (!r.ok) {
+      const { error } = await r.json().catch(() => ({}));
+      throw new Error(error || r.status);
+    }
+    // Disable the flag
+    await toggleCustomDesign(false);
+    const cb = document.getElementById('custom-design-toggle');
+    if (cb) cb.checked = false;
+    _refreshCustomDesignStatus();
+    showToast('Custom design removed', 'success');
+  } catch (e) {
+    showToast(`Remove failed: ${e.message}`, 'error');
+  }
+}
+
+async function _refreshCustomDesignStatus() {
+  const menuId = _adminSwitcherState.design.menuId;
+  const menuRow = _adminAllMenus.find(m => m.id === menuId);
+  if (!menuRow || !SUPABASE_URL) return;
+
+  const sanitized = sanitizeMenuName(menuRow.name);
+  if (!sanitized) return;
+
+  const baseUrl = `${SUPABASE_URL}/storage/v1/object/public/menu-designs`;
+  const [htmlRes, cssRes] = await Promise.all([
+    fetch(`${baseUrl}/${sanitized}_design.html`, { method: 'HEAD' }),
+    fetch(`${baseUrl}/${sanitized}_design.css`,  { method: 'HEAD' }),
+  ]);
+
+  const htmlBadge = document.getElementById('custom-design-html-status');
+  const cssBadge  = document.getElementById('custom-design-css-status');
+  if (htmlBadge) {
+    htmlBadge.textContent  = htmlRes.ok ? 'Uploaded' : 'Not found';
+    htmlBadge.className    = `custom-design-status-badge ${htmlRes.ok ? 'status-ok' : 'status-missing'}`;
+  }
+  if (cssBadge) {
+    cssBadge.textContent  = cssRes.ok ? 'Uploaded' : 'Not found';
+    cssBadge.className    = `custom-design-status-badge ${cssRes.ok ? 'status-ok' : 'status-missing'}`;
   }
 }
 
