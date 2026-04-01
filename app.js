@@ -1625,6 +1625,115 @@ function _renderDefaultPublicView() {
   updateCollapseAllBtn();
 }
 
+function _getVisiblePublicItemsForRoute(categoryId) {
+  const state = menuState[categoryId] || { items: [] };
+  return (state.items || []).filter(item => item.onMenu !== false && item.visibility !== 'off_menu');
+}
+
+function _buildLeroyRouteFeaturedItemsHtml() {
+  const featuredSlots = _featuredGroups.flatMap(group => group.slots || []).filter(slot => slot.item);
+  if (!featuredSlots.length) {
+    const fallbackItems = _getVisiblePublicItemsForRoute('special').slice(0, 2);
+    if (!fallbackItems.length) return '<p class="leroy-route-empty">Nothing featured right now.</p>';
+    return fallbackItems.map((item, index) => {
+      const is86 = !!item.eightySixed;
+      const classes = ['leroy-route-feature-card', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
+      return `<article class="${classes}">
+        <div class="leroy-route-feature-copy">
+          <div class="leroy-route-feature-head">
+            <h4 class="leroy-route-feature-name menu-item-name">${escHtml(item.name)}</h4>
+            ${index === 0 ? '<span class="leroy-route-feature-badge">Chef\'s Choice</span>' : ''}
+          </div>
+          ${item.desc ? `<p class="leroy-route-feature-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+        </div>
+        ${item.price ? `<span class="leroy-route-feature-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+      </article>`;
+    }).join('');
+  }
+
+  return featuredSlots.slice(0, 3).map((slot, index) => {
+    const item = slot.item;
+    const is86 = !!item?.eightySixed;
+    const classes = ['leroy-route-feature-card', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
+    return `<article class="${classes}">
+      <div class="leroy-route-feature-copy">
+        <div class="leroy-route-feature-head">
+          <h4 class="leroy-route-feature-name menu-item-name">${escHtml(item?.name || '')}</h4>
+          ${index === 0 ? '<span class="leroy-route-feature-badge">Featured</span>' : ''}
+          ${is86 ? '<span class="leroy-route-feature-badge leroy-route-feature-badge--muted">86\'d</span>' : ''}
+        </div>
+        ${item?.desc ? `<p class="leroy-route-feature-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+      </div>
+      ${item?.price ? `<span class="leroy-route-feature-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+    </article>`;
+  }).join('');
+}
+
+function _buildLeroyRouteCategoryHtml(cat) {
+  const items = _getVisiblePublicItemsForRoute(cat.id);
+  if (!items.length) return '';
+  const itemsHtml = items.map(item => {
+    const is86 = !!item.eightySixed;
+    const classes = ['leroy-route-item', 'menu-item', is86 ? 'menu-item-86d' : ''].filter(Boolean).join(' ');
+    return `<article class="${classes}">
+      <div class="leroy-route-item-main">
+        <div class="leroy-route-item-head">
+          <h4 class="leroy-route-item-name menu-item-name">${escHtml(item.name)}</h4>
+          ${item.price ? `<span class="leroy-route-item-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+        </div>
+        ${item.desc ? `<p class="leroy-route-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
+      </div>
+      ${is86 ? '<span class="leroy-route-item-flag">86\'d</span>' : ''}
+    </article>`;
+  }).join('');
+  return `<section class="leroy-route-section menu-category" data-category="${escHtml(cat.id)}">
+    <div class="leroy-route-section-head">
+      <div>
+        <h3 class="leroy-route-section-title">${escHtml(cat.title)}</h3>
+        ${cat.sub ? `<p class="leroy-route-section-sub">${escHtml(cat.sub)}</p>` : ''}
+      </div>
+      <span class="leroy-route-section-meta">${escHtml(MENU_TYPE === 'food' ? 'Kitchen' : 'Bar')}</span>
+    </div>
+    <div class="leroy-route-item-list">${itemsHtml}</div>
+  </section>`;
+}
+
+function _renderLeroyRoutePage(container) {
+  const template = document.getElementById('leroy-route-template');
+  if (!template) return false;
+  container.innerHTML = '';
+  container.appendChild(template.content.cloneNode(true));
+
+  const timestamp = getLastUpdatedTs();
+  const timestampText = timestamp ? formatUpdatedAt(timestamp, '') : 'Awaiting first update';
+  const menuNameEl = document.getElementById('leroy-route-menu-name');
+  if (menuNameEl) menuNameEl.textContent = _activeMenuName || "Leroy's Lounge";
+  const statusTsEl = document.getElementById('leroy-route-status-timestamp');
+  if (statusTsEl) statusTsEl.textContent = timestampText;
+  const footerTsEl = document.getElementById('leroy-route-footer-timestamp');
+  if (footerTsEl) footerTsEl.textContent = timestampText;
+  const footerVersionEl = document.getElementById('leroy-route-footer-version');
+  if (footerVersionEl) footerVersionEl.innerHTML = APP_VERSION + (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
+
+  const switchBtn = document.getElementById('leroy-route-switch-btn');
+  if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
+
+  const featuredWrap = document.getElementById('leroy-route-featured');
+  if (featuredWrap) featuredWrap.innerHTML = _buildLeroyRouteFeaturedItemsHtml();
+
+  const categoryWrap = document.getElementById('leroy-route-categories');
+  if (categoryWrap) {
+    const categoriesHtml = CATEGORY_DEFS
+      .filter(cat => cat.id !== 'special')
+      .map(_buildLeroyRouteCategoryHtml)
+      .filter(Boolean)
+      .join('');
+    categoryWrap.innerHTML = categoriesHtml || '<p class="leroy-route-empty">Nothing on the menu yet.</p>';
+  }
+
+  return true;
+}
+
 async function _renderCustomDesignView() {
   const fallbackContainer = document.getElementById('public-categories');
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
@@ -1634,6 +1743,11 @@ async function _renderCustomDesignView() {
   if (!_restaurantCustomDesignEnabled || !assetPaths || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
+    return;
+  }
+
+  if (renderIntoSiteWrapper && _siteRestaurant?.id === RESTAURANTS.LEROYS.id && _renderLeroyRoutePage(container)) {
+    _togglePublicShellMode('site');
     return;
   }
 

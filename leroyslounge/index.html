@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Leroy's Lounge | Current Menu</title>
-<link rel="icon" type="image/png" href="HFLOGO.png">
-<link rel="stylesheet" href="lib/fonts/fonts.css">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="/HFLOGO.png">
+<link rel="stylesheet" href="/lib/fonts/fonts.css">
+<link rel="stylesheet" href="/style.css">
 </head>
-<body class="route-restaurant">
+<body class="route-restaurant route-restaurant--leroy">
 <main id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
     <p class="site-picker-kicker">Current Menu</p>
@@ -19,6 +19,64 @@
     </div>
   </div>
 </main>
+
+<template id="leroy-route-template">
+  <div class="leroy-route-page">
+    <section class="leroy-route-hero">
+      <div class="leroy-route-hero-head">
+        <div class="leroy-route-brand-wrap">
+          <span class="leroy-route-brand-kicker">Leroy's Lounge</span>
+          <h1 class="leroy-route-brand-title">Current Menu</h1>
+          <p class="leroy-route-brand-sub">Late-night tavern fare, fresh pours, and live updates from the line.</p>
+        </div>
+        <div class="leroy-route-hero-meta">
+          <p class="leroy-route-meta-label">Viewing</p>
+          <p class="leroy-route-meta-value" id="leroy-route-menu-name">Leroy's Lounge</p>
+        </div>
+      </div>
+
+      <div class="leroy-route-status">
+        <div class="leroy-route-status-main">
+          <span class="leroy-route-status-dot"></span>
+          <div>
+            <p class="leroy-route-status-label">Kitchen Status</p>
+            <p class="leroy-route-status-value">Live &amp; Service Active</p>
+          </div>
+        </div>
+        <div class="leroy-route-status-side">
+          <p class="leroy-route-status-timestamp">Menu last updated: <span id="leroy-route-status-timestamp">Awaiting first update</span></p>
+          <button id="leroy-route-switch-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="leroy-route-featured-shell">
+      <div class="leroy-route-featured-head">
+        <h2 class="leroy-route-featured-title">Featured Right Now</h2>
+        <span class="leroy-route-featured-kicker">Updated live</span>
+      </div>
+      <div id="leroy-route-featured" class="leroy-route-featured-grid"></div>
+    </section>
+
+    <div id="leroy-route-categories" class="leroy-route-category-grid"></div>
+
+    <section class="leroy-route-quote">
+      <p class="leroy-route-quote-label">Leroy</p>
+      <p class="leroy-route-quote-text">"Leroy was conceived, born and nursed in bars. His mom home schooled him at the bar. He likes hamburgers, chili and french fries. It was time to open his own place."</p>
+    </section>
+
+    <footer class="leroy-route-footer">
+      <div>
+        <p class="leroy-route-footer-brand">Leroy's Lounge</p>
+        <p class="leroy-route-footer-copy">The room changes nightly. The menu keeps up.</p>
+      </div>
+      <div class="leroy-route-footer-meta">
+        <p id="leroy-route-footer-version"></p>
+        <p id="leroy-route-footer-timestamp"></p>
+      </div>
+    </footer>
+  </div>
+</template>
 
 <div class="wrapper" id="app-shell">
   <header>
@@ -579,6 +637,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

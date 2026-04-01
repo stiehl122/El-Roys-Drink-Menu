@@ -82,6 +82,86 @@
   body.route-restaurant.restaurant-public-site .header-signin-btn,
   body.route-restaurant.restaurant-public-site .user-chip { position: static; pointer-events: auto; }
   body.route-restaurant.restaurant-public-site .header-action-group { gap: 8px; }
+  body.route-restaurant--leroy.restaurant-public-site header { top: 18px; right: 18px; }
+  #restaurant-site-wrapper .leroy-route-page { min-height: 100vh; background: radial-gradient(circle at top left, rgba(255,193,7,0.08), transparent 28%), linear-gradient(180deg, #101010 0%, #171717 42%, #101010 100%); color: #efe5d6; padding: 112px 24px 48px; }
+  #restaurant-site-wrapper .leroy-route-hero,
+  #restaurant-site-wrapper .leroy-route-featured-shell,
+  #restaurant-site-wrapper .leroy-route-category-grid,
+  #restaurant-site-wrapper .leroy-route-footer { width: min(1100px, 100%); margin: 0 auto; }
+  #restaurant-site-wrapper .leroy-route-hero-head,
+  #restaurant-site-wrapper .leroy-route-status,
+  #restaurant-site-wrapper .leroy-route-footer { display: flex; justify-content: space-between; gap: 24px; }
+  #restaurant-site-wrapper .leroy-route-brand-kicker { display: inline-block; color: #8fe789; font-size: 12px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; margin-bottom: 12px; }
+  #restaurant-site-wrapper .leroy-route-brand-title { font-family: "Epilogue", var(--font-heading); font-size: clamp(56px, 9vw, 110px); line-height: 0.92; text-transform: uppercase; letter-spacing: -0.04em; color: #ffe4af; margin: 0; }
+  #restaurant-site-wrapper .leroy-route-brand-sub { max-width: 560px; color: rgba(239,229,214,0.72); font-size: 16px; line-height: 1.7; margin: 18px 0 0; }
+  #restaurant-site-wrapper .leroy-route-hero-meta { align-self: flex-end; text-align: right; }
+  #restaurant-site-wrapper .leroy-route-meta-label,
+  #restaurant-site-wrapper .leroy-route-status-label,
+  #restaurant-site-wrapper .leroy-route-quote-label,
+  #restaurant-site-wrapper .leroy-route-featured-kicker { color: rgba(239,229,214,0.6); font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; }
+  #restaurant-site-wrapper .leroy-route-meta-value { font-family: "Epilogue", var(--font-heading); font-size: 24px; color: #fff; margin: 8px 0 0; }
+  #restaurant-site-wrapper .leroy-route-status { margin-top: 36px; align-items: center; background: rgba(28,27,27,0.92); border: 1px solid rgba(255,228,175,0.16); border-radius: 18px; padding: 22px 24px; box-shadow: 0 18px 40px rgba(0,0,0,0.24); }
+  #restaurant-site-wrapper .leroy-route-status-main,
+  #restaurant-site-wrapper .leroy-route-status-side { display: flex; align-items: center; gap: 16px; }
+  #restaurant-site-wrapper .leroy-route-status-side { flex-wrap: wrap; justify-content: flex-end; }
+  #restaurant-site-wrapper .leroy-route-status-dot { width: 12px; height: 12px; border-radius: 999px; background: #91ff89; box-shadow: 0 0 0 8px rgba(145,255,137,0.14); }
+  #restaurant-site-wrapper .leroy-route-status-value { margin: 4px 0 0; font-size: 20px; font-weight: 700; color: #91ff89; }
+  #restaurant-site-wrapper .leroy-route-status-timestamp { margin: 0; color: rgba(239,229,214,0.7); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  #restaurant-site-wrapper .leroy-route-featured-shell { margin-top: 52px; }
+  #restaurant-site-wrapper .leroy-route-featured-head,
+  #restaurant-site-wrapper .leroy-route-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+  #restaurant-site-wrapper .leroy-route-featured-title,
+  #restaurant-site-wrapper .leroy-route-section-title { font-family: "Epilogue", var(--font-heading); font-size: clamp(28px, 4vw, 44px); letter-spacing: -0.04em; color: #ffe4af; margin: 0; text-transform: uppercase; }
+  #restaurant-site-wrapper .leroy-route-featured-grid,
+  #restaurant-site-wrapper .leroy-route-category-grid { display: grid; gap: 22px; }
+  #restaurant-site-wrapper .leroy-route-featured-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #restaurant-site-wrapper .leroy-route-feature-card,
+  #restaurant-site-wrapper .leroy-route-section { background: rgba(32,32,31,0.9); border: 1px solid rgba(79,70,50,0.36); border-radius: 22px; padding: 24px; }
+  #restaurant-site-wrapper .leroy-route-feature-card.menu-item-86d,
+  #restaurant-site-wrapper .leroy-route-item.menu-item-86d { opacity: 0.52; filter: grayscale(1); }
+  #restaurant-site-wrapper .leroy-route-feature-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  #restaurant-site-wrapper .leroy-route-feature-name,
+  #restaurant-site-wrapper .leroy-route-item-name { font-family: "Epilogue", var(--font-heading); color: #fff; margin: 0; }
+  #restaurant-site-wrapper .leroy-route-feature-name { font-size: 30px; }
+  #restaurant-site-wrapper .leroy-route-item-name { font-size: 22px; }
+  #restaurant-site-wrapper .leroy-route-feature-badge,
+  #restaurant-site-wrapper .leroy-route-item-flag,
+  #restaurant-site-wrapper .leroy-route-section-meta { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 10px; font-size: 10px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+  #restaurant-site-wrapper .leroy-route-feature-badge { background: rgba(255,193,7,0.12); color: #ffe4af; border: 1px solid rgba(255,228,175,0.14); }
+  #restaurant-site-wrapper .leroy-route-feature-badge--muted,
+  #restaurant-site-wrapper .leroy-route-item-flag { background: rgba(255,180,171,0.14); color: #ffb4ab; }
+  #restaurant-site-wrapper .leroy-route-feature-desc,
+  #restaurant-site-wrapper .leroy-route-item-desc,
+  #restaurant-site-wrapper .leroy-route-section-sub,
+  #restaurant-site-wrapper .leroy-route-empty,
+  #restaurant-site-wrapper .leroy-route-footer-copy,
+  #restaurant-site-wrapper #leroy-route-footer-timestamp,
+  #restaurant-site-wrapper #leroy-route-footer-version { color: rgba(239,229,214,0.7); }
+  #restaurant-site-wrapper .leroy-route-feature-desc,
+  #restaurant-site-wrapper .leroy-route-item-desc { line-height: 1.7; margin: 0; }
+  #restaurant-site-wrapper .leroy-route-feature-price,
+  #restaurant-site-wrapper .leroy-route-item-price { font-family: "Space Grotesk", var(--font-body); color: #ffe4af; font-size: 22px; font-weight: 700; flex-shrink: 0; }
+  #restaurant-site-wrapper .leroy-route-category-grid { margin-top: 24px; }
+  #restaurant-site-wrapper .leroy-route-item-list { display: grid; gap: 16px; }
+  #restaurant-site-wrapper .leroy-route-item { display: flex; justify-content: space-between; gap: 18px; padding-top: 16px; border-top: 1px solid rgba(79,70,50,0.34); }
+  #restaurant-site-wrapper .leroy-route-item:first-child { border-top: 0; padding-top: 0; }
+  #restaurant-site-wrapper .leroy-route-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 6px; }
+  #restaurant-site-wrapper .leroy-route-quote { width: min(900px, calc(100% - 48px)); margin: 60px auto 0; padding: 32px 28px; background: linear-gradient(rgba(28,27,27,0.92), rgba(28,27,27,0.92)), radial-gradient(circle at top left, rgba(255,193,7,0.16), transparent 58%); border: 1px solid rgba(79,70,50,0.36); border-radius: 22px; text-align: center; }
+  #restaurant-site-wrapper .leroy-route-quote-text { color: rgba(239,229,214,0.88); font-size: 18px; font-style: italic; line-height: 1.8; max-width: 740px; margin: 12px auto 0; }
+  #restaurant-site-wrapper .leroy-route-footer { margin-top: 44px; padding: 24px 0 4px; border-top: 1px solid rgba(79,70,50,0.36); align-items: flex-end; }
+  #restaurant-site-wrapper .leroy-route-footer-brand { font-family: "Epilogue", var(--font-heading); color: #ffe4af; font-size: 24px; margin: 0; text-transform: uppercase; }
+  #restaurant-site-wrapper .leroy-route-footer-meta { text-align: right; }
+  @media (max-width: 900px) {
+    #restaurant-site-wrapper .leroy-route-page { padding: 96px 16px 40px; }
+    #restaurant-site-wrapper .leroy-route-hero-head,
+    #restaurant-site-wrapper .leroy-route-status,
+    #restaurant-site-wrapper .leroy-route-footer,
+    #restaurant-site-wrapper .leroy-route-item-head { flex-direction: column; align-items: flex-start; }
+    #restaurant-site-wrapper .leroy-route-hero-meta,
+    #restaurant-site-wrapper .leroy-route-footer-meta { text-align: left; }
+    #restaurant-site-wrapper .leroy-route-featured-grid { grid-template-columns: 1fr; }
+    #restaurant-site-wrapper .leroy-route-item { flex-direction: column; }
+  }
 
   /* ── HEADER ── */
   header { background: var(--teal); margin: 0 -16px; padding: 24px 24px 20px; text-align: center; margin-bottom: 22px; position: relative; border-radius: 0 0 22px 22px; box-shadow: 0 6px 24px rgba(18,133,120,0.28); }
