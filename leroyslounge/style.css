@@ -311,6 +311,12 @@
 }
 
 #restaurant-site-wrapper .ll-board-section {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
   margin-bottom: 2.5rem;
 }
 
@@ -318,6 +324,10 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   margin-bottom: 1rem;
 }
 

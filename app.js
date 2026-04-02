@@ -2203,6 +2203,13 @@ function _setDisplayBySelector(selector, display) {
   });
 }
 
+function _setDisplayBySelectorFiltered(selector, display, predicate) {
+  document.querySelectorAll(selector).forEach(el => {
+    if (typeof predicate === 'function' && !predicate(el)) return;
+    el.style.display = display;
+  });
+}
+
 function renderUserHeader() {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
@@ -2222,7 +2229,7 @@ function renderUserHeader() {
 
   _setDisplayById('signin-btn', signedIn ? 'none' : '');
   _setDisplayById('user-chip', signedIn ? '' : 'none');
-  _setDisplayBySelector('[data-route-signin]', signedIn ? 'none' : '');
+  _setDisplayBySelectorFiltered('[data-route-signin]', signedIn ? 'none' : '', el => !el.hasAttribute('data-route-signin-persistent'));
   _setDisplayBySelector('[data-route-user-chip]', signedIn ? '' : 'none');
 
   const actionBtn = document.getElementById('action-btn');
