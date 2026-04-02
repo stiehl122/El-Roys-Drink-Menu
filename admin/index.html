@@ -482,9 +482,12 @@
 <!-- MENU PICKER OVERLAY -->
 <div id="menu-picker-overlay">
   <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
-    <h2 class="picker-title">SELECT A MENU</h2>
-    <p class="picker-subtitle">Choose which menu to view</p>
+    <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
+    <p class="picker-subtitle" id="picker-subtitle">Choose which menu to view</p>
     <div id="picker-menu-list" class="picker-menu-list"></div>
+    <div class="picker-actions">
+      <button type="button" class="btn-small picker-close-btn" id="picker-close-btn" onclick="closeMenuPicker()" style="display:none">Cancel</button>
+    </div>
   </div>
 </div>
 

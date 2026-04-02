@@ -58,6 +58,9 @@ let _visibilityHandler = null;      // Page Visibility API handler for smart pol
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
+let _pickerOnClose     = null;
+let _settingsRedirectTimer = null;
+let _settingsRedirectCleanup = null;
 
 let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
@@ -371,7 +374,7 @@ function showPickerPage() {
   const appShell = document.getElementById('app-shell');
   if (appShell) appShell.style.display = 'none';
   document.getElementById('auth-overlay')?.classList.remove('open');
-  document.getElementById('menu-picker-overlay')?.classList.remove('open');
+  closeMenuPicker({ skipOnClose: true });
   document.title = 'Choose a Restaurant | Current Menu';
 }
 
@@ -1524,20 +1527,115 @@ function _setLoadingMessage(message, opts = {}) {
   if (textEl) textEl.textContent = message;
 }
 
-async function _ensureSettingsPageMenuContext() {
-  if (_appPageMode === 'admin') {
-    if (!KNOWN_MENU_ORDER.includes(MENU_ID)) MENU_ID = KNOWN_MENU_ORDER[0] || '';
-  } else {
-    const accessibleIds = currentUser?.accessibleMenuIds || [];
-    if (!accessibleIds.length) return false;
-    if (!accessibleIds.includes(MENU_ID)) MENU_ID = accessibleIds[0];
-  }
-  if (!MENU_ID) return false;
+function getAccessibleManagerMenuIds() {
+  if (currentUser?.role === 'admin') return [...KNOWN_MENU_ORDER];
+  return normalizeAccessibleMenuIds(currentUser?.accessibleMenuIds);
+}
+
+async function _loadSettingsPageMenuContext(menuId) {
+  if (!KNOWN_MENU_ORDER.includes(menuId)) return false;
+  const fallbackMenu = knownMenuList().find(menu => menu.id === menuId) || null;
+  MENU_ID = menuId;
   lsSet(LS_KEYS.menuId, MENU_ID);
+  if (fallbackMenu) {
+    if (setActiveMenuContext(fallbackMenu.name, fallbackMenu.type, fallbackMenu.restaurantId) === false) return false;
+    const url = new URL(location.href);
+    url.searchParams.set('menu', fallbackMenu.slug);
+    history.replaceState({}, '', url.toString());
+  }
   await sbResolveMenu();
+  if (!MENU_ID) return false;
   await loadActiveMenuState();
   applyDesign(currentDesign);
   return true;
+}
+
+function _clearSettingsRedirectPrompt() {
+  if (_settingsRedirectTimer) {
+    clearTimeout(_settingsRedirectTimer);
+    _settingsRedirectTimer = null;
+  }
+  if (typeof _settingsRedirectCleanup === 'function') {
+    _settingsRedirectCleanup();
+    _settingsRedirectCleanup = null;
+  }
+}
+
+function _showSettingsRedirectMessage(message) {
+  _clearSettingsRedirectPrompt();
+  isManagerMode = false;
+  isAdminMode = false;
+  document.body.classList.remove('manager-mode');
+  renderUserHeader();
+
+  const publicView = document.getElementById('public-view');
+  const managerView = document.getElementById('manager-view');
+  if (publicView) publicView.style.display = 'none';
+  if (managerView) managerView.style.display = 'none';
+
+  closeMenuPicker({ skipOnClose: true });
+  _setLoadingMessage(`${message} Redirecting to the menu selector…`, { hideSpinner: true });
+
+  const loadingView = document.getElementById('loading-view');
+  const redirectNow = () => {
+    _clearSettingsRedirectPrompt();
+    navigateToPage('/');
+  };
+
+  if (loadingView) {
+    const onClick = () => redirectNow();
+    const onKeyDown = e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      redirectNow();
+    };
+    loadingView.classList.add('loading-view-actionable');
+    loadingView.tabIndex = 0;
+    loadingView.setAttribute('role', 'button');
+    loadingView.setAttribute('aria-label', 'Return to the restaurant selector');
+    loadingView.addEventListener('click', onClick);
+    loadingView.addEventListener('keydown', onKeyDown);
+    _settingsRedirectCleanup = () => {
+      loadingView.classList.remove('loading-view-actionable');
+      loadingView.removeAttribute('tabindex');
+      loadingView.removeAttribute('role');
+      loadingView.removeAttribute('aria-label');
+      loadingView.removeEventListener('click', onClick);
+      loadingView.removeEventListener('keydown', onKeyDown);
+    };
+  }
+
+  _settingsRedirectTimer = setTimeout(redirectNow, 3000);
+}
+
+function showAdminAccessDenied(message = 'Admin access required for this page.') {
+  _showSettingsRedirectMessage(message);
+}
+
+function showManagerAccessDenied(message = 'Manager access required for this page.') {
+  _showSettingsRedirectMessage(message);
+}
+
+async function showManagerMenuSelector(menuIds) {
+  const accessibleMenuIds = normalizeAccessibleMenuIds(menuIds);
+  const entryMenuIds = accessibleMenuIds.length ? accessibleMenuIds : getAccessibleManagerMenuIds();
+  showMenuPicker(async () => {
+    _managerMenuPicked = true;
+    _setLoadingMessage('Loading settings…');
+    const hasMenuContext = await _loadSettingsPageMenuContext(MENU_ID);
+    if (!hasMenuContext) {
+      showManagerAccessDenied('Selected menu is no longer available for this account.');
+      return;
+    }
+    enterManager();
+  }, {
+    menuIds: entryMenuIds,
+    title: 'CHOOSE MENU TO EDIT',
+    subtitle: 'Select the menu you want to manage.',
+    closeLabel: 'Back to menu selector',
+    emptyMessage: 'No accessible menus found.',
+    onClose: () => navigateToPage('/'),
+  });
 }
 
 async function _syncRequestedPageMode() {
@@ -1547,6 +1645,7 @@ async function _syncRequestedPageMode() {
   const managerView = document.getElementById('manager-view');
   if (!publicView || !managerView) return;
 
+  _clearSettingsRedirectPrompt();
   renderUserHeader();
 
   if (!currentUser) {
@@ -1561,33 +1660,55 @@ async function _syncRequestedPageMode() {
   }
 
   const isAdmin = currentUser.role === 'admin';
-  const hasManagerAccess = isAdmin || (currentUser.accessibleMenuIds || []).length > 0;
-  const allowed = _appPageMode === 'admin' ? isAdmin : hasManagerAccess;
+  const isManager = currentUser.role === 'manager';
 
-  if (!allowed) {
-    isManagerMode = false;
-    isAdminMode = false;
-    document.body.classList.remove('manager-mode');
-    publicView.style.display = 'none';
-    managerView.style.display = 'none';
-    _setLoadingMessage(
-      _appPageMode === 'admin' ? 'Admin access required for this page.' : 'Manager access required for this page.',
-      { hideSpinner: true }
-    );
+  if (_appPageMode === 'admin') {
+    if (!isAdmin) {
+      showAdminAccessDenied();
+      return;
+    }
+
+    _setLoadingMessage('Loading settings…');
+    const targetMenuId = KNOWN_MENU_ORDER.includes(MENU_ID) ? MENU_ID : (KNOWN_MENU_ORDER[0] || '');
+    const hasMenuContext = await _loadSettingsPageMenuContext(targetMenuId);
+    if (!hasMenuContext) {
+      showAdminAccessDenied('No menu context available for this page.');
+      return;
+    }
+    enterAdmin();
     return;
   }
 
-  _setLoadingMessage('Loading settings…');
-  const hasMenuContext = await _ensureSettingsPageMenuContext();
-  if (!hasMenuContext) {
-    publicView.style.display = 'none';
-    managerView.style.display = 'none';
-    _setLoadingMessage('No accessible menu found for this account.', { hideSpinner: true });
+  if (!isAdmin && !isManager) {
+    showManagerAccessDenied();
     return;
   }
 
-  if (_appPageMode === 'admin') enterAdmin();
-  else enterManager();
+  const accessibleMenuIds = getAccessibleManagerMenuIds();
+  if (!accessibleMenuIds.length) {
+    showManagerAccessDenied('No accessible menu found for this account.');
+    return;
+  }
+
+  if (accessibleMenuIds.length === 1) {
+    _managerMenuPicked = false;
+    _setLoadingMessage('Loading settings…');
+    const hasMenuContext = await _loadSettingsPageMenuContext(accessibleMenuIds[0]);
+    if (!hasMenuContext) {
+      showManagerAccessDenied('Selected menu is no longer available for this account.');
+      return;
+    }
+    enterManager();
+    return;
+  }
+
+  isManagerMode = false;
+  isAdminMode = false;
+  document.body.classList.remove('manager-mode');
+  publicView.style.display = 'none';
+  managerView.style.display = 'none';
+  _setLoadingMessage('Select a menu to manage.', { hideSpinner: true });
+  showManagerMenuSelector(accessibleMenuIds);
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
@@ -2316,11 +2437,12 @@ function enterAdmin() {
   _togglePublicShellMode('default');
   if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
   isAdminMode = true;
+  _clearSettingsRedirectPrompt();
   stopPolling();
   document.body.classList.add('manager-mode');
   document.getElementById('public-view').style.display     = 'none';
   document.getElementById('loading-view').style.display    = 'none';
-  document.getElementById('menu-picker-overlay').classList.remove('open');
+  closeMenuPicker({ skipOnClose: true });
   managerView.style.display    = 'block';
   managerPanel.style.display   = 'none';
   adminPanel.style.display     = 'block';
@@ -2444,6 +2566,7 @@ function _pickerFocusTrap(e) {
   if (e.key === 'Escape') { closeMenuPicker(); return; }
   if (e.key !== 'Tab') return;
   const box = document.querySelector('#menu-picker-overlay .picker-box');
+  if (!box) return;
   const focusable = Array.from(
     box.querySelectorAll('button, [tabindex]:not([tabindex="-1"])')
   ).filter(el => !el.disabled && el.offsetParent !== null);
@@ -2457,22 +2580,58 @@ function _pickerFocusTrap(e) {
   }
 }
 
+function _setMenuPickerContent(opts = {}) {
+  const titleEl = document.getElementById('picker-title');
+  const subtitleEl = document.getElementById('picker-subtitle');
+  const closeBtn = document.getElementById('picker-close-btn');
+  const box = document.querySelector('#menu-picker-overlay .picker-box');
+  const title = opts.title || 'SELECT A MENU';
+  const subtitle = opts.subtitle || 'Choose which menu to view';
+
+  if (titleEl) titleEl.textContent = title;
+  if (subtitleEl) subtitleEl.textContent = subtitle;
+  if (box) box.setAttribute('aria-label', title);
+
+  if (closeBtn) {
+    closeBtn.textContent = opts.closeLabel || 'Cancel';
+    closeBtn.style.display = typeof _pickerOnClose === 'function' ? '' : 'none';
+  }
+}
+
 // afterSelect: optional callback fired after the user picks a menu.
 // opts.managerOnly: when true, filter to accessible menus only (used by manager switch).
 async function showMenuPicker(afterSelect, opts) {
   const managerOnly = opts?.managerOnly || false;
+  const menuIds = normalizeAccessibleMenuIds(opts?.menuIds);
   _pickerFocusBefore = document.activeElement;
   _pickerOnSelect    = afterSelect || null;
+  _pickerOnClose     = typeof opts?.onClose === 'function' ? opts.onClose : null;
+
+  _setMenuPickerContent(opts);
 
   const list = document.getElementById('picker-menu-list');
+  if (!list) return;
   list.innerHTML = '<p class="picker-loading">Loading…</p>';
   document.getElementById('menu-picker-overlay').classList.add('open');
+  document.removeEventListener('keydown', _pickerFocusTrap);
   document.addEventListener('keydown', _pickerFocusTrap);
 
   let menus = [];
-  if (SUPABASE_URL) {
-    const accessibleIds = currentUser?.accessibleMenuIds || [];
-    let url = `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`;
+  if (menuIds.length) {
+    menus = sortKnownMenus(
+      knownMenuList()
+        .filter(menu => menuIds.includes(menu.id))
+        .map(menu => ({
+          id: menu.id,
+          name: menu.name,
+          slug: menu.slug,
+          type: menu.type,
+          restaurant_id: menu.restaurantId,
+          archived: false,
+        }))
+    );
+  } else if (SUPABASE_URL) {
+    const url = `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`;
     try {
       const res = await fetch(url, { headers: sbHeaders() });
       if (res.ok) menus = sortKnownMenus(await res.json());
@@ -2486,10 +2645,14 @@ async function showMenuPicker(afterSelect, opts) {
     const allowed = new Set(currentUser?.accessibleMenuIds || []);
     menus = menus.filter(menu => allowed.has(menu.id));
   }
+  if (menuIds.length) {
+    const allowed = new Set(menuIds);
+    menus = menus.filter(menu => allowed.has(menu.id));
+  }
 
   list.innerHTML = '';
   if (!menus.length) {
-    list.innerHTML = '<p class="picker-empty">No menus available.</p>';
+    list.innerHTML = `<p class="picker-empty">${escHtml(opts?.emptyMessage || 'No menus available.')}</p>`;
   } else {
     knownRestaurantList().forEach(restaurant => {
       const sectionMenus = menus.filter(menu => menu.restaurant_id === restaurant.id);
@@ -2519,25 +2682,30 @@ async function showMenuPicker(afterSelect, opts) {
   }
 }
 
-function closeMenuPicker() {
-  document.getElementById('menu-picker-overlay').classList.remove('open');
+function closeMenuPicker(opts = {}) {
+  const overlay = document.getElementById('menu-picker-overlay');
+  if (overlay) overlay.classList.remove('open');
   document.removeEventListener('keydown', _pickerFocusTrap);
+  const onClose = opts.skipOnClose ? null : _pickerOnClose;
+  _pickerOnClose = null;
+  _setMenuPickerContent({});
   if (_pickerFocusBefore?.focus) _pickerFocusBefore.focus();
   _pickerFocusBefore = null;
+  _pickerOnSelect = null;
+  if (onClose) onClose();
 }
 
 function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
+  const cb = _pickerOnSelect;
   MENU_ID       = menuId;
   setActiveMenuContext(menuName || '', menuType || 'drinks', restaurantId || '');
   lsSet(LS_KEYS.menuId, MENU_ID);
   const url = new URL(location.href);
   url.searchParams.set('menu', slug);
   history.replaceState({}, '', url.toString());
-  closeMenuPicker();
+  closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
   renderUserHeader();
-  const cb = _pickerOnSelect;
-  _pickerOnSelect = null;
   if (cb) cb();
 }
 
@@ -2783,11 +2951,12 @@ function enterManager() {
   }
   if (isAdminMode) { isAdminMode = false; }
   isManagerMode = true;
+  _clearSettingsRedirectPrompt();
   stopPolling();
   document.body.classList.add('manager-mode');
   document.getElementById('public-view').style.display    = 'none';
   document.getElementById('loading-view').style.display   = 'none';
-  document.getElementById('menu-picker-overlay').classList.remove('open');
+  closeMenuPicker({ skipOnClose: true });
   managerView.style.display   = 'block';
   managerPanel.style.display  = 'block';
   adminPanel.style.display    = 'none';
