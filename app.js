@@ -52,6 +52,7 @@ let _activeRestaurantName = '';     // display name of the currently loaded rest
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
 let MENU_TYPE          = 'drinks';  // 'drinks' | 'food'
 let _siteRestaurant    = null;      // restaurant implied by the current pathname
+let _appPageMode       = 'public';  // 'picker' | 'public' | 'manager' | 'admin'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _restaurantCustomDesignEnabled = true; // cached restaurants.use_custom_design for the active restaurant
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
@@ -107,6 +108,10 @@ const LEGACY_MENU_SLUG_ALIASES = {
 const SITE_PATHS = {
   [RESTAURANTS.LEROYS.id]: '/leroyslounge',
   [RESTAURANTS.ELROYS.id]: '/elroyscantina',
+};
+const SHARED_PAGE_PATHS = {
+  manager: '/manager',
+  admin: '/admin',
 };
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
@@ -229,8 +234,48 @@ function getSiteRestaurantFromPath(pathname = window.location.pathname) {
   return null;
 }
 
+function getAppPageModeFromPath(pathname = window.location.pathname) {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  if (
+    normalizedPath === SHARED_PAGE_PATHS.manager ||
+    normalizedPath === `${SHARED_PAGE_PATHS.manager}.html` ||
+    normalizedPath === `${SHARED_PAGE_PATHS.manager}/index.html`
+  ) return 'manager';
+  if (
+    normalizedPath === SHARED_PAGE_PATHS.admin ||
+    normalizedPath === `${SHARED_PAGE_PATHS.admin}.html` ||
+    normalizedPath === `${SHARED_PAGE_PATHS.admin}/index.html`
+  ) return 'admin';
+  return isRootSitePath(normalizedPath) ? 'picker' : 'public';
+}
+
 function isRootSitePath(pathname = window.location.pathname) {
   return (pathname.replace(/\/+$/, '') || '/') === '/';
+}
+
+function isSettingsPage() {
+  return _appPageMode === 'manager' || _appPageMode === 'admin';
+}
+
+function getDefaultPublicPath() {
+  if (RESTAURANT_ID && SITE_PATHS[RESTAURANT_ID]) return SITE_PATHS[RESTAURANT_ID];
+  if (_siteRestaurant?.id && SITE_PATHS[_siteRestaurant.id]) return SITE_PATHS[_siteRestaurant.id];
+  return '/';
+}
+
+function getPublicHrefForCurrentMenu() {
+  const menu = knownMenuList().find(entry => entry.id === MENU_ID) || null;
+  const basePath = menu?.restaurantId && SITE_PATHS[menu.restaurantId]
+    ? SITE_PATHS[menu.restaurantId]
+    : getDefaultPublicPath();
+  if (!menu?.slug) return basePath;
+  const url = new URL(basePath, window.location.origin);
+  url.searchParams.set('menu', menu.slug);
+  return `${url.pathname}${url.search}`;
+}
+
+function navigateToPage(path) {
+  window.location.assign(path);
 }
 
 function getDefaultMenuForRestaurant(restaurant) {
@@ -1224,8 +1269,9 @@ function migrateLocalStorage() {
 }
 
 async function init() {
+  _appPageMode = getAppPageModeFromPath();
   _siteRestaurant = getSiteRestaurantFromPath();
-  if (isRootSitePath()) {
+  if (_appPageMode === 'picker') {
     showPickerPage();
     return;
   }
@@ -1277,6 +1323,7 @@ async function init() {
   // Restore Supabase session — recovery callback takes priority over stored tokens
   const handledRecovery = await _tryHandleRecoveryCallback();
   if (!handledRecovery) await _tryRestoreSession();
+  await _syncRequestedPageMode();
 }
 
 async function _tryHandleRecoveryCallback() {
@@ -1335,6 +1382,7 @@ async function _tryRestoreSession() {
     }
     _applySession(data, role, name, accessibleMenuIds);
     applyRole(role);
+    await _syncRequestedPageMode();
   };
 
   try {
@@ -1375,6 +1423,82 @@ function showPublicViewWithError(msg) {
   el.textContent = msg;
   el.classList.add('visible');
   renderPublicView();
+}
+
+function _setLoadingMessage(message, opts = {}) {
+  const loadingView = document.getElementById('loading-view');
+  if (!loadingView) return;
+  const spinner = loadingView.querySelector('.spinner');
+  const textEl = loadingView.querySelector('p');
+  loadingView.style.display = 'block';
+  if (spinner) spinner.style.display = opts.hideSpinner ? 'none' : '';
+  if (textEl) textEl.textContent = message;
+}
+
+async function _ensureSettingsPageMenuContext() {
+  if (_appPageMode === 'admin') {
+    if (!KNOWN_MENU_ORDER.includes(MENU_ID)) MENU_ID = KNOWN_MENU_ORDER[0] || '';
+  } else {
+    const accessibleIds = currentUser?.accessibleMenuIds || [];
+    if (!accessibleIds.length) return false;
+    if (!accessibleIds.includes(MENU_ID)) MENU_ID = accessibleIds[0];
+  }
+  if (!MENU_ID) return false;
+  lsSet(LS_KEYS.menuId, MENU_ID);
+  await sbResolveMenu();
+  await loadActiveMenuState();
+  applyDesign(currentDesign);
+  return true;
+}
+
+async function _syncRequestedPageMode() {
+  if (!isSettingsPage()) return;
+
+  const publicView = document.getElementById('public-view');
+  const managerView = document.getElementById('manager-view');
+  if (!publicView || !managerView) return;
+
+  renderUserHeader();
+
+  if (!currentUser) {
+    isManagerMode = false;
+    isAdminMode = false;
+    document.body.classList.remove('manager-mode');
+    publicView.style.display = 'none';
+    managerView.style.display = 'none';
+    _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
+    openAuthOverlay('signin');
+    return;
+  }
+
+  const isAdmin = currentUser.role === 'admin';
+  const hasManagerAccess = isAdmin || (currentUser.accessibleMenuIds || []).length > 0;
+  const allowed = _appPageMode === 'admin' ? isAdmin : hasManagerAccess;
+
+  if (!allowed) {
+    isManagerMode = false;
+    isAdminMode = false;
+    document.body.classList.remove('manager-mode');
+    publicView.style.display = 'none';
+    managerView.style.display = 'none';
+    _setLoadingMessage(
+      _appPageMode === 'admin' ? 'Admin access required for this page.' : 'Manager access required for this page.',
+      { hideSpinner: true }
+    );
+    return;
+  }
+
+  _setLoadingMessage('Loading settings…');
+  const hasMenuContext = await _ensureSettingsPageMenuContext();
+  if (!hasMenuContext) {
+    publicView.style.display = 'none';
+    managerView.style.display = 'none';
+    _setLoadingMessage('No accessible menu found for this account.', { hideSpinner: true });
+    return;
+  }
+
+  if (_appPageMode === 'admin') enterAdmin();
+  else enterManager();
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
@@ -1910,6 +2034,7 @@ function renderUserHeader() {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
   const isAdmin   = role === 'admin';
+  const isSettingsRoute = isSettingsPage();
   const name      = currentUser?.name || '';
   const parts     = name.trim().split(/\s+/).filter(Boolean);
   const initials  = parts.length >= 2
@@ -1932,7 +2057,7 @@ function renderUserHeader() {
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && hasMenuAccess) ? '' : 'none';
-    actionBtn.textContent   = isManagerMode ? '✕ Exit' : '⚙ Manager';
+    actionBtn.textContent   = (isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager';
     actionBtn.classList.toggle('active', isManagerMode);
   }
   if (adminBtn) {
@@ -1976,14 +2101,25 @@ function applyRole(role) {
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
-  if (isManagerMode) exitView(); else enterManager();
+  if (_appPageMode !== 'manager') {
+    navigateToPage(SHARED_PAGE_PATHS.manager);
+  }
 }
 
 function onAdminBtnClick() {
-  if (isAdminMode) exitView(); else enterAdmin();
+  if (_appPageMode !== 'admin') {
+    navigateToPage(SHARED_PAGE_PATHS.admin);
+  }
 }
 
 function enterAdmin() {
+  const managerView = document.getElementById('manager-view');
+  const managerPanel = document.getElementById('manager-panel');
+  const adminPanel = document.getElementById('admin-panel');
+  if (!managerView || !managerPanel || !adminPanel) {
+    navigateToPage(SHARED_PAGE_PATHS.admin);
+    return;
+  }
   document.getElementById('custom-design-style')?.remove();
   _togglePublicShellMode('default');
   if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
@@ -1993,9 +2129,9 @@ function enterAdmin() {
   document.getElementById('public-view').style.display     = 'none';
   document.getElementById('loading-view').style.display    = 'none';
   document.getElementById('menu-picker-overlay').classList.remove('open');
-  document.getElementById('manager-view').style.display    = 'block';
-  document.getElementById('manager-panel').style.display   = 'none';
-  document.getElementById('admin-panel').style.display     = 'block';
+  managerView.style.display    = 'block';
+  managerPanel.style.display   = 'none';
+  adminPanel.style.display     = 'block';
   renderUserHeader();
   checkAdminSupabaseStatus();
   switchAdminTab('admin-restaurants');
@@ -2007,6 +2143,10 @@ function exitAdmin() {
   document.getElementById('manager-view').style.display = 'none';
   _setRestaurantPublicMode(false);
   renderUserHeader();
+  if (isSettingsPage()) {
+    navigateToPage(getPublicHrefForCurrentMenu());
+    return;
+  }
   showPublicView();
 }
 
@@ -2268,6 +2408,7 @@ async function handleSignIn() {
     _applySession(data, role, name, accessibleMenuIds);
     closeAuthOverlay();
     applyRole(role);
+    await _syncRequestedPageMode();
     if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
   } catch(err) {
     const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
@@ -2343,6 +2484,7 @@ async function handleResetPassword() {
     _recoverySessionData = null;
     closeAuthOverlay();
     applyRole(role);
+    await _syncRequestedPageMode();
     showToast('Password updated. You are now signed in.', 'info');
   } catch(err) {
     const msg = err?.msg || err?.error_description || err?.message || 'Failed to update password.';
@@ -2364,10 +2506,18 @@ function signOut() {
   localStorage.removeItem(LS_KEYS.email);
   if (isManagerMode || isAdminMode) exitView();
   renderUserHeader();
+  _syncRequestedPageMode();
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
+  const managerView = document.getElementById('manager-view');
+  const managerPanel = document.getElementById('manager-panel');
+  const adminPanel = document.getElementById('admin-panel');
+  if (!managerView || !managerPanel || !adminPanel) {
+    navigateToPage(SHARED_PAGE_PATHS.manager);
+    return;
+  }
   document.getElementById('custom-design-style')?.remove();
   _togglePublicShellMode('default');
   if (!MENU_ID) {
@@ -2388,9 +2538,9 @@ function enterManager() {
   document.getElementById('public-view').style.display    = 'none';
   document.getElementById('loading-view').style.display   = 'none';
   document.getElementById('menu-picker-overlay').classList.remove('open');
-  document.getElementById('manager-view').style.display   = 'block';
-  document.getElementById('manager-panel').style.display  = 'block';
-  document.getElementById('admin-panel').style.display    = 'none';
+  managerView.style.display   = 'block';
+  managerPanel.style.display  = 'block';
+  adminPanel.style.display    = 'none';
   renderUserHeader();
   switchManagerTab('edit-menu');
   updateDraftIndicator();
@@ -2406,6 +2556,10 @@ function exitManager() {
   document.getElementById('manager-view').style.display = 'none';
   _setRestaurantPublicMode(false);
   renderUserHeader();
+  if (isSettingsPage()) {
+    navigateToPage(getPublicHrefForCurrentMenu());
+    return;
+  }
   showPublicView();
 }
 

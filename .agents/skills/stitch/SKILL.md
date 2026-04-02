@@ -70,6 +70,7 @@ That means:
 - use Stitch fonts, logos, textures, and other visual assets whenever available
 - keep the Stitch section hierarchy and spacing
 - keep the Stitch item presentation unless functionality forces a change
+- inspect the Stitch screen for explicit item-state treatments, including unavailable or 86'd items, and preserve those treatments when present
 - avoid introducing an app-authored hero, card system, or layout language when Stitch already defines one
 
 Required functionality to fit into the design as needed:
@@ -82,6 +83,11 @@ Required functionality to fit into the design as needed:
 - sign-in entry point
 - manager/admin entry points when applicable
 - menu switching when applicable
+
+86'd state rule:
+- If the Stitch design shows an explicit visual treatment for an unavailable, sold-out, disabled, hidden, or 86'd item state, preserve that exact treatment as closely as possible.
+- If the Stitch design does not show that state, use the app's canonical fallback treatment: keep the item visible publicly with strike-through and an `86'D` badge.
+- Do not remove 86'd items from the public menu unless the Stitch design explicitly requires a presentation that still clearly communicates the unavailable state.
 
 If the request is for a dedicated restaurant route:
 - treat the Stitch screen as the full public page template
@@ -116,6 +122,7 @@ Markup rules:
   - `.menu-item-price`
   - `.menu-item-desc`
   - `.menu-item-86d`
+- when Stitch includes a distinct unavailable-item variant, bind the 86'd state into that variant instead of replacing it with a generic app-authored pattern
 
 6. Write the output files.
 
