@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800&family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/leroyslounge/style.css">
 </head>
 <body class="route-restaurant route-restaurant--leroy">
 <main id="site-picker-view" class="site-picker-view" hidden>
@@ -35,8 +36,39 @@
         <img class="ll-board-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge">
       </div>
       <div class="ll-board-topbar-right">
-        <button class="ll-board-nav-btn" data-route-admin onclick="onAdminBtnClick()" style="display:none">Admin</button>
-        <button class="ll-board-nav-btn" data-route-manager onclick="onActionBtnClick()" style="display:none">Manager</button>
+        <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
+          <button id="ll-route-swap-trigger"
+                  class="ll-board-swap-trigger"
+                  type="button"
+                  data-route-dropdown-trigger
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-controls="ll-route-swap-dropdown"
+                  onclick="toggleRouteDropdown('ll-route-swap-trigger', 'll-route-swap-dropdown')">
+            Swap Menu
+          </button>
+          <div id="ll-route-swap-dropdown"
+               class="ll-board-route-dropdown"
+               data-route-dropdown-panel
+               hidden></div>
+        </div>
+        <div class="ll-board-action-dropdown" data-route-dropdown data-route-settings style="display:none">
+          <button id="ll-route-settings-trigger"
+                  class="ll-board-settings-trigger"
+                  type="button"
+                  data-route-dropdown-trigger
+                  aria-label="Manager and admin actions"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-controls="ll-route-settings-dropdown"
+                  onclick="toggleRouteDropdown('ll-route-settings-trigger', 'll-route-settings-dropdown')">
+            <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+          </button>
+          <div id="ll-route-settings-dropdown"
+               class="ll-board-route-dropdown"
+               data-route-dropdown-panel
+               hidden></div>
+        </div>
         <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
              onclick="toggleUserDropdown('ll-user-chip')"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
@@ -63,7 +95,6 @@
       <div class="ll-board-meta">
         <p class="ll-board-meta-line">Menu: <span id="ll-route-menu-name">Leroy's Lounge</span></p>
         <p class="ll-board-meta-line">Updated: <span id="ll-route-status-timestamp">Awaiting first update</span></p>
-        <button id="ll-route-switch-btn" class="ll-board-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
       </div>
 
       <section class="ll-board-section menu-category" data-category="special">

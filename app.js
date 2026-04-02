@@ -1888,6 +1888,95 @@ function _buildLeroyRouteCategoryHtml(cat) {
   </section>`;
 }
 
+function _getLeroyRouteMenus() {
+  return sortKnownMenus(
+    knownMenuList()
+      .filter(menu => menu.restaurantId === RESTAURANTS.LEROYS.id)
+      .map(menu => ({
+        id: menu.id,
+        name: menu.name,
+        slug: menu.slug,
+        type: menu.type,
+        restaurant_id: menu.restaurantId,
+      }))
+  );
+}
+
+function _renderLeroyRouteSettingsDropdown() {
+  const wrapper = document.querySelector('[data-route-settings]');
+  const dropdown = document.getElementById('ll-route-settings-dropdown');
+  if (!wrapper || !dropdown) return;
+
+  const role = currentUser?.role || 'none';
+  const accessibleIds = currentUser?.accessibleMenuIds || [];
+  const options = [];
+
+  if (role === 'admin' || accessibleIds.length > 0) {
+    options.push({ label: 'Manager', icon: 'tune', onClick: () => onActionBtnClick() });
+  }
+  if (role === 'admin') {
+    options.push({ label: 'Admin', icon: 'shield_person', onClick: () => onAdminBtnClick() });
+  }
+
+  wrapper.style.display = options.length ? '' : 'none';
+  dropdown.innerHTML = options.map(option => `
+    <button class="ll-board-route-option" type="button" data-route-settings-option="${escHtml(option.label)}">
+      <span class="ll-board-route-option-label">${escHtml(option.label)}</span>
+      <span class="material-symbols-outlined ll-board-route-option-icon" aria-hidden="true">${escHtml(option.icon)}</span>
+    </button>
+  `).join('');
+
+  dropdown.querySelectorAll('[data-route-settings-option]').forEach((button, index) => {
+    button.onclick = () => {
+      closeRouteDropdowns();
+      options[index]?.onClick?.();
+    };
+  });
+}
+
+async function onLeroyRouteMenuSelect(menuId) {
+  const menu = _getLeroyRouteMenus().find(entry => entry.id === menuId);
+  if (!menu) return;
+
+  closeRouteDropdowns();
+  selectMenu(menu.id, menu.slug, menu.name, menu.type, menu.restaurant_id);
+
+  const targetHref = getPublicHrefForCurrentMenu();
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (targetHref && targetHref !== currentHref) {
+    navigateToPage(targetHref);
+    return;
+  }
+
+  await loadActiveMenuState();
+  applyDesign(currentDesign);
+  renderPublicViews();
+}
+
+function _renderLeroyRouteSwapDropdown() {
+  const dropdown = document.getElementById('ll-route-swap-dropdown');
+  const trigger = document.getElementById('ll-route-swap-trigger');
+  if (!dropdown || !trigger) return;
+
+  const menus = _getLeroyRouteMenus();
+  trigger.style.display = menus.length > 1 ? '' : 'none';
+  dropdown.innerHTML = menus.map(menu => {
+    const isActive = menu.id === MENU_ID;
+    return `
+      <button class="ll-board-route-option${isActive ? ' is-active' : ''}" type="button" data-route-menu-option="${escHtml(menu.id)}">
+        <span class="ll-board-route-option-label">${escHtml(getMenuTypeLabel(menu.type))}</span>
+        <span class="material-symbols-outlined ll-board-route-option-icon" aria-hidden="true">${menu.type === 'food' ? 'restaurant_menu' : 'sports_bar'}</span>
+      </button>
+    `;
+  }).join('');
+
+  dropdown.querySelectorAll('[data-route-menu-option]').forEach(button => {
+    button.onclick = async () => {
+      await onLeroyRouteMenuSelect(button.getAttribute('data-route-menu-option') || '');
+    };
+  });
+}
+
 function _renderLeroyRoutePage(container) {
   const template = document.getElementById('leroy-route-template');
   if (!template) return false;
@@ -1905,9 +1994,6 @@ function _renderLeroyRoutePage(container) {
   const footerVersionEl = document.getElementById('ll-route-footer-version');
   if (footerVersionEl) footerVersionEl.innerHTML = APP_VERSION + (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
 
-  const switchBtn = document.getElementById('ll-route-switch-btn');
-  if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
-
   const featuredWrap = document.getElementById('ll-route-specials');
   if (featuredWrap) featuredWrap.innerHTML = _buildLeroyRouteFeaturedItemsHtml();
 
@@ -1920,6 +2006,9 @@ function _renderLeroyRoutePage(container) {
       .join('');
     categoryWrap.innerHTML = categoriesHtml || '<p class="ll-route-empty">Nothing on the menu yet.</p>';
   }
+
+  _renderLeroyRouteSwapDropdown();
+  _renderLeroyRouteSettingsDropdown();
 
   return true;
 }
@@ -2153,6 +2242,8 @@ function renderUserHeader() {
     if (routeName) routeName.textContent = fullName;
     if (routeRole) routeRole.textContent = roleLabel;
   }
+
+  _renderLeroyRouteSettingsDropdown();
 }
 
 function applyRole(role) {
@@ -2221,10 +2312,40 @@ function exitView() {
 function toggleUserDropdown(chipId = 'user-chip') {
   const chip = document.getElementById(chipId);
   if (!chip) return;
+  closeRouteDropdowns();
   const isOpen = chip.classList.toggle('open');
   chip.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen) {
     const firstFocusable = chip.querySelector('button, a');
+    if (firstFocusable) firstFocusable.focus();
+  }
+}
+
+function closeRouteDropdowns(exceptDropdownId = '') {
+  document.querySelectorAll('[data-route-dropdown]').forEach(wrapper => {
+    const trigger = wrapper.querySelector('[data-route-dropdown-trigger], [aria-controls]');
+    const panel = wrapper.querySelector('[data-route-dropdown-panel]');
+    if (!trigger || !panel) return;
+    if (exceptDropdownId && panel.id === exceptDropdownId) return;
+    wrapper.classList.remove('open');
+    panel.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+  });
+}
+
+function toggleRouteDropdown(triggerId, dropdownId) {
+  const trigger = document.getElementById(triggerId);
+  const dropdown = document.getElementById(dropdownId);
+  if (!trigger || !dropdown) return;
+  const wrapper = trigger.closest('[data-route-dropdown]');
+  const shouldOpen = dropdown.hidden;
+  closeRouteDropdowns(shouldOpen ? dropdownId : '');
+  if (!wrapper) return;
+  wrapper.classList.toggle('open', shouldOpen);
+  dropdown.hidden = !shouldOpen;
+  trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+  if (shouldOpen) {
+    const firstFocusable = dropdown.querySelector('button, [tabindex]:not([tabindex="-1"])');
     if (firstFocusable) firstFocusable.focus();
   }
 }
@@ -2235,6 +2356,15 @@ document.addEventListener('click', function(e) {
     if (!chip.contains(e.target)) {
       chip.classList.remove('open');
       chip.setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.querySelectorAll('[data-route-dropdown]').forEach(wrapper => {
+    if (!wrapper.contains(e.target)) {
+      wrapper.classList.remove('open');
+      const trigger = wrapper.querySelector('[data-route-dropdown-trigger], [aria-controls]');
+      const panel = wrapper.querySelector('[data-route-dropdown-panel]');
+      if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      if (panel) panel.hidden = true;
     }
   });
 });
@@ -2248,6 +2378,16 @@ document.addEventListener('keydown', function(e) {
       chip.setAttribute('aria-expanded', 'false');
       chip.focus();
     }
+  });
+  document.querySelectorAll('[data-route-dropdown].open').forEach(wrapper => {
+    wrapper.classList.remove('open');
+    const trigger = wrapper.querySelector('[data-route-dropdown-trigger], [aria-controls]');
+    const panel = wrapper.querySelector('[data-route-dropdown-panel]');
+    if (trigger) {
+      trigger.setAttribute('aria-expanded', 'false');
+      trigger.focus();
+    }
+    if (panel) panel.hidden = true;
   });
 });
 

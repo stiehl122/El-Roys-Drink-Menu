@@ -1,0 +1,148 @@
+#restaurant-site-wrapper .ll-board-action-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+#restaurant-site-wrapper .ll-board-swap-trigger,
+#restaurant-site-wrapper .ll-board-settings-trigger {
+  border: 0;
+  background: transparent;
+  color: rgb(255 255 255 / 0.96);
+  cursor: pointer;
+  transition: color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+#restaurant-site-wrapper .ll-board-swap-trigger {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: 3px;
+  font-family: 'Epilogue', sans-serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 5px rgb(255 255 255 / 0.3);
+  text-transform: uppercase;
+  box-shadow: 0 0 8px rgb(0 0 0 / 0.12);
+}
+
+#restaurant-site-wrapper .ll-board-settings-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-height: 28px;
+}
+
+#restaurant-site-wrapper .ll-board-settings-trigger .material-symbols-outlined {
+  font-size: 22px;
+  line-height: 1;
+}
+
+#restaurant-site-wrapper .ll-board-swap-trigger:hover,
+#restaurant-site-wrapper .ll-board-swap-trigger:focus-visible,
+#restaurant-site-wrapper .ll-board-settings-trigger:hover,
+#restaurant-site-wrapper .ll-board-settings-trigger:focus-visible,
+#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-swap-trigger,
+#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-settings-trigger {
+  color: rgb(255 228 175 / 0.98);
+  outline: none;
+  transform: translateY(1px);
+}
+
+#restaurant-site-wrapper .ll-board-swap-trigger:hover,
+#restaurant-site-wrapper .ll-board-swap-trigger:focus-visible,
+#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-swap-trigger {
+  border-color: rgb(255 228 175 / 0.5);
+  text-shadow: 0 0 8px rgb(252 211 77 / 0.5);
+}
+
+#restaurant-site-wrapper .ll-board-route-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(16rem, calc(100vw - 24px));
+  overflow: hidden;
+  border: 4px solid rgb(65 0 0 / 0.95);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgb(42 42 42 / 1),
+      rgb(42 42 42 / 1) 2px,
+      rgb(53 53 53 / 1) 2px,
+      rgb(53 53 53 / 1) 30px
+    );
+  box-shadow:
+    inset 0 0 10px rgb(0 0 0 / 0.8),
+    0 4px 12px rgb(0 0 0 / 0.6);
+  z-index: 25;
+}
+
+#restaurant-site-wrapper .ll-board-route-dropdown[hidden] {
+  display: none;
+}
+
+#restaurant-site-wrapper .ll-board-route-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 24px;
+  border: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+  background: transparent;
+  color: rgb(14 14 14 / 1);
+  cursor: pointer;
+  text-align: left;
+  text-shadow: 1px 1px 0 rgb(0 0 0 / 1), 2px 2px 0 rgb(0 0 0 / 0.5);
+  transition: background-color 0.15s ease;
+}
+
+#restaurant-site-wrapper .ll-board-route-option:last-child {
+  border-bottom: 0;
+}
+
+#restaurant-site-wrapper .ll-board-route-option:hover,
+#restaurant-site-wrapper .ll-board-route-option:focus-visible,
+#restaurant-site-wrapper .ll-board-route-option.is-active {
+  background: rgb(255 255 255 / 0.05);
+  outline: none;
+}
+
+#restaurant-site-wrapper .ll-board-route-option-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.125rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-board-route-option-icon {
+  font-size: 24px;
+  color: rgb(250 189 0 / 0.9);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#restaurant-site-wrapper .ll-board-route-option:hover .ll-board-route-option-icon,
+#restaurant-site-wrapper .ll-board-route-option:focus-visible .ll-board-route-option-icon,
+#restaurant-site-wrapper .ll-board-route-option.is-active .ll-board-route-option-icon {
+  opacity: 1;
+}
+
+@media (max-width: 820px) {
+  #restaurant-site-wrapper .ll-board-route-dropdown {
+    right: -4px;
+  }
+
+  #restaurant-site-wrapper .ll-board-route-option {
+    padding: 14px 18px;
+  }
+
+  #restaurant-site-wrapper .ll-board-route-option-label {
+    font-size: 1rem;
+  }
+}
