@@ -152,7 +152,12 @@
     const userChip = document.querySelector('[data-route-user-chip]');
     const isAuthed = !!sharedState.currentUser;
 
-    if (signInButton) signInButton.style.display = isAuthed ? 'none' : '';
+    if (signInButton) {
+      signInButton.disabled = isAuthed;
+      signInButton.setAttribute('aria-hidden', isAuthed ? 'true' : 'false');
+      signInButton.setAttribute('aria-label', isAuthed ? "Leroy's Lounge" : 'Sign in');
+      signInButton.classList.toggle('is-inert', isAuthed);
+    }
     if (userChip) userChip.style.display = isAuthed ? '' : 'none';
   }
 

@@ -27,13 +27,11 @@
 <template id="leroy-route-template">
   <div class="ll-board-page">
     <header class="ll-board-topbar neon-header-full">
-      <div class="ll-board-topbar-left">
-        <button class="ll-board-logo-btn" data-route-signin onclick="openAuthOverlay()" aria-label="Sign in">
+      <div class="ll-board-topbar-left" aria-hidden="true"></div>
+      <div class="ll-board-topbar-center">
+        <button class="ll-board-logo-btn ll-board-logo-btn--center" data-route-signin type="button" onclick="openAuthOverlay()" aria-label="Sign in">
           <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge">
         </button>
-      </div>
-      <div class="ll-board-topbar-center">
-        <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge">
       </div>
       <div class="ll-board-topbar-right">
         <div class="ll-board-action-cluster">
@@ -95,11 +93,6 @@
 
     <div class="ll-board-bg">
     <main class="ll-board-main">
-      <div class="ll-board-meta">
-        <p class="ll-board-meta-line">Menu: <span id="ll-route-menu-name">Leroy's Lounge</span></p>
-        <p class="ll-board-meta-line">Updated: <span id="ll-route-status-timestamp">Awaiting first update</span></p>
-      </div>
-
       <section class="ll-board-section menu-category" data-category="special">
         <div class="ll-board-section-head">
           <h2 class="ll-board-section-title">Specials</h2>

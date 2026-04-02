@@ -42,7 +42,7 @@
 
 #restaurant-site-wrapper .neon-header-full {
   background-color: var(--ll-board-red);
-  overflow: hidden;
+  overflow: visible;
   box-shadow:
     0 5px 25px var(--ll-board-glow),
     inset 0 0 15px var(--ll-board-red-deep);
@@ -64,6 +64,7 @@
 #restaurant-site-wrapper .ll-board-topbar-right {
   justify-content: flex-end;
   gap: 1rem;
+  overflow: visible;
 }
 
 #restaurant-site-wrapper .ll-board-logo-btn {
@@ -86,6 +87,17 @@
   width: auto;
   height: 3rem;
   object-fit: contain;
+}
+
+#restaurant-site-wrapper .ll-board-logo-btn--center {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#restaurant-site-wrapper .ll-board-logo-btn.is-inert {
+  cursor: default;
+  pointer-events: none;
 }
 
 #restaurant-site-wrapper .ll-board-action-cluster {
@@ -196,7 +208,7 @@
 
 #restaurant-site-wrapper .ll-board-route-dropdown {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 12px);
   right: 0;
   width: min(16rem, calc(100vw - 24px));
   overflow: hidden;
@@ -287,15 +299,6 @@
   padding: 2.5rem 2rem;
 }
 
-#restaurant-site-wrapper .ll-board-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-bottom: 2rem;
-}
-
-#restaurant-site-wrapper .ll-board-meta-line,
 #restaurant-site-wrapper .ll-board-footer-updated,
 #restaurant-site-wrapper .ll-board-footer-version {
   margin: 0;
@@ -575,11 +578,6 @@
   #restaurant-site-wrapper .ll-board-main {
     width: calc(100% - 1rem);
     padding: 1rem 0.5rem 2rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-meta {
-    justify-content: flex-start;
-    margin-bottom: 1.25rem;
   }
 
   #restaurant-site-wrapper .ll-board-section {
