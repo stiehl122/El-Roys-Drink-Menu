@@ -2230,6 +2230,7 @@ function renderUserHeader() {
   _setDisplayById('signin-btn', signedIn ? 'none' : '');
   _setDisplayById('user-chip', signedIn ? '' : 'none');
   _setDisplayBySelectorFiltered('[data-route-signin]', signedIn ? 'none' : '', el => !el.hasAttribute('data-route-signin-persistent'));
+  _setDisplayBySelector('[data-route-signin-persistent]', '');
   _setDisplayBySelector('[data-route-user-chip]', signedIn ? '' : 'none');
 
   const actionBtn = document.getElementById('action-btn');

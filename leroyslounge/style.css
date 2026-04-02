@@ -310,7 +310,7 @@
   text-transform: uppercase;
 }
 
-#restaurant-site-wrapper .ll-board-section {
+#restaurant-site-wrapper .ll-slat-section {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -320,7 +320,7 @@
   margin-bottom: 2.5rem;
 }
 
-#restaurant-site-wrapper .ll-board-section-head {
+#restaurant-site-wrapper .ll-slat-section-head {
   display: flex;
   align-items: center;
   gap: 1rem;
@@ -331,7 +331,7 @@
   margin-bottom: 1rem;
 }
 
-#restaurant-site-wrapper .ll-board-section-title {
+#restaurant-site-wrapper .ll-slat-section-title {
   margin: 0;
   color: var(--ll-board-red);
   font-family: 'Epilogue', sans-serif;
@@ -590,7 +590,7 @@
     padding: 1rem 0.5rem 2rem;
   }
 
-  #restaurant-site-wrapper .ll-board-section {
+  #restaurant-site-wrapper .ll-slat-section {
     margin-bottom: 1.75rem;
   }
 

@@ -56,9 +56,9 @@
   function buildCategoryHtml(sharedState, category) {
     const items = getVisibleItems(sharedState.menuState, category.id);
     if (!items.length) return '';
-    return `<section class="ll-board-section menu-category" data-category="${esc(category.id)}">
-      <div class="ll-board-section-head">
-        <h2 class="ll-board-section-title">${esc(category.title)}</h2>
+    return `<section class="ll-slat-section menu-category" data-category="${esc(category.id)}">
+      <div class="ll-slat-section-head">
+        <h2 class="ll-slat-section-title">${esc(category.title)}</h2>
       </div>
       <div class="ll-board-rows">${items.map(item => buildItemHtml(item)).join('')}</div>
     </section>`;
