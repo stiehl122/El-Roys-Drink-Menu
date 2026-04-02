@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>El Roy's Cantina | Current Menu</title>
+<link rel="icon" type="image/png" href="/HFLOGO.png">
+<link rel="stylesheet" href="/lib/fonts/fonts.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body class="route-restaurant">
+<main id="site-picker-view" class="site-picker-view" hidden>
+  <div class="site-picker-card">
+    <p class="site-picker-kicker">Current Menu</p>
+    <h1 class="site-picker-title">Choose a restaurant</h1>
+    <div class="site-picker-actions">
+      <a class="site-picker-link" href="/leroyslounge">Leroy's Lounge</a>
+      <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
+    </div>
+  </div>
+</main>
+
+<div class="wrapper" id="app-shell">
+  <header>
+    <img class="hf-logo" src="" alt="Logo" style="display:none"/>
+    <span class="logo-mark" style="display:none"></span>
+    <h1>CURRENT MENU</h1>
+    <div class="header-sub" id="last-updated-label">Last Updated: —</div>
+    <div class="header-action-group">
+      <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
+      <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
+    </div>
+    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+    <div class="user-chip" id="user-chip" style="display:none"
+         onclick="toggleUserDropdown()"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
+         tabindex="0"
+         role="button"
+         aria-haspopup="true"
+         aria-expanded="false"
+         aria-label="User menu">
+      <span id="user-initials">?</span>
+      <span>▾</span>
+      <div class="user-dropdown" id="user-dropdown">
+        <div class="user-dropdown-name" id="user-dropdown-name"></div>
+        <div class="user-dropdown-role" id="user-dropdown-role"></div>
+        <div class="user-dropdown-divider"></div>
+        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LOADING -->
+  <div id="loading-view">
+    <div class="spinner"></div>
+    <p>Loading menu...</p>
+  </div>
+
+  <!-- PUBLIC VIEW -->
+  <div id="public-view" style="display:none;">
+    <div id="restaurant-site-wrapper" hidden></div>
+    <div id="public-default-shell">
+      <div class="error-banner" id="public-error"></div>
+      <div class="collapse-all-row">
+        <button id="collapse-all-btn" class="collapse-all-btn" onclick="toggleAllCategories()">Collapse All</button>
+        <button id="public-switch-menu-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
+      </div>
+      <div id="featured-public-section" style="display:none;"></div>
+      <div id="public-categories"></div>
+      <footer id="menu-footer">
+        <span id="footer-version"></span>
+        <span id="footer-last-updated"></span>
+      </footer>
+    </div>
+  </div>
+
+</div>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay">
+  <div class="auth-box" id="auth-box" role="dialog" aria-modal="true" aria-label="Sign In">
+    <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
+    <div id="auth-form-wrap">
+
+      <!-- SIGN IN -->
+      <div id="auth-screen-signin" class="auth-screen">
+        <h2 class="auth-screen-title">SIGN IN</h2>
+        <p class="auth-screen-subtitle">Sign in to your account</p>
+        <div class="auth-field">
+          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
+        </div>
+        <div class="auth-field">
+          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
+        </div>
+        <div class="auth-error" id="signin-error"></div>
+        <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
+        <button class="auth-link-btn" onclick="renderAuthScreen('forgot')">Forgot password?</button>
+        <div class="auth-toggle">
+          <span>Don't have an account?</span>
+          <button class="auth-toggle-btn" onclick="renderAuthScreen('signup')">Sign Up</button>
+        </div>
+      </div>
+
+      <!-- SIGN UP -->
+      <div id="auth-screen-signup" class="auth-screen" style="display:none">
+        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
+        <p class="auth-screen-subtitle">Sign up with your work email</p>
+        <div class="auth-field">
+          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
+        </div>
+        <div class="auth-field">
+          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
+        </div>
+        <div class="auth-field">
+          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
+        </div>
+        <div class="auth-field">
+          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
+                 aria-describedby="signup-error"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
+        </div>
+        <div class="auth-error" id="signup-error"></div>
+        <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>
+        <p class="auth-approval-notice">New accounts require admin approval before menu access is granted.</p>
+        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
+      </div>
+
+      <!-- FORGOT PASSWORD -->
+      <div id="auth-screen-forgot" class="auth-screen" style="display:none">
+        <h2 class="auth-screen-title">RESET PASSWORD</h2>
+        <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
+        <div class="auth-field">
+          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
+        </div>
+        <div class="auth-error" id="forgot-error"></div>
+        <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
+        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
+      </div>
+
+      <!-- RESET PASSWORD -->
+      <div id="auth-screen-reset" class="auth-screen" style="display:none">
+        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
+        <p class="auth-screen-subtitle">Choose a new password for your account</p>
+        <div class="auth-field">
+          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
+        </div>
+        <div class="auth-field">
+          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
+        </div>
+        <div class="auth-error" id="reset-error"></div>
+        <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
+      </div>
+
+    </div>
+    <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
+  </div>
+</div>
+
+<!-- CONFIG JSON MODAL -->
+<div class="modal-bg" id="config-modal-bg">
+  <div class="modal">
+    <h2>UPDATE CONFIG FILE</h2>
+    <div class="modal-sub">Copy this into <code>lib/config/notifications.json</code> and reload the page.</div>
+    <textarea id="config-json-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
+      <button class="btn-confirm" onclick="copyConfigJson()">COPY JSON</button>
+    </div>
+  </div>
+</div>
+
+<!-- PREVIEW MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h2>PATCH NOTES PREVIEW</h2>
+    <div class="modal-sub">Only changes since the last update will be sent.</div>
+    <div id="preview-content"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVITE MODAL -->
+<div class="modal-bg" id="invite-modal-bg">
+  <div class="modal">
+    <h2>INVITE STAFF</h2>
+    <div class="modal-sub">Copy this message and send it to new staff members.</div>
+    <textarea id="invite-text-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
+      <button class="btn-confirm" onclick="copyInviteText()">COPY MESSAGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- MENU PICKER OVERLAY -->
+<div id="menu-picker-overlay">
+  <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
+    <h2 class="picker-title">SELECT A MENU</h2>
+    <p class="picker-subtitle">Choose which menu to view</p>
+    <div id="picker-menu-list" class="picker-menu-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

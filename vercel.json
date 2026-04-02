@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    { "source": "/leroyslounge", "destination": "/leroyslounge/index.html" },
+    { "source": "/leroyslounge/", "destination": "/leroyslounge/index.html" },
+    { "source": "/elroyscantina", "destination": "/elroyscantina/index.html" },
+    { "source": "/elroyscantina/", "destination": "/elroyscantina/index.html" },
+    { "source": "/manager", "destination": "/manager/index.html" },
+    { "source": "/manager/", "destination": "/manager/index.html" },
+    { "source": "/admin", "destination": "/admin/index.html" },
+    { "source": "/admin/", "destination": "/admin/index.html" }
+  ]
+}

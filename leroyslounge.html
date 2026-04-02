@@ -3,12 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Current Menu</title>
-<link rel="icon" type="image/png" href="HFLOGO.png">
-<link rel="stylesheet" href="lib/fonts/fonts.css">
-<link rel="stylesheet" href="style.css">
+<title>Leroy's Lounge | Current Menu</title>
+<link rel="icon" type="image/png" href="/HFLOGO.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800&family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
 </head>
-<body>
+<body class="route-restaurant route-restaurant--leroy">
 <main id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
     <p class="site-picker-kicker">Current Menu</p>
@@ -19,6 +22,90 @@
     </div>
   </div>
 </main>
+
+<template id="leroy-route-template">
+  <div class="ll-site-page">
+    <header class="ll-site-topbar">
+      <div class="ll-site-topbar-inner">
+        <div class="ll-site-brand">
+          <img class="ll-site-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge Logo">
+          <span class="ll-site-brand-name">Leroy's Lounge</span>
+        </div>
+        <div class="ll-site-controls">
+          <button class="ll-site-control-btn" data-route-signin onclick="openAuthOverlay()">Login</button>
+          <button class="ll-site-control-btn" data-route-manager onclick="onActionBtnClick()" style="display:none">Manager</button>
+          <button class="ll-site-control-btn ll-site-control-btn--admin" data-route-admin onclick="onAdminBtnClick()" style="display:none">Admin</button>
+          <div class="ll-site-userchip" data-route-user-chip style="display:none"
+               onclick="toggleUserDropdown('ll-user-chip')"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
+               tabindex="0"
+               role="button"
+               aria-haspopup="true"
+               aria-expanded="false"
+               id="ll-user-chip"
+               aria-label="User menu">
+            <span id="ll-user-initials">?</span>
+            <span>▾</span>
+            <div class="ll-site-userdropdown" id="ll-user-dropdown">
+              <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
+              <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
+              <div class="user-dropdown-divider"></div>
+              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="ll-site-main">
+      <div class="ll-menu-wrapper">
+        <div class="ll-status-bar">
+          <div class="ll-status-badge">
+            <div class="ll-pulse-wrapper">
+              <span class="ll-pulse-ring"></span>
+              <span class="ll-pulse-dot"></span>
+            </div>
+            <p class="ll-status-text">Kitchen Status: Live &amp; Service Active</p>
+          </div>
+          <div class="ll-timestamp-row">
+            <span class="material-symbols-outlined ll-timestamp-icon" aria-hidden="true">schedule</span>
+            <p class="ll-timestamp-text">Menu last updated: <span id="ll-route-status-timestamp">Awaiting first update</span></p>
+            <span class="ll-route-menu-pill" id="ll-route-menu-name">Leroy's Lounge</span>
+            <button id="ll-route-switch-btn" class="public-switch-btn ll-route-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+          </div>
+        </div>
+
+        <section class="ll-section menu-category" data-category="special">
+          <div class="ll-section-header">
+            <h2 class="ll-section-title">Specials</h2>
+            <span class="ll-section-badge">Limited Time Only</span>
+          </div>
+          <div id="ll-route-specials" class="ll-specials-list"></div>
+        </section>
+
+        <div id="ll-route-sections"></div>
+
+        <div class="ll-quote-block wood-grain-overlay">
+          <p class="ll-quote-label">Leroy</p>
+          <p class="ll-quote-text">"Leroy was conceived, born and nursed in bars. His mom home schooled him at the bar. He likes hamburgers, chili and french fries. It was time to open his own place."</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="ll-site-footer">
+      <div class="ll-site-footer-inner">
+        <div class="ll-site-footer-copy">
+          <span class="ll-site-footer-brand">Leroy's Lounge</span>
+          <p class="ll-site-footer-meta">86'd items updated live</p>
+          <p class="ll-site-footer-timestamp">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
+        </div>
+        <div class="ll-site-footer-links">
+          <p id="ll-route-footer-version" class="ll-site-footer-version"></p>
+        </div>
+      </div>
+    </footer>
+  </div>
+</template>
 
 <div class="wrapper" id="app-shell">
   <header>
@@ -490,6 +577,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
-<script src="app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>
