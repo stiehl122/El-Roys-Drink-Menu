@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.1';
+const APP_VERSION = 'v0.8.2';
 const RESTAURANTS = {
   LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
   ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
@@ -46,7 +46,6 @@ let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
-let _invalidMenuSlug   = null;      // set when ?menu= slug resolved to nothing
 let _activeMenuName    = '';        // display name of the currently loaded menu
 let _activeRestaurantName = '';     // display name of the currently loaded restaurant
 let RESTAURANT_ID      = '';        // restaurant_id for the active menu
@@ -113,6 +112,7 @@ const SHARED_PAGE_PATHS = {
   manager: '/manager',
   admin: '/admin',
 };
+const REDIRECT_NOTICE_KEY = 'hf_redirect_notice';
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
@@ -185,6 +185,10 @@ function knownMenuList() {
   return [MENUS.LEROYS_DRINKS, MENUS.LEROYS_FOOD, MENUS.ELROYS_DRINKS, MENUS.ELROYS_FOOD];
 }
 
+function isValidRestaurant(restaurantId) {
+  return restaurantId === RESTAURANTS.LEROYS.id || restaurantId === RESTAURANTS.ELROYS.id;
+}
+
 function sortKnownRestaurants(restaurants) {
   return [...restaurants].sort((a, b) => KNOWN_RESTAURANT_ORDER.indexOf(a.id) - KNOWN_RESTAURANT_ORDER.indexOf(b.id));
 }
@@ -195,6 +199,10 @@ function sortKnownMenus(menus) {
 
 function normalizeKnownMenuSlug(slug) {
   return LEGACY_MENU_SLUG_ALIASES[slug] || slug;
+}
+
+function normalizeAccessibleMenuIds(menuIds) {
+  return (Array.isArray(menuIds) ? menuIds : []).filter(menuId => KNOWN_MENU_ORDER.includes(menuId));
 }
 
 function getRestaurantById(id) {
@@ -212,11 +220,52 @@ function formatMenuDisplayName(menuName, menuType, restaurantId) {
   return menuName || typeLabel;
 }
 
+function _clearActiveMenuContext({ clearCache = false } = {}) {
+  MENU_ID = '';
+  RESTAURANT_ID = '';
+  _activeRestaurantName = '';
+  _activeMenuName = '';
+  _restaurantCustomDesignEnabled = true;
+  lsSet(LS_KEYS.menuId, '');
+  if (clearCache) localStorage.removeItem(LS_KEYS.menuCache);
+}
+
+function queueRedirectNotice(message) {
+  if (!message) return;
+  try { sessionStorage.setItem(REDIRECT_NOTICE_KEY, message); } catch (_) { /* ignore */ }
+}
+
+function consumeRedirectNotice() {
+  try {
+    const message = sessionStorage.getItem(REDIRECT_NOTICE_KEY) || '';
+    if (message) sessionStorage.removeItem(REDIRECT_NOTICE_KEY);
+    return message;
+  } catch (_) {
+    return '';
+  }
+}
+
+function redirectToRestaurantPath(restaurantId, slug = '', message = '') {
+  const safeRestaurantId = isValidRestaurant(restaurantId) ? restaurantId : RESTAURANTS.LEROYS.id;
+  const path = SITE_PATHS[safeRestaurantId] || SITE_PATHS[RESTAURANTS.LEROYS.id];
+  const url = new URL(path, window.location.origin);
+  if (slug) url.searchParams.set('menu', slug);
+  _clearActiveMenuContext({ clearCache: !isValidRestaurant(restaurantId) });
+  queueRedirectNotice(message);
+  navigateToPage(`${url.pathname}${url.search}`);
+  return false;
+}
+
 function setActiveMenuContext(menuName, menuType, restaurantId) {
+  if (!isValidRestaurant(restaurantId)) {
+    console.warn(`Invalid restaurant: ${restaurantId}`);
+    return redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
+  }
   MENU_TYPE = menuType || 'drinks';
   RESTAURANT_ID = restaurantId || '';
   _activeRestaurantName = getRestaurantById(RESTAURANT_ID)?.name || '';
   _activeMenuName = formatMenuDisplayName(menuName, MENU_TYPE, RESTAURANT_ID);
+  return true;
 }
 
 function getSiteRestaurantFromPath(pathname = window.location.pathname) {
@@ -278,11 +327,32 @@ function navigateToPage(path) {
   window.location.assign(path);
 }
 
+function readCachedMenuState(expectedRestaurantId = '') {
+  const cached = localStorage.getItem(LS_KEYS.menuCache);
+  if (!cached) return null;
+  try {
+    const parsed = JSON.parse(cached);
+    const cachedRestaurantId = parsed?.restaurant?.id || '';
+    if (!isValidRestaurant(cachedRestaurantId)) {
+      _clearActiveMenuContext({ clearCache: true });
+      return null;
+    }
+    if (expectedRestaurantId && cachedRestaurantId !== expectedRestaurantId) {
+      localStorage.removeItem(LS_KEYS.menuCache);
+      return null;
+    }
+    return parsed;
+  } catch (_) {
+    localStorage.removeItem(LS_KEYS.menuCache);
+    return null;
+  }
+}
+
 function getDefaultMenuForRestaurant(restaurant) {
-  if (!restaurant?.id) return MENUS.ELROYS_DRINKS;
+  if (!isValidRestaurant(restaurant?.id)) return MENUS.LEROYS_DRINKS;
   return knownMenuList().find(menu => (
     menu.restaurantId === restaurant.id && menu.type === 'drinks'
-  )) || MENUS.ELROYS_DRINKS;
+  )) || MENUS.LEROYS_DRINKS;
 }
 
 function primeSiteRestaurantMenu(restaurant) {
@@ -381,8 +451,16 @@ async function sbResolveMenu() {
     if (menuRes.ok) {
       const [menu] = await menuRes.json();
       if (menu?.id) {
+        if (!isValidRestaurant(menu.restaurant_id)) {
+          redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
+          return;
+        }
+        if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
+          redirectToRestaurantPath(menu.restaurant_id, slug);
+          return;
+        }
         MENU_ID          = menu.id;
-        setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '');
+        if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
         lsSet(LS_KEYS.menuId, MENU_ID);
         if (rawSlug && rawSlug !== slug) {
           const url = new URL(location.href);
@@ -392,8 +470,14 @@ async function sbResolveMenu() {
         return;
       }
     }
-    _invalidMenuSlug = rawSlug || slug;
-    return;
+    const invalidSlug = rawSlug || slug;
+    _clearActiveMenuContext({ clearCache: true });
+    if (_siteRestaurant?.id) {
+      queueRedirectNotice(`Menu "${invalidSlug}" not found. Showing default menu for ${_siteRestaurant.name}.`);
+      primeSiteRestaurantMenu(_siteRestaurant);
+      return sbResolveMenu();
+    }
+    queueRedirectNotice(`Menu "${invalidSlug}" not found. Showing default menu.`);
   }
 
   if (MENU_ID) {
@@ -403,25 +487,25 @@ async function sbResolveMenu() {
     ]);
     if (nameRes.ok) {
       const [menu] = await nameRes.json();
+      if (menu && !isValidRestaurant(menu.restaurant_id)) {
+        redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
+        return;
+      }
       if (menu?.archived === true) {
-        MENU_ID = ''; RESTAURANT_ID = '';
-        _activeMenuName = '';
-        _activeRestaurantName = '';
-        _restaurantCustomDesignEnabled = true;
-        lsSet(LS_KEYS.menuId, '');
+        _clearActiveMenuContext({ clearCache: true });
       } else if (menu) {
-        setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID);
+        if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
+          redirectToRestaurantPath(menu.restaurant_id, menu.slug || '');
+          return;
+        }
+        if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
         if (menu.slug) {
           const url = new URL(location.href);
           url.searchParams.set('menu', menu.slug);
           history.replaceState({}, '', url.toString());
         }
       } else {
-        MENU_ID = ''; RESTAURANT_ID = '';
-        _activeMenuName = '';
-        _activeRestaurantName = '';
-        _restaurantCustomDesignEnabled = true;
-        lsSet(LS_KEYS.menuId, '');
+        _clearActiveMenuContext({ clearCache: true });
       }
     }
     if (allMenusRes.ok) {
@@ -439,16 +523,20 @@ async function sbResolveMenu() {
   const menus = sortKnownMenus((await res.json()).filter(menu => !menu.archived));
   _hasMultipleMenus = menus.length > 1;
 
-  let defaultMenu = menus.find(menu => menu.id === MENUS.ELROYS_DRINKS.id);
+  let defaultMenu = menus.find(menu => menu.id === MENUS.LEROYS_DRINKS.id);
   if (!defaultMenu && currentUser?.role === 'manager') {
-    defaultMenu = menus.find(menu => (currentUser.accessibleMenuIds || []).includes(menu.id));
+    defaultMenu = menus.find(menu => normalizeAccessibleMenuIds(currentUser.accessibleMenuIds).includes(menu.id));
   }
   if (!defaultMenu) defaultMenu = menus[0];
 
   if (defaultMenu) {
     MENU_ID          = defaultMenu.id;
-    setActiveMenuContext(defaultMenu.name || '', defaultMenu.type || 'drinks', defaultMenu.restaurant_id || '');
+    if (setActiveMenuContext(defaultMenu.name || '', defaultMenu.type || 'drinks', defaultMenu.restaurant_id || '') === false) return;
     lsSet(LS_KEYS.menuId, MENU_ID);
+    if (_siteRestaurant?.id && defaultMenu.restaurant_id !== _siteRestaurant.id) {
+      redirectToRestaurantPath(defaultMenu.restaurant_id, defaultMenu.slug || '');
+      return;
+    }
     const url = new URL(location.href);
     url.searchParams.set('menu', defaultMenu.slug);
     history.replaceState({}, '', url.toString());
@@ -986,6 +1074,7 @@ function clearLogo() {
 async function saveDesign() {
   const targetRestaurantId = _adminSwitcherState.design.restaurantId;
   if (!targetRestaurantId) { showToast('No restaurant selected.', 'info'); return; }
+  if (!isValidRestaurant(targetRestaurantId)) { showToast('Unsupported restaurant selected.', 'error'); return; }
 
   function getFontValue(selectId) {
     const sel = document.getElementById(selectId);
@@ -1270,13 +1359,15 @@ function migrateLocalStorage() {
 
 async function init() {
   _appPageMode = getAppPageModeFromPath();
-  _siteRestaurant = getSiteRestaurantFromPath();
+  const detectedSiteRestaurant = getSiteRestaurantFromPath();
+  _siteRestaurant = isValidRestaurant(detectedSiteRestaurant?.id) ? detectedSiteRestaurant : null;
   if (_appPageMode === 'picker') {
     showPickerPage();
     return;
   }
   showAppShell();
   migrateLocalStorage();
+  if (MENU_ID && !KNOWN_MENU_ORDER.includes(MENU_ID)) _clearActiveMenuContext({ clearCache: true });
   document.getElementById('loading-view').style.display = 'block';
   document.getElementById('public-view').style.display = 'none';
 
@@ -1288,15 +1379,11 @@ async function init() {
 
   if (SUPABASE_URL) await sbResolveMenu();
 
-  if (_invalidMenuSlug) {
-    menuState = defaultState();
-    applyDesign(currentDesign);
-    showPublicViewWithError(`⚠️ Menu "${escHtml(_invalidMenuSlug)}" not found.`);
-  } else if (!SUPABASE_URL || !MENU_ID) {
+  if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
-    const cached = localStorage.getItem(LS_KEYS.menuCache);
+    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
     if (cached) {
-      try { hydrateState(JSON.parse(cached)); } catch(e) { menuState = defaultState(); }
+      try { hydrateState(cached); } catch(e) { menuState = defaultState(); }
     } else {
       menuState = defaultState();
     }
@@ -1309,9 +1396,9 @@ async function init() {
       showPublicView();
     } catch(e) {
       // Fallback to localStorage cache
-      const cached = localStorage.getItem(LS_KEYS.menuCache);
+      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
       if (cached) {
-        try { hydrateState(JSON.parse(cached)); } catch(e2) { menuState = defaultState(); }
+        try { hydrateState(cached); } catch(e2) { menuState = defaultState(); }
       } else {
         menuState = defaultState();
       }
@@ -1324,6 +1411,8 @@ async function init() {
   const handledRecovery = await _tryHandleRecoveryCallback();
   if (!handledRecovery) await _tryRestoreSession();
   await _syncRequestedPageMode();
+  const redirectNotice = consumeRedirectNotice();
+  if (redirectNotice) showToast(redirectNotice, 'error');
 }
 
 async function _tryHandleRecoveryCallback() {
@@ -1956,7 +2045,7 @@ async function sbGetProfile(accessToken) {
   });
   if (!r.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
   const { role, name, accessibleMenuIds } = await r.json();
-  return { role: role || 'none', name: name || '', accessibleMenuIds: accessibleMenuIds || [] };
+  return { role: role || 'none', name: name || '', accessibleMenuIds: normalizeAccessibleMenuIds(accessibleMenuIds) };
 }
 
 async function sbResetPasswordForEmail(email) {
@@ -2581,7 +2670,7 @@ async function checkAdminSupabaseStatus() {
   el.textContent = 'Checking…'; el.className = 'db-status';
   try {
     // Ping the restaurants table (lightweight, always accessible via RLS SELECT)
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?select=id&limit=1`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id&limit=1`, {
       headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
     });
     if (res.ok || res.status === 200) {
@@ -2654,6 +2743,7 @@ function _populateNotifCredKeys(cfg) {
 async function saveNotifCredKeys() {
   const restaurantId = _adminSwitcherState.notif.restaurantId;
   if (!restaurantId) { showToast('No restaurant selected.', 'info'); return; }
+  if (!isValidRestaurant(restaurantId)) { showToast('Unsupported restaurant selected.', 'error'); return; }
   const val = id => (document.getElementById(id)?.value || '').trim();
   const notifications_config = {};
   if (val('notif-cred-groupme'))        notifications_config.groupme = { env_key: val('notif-cred-groupme') };
@@ -2756,6 +2846,11 @@ async function _loadAdminTabData(context) {
   if (context === 'notif') {
     const menuId       = _adminSwitcherState.notif.menuId;
     const restaurantId = _adminSwitcherState.notif.restaurantId;
+    if (restaurantId && !isValidRestaurant(restaurantId)) {
+      _populateAdminNotificationsPanel({});
+      _populateNotifCredKeys({});
+      return;
+    }
     const urlInput = document.getElementById('menu-url-input');
     if (urlInput) urlInput.value = MENU_URL || '';
     if (!menuId) { _populateAdminNotificationsPanel({}); }
@@ -3773,7 +3868,7 @@ async function loadUsers() {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
       const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?select=id,name&archived=eq.false&order=created_at.asc`,
+        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name&archived=eq.false&order=created_at.asc`,
         { headers: sbHeaders() }
       );
       if (menusRes.ok) window._adminMenuList = await menusRes.json();
