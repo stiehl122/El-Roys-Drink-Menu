@@ -1830,87 +1830,61 @@ function _getVisiblePublicItemsForRoute(categoryId) {
   return (state.items || []).filter(item => item.onMenu !== false && item.visibility !== 'off_menu');
 }
 
+function _buildLeroyRouteItemHtml(item, options = {}) {
+  const {
+    badgeText = '',
+  } = options;
+  const is86 = !!item?.eightySixed;
+  const desc = (item?.desc || '').trim();
+  const hasDesc = !!desc;
+  const rowClasses = ['ll-board-row', hasDesc ? 'll-board-row--expandable' : '', is86 ? 'll-board-row--sold' : ''].filter(Boolean).join(' ');
+  const cardClasses = ['ll-board-item', 'menu-item', hasDesc ? 'has-detail' : '', is86 ? 'menu-item-86d ll-board-item--sold' : ''].filter(Boolean).join(' ');
+  const toggleHandler = hasDesc ? ' onclick="togglePublicDesc(this.closest(\'.menu-item\'))"' : '';
+  const expandIcon = hasDesc
+    ? `<span class="material-symbols-outlined item-expand-icon ll-board-expand" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">expand_more</span>`
+    : '';
+  return `<article class="${cardClasses}">
+    <div class="${rowClasses}"${toggleHandler}>
+      ${is86 ? '<span class="ll-board-strike" aria-hidden="true"></span>' : ''}
+      <div class="ll-board-item-main">
+        <div class="ll-board-item-name-wrap">
+          <h3 class="ll-board-item-name menu-item-name">${escHtml(item?.name || '')}</h3>
+          ${badgeText ? `<span class="ll-board-chip">${escHtml(badgeText)}</span>` : ''}
+        </div>
+      </div>
+      <div class="ll-board-item-side">
+        ${is86 ? '<span class="ll-board-stamp">Sold Out</span>' : ''}
+        ${item?.price ? `<span class="ll-board-price menu-item-price">${escHtml(item.price)}</span>` : ''}
+        ${expandIcon}
+      </div>
+    </div>
+    ${hasDesc ? `<div class="item-detail-panel ll-board-detail"><p class="ll-board-item-desc menu-item-desc">${escHtml(desc)}</p></div>` : ''}
+  </article>`;
+}
+
 function _buildLeroyRouteFeaturedItemsHtml() {
   const featuredSlots = _featuredGroups.flatMap(group => group.slots || []).filter(slot => slot.item);
   if (!featuredSlots.length) {
-    const fallbackItems = _getVisiblePublicItemsForRoute('special').slice(0, 2);
+    const fallbackItems = _getVisiblePublicItemsForRoute('special').slice(0, 3);
     if (!fallbackItems.length) return '<p class="ll-route-empty">Nothing featured right now.</p>';
-    return fallbackItems.map((item, index) => {
-      const is86 = !!item.eightySixed;
-      return `<article class="ll-special-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
-        <div class="ll-item-body ${is86 ? 'll-item-body-relative' : ''}">
-          ${is86 ? '<div class="ll-86d-stamp">86\'d</div>' : ''}
-          <div class="ll-item-name-row">
-            <h3 class="ll-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</h3>
-            ${index === 0 ? '<span class="ll-chef-badge">Chef\'s Choice</span>' : ''}
-          </div>
-          ${item.desc ? `<p class="ll-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
-        </div>
-        <div class="ll-item-price-col">
-          ${item.price ? `<span class="ll-special-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
-        </div>
-      </article>`;
-    }).join('');
+    return fallbackItems.map((item, index) => _buildLeroyRouteItemHtml(item, {
+      badgeText: index === 0 ? 'Chef\'s Choice' : '',
+    })).join('');
   }
 
-  return featuredSlots.slice(0, 3).map((slot, index) => {
-    const item = slot.item;
-    const is86 = !!item?.eightySixed;
-    return `<article class="ll-special-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
-      <div class="ll-item-body ${is86 ? 'll-item-body-relative' : ''}">
-        ${is86 ? '<div class="ll-86d-stamp">86\'d</div>' : ''}
-        <div class="ll-item-name-row">
-          <h3 class="ll-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item?.name || '')}</h3>
-          ${index === 0 ? '<span class="ll-chef-badge">Chef\'s Choice</span>' : ''}
-        </div>
-        ${item?.desc ? `<p class="ll-item-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
-      </div>
-      <div class="ll-item-price-col">
-        ${item?.price ? `<span class="ll-special-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
-      </div>
-    </article>`;
-  }).join('');
-}
-
-function _getLeroyRouteSectionBadge(cat, layout) {
-  if (cat.id === 'special') return 'Limited Time Only';
-  if (cat.id === 'food') return 'Main Menu';
-  if (cat.id === 'sides') return 'Small Bites';
-  if (layout === 'list') return 'Small Bites';
-  return MENU_TYPE === 'food' ? 'Main Menu' : 'Bar Menu';
+  return featuredSlots.slice(0, 3).map((slot, index) => _buildLeroyRouteItemHtml(slot.item, {
+    badgeText: index === 0 ? 'Chef\'s Choice' : '',
+  })).join('');
 }
 
 function _buildLeroyRouteCategoryHtml(cat) {
   const items = _getVisiblePublicItemsForRoute(cat.id);
   if (!items.length) return '';
-  const listishIds = new Set(['sides', 'beer', 'canned']);
-  const layout = listishIds.has(cat.id) || items.length <= 3 ? 'list' : 'grid';
-  const itemsHtml = items.map(item => {
-    const is86 = !!item.eightySixed;
-    if (layout === 'list') {
-      return `<article class="ll-side-item menu-item ${is86 ? 'll-item-86d menu-item-86d' : ''}">
-        <div class="ll-side-info">
-          <span class="ll-side-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</span>
-          ${item.desc ? `<p class="ll-side-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
-        </div>
-        ${item.price ? `<span class="ll-side-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
-      </article>`;
-    }
-    return `<article class="ll-food-item menu-item ${is86 ? 'll-food-item-86d menu-item-86d' : ''}">
-      <div class="ll-food-item-header">
-        <h3 class="ll-food-item-name ${is86 ? 'll-item-struck' : ''} menu-item-name">${escHtml(item.name)}</h3>
-        ${item.price ? `<span class="ll-food-price ${is86 ? 'll-price-muted' : ''} menu-item-price">${escHtml(item.price)}</span>` : ''}
-      </div>
-      ${item.desc ? `<p class="ll-food-desc menu-item-desc">${escHtml(item.desc)}</p>` : ''}
-      ${is86 ? '<span class="ll-sold-out-badge">Sold Out</span>' : ''}
-    </article>`;
-  }).join('');
-  return `<section class="ll-section menu-category" data-category="${escHtml(cat.id)}">
-    <div class="ll-section-header">
-      <h2 class="ll-section-title">${escHtml(cat.title)}</h2>
-      <span class="ll-section-badge">${escHtml(_getLeroyRouteSectionBadge(cat, layout))}</span>
+  return `<section class="ll-board-section menu-category" data-category="${escHtml(cat.id)}">
+    <div class="ll-board-section-head">
+      <h2 class="ll-board-section-title">${escHtml(cat.title)}</h2>
     </div>
-    <div class="${layout === 'list' ? 'll-sides-list' : 'll-food-grid'}">${itemsHtml}</div>
+    <div class="ll-board-rows">${items.map(item => _buildLeroyRouteItemHtml(item)).join('')}</div>
   </section>`;
 }
 
@@ -3845,16 +3819,16 @@ function _toastUndo() {
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
 }
 
-document.getElementById('modal-bg').addEventListener('click', e => {
+document.getElementById('modal-bg')?.addEventListener('click', e => {
   if (e.target === document.getElementById('modal-bg')) closeModal();
 });
 
-document.getElementById('prune-all-btn').addEventListener('click', () => {
+document.getElementById('prune-all-btn')?.addEventListener('click', () => {
   if (!confirm('Permanently delete ALL off-menu items? This cannot be undone.')) return;
   pruneRemoved('all');
 });
 
-document.getElementById('prune-items-wrap').addEventListener('click', e => {
+document.getElementById('prune-items-wrap')?.addEventListener('click', e => {
   const btn = e.target.closest('.prune-del-btn');
   if (!btn) return;
   pruneSingleItem(btn.dataset.catid, btn.dataset.name);
@@ -4107,7 +4081,7 @@ async function copyInviteText() {
   showToast('Copied!', 'success');
 }
 
-document.getElementById('invite-modal-bg').addEventListener('click', e => {
+document.getElementById('invite-modal-bg')?.addEventListener('click', e => {
   if (e.target === document.getElementById('invite-modal-bg')) closeInviteModal();
 });
 

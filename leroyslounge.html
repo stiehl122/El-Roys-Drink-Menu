@@ -24,85 +24,61 @@
 </main>
 
 <template id="leroy-route-template">
-  <div class="ll-site-page">
-    <header class="ll-site-topbar">
-      <div class="ll-site-topbar-inner">
-        <div class="ll-site-brand">
-          <img class="ll-site-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge Logo">
-          <span class="ll-site-brand-name">Leroy's Lounge</span>
-        </div>
-        <div class="ll-site-controls">
-          <button class="ll-site-control-btn" data-route-signin onclick="openAuthOverlay()">Login</button>
-          <button class="ll-site-control-btn" data-route-manager onclick="onActionBtnClick()" style="display:none">Manager</button>
-          <button class="ll-site-control-btn ll-site-control-btn--admin" data-route-admin onclick="onAdminBtnClick()" style="display:none">Admin</button>
-          <div class="ll-site-userchip" data-route-user-chip style="display:none"
-               onclick="toggleUserDropdown('ll-user-chip')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
-               tabindex="0"
-               role="button"
-               aria-haspopup="true"
-               aria-expanded="false"
-               id="ll-user-chip"
-               aria-label="User menu">
-            <span id="ll-user-initials">?</span>
-            <span>▾</span>
-            <div class="ll-site-userdropdown" id="ll-user-dropdown">
-              <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
-              <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
-              <div class="user-dropdown-divider"></div>
-              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
-            </div>
+  <div class="ll-board-page">
+    <header class="ll-board-topbar">
+      <div class="ll-board-topbar-left">
+        <button class="ll-board-logo-btn" data-route-signin onclick="openAuthOverlay()" aria-label="Sign in">
+          <img class="ll-board-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge">
+        </button>
+      </div>
+      <div class="ll-board-topbar-center">
+        <img class="ll-board-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge">
+      </div>
+      <div class="ll-board-topbar-right">
+        <button class="ll-board-nav-btn" data-route-admin onclick="onAdminBtnClick()" style="display:none">Admin</button>
+        <button class="ll-board-nav-btn" data-route-manager onclick="onActionBtnClick()" style="display:none">Manager</button>
+        <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
+             onclick="toggleUserDropdown('ll-user-chip')"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
+             tabindex="0"
+             role="button"
+             aria-haspopup="true"
+             aria-expanded="false"
+             id="ll-user-chip"
+             aria-label="User menu">
+          <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
+          <span class="material-symbols-outlined ll-board-usercaret" aria-hidden="true">keyboard_arrow_down</span>
+          <div class="ll-board-userdropdown ll-site-userdropdown" id="ll-user-dropdown">
+            <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
+            <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
+            <div class="user-dropdown-divider"></div>
+            <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
           </div>
         </div>
+        <span id="ll-user-initials" hidden>?</span>
       </div>
     </header>
 
-    <main class="ll-site-main">
-      <div class="ll-menu-wrapper">
-        <div class="ll-status-bar">
-          <div class="ll-status-badge">
-            <div class="ll-pulse-wrapper">
-              <span class="ll-pulse-ring"></span>
-              <span class="ll-pulse-dot"></span>
-            </div>
-            <p class="ll-status-text">Kitchen Status: Live &amp; Service Active</p>
-          </div>
-          <div class="ll-timestamp-row">
-            <span class="material-symbols-outlined ll-timestamp-icon" aria-hidden="true">schedule</span>
-            <p class="ll-timestamp-text">Menu last updated: <span id="ll-route-status-timestamp">Awaiting first update</span></p>
-            <span class="ll-route-menu-pill" id="ll-route-menu-name">Leroy's Lounge</span>
-            <button id="ll-route-switch-btn" class="public-switch-btn ll-route-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-          </div>
-        </div>
-
-        <section class="ll-section menu-category" data-category="special">
-          <div class="ll-section-header">
-            <h2 class="ll-section-title">Specials</h2>
-            <span class="ll-section-badge">Limited Time Only</span>
-          </div>
-          <div id="ll-route-specials" class="ll-specials-list"></div>
-        </section>
-
-        <div id="ll-route-sections"></div>
-
-        <div class="ll-quote-block wood-grain-overlay">
-          <p class="ll-quote-label">Leroy</p>
-          <p class="ll-quote-text">"Leroy was conceived, born and nursed in bars. His mom home schooled him at the bar. He likes hamburgers, chili and french fries. It was time to open his own place."</p>
-        </div>
+    <main class="ll-board-main">
+      <div class="ll-board-meta">
+        <p class="ll-board-meta-line">Menu: <span id="ll-route-menu-name">Leroy's Lounge</span></p>
+        <p class="ll-board-meta-line">Updated: <span id="ll-route-status-timestamp">Awaiting first update</span></p>
+        <button id="ll-route-switch-btn" class="ll-board-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
       </div>
+
+      <section class="ll-board-section menu-category" data-category="special">
+        <div class="ll-board-section-head">
+          <h2 class="ll-board-section-title">Specials</h2>
+        </div>
+        <div id="ll-route-specials" class="ll-board-rows"></div>
+      </section>
+
+      <div id="ll-route-sections"></div>
     </main>
 
-    <footer class="ll-site-footer">
-      <div class="ll-site-footer-inner">
-        <div class="ll-site-footer-copy">
-          <span class="ll-site-footer-brand">Leroy's Lounge</span>
-          <p class="ll-site-footer-meta">86'd items updated live</p>
-          <p class="ll-site-footer-timestamp">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
-        </div>
-        <div class="ll-site-footer-links">
-          <p id="ll-route-footer-version" class="ll-site-footer-version"></p>
-        </div>
-      </div>
+    <footer class="ll-board-footer">
+      <p class="ll-board-footer-updated">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
+      <p id="ll-route-footer-version" class="ll-board-footer-version"></p>
     </footer>
   </div>
 </template>
