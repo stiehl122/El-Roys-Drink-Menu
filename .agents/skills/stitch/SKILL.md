@@ -20,7 +20,7 @@ Stitch owns the design.
 
 Your job is not to reinterpret, improve, or "clean up" the UI. Your job is to:
 - preserve the Stitch layout, typography, logo, spacing, colors, and overall visual hierarchy as closely as possible
-- fit the app's live functionality into that design
+- build the full route-owned menu page HTML around that design, including the app's live functionality hooks and runtime bindings
 - ask for help only when required functionality genuinely cannot fit the Stitch design cleanly
 
 Do not fall back to the old assumption that the app provides a shared design shell
@@ -33,13 +33,14 @@ and Stitch only provides a fragment. The default assumption is now:
 - `restaurant_name`
 - `stitch_project_id`
 - optional `screen_id`
+- optional `special_arguments`
 
-Interpret the request flexibly. If the user writes `/stitch El Roy's Cantina 4044680601076201931`, treat that as input. If required values are missing or the restaurant is ambiguous, ask a concise follow-up.
+Interpret the request flexibly. If the user writes `/stitch El Roy's Cantina 4044680601076201931`, treat that as input. If the user includes extra instructions after the required values, treat the trailing text as `special_arguments` that describe behavior or implementation requirements not obvious from the static Stitch HTML. If required values are missing or the restaurant is ambiguous, ask a concise follow-up.
 
 ## Workflow
 
 1. Parse the request.
-Identify the numeric Stitch project ID and optional screen ID. Treat the remaining text as the restaurant name.
+Identify the numeric Stitch project ID, optional screen ID, and optional trailing `special_arguments`. Treat the restaurant-name portion as the restaurant name, and treat any remaining trailing instruction text as behavior guidance that should shape the implementation without overriding Stitch as the design source of truth.
 
 2. Verify the restaurant before touching files.
 Use live app config when available:
@@ -64,10 +65,11 @@ Selection rules:
 
 Default implementation rule:
 - Preserve the Stitch structure first.
-- Add only the minimum semantic hooks and dynamic bindings needed for the app to work.
+- Stitch owns the design; the route implementation owns the full menu page HTML, semantic hooks, and dynamic bindings needed for the app to work.
 
 That means:
 - use Stitch fonts, logos, textures, and other visual assets whenever available
+- download and store required remote Stitch assets in stable repo asset paths when the route depends on them; do not leave critical design assets as fragile remote references
 - keep the Stitch section hierarchy and spacing
 - keep the Stitch item presentation unless functionality forces a change
 - inspect the Stitch screen for explicit item-state treatments, including unavailable or 86'd items, and preserve those treatments when present
@@ -84,6 +86,11 @@ Required functionality to fit into the design as needed:
 - manager/admin entry points when applicable
 - menu switching when applicable
 
+Missing-control rule:
+- if required functionality depends on a button or other explicit control that is not present in the Stitch design, do not invent or place that control unilaterally
+- ask the user how they want that functionality introduced before proceeding with the visual implementation
+- only add the missing control without asking when the user has already given clear prior direction for that exact control pattern
+
 86'd state rule:
 - If the Stitch design shows an explicit visual treatment for an unavailable, sold-out, disabled, hidden, or 86'd item state, preserve that exact treatment as closely as possible.
 - If the Stitch design does not show that state, use the app's canonical fallback treatment: keep the item visible publicly with strike-through and an `86'D` badge.
@@ -93,6 +100,9 @@ If the request is for a dedicated restaurant route:
 - treat the Stitch screen as the full public page template
 - prefer updating the route entry page such as `leroyslounge/index.html` or `elroyscantina/index.html`
 - preserve the Stitch page visually and bind live data into it
+- create the full route-owned menu page HTML, not a partial fragment or isolated design mock
+- include the complete functionality surface required by the live page, including public rendering, featured content, prices, descriptions, 86'd state, timestamps, sign-in entry points, and manager/admin hooks when applicable
+- keep the restaurant route's design CSS owned by that route instead of adding restaurant-specific design styling to the shared root `style.css`
 
 If the request includes root-level picker changes:
 - update `index.html` only for the picker or shared shell concerns
@@ -110,7 +120,7 @@ HTML rules:
 CSS rules:
 - preserve Stitch typography and visual tokens
 - preserve font imports when needed
-- preserve asset references when practical; if remote assets are fragile, download them into a stable repo asset path used by the route page
+- preserve asset references when practical; if a remote asset is needed for the route to match Stitch, download it into a stable repo asset path used by the route page
 - if the target runtime requires scoping, scope as narrowly as needed without altering the visual result more than necessary
 
 Markup rules:
@@ -130,11 +140,16 @@ Update the route-owned public page files directly:
 - `leroyslounge/index.html`
 - `elroyscantina/index.html`
 
-Keep the top-level route entry files in sync when the repo uses both:
-- `leroyslounge.html`
-- `elroyscantina.html`
+When route-specific styling is required, write it to route-owned CSS files that live with the restaurant page, for example:
+- `leroyslounge/style.css`
+- `elroyscantina/style.css`
 
 When needed, add or update supporting assets in stable repo asset paths used by those route files.
+
+Asset rule:
+- required design assets are part of the implementation, not optional polish
+- download the necessary Stitch assets before finishing the task
+- report exactly which assets were downloaded and where they were written
 
 7. Report the result.
 
@@ -154,4 +169,6 @@ If you had to compromise visually, say exactly where and why.
 - Treat `index.html`, `leroyslounge/index.html`, and `elroyscantina/index.html` as the design source files.
 - Preserve route-specific public pages when they already exist.
 - Do not tell the user to use an in-app Design tab; that workflow is deprecated.
+- The route-owned restaurant pages are the architecture. Stitch supplies the design, and the implementation must produce the complete live route page HTML and hooks inside those route files.
+- Restaurant-specific public design CSS should live with the restaurant route, not in the shared root `style.css`.
 - If the user is asking to create or refresh a Stitch-driven page, do the work instead of only describing it.
