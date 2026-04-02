@@ -2264,12 +2264,21 @@ function renderUserHeader() {
     const routeInitials = document.getElementById('ll-user-initials');
     const routeName = document.getElementById('ll-user-dropdown-name');
     const routeRole = document.getElementById('ll-user-dropdown-role');
+    const cantinaName = document.getElementById('erc-user-dropdown-name');
+    const cantinaRole = document.getElementById('erc-user-dropdown-role');
     if (standardInitials) standardInitials.textContent = initials;
     if (standardName) standardName.textContent = fullName;
     if (standardRole) standardRole.textContent = roleLabel;
     if (routeInitials) routeInitials.textContent = initials;
     if (routeName) routeName.textContent = fullName;
     if (routeRole) routeRole.textContent = roleLabel;
+    if (cantinaName) cantinaName.textContent = fullName;
+    if (cantinaRole) cantinaRole.textContent = roleLabel;
+  }
+
+  const publicView = document.getElementById('public-view');
+  if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
+    renderPublicView();
   }
 
   _renderLeroyRouteSettingsDropdown();
