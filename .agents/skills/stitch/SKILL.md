@@ -1,37 +1,53 @@
 ---
 name: stitch
 description: >
-  Convert a Stitch project into El Roy's custom-design files by verifying the
-  target restaurant, downloading the Stitch screen, saving raw exports,
-  melding the markup/CSS to app conventions, and writing upload-ready files
-  into `designs/`. Use when the user mentions `/stitch`, asks to integrate a
-  Stitch project, or wants a restaurant custom design prepared from Stitch.
-  Expected inputs: restaurant name, Stitch project ID, and optional screen ID.
+  Treat Stitch as the source of truth for a restaurant's public design. Verify
+  the target restaurant, download the Stitch screen, and fit the app's live
+  menu/auth/manager functionality into the Stitch design with minimal visual
+  deviation. Update the restaurant route page directly instead of generating a
+  separate design artifact folder. Expected inputs:
+  restaurant name, Stitch project ID, and optional screen ID.
 ---
 
 # Stitch
 
-Use this skill when the user wants the Codex equivalent of the repo's Claude `/stitch` workflow.
+Use this skill when the user mentions `/stitch`, asks to import a Stitch design,
+or wants a restaurant public page rebuilt from Stitch.
 
-Expected inputs:
+## Core rule
+
+Stitch owns the design.
+
+Your job is not to reinterpret, improve, or "clean up" the UI. Your job is to:
+- preserve the Stitch layout, typography, logo, spacing, colors, and overall visual hierarchy as closely as possible
+- fit the app's live functionality into that design
+- ask for help only when required functionality genuinely cannot fit the Stitch design cleanly
+
+Do not fall back to the old assumption that the app provides a shared design shell
+and Stitch only provides a fragment. The default assumption is now:
+- the entire public restaurant page comes from Stitch
+- Codex adapts functionality to the Stitch page
+
+## Expected inputs
+
 - `restaurant_name`
 - `stitch_project_id`
 - optional `screen_id`
 
-Interpret the request flexibly. If the user writes `/stitch El Roy's Cantina 4044680601076201931`, treat that as the input. If the request is missing required values or the restaurant name is ambiguous, ask a concise follow-up.
+Interpret the request flexibly. If the user writes `/stitch El Roy's Cantina 4044680601076201931`, treat that as input. If required values are missing or the restaurant is ambiguous, ask a concise follow-up.
 
 ## Workflow
 
 1. Parse the request.
-Identify the numeric Stitch project ID and optional numeric screen ID. Treat the remaining text as the restaurant name.
+Identify the numeric Stitch project ID and optional screen ID. Treat the remaining text as the restaurant name.
 
-2. Verify the restaurant exists before touching Stitch files.
-Use the live app config when available:
+2. Verify the restaurant before touching files.
+Use live app config when available:
 - Prefer the deployed app's `/api/config` response or existing environment values for `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
-- In v0.8.x, only `Leroy's Lounge` and `El Roy's Cantina` are valid targets. If the request names anything else, stop and tell the user to choose one of those two restaurants.
+- In v0.8.x, only `Leroy's Lounge` and `El Roy's Cantina` are valid targets.
 - Query `restaurants` by name.
-- If there is no match, report that clearly and list available restaurant names if you can retrieve them.
-- If there are multiple plausible matches, stop and ask the user which restaurant to use.
+- If there is no match, report that clearly.
+- If there are multiple plausible matches, stop and ask the user which one to use.
 
 3. Download the Stitch project with the Stitch MCP tools.
 Use this sequence:
@@ -44,33 +60,56 @@ Selection rules:
 - If no `screen_id` was provided and there is exactly one screen, use it.
 - If multiple screens exist and the user did not specify one, ask which screen to use.
 
-4. Save raw exports under `designs/{sanitized_restaurant_name}/`.
-Use the repo's naming convention:
-- lowercase
-- replace runs of non-alphanumeric characters with `_`
-- trim leading and trailing `_`
+4. Fit app functionality to the Stitch design.
 
-Write:
-- `raw_screen.html`
-- `raw_screen.css`
+Default implementation rule:
+- Preserve the Stitch structure first.
+- Add only the minimum semantic hooks and dynamic bindings needed for the app to work.
 
-5. Meld the design for the app's custom-design runtime.
+That means:
+- use Stitch fonts, logos, textures, and other visual assets whenever available
+- keep the Stitch section hierarchy and spacing
+- keep the Stitch item presentation unless functionality forces a change
+- avoid introducing an app-authored hero, card system, or layout language when Stitch already defines one
+
+Required functionality to fit into the design as needed:
+- live menu sections and items
+- featured items / specials
+- prices
+- descriptions
+- 86'd state
+- last updated timestamp
+- sign-in entry point
+- manager/admin entry points when applicable
+- menu switching when applicable
+
+If the request is for a dedicated restaurant route:
+- treat the Stitch screen as the full public page template
+- prefer updating the route entry page such as `leroyslounge/index.html` or `elroyscantina/index.html`
+- preserve the Stitch page visually and bind live data into it
+
+If the request includes root-level picker changes:
+- update `index.html` only for the picker or shared shell concerns
+- keep the restaurant-specific public design in the route files
+
+5. Implementation rules when adapting a Stitch screen.
 
 HTML rules:
-- Remove all `<script>` tags and their contents.
-- Remove external stylesheet `<link>` tags except allowed font stylesheets.
-- Move inline `<style>` content into the output CSS.
-- Produce an HTML fragment only, not a full document shell.
+- remove `<script>` tags and their contents
+- remove external stylesheet links except font stylesheets you intentionally keep
+- move inline `<style>` content into CSS output
+- preserve the Stitch markup structure as much as possible
+- keep the output as a full route-owned page section, not a fragment in a separate design folder
 
 CSS rules:
-- Scope selectors to `#public-categories`.
-- Do not prefix `@keyframes`, `@font-face`, or `:root`.
-- Remove external non-font asset URLs where practical.
-- Preserve font imports and font-face rules when they are needed.
+- preserve Stitch typography and visual tokens
+- preserve font imports when needed
+- preserve asset references when practical; if remote assets are fragile, download them into a stable repo asset path used by the route page
+- if the target runtime requires scoping, scope as narrowly as needed without altering the visual result more than necessary
 
 Markup rules:
-- Preserve the design's existing classes.
-- Add semantic classes where needed so future data binding can target the structure:
+- preserve the design's existing classes
+- add semantic classes only where needed for data binding:
   - `.menu-category`
   - `.menu-item`
   - `.menu-item-name`
@@ -78,29 +117,34 @@ Markup rules:
   - `.menu-item-desc`
   - `.menu-item-86d`
 
-6. Write the upload-ready files.
-Save:
-- `designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.html`
-- `designs/{sanitized_restaurant_name}/{sanitized_restaurant_name}_design.css`
+6. Write the output files.
 
-These are the files the admin uploads through Admin -> Design.
+Update the route-owned public page files directly:
+- `leroyslounge/index.html`
+- `elroyscantina/index.html`
+
+Keep the top-level route entry files in sync when the repo uses both:
+- `leroyslounge.html`
+- `elroyscantina.html`
+
+When needed, add or update supporting assets in stable repo asset paths used by those route files.
 
 7. Report the result.
+
 Summarize:
 - verified restaurant name and ID
 - Stitch project ID and screen ID used
-- raw files written
-- melded files written
-- any assumptions or manual cleanup still recommended
+- route files updated, if any
+- asset files updated, if any
+- any places where functionality could not cleanly fit the Stitch design
 
-End with the operational next steps:
-1. Review the melded files.
-2. Upload the generated HTML and CSS in Admin -> Design.
-3. Leave "Use Custom Design" enabled unless the restaurant needs to fall back to the default renderer temporarily.
+If you had to compromise visually, say exactly where and why.
 
-## Repo-specific constraints
+## Repo-specific rules
 
-- Keep the output aligned with the app's existing custom-design behavior described in `CLAUDE.md`.
 - Do not introduce dependencies or build steps.
-- Write files directly into `designs/`.
-- If the user is asking to create or refresh design files, do the work rather than only describing it.
+- Do not write to `designs/`; that folder is deprecated.
+- Treat `index.html`, `leroyslounge/index.html`, and `elroyscantina/index.html` as the design source files.
+- Preserve route-specific public pages when they already exist.
+- Do not tell the user to use an in-app Design tab; that workflow is deprecated.
+- If the user is asking to create or refresh a Stitch-driven page, do the work instead of only describing it.

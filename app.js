@@ -41,7 +41,7 @@ let isManagerMode = false;
 let isAdminMode   = false;
 let _adminRestaurants   = [];
 let _adminAllMenus      = [];
-let _adminSwitcherState = { notif: { restaurantId: '', menuId: '' }, design: { restaurantId: '', menuId: '' } };
+let _adminSwitcherState = { notif: { restaurantId: '', menuId: '' } };
 let syncInterval  = null;
 let _tokenRefreshTimer = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
@@ -248,19 +248,6 @@ function primeSiteRestaurantMenu(restaurant) {
   const url = new URL(location.href);
   url.searchParams.set('menu', preferredMenu.slug);
   history.replaceState({}, '', url.toString());
-}
-
-function getCustomDesignAssetPaths(restaurantName) {
-  const sanitized = sanitizeMenuName(restaurantName);
-  if (!sanitized) return null;
-  const basePath = `/designs/${sanitized}`;
-  return {
-    sanitized,
-    htmlFile: `${sanitized}_design.html`,
-    cssFile: `${sanitized}_design.css`,
-    htmlUrl: `${basePath}/${sanitized}_design.html`,
-    cssUrl: `${basePath}/${sanitized}_design.css`,
-  };
 }
 
 function showPickerPage() {
@@ -1755,56 +1742,21 @@ async function _renderCustomDesignView() {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
   const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
-  const assetPaths = getCustomDesignAssetPaths(_activeRestaurantName);
-  if (!_restaurantCustomDesignEnabled || !assetPaths || !container) {
+  if (!_restaurantCustomDesignEnabled || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
     return;
   }
+
+  document.getElementById('custom-design-style')?.remove();
 
   if (renderIntoSiteWrapper && _siteRestaurant?.id === RESTAURANTS.LEROYS.id && _renderLeroyRoutePage(container)) {
     _togglePublicShellMode('site');
     return;
   }
 
-  container.innerHTML = '<div class="custom-design-loading"><div class="spinner"></div></div>';
-
-  try {
-    const ts = Date.now(); // cache-bust so stale CDN copies don't persist after upload
-    const [htmlRes, cssRes] = await Promise.all([
-      fetch(`${assetPaths.htmlUrl}?v=${ts}`),
-      fetch(`${assetPaths.cssUrl}?v=${ts}`),
-    ]);
-    if (!htmlRes.ok) throw new Error(`HTML not found (${htmlRes.status})`);
-
-    // Inject scoped CSS
-    let style = document.getElementById('custom-design-style');
-    if (style) style.remove();
-    const cssContent = cssRes.ok ? await cssRes.text() : '';
-    if (cssContent) {
-      style = document.createElement('style');
-      style.id = 'custom-design-style';
-      style.textContent = renderIntoSiteWrapper
-        ? cssContent.replace(/#public-categories\b/g, '#restaurant-site-wrapper')
-        : cssContent;
-      document.head.appendChild(style);
-    }
-
-    container.innerHTML = await htmlRes.text();
-    if (renderIntoSiteWrapper) {
-      _togglePublicShellMode('site');
-    } else {
-      _togglePublicShellMode('default');
-      renderFeaturedPublicSection();
-      updateCollapseAllBtn();
-    }
-  } catch (e) {
-    console.warn('[custom-design] Falling back to default:', e.message);
-    document.getElementById('custom-design-style')?.remove();
-    if (siteWrapper) siteWrapper.innerHTML = '';
-    _togglePublicShellMode('default');
-    _renderDefaultPublicView();
-  }
+  _togglePublicShellMode('default');
+  _renderDefaultPublicView();
 }
 
 function togglePublicDesc(el) {
@@ -2613,10 +2565,10 @@ async function initAdminSwitcherTab(context) {
   // Default to current active restaurant/menu on first open
   if (!_adminSwitcherState[context].restaurantId) {
     _adminSwitcherState[context].restaurantId = RESTAURANT_ID || (_adminRestaurants[0]?.id || '');
-    _adminSwitcherState[context].menuId       = context === 'notif' ? (MENU_ID || '') : '';
+    _adminSwitcherState[context].menuId       = MENU_ID || '';
   }
   restSelect.value = _adminSwitcherState[context].restaurantId;
-  if (context !== 'design') _refreshAdminMenuSelect(context);
+  _refreshAdminMenuSelect(context);
   await _loadAdminTabData(context);
 }
 
@@ -2624,10 +2576,8 @@ async function onAdminSwitcherRestaurantChange(context) {
   const restSelect = document.getElementById(`${context}-restaurant-select`);
   if (!restSelect) return;
   _adminSwitcherState[context].restaurantId = restSelect.value;
-  if (context !== 'design') {
-    _adminSwitcherState[context].menuId = ''; // reset so _refreshAdminMenuSelect picks first menu
-    _refreshAdminMenuSelect(context);
-  }
+  _adminSwitcherState[context].menuId = ''; // reset so _refreshAdminMenuSelect picks first menu
+  _refreshAdminMenuSelect(context);
   await _loadAdminTabData(context);
 }
 
@@ -2667,94 +2617,6 @@ async function _loadAdminTabData(context) {
         _populateNotifCredKeys(rest?.notifications_config || {});
       } catch { _populateNotifCredKeys({}); }
     } else { _populateNotifCredKeys({}); }
-  } else if (context === 'design') {
-    const restaurantId = _adminSwitcherState.design.restaurantId;
-    if (!restaurantId) {
-      _populateAdminDesignPanel(DESIGN_DEFAULTS);
-      _renderCustomDesignControls(null);
-      return;
-    }
-    try {
-      const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=id,name,design,use_custom_design`,
-        { headers: sbHeaders() }
-      );
-      const [row] = r.ok ? await r.json() : [{}];
-      _populateAdminDesignPanel({ ...DESIGN_DEFAULTS, ...(row?.design || {}) });
-      const entry = _adminRestaurants.find(rest => rest.id === restaurantId);
-      if (entry) entry.use_custom_design = !!row?.use_custom_design;
-      _renderCustomDesignControls(row);
-    } catch {
-      _populateAdminDesignPanel(DESIGN_DEFAULTS);
-      const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
-      _renderCustomDesignControls(restaurantRow || null);
-    }
-    const sec = document.getElementById('custom-design-section');
-    if (sec && !sec.innerHTML.trim()) {
-      const restaurantRow = _adminRestaurants.find(rest => rest.id === restaurantId);
-      _renderCustomDesignControls(restaurantRow || null);
-    }
-  }
-}
-
-// ─── CUSTOM DESIGN ADMIN CONTROLS ────────────────────────────────────────────
-
-function _renderCustomDesignControls(restaurantRow) {
-  const sec = document.getElementById('custom-design-section');
-  if (!sec) return;
-  if (!restaurantRow) { sec.innerHTML = ''; return; }
-
-  const assetPaths = getCustomDesignAssetPaths(restaurantRow.name);
-  const checked   = restaurantRow.use_custom_design ? 'checked' : '';
-
-  sec.innerHTML = `
-    <div class="config-card" style="margin-top:14px;">
-      <div class="section-label" style="margin-bottom:10px;">Primary Public Design</div>
-      <p class="config-hint" style="margin-bottom:12px;">Public rendering reads the restaurant design directly from the repo-hosted files below. This control only decides whether the app should use that custom design or fall back to the default accordion renderer.</p>
-      <div class="custom-design-toggle-row">
-        <label for="custom-design-toggle">Use Custom Design</label>
-        <input type="checkbox" id="custom-design-toggle" ${checked}
-          onchange="toggleCustomDesign(this.checked)"
-          aria-label="Use custom design for this restaurant"/>
-      </div>
-      <div class="custom-design-file-targets">
-        <div class="custom-design-file-row">
-          <span class="custom-design-file-label">HTML</span>
-          <code class="custom-design-file-name">${escHtml(assetPaths?.htmlUrl || '—')}</code>
-        </div>
-        <div class="custom-design-file-row">
-          <span class="custom-design-file-label">CSS</span>
-          <code class="custom-design-file-name">${escHtml(assetPaths?.cssUrl || '—')}</code>
-        </div>
-      </div>
-    </div>`;
-}
-
-async function toggleCustomDesign(checked) {
-  const restaurantId = _adminSwitcherState.design.restaurantId;
-  if (!restaurantId || !SUPABASE_URL || !currentUser?.accessToken) return;
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`,
-      {
-        method: 'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify({ use_custom_design: checked }),
-      }
-    );
-    if (!r.ok) throw new Error(await r.text());
-    const entry = _adminRestaurants.find(rest => rest.id === restaurantId);
-    if (entry) entry.use_custom_design = checked;
-    if (restaurantId === RESTAURANT_ID) {
-      _restaurantCustomDesignEnabled = checked;
-      renderPublicViews();
-    }
-    showToast(checked ? 'Custom design enabled' : 'Custom design disabled', 'success');
-  } catch (e) {
-    showToast('Failed to update custom design flag', 'error');
-    // Revert checkbox
-    const cb = document.getElementById('custom-design-toggle');
-    if (cb) cb.checked = !checked;
   }
 }
 
@@ -4274,7 +4136,7 @@ function switchManagerTab(name) {
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-design', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
+  ['admin-restaurants', 'admin-notifications', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
@@ -4282,7 +4144,6 @@ function switchAdminTab(name) {
   });
   if (name === 'admin-restaurants')   { renderMenusPanel(); }
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
-  if (name === 'admin-design')        { initAdminSwitcherTab('design'); }
   if (name === 'admin-users')         { loadUsers(); }
   if (name === 'admin-featured')      { renderFeaturedAdmin(); }
   if (name === 'admin-history')       { renderUpdateHistory(); }

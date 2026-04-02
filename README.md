@@ -1,155 +1,208 @@
 # El Roy's Drink Menu
 
-A live, single-page drink menu for El Roy's — built with zero external dependencies and no build step. Staff sign in with email and password, update the menu in real time, save changes to Firebase, and push a formatted update to a GroupMe group. The public-facing view updates instantly via Firebase.
+Zero-dependency web app for the live public and manager-facing menus of exactly two restaurants:
 
----
+- Leroy's Lounge
+- El Roy's Cantina
 
-## Features
+Each restaurant has two menus, Drinks and Food, for four total menus. The public experience is custom-design first: each restaurant's public page is owned by its route files, and the shared app falls back to the default accordion renderer only when a route-specific design is unavailable or disabled.
 
-- **Live public menu** — displays beers on tap, infused tequilas, frozen marg flavors, cocktails, monthly specials, and canned & bottled offerings
-- **Item descriptions** — optional per-item descriptions visible to the public via an expandable tap/click
-- **Recipe management** — internal-only recipe notes per item, visible only in manager mode
-- **86'd items** — mark items out of stock; they remain visible on the public menu with a strikethrough and "86'D" tag
-- **Manager mode** — role-protected editing interface; add or remove items per category, toggle 86 status, and write item descriptions
-- **Save vs. Send Update** — save menu changes to the database without notifying the group; send only when ready
-- **Draft indicators** — green dot per item means it hasn't been announced yet; the Send Update button shows a change count when there are unsent changes
-- **Supabase sign-in** — four-screen auth wizard: Sign In, Sign Up, Forgot Password, and Reset Password; role-based access (`none`, `manager`, `admin`)
-- **GroupMe integration** — sends a formatted patch-notes message to a GroupMe group via a bot
-- **Firebase cloud sync** — menu state and config sync across devices in real time via Firebase Realtime Database
-- **Offline-capable** — falls back to localStorage if Firebase is unavailable
-- **Categories tab** — admin can add, remove, or reorder menu categories
-- **Design & Branding panel** — admin can set brand name, logo, fonts, and accent colors; color pickers include a typable hex input so exact color codes can be entered directly
-- **Public menu footer** — displays the app version and last-updated timestamp; shows a PREVIEW badge on Vercel preview deployments
-- **Database tab** — admin can prune items that have been removed from the menu
-- **Accessible interface** — ARIA roles, live regions, focus management, and keyboard navigation throughout; screen-reader-friendly for all interactive controls
-- **Zero client-side dependencies** — no build step, no package manager required
+## Current Architecture
 
----
+- `index.html`, `style.css`, `app.js`: no build step, bundler, or package manager
+- Supabase PostgREST: primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, history, and auth-backed user data
+- `localStorage`: offline/degraded-read cache for menu data, timestamps, and session state
+- Supabase Auth: client email/password auth with recovery handling
+- Vercel API routes in [`api/`](api): config delivery, role lookup, user management, and notifications
+- Route-owned public pages in [`leroyslounge/index.html`](leroyslounge/index.html) and [`elroyscantina/index.html`](elroyscantina/index.html)
+- Supabase migrations in [`supabase/migrations/`](supabase/migrations) as the database history and provisioning source of truth
 
-## Menu Categories
+## Fixed Restaurant And Menu Model
 
-| Category | Description |
-|---|---|
-| 🍺 Beers on Tap | Current draft beer offerings |
-| 🍻 Canned & Bottled | Canned and bottled offerings |
-| 🍹 Cocktails | Craft cocktail offerings |
-| 🌶️ Infused Tequila | Rotating infused margarita tequilas |
-| 🧊 Frozen Marg | Current frozen margarita flavor(s) |
-| ⭐ Monthly Specials | Featured cocktails and promos |
+The app is intentionally centered on four known menus, not arbitrary multi-restaurant CRUD:
 
----
+- Leroy's Lounge Drinks
+- Leroy's Lounge Food
+- El Roy's Cantina Drinks
+- El Roy's Cantina Food
 
-## Setup & Configuration
+Those IDs and slugs are hardcoded in [`app.js`](app.js). Legacy `?menu=el-roys` links still normalize to El Roy's Cantina Drinks.
 
-### 1. Firebase Realtime Database
+## Key Behaviors
 
-1. Go to [Firebase Console](https://console.firebase.google.com) and create a project
-2. Enable **Realtime Database** (start in test mode or set rules as needed)
-3. Copy your **Database URL** (e.g. `https://your-app-default-rtdb.firebaseio.com`)
-4. Go to **Project Settings → Service Accounts → Database Secrets** and generate a legacy secret
+- `Save` persists current state without notifying anyone
+- `Send Update` persists, sends notifications, and updates the public timestamp
+- Draft indicators show unsent item changes
+- 86'd items remain visible publicly with a strike-through and badge
+- Item descriptions and optional prices are supported in public and manager views
+- Food menus hide recipe controls and use food defaults
+- Managers have per-menu access; admins have global access
+- Public footer shows `APP_VERSION` and last-updated time; preview deployments show a `PREVIEW` badge
 
-### 2. Supabase Project
+Current app version in code: `v0.8.1` from [`app.js:2`](app.js#L2).
 
-1. Go to [supabase.com](https://supabase.com) and create a project
-2. Under **Project Settings → API**, copy the **Project URL** and **anon/public key**
-3. Enable **Email auth** under **Authentication → Providers**
-4. Create a `profiles` table (or equivalent) to store user roles (`none`, `manager`, `admin`)
+## Public Routes
 
-### 3. GroupMe Bot
+- Root app shell: `/`
+- Leroy's Lounge public route: `/leroyslounge`
+- El Roy's Cantina public route: `/elroyscantina`
 
-1. Go to [dev.groupme.com](https://dev.groupme.com) and sign in
-2. Click **Bots → Create Bot**, select your group, give it a name
-3. Copy the **Bot ID** shown after creation
+The shared app detects route ownership and renders the matching public restaurant page when possible. Manager/admin flows still live in the shared app shell.
 
-### 4. Vercel Deployment
+## Repo Layout
 
-This app requires Vercel for full functionality. The `/api/` routes run as serverless functions and handle credential delivery, role lookups, and GroupMe proxying.
-
-1. Fork or clone this repository and import it into [Vercel](https://vercel.com)
-2. Set the following **Environment Variables** in the Vercel dashboard:
-   - `FIREBASE_SECRET` — the legacy Firebase Database secret
-   - `SUPABASE_URL` — your Supabase project URL
-   - `SUPABASE_ANON_KEY` — your Supabase anon/public key
-   - `SUPABASE_SERVICE_ROLE_KEY` — your Supabase service role key (used by `/api/role`)
-3. Deploy. The app is available at your Vercel project URL.
-
-> **Note:** GitHub Pages and other plain static hosts will not work for write operations. Without the API routes, Firebase writes, Supabase auth config delivery, and GroupMe sending are all unavailable.
-
-### 5. First-Time Sign-In
-
-1. Open your Vercel deployment URL
-2. Click **Sign In** in the top-right corner
-3. Click **Sign up** in the auth overlay, fill in your first name, last name, email, and password — new accounts start with `role: none`
-4. The first admin must be promoted manually via the **Supabase dashboard** (set their role to `admin` in the profiles table)
-5. Once you have an admin account, additional users can be promoted via the **Admin** tab in the app
-
-### 6. GroupMe and Firebase URL (In-App Config)
-
-1. Sign in with an admin account
-2. Open the **Admin** tab
-3. Fill in:
-   - **Firebase Database URL**
-   - **GroupMe Bot ID**
-   - **Menu Page URL** — the public URL for the app (included in GroupMe messages)
-4. Click **Save** for each field
-
----
-
-## Usage Guide
-
-### Viewing the Menu (Public)
-
-Open the page URL in any browser. The menu loads automatically from Firebase and shows all current items by category. Items marked 86'd appear with a strikethrough and red "86'D" tag. Items with a description show a **›** icon — tap or click to expand.
-
-### Updating the Menu (Manager or Admin)
-
-1. Click **Sign In** and enter your email and password. To reset a forgotten password, click **Forgot password?** on the Sign In screen, enter your email, and follow the link in the reset email — it opens the app directly to the Reset Password screen.
-2. Use the **Manager** tab to edit each category:
-   - Type an item name in the input field and press **+** (or Enter) to add it
-   - Click **86** on an item to mark it out of stock; click **↩** to restore it
-   - Click **📝** to add or edit an item description
-   - Click **✕** to remove an item permanently
-3. Items not yet announced to the group show a **green dot**; the Send Update button shows a change count when unsent changes exist
-4. At the bottom of the manager screen:
-   - **💾 SAVE** — saves all changes to Firebase without sending a GroupMe message
-   - **🔥 SEND UPDATE** — saves changes and sends a patch-notes message to your GroupMe group, including any previously saved-but-not-sent changes; also updates the **Last Updated** timestamp in the header
-
-### Changing Admin Settings
-
-1. Click **Sign In** and sign in with an **admin** account
-2. The **Admin** tab will be visible — `manager` role accounts cannot see it
-3. Update Firebase URL, Bot ID, Menu URL, categories, design settings, or promote/demote users as needed
-
-### Access Levels
-
-| Action | `none` | `manager` | `admin` |
-|---|---|---|---|
-| View public menu | ✅ | ✅ | ✅ |
-| Edit menu items | ❌ | ✅ | ✅ |
-| Save to database | ❌ | ✅ | ✅ |
-| Send to GroupMe | ❌ | ✅ | ✅ |
-| View admin settings | ❌ | ❌ | ✅ |
-| Change categories / design | ❌ | ❌ | ✅ |
-| Promote / demote users | ❌ | ❌ | ✅ |
-
-> **Note:** New accounts start with `role: none`. An admin must promote the account before the user can edit the menu.
-
----
-
-## File Structure
-
-```
+```text
 El-Roys-Drink-Menu/
-├── index.html        # HTML structure and markup
-├── app.js            # All JavaScript logic
-├── style.css         # All CSS styles
+├── index.html
+├── style.css
+├── app.js
 ├── api/
-│   ├── config.js         # Serves Supabase URL + anon key
-│   ├── role.js           # Looks up authenticated user's role
-│   ├── firebase-config.js# Serves Firebase secret (FIREBASE_SECRET env var)
-│   └── send-groupme.js   # Proxies GroupMe Bot API calls
-├── README.md         # Setup and usage documentation
-└── CLAUDE.md         # AI assistant instructions and project context
+│   ├── _auth.js
+│   ├── config.js
+│   ├── role.js
+│   ├── send-groupme.js
+│   ├── send-notification.js
+│   └── users.js
+├── leroyslounge/
+│   └── index.html
+├── elroyscantina/
+│   └── index.html
+├── assets/
+├── docs/
+├── scripts/
+└── supabase/
+    ├── config.toml
+    └── migrations/
 ```
 
-Configuration is stored in Firebase and `localStorage`. The `FIREBASE_SECRET` and Supabase keys are kept server-side as Vercel environment variables and never exposed to the client directly.
+## Setup
+
+### 1. Create A Supabase Project
+
+1. Create a Supabase project.
+2. Under Project Settings, copy:
+   - project URL
+   - anon/public key
+   - service role key
+3. Enable Email auth.
+4. Apply the repo migrations so the project has the expected schema and seed state.
+
+If you use the Supabase CLI locally, this repo is configured to apply migrations during `db push` / `db reset` via [`supabase/config.toml`](supabase/config.toml).
+
+### 2. Configure Vercel
+
+This app requires Vercel for full functionality. The API routes are not optional if you need authenticated role checks, user management, or notification delivery.
+
+Set these required environment variables in Vercel:
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Optional notification environment variables:
+
+- `GROUPME_BOT_ID`
+- `DISCORD_WEBHOOK_URL`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
+- `TWILIO_TO_NUMBERS`
+- `GENERIC_WEBHOOK_URL`
+- `GENERIC_WEBHOOK_SECRET`
+
+Per-restaurant notification credential mapping is stored in the database; the app can point a restaurant's notification channels at any of the configured env var names.
+
+### 3. Deploy
+
+1. Import the repo into Vercel.
+2. Set the environment variables above.
+3. Deploy.
+4. Open the deployment URL and verify `/api/config` returns the Supabase config payload.
+
+Static-only hosting is insufficient for the full app.
+
+## First-Time Bootstrapping
+
+1. Run the Supabase migrations against the target project.
+2. Deploy to Vercel with the required env vars.
+3. Open the app and create a user through the Sign Up flow.
+4. Promote the first admin directly in Supabase if needed.
+5. Use the Admin tab to assign menu access for managers across the four fixed menus.
+
+New accounts start with `role: none`.
+
+## Access Model
+
+| Capability | `manager` | `admin` |
+|---|---|---|
+| Edit/save/send for assigned menus | Yes | Yes |
+| View Admin tab | No | Yes |
+| Change categories | No | Yes |
+| Manage users and menu access | No | Yes |
+| Configure notification credentials | No | Yes |
+| Manage featured groups/history/design toggles | No | Yes |
+
+## Categories
+
+Drink defaults:
+
+- `beer`
+- `canned`
+- `cocktails`
+- `tequila`
+- `frozen`
+- `special`
+
+Food defaults:
+
+- `starters`
+- `tacos`
+- `entrees`
+- `sides`
+- `desserts`
+
+Categories remain admin-configurable at runtime. Deleting a category moves its items into the hidden `__uncategorized__` pool.
+
+## Public Design Workflow
+
+Stitch is the source of truth for each restaurant's public design.
+
+- Leroy's Lounge design lives in [`leroyslounge/index.html`](leroyslounge/index.html)
+- El Roy's Cantina design lives in [`elroyscantina/index.html`](elroyscantina/index.html)
+- Shared fallback rendering still exists in [`app.js`](app.js)
+
+When a design changes, update the route page directly instead of introducing a separate generated design artifact.
+
+## Notifications
+
+Notification sends go through [`api/send-notification.js`](api/send-notification.js).
+
+Supported channels:
+
+- GroupMe
+- Twilio SMS
+- Discord webhook
+- Generic webhook
+
+Enabled/disabled channels are stored per menu. Credential-env-key mapping is stored per restaurant.
+
+## Local Development
+
+There is no build step. Serve the repo with any static file server and use the Vercel deployment for full API behavior, or run a local Vercel-compatible dev flow if you need serverless routes locally.
+
+When doing normal UI work:
+
+- do not add dependencies
+- do not add a bundler
+- keep the app working as plain HTML/CSS/JS
+- preserve Supabase auth and localStorage fallback behavior
+
+## Database Files
+
+The `.sql` files under [`supabase/migrations/`](supabase/migrations) are not used by the browser at runtime, but they are still needed as schema/data migration history and for provisioning a fresh Supabase project.
+
+## Release Notes
+
+- `APP_VERSION` must be updated for every release, including patches
+- preview Vercel deployments show a `PREVIEW` badge in the public footer
+- schema changes belong in Supabase migrations, not ad hoc dashboard edits

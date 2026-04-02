@@ -249,7 +249,7 @@
   #restaurant-site-wrapper .ll-side-info { display: flex; flex-direction: column; }
   #restaurant-site-wrapper .ll-side-name { font-size: 1.125rem; text-transform: uppercase; letter-spacing: -0.025em; color: var(--ll-on-surface); }
   #restaurant-site-wrapper .ll-side-desc { font-size: 0.75rem; margin: 0; }
-  #restaurant-site-wrapper .wood-grain-overlay { background-image: linear-gradient(rgba(19, 19, 19, 0.9), rgba(19, 19, 19, 0.9)), url('/designs/leroy_s_lounge/raw_texture.png'); background-size: cover; background-position: center; }
+  #restaurant-site-wrapper .wood-grain-overlay { background-image: linear-gradient(rgba(19, 19, 19, 0.9), rgba(19, 19, 19, 0.9)), url('/assets/leroys-lounge/texture.png'); background-size: cover; background-position: center; }
   #restaurant-site-wrapper .ll-quote-block { margin-top: 6rem; padding: 2rem; background-color: var(--ll-surface-container-low); border-radius: 0.5rem; border: 1px solid rgba(79, 70, 50, 0.05); text-align: center; }
   #restaurant-site-wrapper .ll-quote-label { font-family: var(--ll-font-label); font-size: 0.75rem; letter-spacing: 0.3em; color: var(--ll-on-surface-variant); text-transform: uppercase; margin: 0 0 1rem; }
   #restaurant-site-wrapper .ll-quote-text { font-size: 0.875rem; font-style: italic; margin: 0; line-height: 1.6; color: var(--ll-on-surface-variant); }

@@ -15,8 +15,8 @@ Each restaurant has two menus, **Drinks** and **Food**, for four total menus. Ma
 - **Supabase PostgREST** — primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, and update history.
 - **localStorage fallback** — caches menu state, timestamps, and auth/session state for degraded or offline reads.
 - **Supabase Auth + role API** — email/password auth in the client; `/api/role` and `/api/users` enforce role and per-menu access.
-- **Supabase Storage** — `menu-designs` bucket stores restaurant-scoped public HTML/CSS files named `{sanitized_restaurant_name}_design.html` and `.css`.
-- **Vercel API routes** — required for config, roles, notifications, user management, and design uploads.
+- **Route-owned public pages** — restaurant public designs now live directly in the repo route files such as `leroyslounge/index.html` and `elroyscantina/index.html`. Stitch is the source of truth for those pages.
+- **Vercel API routes** — required for config, roles, notifications, and user management.
 - **Hardcoded restaurant/menu model** — the app still uses relational `restaurants` and `menus` tables, but the UI is now intentionally tightened around the known IDs in `app.js`:
 
 ```js
@@ -36,7 +36,7 @@ const MENUS = {
 - **`app.js` organization** — still section-banner based. Large behavior clusters remain in one file but are increasingly split by helper layers such as:
   - menu resolution and hydration (`sbResolveMenu()`, `loadActiveMenuState()`, `refreshFeaturedForActiveMenu()`)
   - public rendering (`renderPublicView()`, `_renderCustomDesignView()`, `_renderDefaultPublicView()`)
-  - admin switchers and design controls (`loadAdminSwitcherData()`, `_loadAdminTabData()`, `_renderCustomDesignControls()`)
+  - admin switchers (`loadAdminSwitcherData()`, `_loadAdminTabData()`)
   - manager rendering and persistence (`buildManagerItemHtml()`, `persistState()`, `computeDiff()`)
 
 ## Menu Categories
@@ -71,7 +71,7 @@ New accounts still start with `role: none`. Admins grant access per menu across 
 - **Notification channels:** Still configured per menu and sent through `/api/send-notification`.
 - **Auth wizard:** Four screens only: Sign In, Sign Up, Forgot Password, Reset Password.
 - **Recovery token handling:** Recovery session data stays in `_recoverySessionData` only and is never written to localStorage.
-- **Custom Design:** Restaurant-level custom HTML/CSS is the **primary** public rendering path. `renderPublicView()` always tries `_renderCustomDesignView()` first and falls back to `_renderDefaultPublicView()` if the files are missing, fail to load, or the restaurant toggle is disabled. Custom CSS is removed when entering manager/admin mode.
+- **Custom Design:** Dedicated restaurant routes own their public page design directly. Stitch defines the page, and the app fits live functionality into that design. If a route-specific implementation is unavailable or disabled, the app falls back to the default accordion renderer.
 - **Public menu footer:** Shows `APP_VERSION` and last-updated timestamp. Preview deployments show a `PREVIEW` badge. `APP_VERSION` must be updated for every release, including patches.
 - **Legacy public links:** Old `?menu=el-roys` links are still normalized to El Roy's Cantina Drinks in `sbResolveMenu()`.
 
@@ -88,7 +88,7 @@ New accounts still start with `role: none`. Admins grant access per menu across 
 | 1085-1286 | Init and public boot | `init()`, `_tryHandleRecoveryCallback()`, `_tryRestoreSession()`, `showPublicView()` |
 | 1287-1596 | Polling and public rendering | `startPolling()`, `renderPublicView()`, `_renderDefaultPublicView()`, `_renderCustomDesignView()` |
 | 1597-2132 | Auth, overlays, menu picker | `_applySession()`, `openAuthOverlay()`, `showMenuPicker()`, `selectMenu()` |
-| 2133-2584 | Manager entry, notifications, admin switchers, custom design | `enterManager()`, `saveNotifications()`, `loadAdminSwitcherData()`, `toggleCustomDesign()` |
+| 2133-2584 | Manager entry, notifications, admin switchers | `enterManager()`, `saveNotifications()`, `loadAdminSwitcherData()` |
 | 2585-3400 | Manager editing and preview flows | `renderManagerItems()`, `persistState()`, `computeDiff()`, `openPreview()` |
 | 3401-3812 | Send update, toast, user management | `sendUpdate()`, `showToast()`, `patchUser()` |
 | 3813-4349 | Featured, tabs, fixed restaurant/menu admin, preview toolbar | `renderFeaturedAdmin()`, `switchAdminTab()`, `fetchRestaurantMenuIndex()`, `renderMenusPanel()`, `_initPreviewToolbar()` |
@@ -124,18 +124,10 @@ Both restaurants are expected to run on uploaded custom HTML/CSS designs.
 
 ### Runtime behavior
 
-1. `renderPublicView()` always calls `_renderCustomDesignView()` first.
-2. The app fetches `{sanitized}_design.html` and `{sanitized}_design.css` from the `menu-designs` bucket using the **restaurant name**, not the menu name.
-3. If the files are unavailable or the restaurant-level toggle is off, the app falls back to the default accordion renderer.
-4. Custom CSS is injected as `#custom-design-style` and removed when switching into manager/admin mode.
-
-### File naming
-
-`sanitizeMenuName(name)` lowercases, replaces runs of non-alphanumeric characters with `_`, and trims leading/trailing underscores.
-
-Examples:
-- `"Leroy's Lounge"` → `leroy_s_lounge`
-- `"El Roy's Cantina"` → `el_roy_s_cantina`
+1. `renderPublicView()` always tries the route-specific public implementation first.
+2. Public restaurant design lives in the route files, not in `designs/` and not in an admin-upload flow.
+3. If a dedicated route implementation is unavailable or disabled, the app falls back to the default accordion renderer.
+4. Route-specific public styling is part of the page implementation and manager/admin mode exits back to the shared interface.
 
 ### `/stitch`
 
@@ -143,11 +135,11 @@ Run `/stitch <restaurant_name> <stitch_project_id> [screen_id]` to:
 
 1. Verify the target restaurant is one of the two supported restaurants.
 2. Download the Stitch project/screen.
-3. Save raw output under `designs/{sanitized_restaurant_name}/`.
-4. Meld the export into the app's restaurant-level custom design format.
-5. Write `{sanitized_restaurant_name}_design.html` and `.css` for upload in Admin → Design.
+3. Treat Stitch as the full public page design source of truth.
+4. Fit the app's live menu/auth/manager functionality into the route page with minimal visual deviation.
+5. Update the restaurant route files directly.
 
-If a design changes, re-run `/stitch` with the same arguments and re-upload the generated files.
+If a design changes, re-run `/stitch` with the same arguments and update the route page again.
 
 ## Hosting
 
@@ -163,7 +155,6 @@ El-Roys-Drink-Menu/
 ├── api/
 │   ├── _auth.js
 │   ├── config.js
-│   ├── design-upload.js
 │   ├── role.js
 │   ├── send-groupme.js
 │   ├── send-notification.js
@@ -173,17 +164,10 @@ El-Roys-Drink-Menu/
 │   │   └── notifications.json
 │   ├── fonts/
 │   └── images/
-├── designs/
-│   ├── el_roy_s_cantina/
-│   │   ├── raw_screen.html
-│   │   ├── raw_screen.css
-│   │   ├── el_roy_s_cantina_design.html
-│   │   └── el_roy_s_cantina_design.css
-│   └── leroy_s_lounge/
-│       ├── raw_screen.html
-│       ├── raw_screen.css
-│       ├── leroy_s_lounge_design.html
-│       └── leroy_s_lounge_design.css
+├── assets/
+│   └── leroys-lounge/
+│       ├── logo.png
+│       └── texture.png
 └── supabase/
     └── migrations/
 ```

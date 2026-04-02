@@ -78,7 +78,7 @@
   <div id="manager-view">
     <div id="setup-banner">
       <h3>⚙️ One-Time Setup</h3>
-      <p>Click <strong style="color:var(--ember)">⚙ Admin</strong> in the header to configure notification channels and design. Everything syncs to the cloud from this point on.</p>
+      <p>Click <strong style="color:var(--ember)">⚙ Admin</strong> in the header to configure notification channels. Everything syncs to the cloud from this point on.</p>
     </div>
 
     <!-- ACTIVE MENU BAR -->
@@ -194,7 +194,6 @@
       <div class="tab-bar" role="tablist" id="admin-tab-bar">
         <button class="tab-btn active" id="tab-btn-admin-restaurants"   role="tab" aria-selected="true"  aria-controls="tab-panel-admin-restaurants"   onclick="switchAdminTab('admin-restaurants')">RESTAURANTS</button>
         <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
-        <button class="tab-btn"        id="tab-btn-admin-design"        role="tab" aria-selected="false" aria-controls="tab-panel-admin-design"        onclick="switchAdminTab('admin-design')">DESIGN</button>
         <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
         <button class="tab-btn"        id="tab-btn-admin-featured"      role="tab" aria-selected="false" aria-controls="tab-panel-admin-featured"      onclick="switchAdminTab('admin-featured')">FEATURED</button>
         <button class="tab-btn"        id="tab-btn-admin-history"       role="tab" aria-selected="false" aria-controls="tab-panel-admin-history"       onclick="switchAdminTab('admin-history')">HISTORY</button>
@@ -322,94 +321,6 @@
           <div class="input-row">
             <input type="text" id="menu-url-input" placeholder="e.g. https://el-roys-drink-menu.vercel.app"/>
             <button class="btn-small" onclick="saveMenuUrl()">Save</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DESIGN SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-design" role="tabpanel" aria-labelledby="tab-btn-admin-design">
-        <div class="section-label">Design &amp; Branding</div>
-        <div class="admin-context-switcher">
-          <label class="switcher-label" for="design-restaurant-select">Restaurant</label>
-          <select id="design-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('design')"></select>
-        </div>
-        <div id="custom-design-section"></div>
-        <div class="config-card">
-          <div class="section-label" style="margin-bottom:12px;">Design Tokens</div>
-          <p class="config-hint">Custom HTML/CSS is the primary public rendering path. These fields remain available as fallback branding tokens and for shared shell styling.</p>
-          <div class="design-row">
-            <span class="design-label">Logo</span>
-            <div class="design-control">
-              <img id="design-logo-preview" class="design-logo-preview"/>
-              <input type="file" id="design-logo-upload" accept="image/*" style="display:none" onchange="handleLogoUpload(event)"/>
-              <div style="display:flex;gap:6px;align-items:center;">
-                <button class="btn-small" onclick="document.getElementById('design-logo-upload').click()">Upload Image</button>
-                <button class="btn-small" id="design-logo-clear-btn" onclick="clearLogo()" style="display:none">Remove</button>
-              </div>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Brand Name</span>
-            <div class="design-control">
-              <input type="text" id="design-brand-name" class="design-input" placeholder="e.g. HONCHO FUEGO"/>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Menu Title</span>
-            <div class="design-control">
-              <input type="text" id="design-menu-title" class="design-input" placeholder="e.g. CURRENT MENU"/>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Header Color</span>
-            <div class="design-control">
-              <div class="design-color-row">
-                <input type="color" id="design-primary-color" value="#2d3748" oninput="updateColorLabel('design-primary-color')"/>
-                <input type="text" class="design-hex-input" id="design-primary-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-primary-color')">
-              </div>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Accent Color</span>
-            <div class="design-control">
-              <div class="design-color-row">
-                <input type="color" id="design-accent-color" value="#4299e1" oninput="updateColorLabel('design-accent-color')"/>
-                <input type="text" class="design-hex-input" id="design-accent-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-accent-color')">
-              </div>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Background</span>
-            <div class="design-control">
-              <div class="design-color-row">
-                <input type="color" id="design-bg-color" value="#f0f4f8" oninput="updateColorLabel('design-bg-color')"/>
-                <input type="text" class="design-hex-input" id="design-bg-color-label" maxlength="7" placeholder="#000000" oninput="syncHexInput('design-bg-color')">
-              </div>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Heading Font</span>
-            <div class="design-control">
-              <select id="design-heading-font" class="design-select" onchange="onFontSelectChange('design-heading-font')"></select>
-              <input type="text" id="design-heading-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Body Font</span>
-            <div class="design-control">
-              <select id="design-body-font" class="design-select" onchange="onFontSelectChange('design-body-font')"></select>
-              <input type="text" id="design-body-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-            </div>
-          </div>
-          <div class="design-row">
-            <span class="design-label">Accent Font</span>
-            <div class="design-control">
-              <select id="design-accent-font" class="design-select" onchange="onFontSelectChange('design-accent-font')"></select>
-              <input type="text" id="design-accent-font-custom" class="design-input" placeholder="Any Google Font name..." style="display:none"/>
-            </div>
-          </div>
-          <div class="design-save-row">
-            <button class="btn-small" onclick="saveDesign()">Save Design</button>
           </div>
         </div>
       </div>
