@@ -2333,7 +2333,16 @@ async function onSwitchMenuClick() {
 
 async function onPublicSwitchMenuClick() {
   showMenuPicker(async () => {
-    // Reload public view for the newly selected menu
+    // Public routes are restaurant-owned, so a cross-restaurant selection
+    // must navigate to the target route instead of only swapping local state.
+    const targetHref = getPublicHrefForCurrentMenu();
+    const currentHref = `${window.location.pathname}${window.location.search}`;
+    if (targetHref && targetHref !== currentHref) {
+      navigateToPage(targetHref);
+      return;
+    }
+
+    // Reload public view in place when the selection stays on the same route.
     await loadActiveMenuState();
     applyDesign(currentDesign);
     renderPublicViews();
