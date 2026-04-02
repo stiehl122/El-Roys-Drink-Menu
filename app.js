@@ -2026,6 +2026,27 @@ async function _renderCustomDesignView() {
 
   document.getElementById('custom-design-style')?.remove();
 
+  if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
+    const didRender = window.initializeRoute(menuState, {
+      activeMenuName: _activeMenuName,
+      appVersion: APP_VERSION,
+      categoryDefs: CATEGORY_DEFS,
+      currentUser,
+      featuredGroups: _featuredGroups,
+      isPreview: IS_PREVIEW,
+      knownMenus: knownMenuList(),
+      lastUpdatedTs: getLastUpdatedTs(),
+      menuId: MENU_ID,
+      menuType: MENU_TYPE,
+      restaurantId: RESTAURANT_ID,
+      siteRestaurant: _siteRestaurant,
+    });
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  }
+
   if (renderIntoSiteWrapper && _siteRestaurant?.id === RESTAURANTS.LEROYS.id && _renderLeroyRoutePage(container)) {
     _togglePublicShellMode('site');
     return;

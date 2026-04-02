@@ -26,16 +26,17 @@
 
 <template id="leroy-route-template">
   <div class="ll-board-page">
-    <header class="ll-board-topbar">
+    <header class="ll-board-topbar neon-header-full">
       <div class="ll-board-topbar-left">
         <button class="ll-board-logo-btn" data-route-signin onclick="openAuthOverlay()" aria-label="Sign in">
-          <img class="ll-board-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge">
+          <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge">
         </button>
       </div>
       <div class="ll-board-topbar-center">
-        <img class="ll-board-logo" src="/assets/leroys-lounge/logo.png" alt="Leroy's Lounge">
+        <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge">
       </div>
       <div class="ll-board-topbar-right">
+        <div class="ll-board-action-cluster">
         <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
           <button id="ll-route-swap-trigger"
                   class="ll-board-swap-trigger"
@@ -69,6 +70,7 @@
                data-route-dropdown-panel
                hidden></div>
         </div>
+        </div>
         <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
              onclick="toggleUserDropdown('ll-user-chip')"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
@@ -91,6 +93,7 @@
       </div>
     </header>
 
+    <div class="ll-board-bg">
     <main class="ll-board-main">
       <div class="ll-board-meta">
         <p class="ll-board-meta-line">Menu: <span id="ll-route-menu-name">Leroy's Lounge</span></p>
@@ -106,6 +109,7 @@
 
       <div id="ll-route-sections"></div>
     </main>
+    </div>
 
     <footer class="ll-board-footer">
       <p class="ll-board-footer-updated">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
@@ -584,6 +588,7 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
+<script src="/leroyslounge/app.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
