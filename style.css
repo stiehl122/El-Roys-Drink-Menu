@@ -615,13 +615,42 @@
   body.manager-mode .logo-mark { color: var(--terra); }
 
   /* ── LOADING ── */
-  #loading-view { text-align: center; padding: 60px 0; }
+  #loading-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    min-height: 38vh;
+    text-align: center;
+    padding: 60px 24px;
+  }
+  #loading-view[style*="display: block"] { display: flex !important; }
   #loading-view.loading-view-actionable { cursor: pointer; }
   #loading-view.loading-view-actionable:focus-visible { outline: 2px solid var(--ember); outline-offset: 8px; border-radius: 12px; }
-  .spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--teal); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 16px; }
+  .spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--teal);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0;
+    box-shadow: 0 0 0 8px var(--surface);
+  }
   body.manager-mode .spinner { border-top-color: var(--fire); }
   @keyframes spin { to { transform: rotate(360deg); } }
-  #loading-view p { color: var(--muted); font-size: 13px; }
+  #loading-view p {
+    max-width: 22rem;
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+  .ll-route-exit-btn:not(.active),
+  .erc-route-exit-btn:not(.active) { display: none !important; }
+  .erc-route-exit-btn.active { display: inline-flex !important; }
 
   /* ── ERROR BANNER ── */
   .error-banner { background: rgba(231,76,60,0.1); border: 1px solid rgba(231,76,60,0.3); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; font-size: 13px; color: #d9534f; display: none; line-height: 1.5; }

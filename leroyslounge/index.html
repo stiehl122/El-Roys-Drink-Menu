@@ -34,7 +34,26 @@
         </button>
       </div>
       <div class="ll-board-topbar-right">
+        <nav class="ll-menu-toggle" aria-label="Swap menu">
+          <button id="ll-nav-drinks"
+                  class="ll-menu-toggle-btn"
+                  type="button"
+                  data-route-menu-toggle="drinks">
+            Drinks
+          </button>
+          <button id="ll-nav-food"
+                  class="ll-menu-toggle-btn"
+                  type="button"
+                  data-route-menu-toggle="food">
+            Food
+          </button>
+        </nav>
         <div class="ll-board-action-cluster">
+        <a class="ll-board-jump-link"
+           href="/elroyscantina"
+           aria-label="Open El Roy's Cantina menu">
+          El Roy's
+        </a>
         <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
           <button id="ll-route-swap-trigger"
                   class="ll-board-swap-trigger"
@@ -68,6 +87,20 @@
                data-route-dropdown-panel
                hidden></div>
         </div>
+        <button class="ll-board-swap-trigger ll-route-exit-btn"
+                type="button"
+                data-route-manager
+                onclick="exitView()"
+                aria-label="Exit manager view">
+          Exit
+        </button>
+        <button class="ll-board-swap-trigger ll-route-exit-btn"
+                type="button"
+                data-route-admin
+                onclick="exitView()"
+                aria-label="Exit admin view">
+          Exit
+        </button>
         </div>
         <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
              onclick="toggleUserDropdown('ll-user-chip')"
