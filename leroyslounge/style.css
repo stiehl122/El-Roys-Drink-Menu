@@ -5,20 +5,28 @@
   --ll-board-slat: rgb(125 127 124 / 1);
   --ll-board-slat-shadow: rgb(0 0 0 / 0.1);
   --ll-board-ink: rgb(17 24 39 / 1);
-  --ll-board-ink-soft: rgb(17 24 39 / 0.58);
+  --ll-board-ink-soft: rgb(17 24 39 / 0.92);
   --ll-board-red: rgb(211 11 11 / 1);
   --ll-board-red-deep: rgb(125 6 6 / 1);
   --ll-board-accent: rgb(250 189 0 / 1);
   --ll-board-shell: rgb(19 19 19 / 1);
+  --ll-board-shell-soft: rgb(65 0 0 / 0.3);
   --ll-board-dropdown: rgb(42 42 42 / 1);
   --ll-board-dropdown-line: rgb(53 53 53 / 1);
   --ll-board-frame: rgb(65 0 0 / 0.95);
   --ll-board-stamp-border: rgb(255 255 255 / 0.3);
+  --ll-board-action-border: rgb(255 255 255 / 0.2);
+  --ll-board-action-text: rgb(255 255 255 / 0.96);
+  --ll-board-action-text-soft: rgb(255 239 214 / 0.82);
+  --ll-board-action-hover: rgb(255 228 175 / 0.98);
+  --ll-board-action-hover-border: rgb(255 228 175 / 0.5);
+  --ll-board-action-shadow: rgb(255 255 255 / 0.3);
+  --ll-board-action-shadow-strong: rgb(252 211 77 / 0.5);
   --ll-board-glow: rgb(255 0 0 / 0.4);
   --ll-board-panel-shadow: 0 4px 12px rgb(0 0 0 / 0.6);
   --ll-board-shadow-inset: inset 0 0 10px rgb(0 0 0 / 0.8);
   --ll-board-text-shadow: 1px 1px 0 rgb(255 255 255 / 0.2), 0.5px 0.5px 1px rgb(0 0 0 / 0.4);
-  --ll-board-description: rgb(17 24 39 / 0.75);
+  --ll-board-description: rgb(17 24 39 / 0.92);
 }
 
 #restaurant-site-wrapper .ll-board-page {
@@ -67,6 +75,41 @@
   overflow: visible;
 }
 
+#restaurant-site-wrapper .ll-menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem;
+  border: 1px solid var(--ll-board-stamp-border);
+  border-radius: 999px;
+  background: var(--ll-board-shell-soft);
+  box-shadow: var(--ll-board-panel-shadow);
+}
+
+#restaurant-site-wrapper .ll-menu-toggle-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ll-board-action-text-soft);
+  padding: 0.55rem 1.2rem;
+  border-radius: 999px;
+  font-family: 'Epilogue', sans-serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#restaurant-site-wrapper .ll-menu-toggle-btn.is-active,
+#restaurant-site-wrapper .ll-menu-toggle-btn:hover,
+#restaurant-site-wrapper .ll-menu-toggle-btn:focus-visible {
+  background: var(--ll-board-accent);
+  color: var(--ll-board-ink);
+  box-shadow: var(--ll-board-panel-shadow);
+  outline: none;
+}
+
 #restaurant-site-wrapper .ll-board-logo-btn {
   border: 0;
   background: transparent;
@@ -104,6 +147,43 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+}
+
+#restaurant-site-wrapper .ll-board-jump-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--ll-board-action-border);
+  border-radius: 0.125rem;
+  color: var(--ll-board-action-text);
+  font-family: 'Epilogue', sans-serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-shadow: 0 0 5px var(--ll-board-action-shadow);
+  text-transform: uppercase;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, text-shadow 0.15s ease;
+}
+
+#restaurant-site-wrapper .ll-board-jump-link:hover,
+#restaurant-site-wrapper .ll-board-jump-link:focus-visible {
+  border-color: var(--ll-board-action-hover-border);
+  color: var(--ll-board-action-hover);
+  text-shadow: 0 0 8px var(--ll-board-action-shadow-strong);
+  transform: translateY(1px);
+  outline: none;
+}
+
+#restaurant-site-wrapper .ll-route-exit-btn {
+  display: none;
+}
+
+#restaurant-site-wrapper .ll-route-exit-btn.active {
+  display: inline-flex !important;
 }
 
 #restaurant-site-wrapper .ll-board-action-dropdown {
@@ -561,10 +641,25 @@
   }
 
   #restaurant-site-wrapper .ll-board-topbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
   }
 
+  #restaurant-site-wrapper .ll-menu-toggle {
+    width: 100%;
+    justify-content: stretch;
+    order: -1;
+  }
+
+  #restaurant-site-wrapper .ll-menu-toggle-btn {
+    flex: 1 1 50%;
+    text-align: center;
+  }
+
   #restaurant-site-wrapper .ll-board-action-cluster {
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 0.5rem;
   }
 

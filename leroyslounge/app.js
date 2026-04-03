@@ -76,6 +76,14 @@
       });
   }
 
+  function updateToggleState(sharedState) {
+    document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
+      const isActive = button.getAttribute('data-route-menu-toggle') === sharedState.menuType;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+  }
+
   function renderSettingsDropdown(sharedState) {
     const wrapper = document.querySelector('[data-route-settings]');
     const dropdown = document.getElementById('ll-route-settings-dropdown');
@@ -147,6 +155,31 @@
     });
   }
 
+  function bindMenuToggles(sharedState) {
+    const menus = getMenusForRoute(sharedState);
+    document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
+      button.onclick = async () => {
+        const targetType = button.getAttribute('data-route-menu-toggle');
+        const menu = menus.find(entry => entry.type === targetType);
+        if (!menu || menu.id === sharedState.menuId) return;
+
+        window.selectMenu?.(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
+        const targetHref = window.getPublicHrefForCurrentMenu?.();
+        const currentHref = `${window.location.pathname}${window.location.search}`;
+        if (targetHref && targetHref !== currentHref) {
+          window.navigateToPage?.(targetHref);
+          return;
+        }
+
+        await window.loadActiveMenuState?.();
+        window.applyDesign?.(typeof currentDesign !== 'undefined' ? currentDesign : null);
+        window.renderPublicViews?.();
+      };
+    });
+
+    updateToggleState(sharedState);
+  }
+
   function renderHeaderState(sharedState) {
     const signInButton = document.querySelector('[data-route-signin]');
     const userChip = document.querySelector('[data-route-user-chip]');
@@ -208,6 +241,7 @@
     renderHeaderState(sharedState);
     renderSwapDropdown(sharedState);
     renderSettingsDropdown(sharedState);
+    bindMenuToggles(sharedState);
 
     return true;
   };

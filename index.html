@@ -20,110 +20,11 @@
   </div>
 </main>
 <script>
-const LS_KEYS = {
-  menuId: 'hf_menu_id',
-  accessToken: 'hf_sb_access_token',
-  refreshToken: 'hf_sb_refresh_token',
-  expiresAt: 'hf_sb_expires_at',
-  uid: 'hf_sb_uid',
-  email: 'hf_sb_email',
-};
-const KNOWN_MENU_PATHS = {
-  '00000000-0000-0000-0000-000000000020': '/leroyslounge',
-  '00000000-0000-0000-0000-000000000021': '/leroyslounge',
-  '00000000-0000-0000-0000-000000000002': '/elroyscantina',
-  '00000000-0000-0000-0000-000000000003': '/elroyscantina',
-};
-const KNOWN_MENU_ORDER = Object.keys(KNOWN_MENU_PATHS);
-
 function showPicker() {
   document.getElementById('site-picker-view')?.removeAttribute('hidden');
 }
 
-function clearSession() {
-  Object.values(LS_KEYS).forEach(key => localStorage.removeItem(key));
-}
-
-function normalizeAccessibleMenuIds(menuIds) {
-  return (Array.isArray(menuIds) ? menuIds : []).filter(menuId => KNOWN_MENU_ORDER.includes(menuId));
-}
-
-function getRedirectPath(role, accessibleMenuIds) {
-  const storedMenuId = localStorage.getItem(LS_KEYS.menuId) || '';
-  if (role === 'admin') return KNOWN_MENU_PATHS[storedMenuId] || '/leroyslounge';
-  const menuId = accessibleMenuIds.includes(storedMenuId) ? storedMenuId : accessibleMenuIds[0];
-  return KNOWN_MENU_PATHS[menuId] || '';
-}
-
-async function fetchConfig() {
-  const response = await fetch('/api/config', { cache: 'no-store' });
-  if (!response.ok) throw new Error('config');
-  return response.json();
-}
-
-async function refreshAccessToken(config, refreshToken) {
-  const response = await fetch(config.supabaseUrl + '/auth/v1/token?grant_type=refresh_token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': config.supabaseAnonKey,
-    },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!response.ok) throw new Error('refresh');
-  return response.json();
-}
-
-async function fetchProfile(accessToken) {
-  const response = await fetch('/api/role', {
-    headers: { Authorization: 'Bearer ' + accessToken },
-  });
-  if (!response.ok) throw new Error('profile');
-  const profile = await response.json();
-  return {
-    role: profile.role || 'none',
-    accessibleMenuIds: normalizeAccessibleMenuIds(profile.accessibleMenuIds),
-  };
-}
-
-async function initRedirect() {
-  const storedAccess = localStorage.getItem(LS_KEYS.accessToken) || '';
-  const storedRefresh = localStorage.getItem(LS_KEYS.refreshToken) || '';
-  const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-  if (!storedAccess && !storedRefresh) {
-    showPicker();
-    return;
-  }
-
-  try {
-    let accessToken = storedAccess;
-    if (!accessToken || storedExpiresAt <= Date.now() + 120000) {
-      if (!storedRefresh) throw new Error('missing-refresh');
-      const config = await fetchConfig();
-      const session = await refreshAccessToken(config, storedRefresh);
-      accessToken = session.access_token || '';
-      if (!accessToken) throw new Error('missing-access');
-      localStorage.setItem(LS_KEYS.accessToken, accessToken);
-      localStorage.setItem(LS_KEYS.refreshToken, session.refresh_token || storedRefresh);
-      localStorage.setItem(LS_KEYS.expiresAt, String(Date.now() + ((Number(session.expires_in) || 3600) * 1000)));
-      if (session.user?.id) localStorage.setItem(LS_KEYS.uid, session.user.id);
-      if (session.user?.email) localStorage.setItem(LS_KEYS.email, session.user.email);
-    }
-
-    const profile = await fetchProfile(accessToken);
-    const path = getRedirectPath(profile.role, profile.accessibleMenuIds);
-    if (path) {
-      window.location.replace(path);
-      return;
-    }
-  } catch (_) {
-    clearSession();
-  }
-
-  showPicker();
-}
-
-initRedirect();
+showPicker();
 </script>
 </body>
 </html>

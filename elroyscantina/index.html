@@ -52,6 +52,20 @@
 
         <div class="erc-actions">
           <button class="erc-login-btn" data-route-signin type="button" onclick="openAuthOverlay()">Login</button>
+          <button class="erc-login-btn erc-route-exit-btn"
+                  type="button"
+                  data-route-manager
+                  onclick="exitView()"
+                  aria-label="Exit manager view">
+            Exit
+          </button>
+          <button class="erc-login-btn erc-route-exit-btn"
+                  type="button"
+                  data-route-admin
+                  onclick="exitView()"
+                  aria-label="Exit admin view">
+            Exit
+          </button>
 
           <div class="erc-userchip" data-route-user-chip style="display:none"
                onclick="toggleUserDropdown('erc-user-chip')"
