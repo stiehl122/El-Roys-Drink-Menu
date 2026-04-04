@@ -1016,95 +1016,9 @@ function renderManagerWorkspace(options = {}) {
 }
 
 function renderAdminWorkspace() {
-  checkAdminSupabaseStatus();
   renderMenusPanel();
   initAdminSwitcherTab('notif');
   loadUsers();
-  renderAdminOverview();
-}
-
-function _setAdminOverviewValue(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = value;
-}
-
-function _renderAdminOverviewMetrics() {
-  const restaurantsCount = _adminRestaurants.length || knownRestaurantList().length;
-  const menusCount = _adminAllMenus.length || knownMenuList().length;
-  const hasUserData = Array.isArray(window._adminUserList);
-  const users = hasUserData ? window._adminUserList : [];
-  const staffCount = users.length;
-  const pendingCount = users.filter(user => user.role === 'none').length;
-
-  _setAdminOverviewValue('admin-overview-restaurants', String(restaurantsCount).padStart(2, '0'));
-  _setAdminOverviewValue('admin-overview-menus', String(menusCount).padStart(2, '0'));
-  _setAdminOverviewValue('admin-overview-staff', hasUserData ? String(staffCount).padStart(2, '0') : '--');
-  _setAdminOverviewValue('admin-overview-pending', hasUserData ? String(pendingCount).padStart(2, '0') : '--');
-
-  const summary = document.getElementById('admin-overview-summary');
-  if (!summary) return;
-
-  if (!hasUserData) {
-    summary.textContent = `${restaurantsCount} restaurants and ${menusCount} menus are available. Staff summaries will populate after the users API responds.`;
-    return;
-  }
-
-  summary.textContent = `${restaurantsCount} restaurants, ${menusCount} live menus, ${staffCount} staff accounts, and ${pendingCount} pending approvals are currently in scope.`;
-}
-
-function _adminActivityLabelForMenu(menuId) {
-  const menu = (_adminAllMenus || []).find(entry => entry.id === menuId)
-    || knownMenuList().find(entry => entry.id === menuId);
-  if (!menu) return 'Unknown menu';
-  return formatMenuDisplayName(menu.name, menu.type, menu.restaurant_id);
-}
-
-async function renderAdminOverviewActivity() {
-  const feed = document.getElementById('admin-activity-feed');
-  if (!feed) return;
-
-  if (!SUPABASE_URL || !currentUser?.accessToken) {
-    feed.innerHTML = '<p class="db-empty">Recent admin activity is available once you are signed in.</p>';
-    return;
-  }
-
-  feed.innerHTML = '<p class="db-empty">Loading recent activity...</p>';
-  try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/update_log?select=menu_id,user_name,diff,created_at&order=created_at.desc&limit=4`,
-      { headers: sbHeaders() }
-    );
-    if (!res.ok) throw new Error(`activity fetch: ${res.status}`);
-    const logs = await res.json();
-    if (!logs.length) {
-      feed.innerHTML = '<p class="db-empty">No sent updates yet.</p>';
-      return;
-    }
-
-    feed.innerHTML = logs.map(log => {
-      const timestamp = new Date(log.created_at);
-      const timeLabel = timestamp.toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      });
-      return `<article class="admin-activity-row">
-        <div class="admin-activity-row-main">
-          <p class="admin-activity-title">${escHtml(_adminActivityLabelForMenu(log.menu_id))}</p>
-          <p class="admin-activity-copy">${escHtml(log.user_name || 'Unknown user')} sent an update. ${escHtml(summarizeHistoryDiff(log.diff || []))}.</p>
-        </div>
-        <time class="admin-activity-time">${escHtml(timeLabel)}</time>
-      </article>`;
-    }).join('');
-  } catch (e) {
-    feed.innerHTML = '<p class="db-empty db-error">Failed to load recent activity.</p>';
-  }
-}
-
-function renderAdminOverview() {
-  _renderAdminOverviewMetrics();
-  renderAdminOverviewActivity();
 }
 
 function refreshManagerViews() {
@@ -2500,7 +2414,7 @@ function enterAdmin() {
   adminPanel.style.display = 'block';
   renderUserHeader();
   renderAdminWorkspace();
-  _syncSettingsSectionFromLocation('admin-overview-section');
+  _syncSettingsSectionFromLocation('admin-restaurants-section');
 }
 
 function exitAdmin() {
@@ -4259,7 +4173,6 @@ async function loadUsers() {
   if (!wrap) return;
   wrap.innerHTML = '<div class="db-empty">Loading...</div>';
   window._adminUserList = null;
-  _renderAdminOverviewMetrics();
   try {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
@@ -4276,10 +4189,8 @@ async function loadUsers() {
     const users = await r.json();
     window._adminUserList = users;
     renderUsersTab(users);
-    _renderAdminOverviewMetrics();
   } catch (e) {
     wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
-    _renderAdminOverviewMetrics();
   }
 }
 
@@ -5040,10 +4951,8 @@ async function renderMenusPanel() {
       row.innerHTML = buildRestaurantRowHtml(restaurant, menus);
       listEl.appendChild(row);
     });
-    _renderAdminOverviewMetrics();
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
-    _renderAdminOverviewMetrics();
   }
 }
 

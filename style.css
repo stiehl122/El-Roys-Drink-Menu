@@ -1287,8 +1287,8 @@ body.admin-console-page .wrapper {
 
 .admin-console-shell {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
   align-items: start;
 }
 
@@ -1301,11 +1301,11 @@ body.admin-console-page .wrapper {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
   background: var(--admin-sidebar);
   color: var(--admin-sidebar-text);
   border-radius: 12px;
-  padding: 24px 18px;
+  padding: 18px 16px;
   box-shadow: 0 24px 40px var(--admin-shadow);
 }
 
@@ -1326,9 +1326,9 @@ body.admin-console-page .wrapper {
 
 .admin-console-rail-title {
   font-family: "Public Sans", var(--font-heading);
-  font-size: 28px;
-  line-height: 0.95;
-  letter-spacing: -0.04em;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.03em;
   color: var(--admin-panel);
 }
 
@@ -1342,9 +1342,9 @@ body.admin-console-page .wrapper {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 4px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   font-family: "Public Sans", var(--font-heading);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--admin-sidebar-dim);
@@ -1389,7 +1389,7 @@ body.admin-console-page .wrapper {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
 }
 
 .admin-console-topbar {
@@ -1399,8 +1399,8 @@ body.admin-console-page .wrapper {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 20px;
-  padding: 22px 24px;
+  gap: 16px;
+  padding: 16px 18px;
   background: var(--admin-canvas-glass);
   backdrop-filter: blur(18px);
   border: 1px solid var(--admin-outline);
@@ -1412,7 +1412,7 @@ body.admin-console-page .wrapper {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .admin-console-kicker,
@@ -1434,59 +1434,19 @@ body.admin-console-page .wrapper {
   color: var(--admin-muted);
 }
 
-.admin-console-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.admin-console-title-row h2 {
+.admin-console-topbar-copy h2 {
   font-family: "Public Sans", var(--font-heading);
-  font-size: clamp(30px, 4vw, 42px);
-  line-height: 0.94;
-  letter-spacing: -0.05em;
+  font-size: clamp(18px, 2.2vw, 24px);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
   color: var(--admin-ink);
-  max-width: 12ch;
-}
-
-.admin-console-status-pill {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: var(--admin-panel);
-  border: 1px solid var(--admin-outline);
-  border-radius: 999px;
-}
-
-.admin-console-status-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--admin-accent);
-  box-shadow: 0 0 0 6px var(--admin-status-glow);
-}
-
-.admin-console-topbar-sub,
-.admin-console-card-caption,
-.restaurant-copy,
-.admin-user-access-note {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--admin-muted);
-}
-
-.admin-console-last-updated {
-  color: var(--admin-muted);
-  font-size: 12px;
+  text-wrap: balance;
 }
 
 .admin-console-topbar-actions {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
 }
 
 .admin-console-topbar .header-action-group,
@@ -1504,7 +1464,7 @@ body.admin-console-page .wrapper {
 .admin-console-topbar .manager-btn,
 .admin-console-topbar .header-signin-btn,
 .admin-console-topbar .user-chip {
-  min-height: 42px;
+  min-height: 38px;
   border-radius: 4px;
   background: var(--admin-panel);
   border: 1px solid var(--admin-outline);
@@ -1530,7 +1490,7 @@ body.admin-console-page .wrapper {
 .admin-console-topbar .user-chip {
   gap: 8px;
   border-radius: 999px;
-  padding-inline: 14px;
+  padding-inline: 12px;
 }
 
 .admin-console-topbar .user-dropdown {
@@ -1539,90 +1499,13 @@ body.admin-console-page .wrapper {
   color: var(--admin-ink);
 }
 
-.admin-console-overview,
 .admin-console-section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   scroll-margin-top: 110px;
 }
 
-.admin-console-overview-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(250px, 0.95fr);
-  gap: 18px;
-  align-items: start;
-}
-
-.admin-console-summary-card,
-.admin-console-metric-card,
-.admin-console-activity-card {
-  background: var(--admin-panel-soft);
-  border: 1px solid var(--admin-outline);
-  border-radius: 12px;
-  box-shadow: 0 18px 36px var(--admin-shadow);
-}
-
-.admin-console-summary-card {
-  min-height: 0;
-  padding: 22px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.admin-console-card-head {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.admin-console-summary-metrics {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-}
-
-.admin-console-summary-value,
-.admin-console-metric-value {
-  display: block;
-  font-family: "Public Sans", var(--font-heading);
-  font-weight: 900;
-  letter-spacing: -0.06em;
-  color: var(--admin-ink);
-}
-
-.admin-console-summary-value {
-  font-size: clamp(40px, 5vw, 64px);
-  line-height: 0.9;
-}
-
-.admin-console-metric-stack {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.admin-console-metric-card {
-  min-height: 104px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  background: var(--admin-panel);
-}
-
-.admin-console-metric-value {
-  font-size: 32px;
-  line-height: 0.95;
-}
-
-.admin-console-metric-card--alert .admin-console-metric-value {
-  color: var(--admin-alert);
-}
-
-.admin-console-summary-pill,
 .restaurant-summary-pill,
 .admin-user-status-pill {
   display: inline-flex;
@@ -1636,7 +1519,6 @@ body.admin-console-page .wrapper {
   text-transform: uppercase;
 }
 
-.admin-console-summary-pill,
 .restaurant-summary-pill,
 .admin-user-status-pill--active,
 .admin-user-status-pill--current {
@@ -1649,7 +1531,6 @@ body.admin-console-page .wrapper {
   color: var(--admin-alert);
 }
 
-.admin-console-activity-card,
 .admin-console-section,
 .admin-console-page .config-card {
   padding: 20px;
@@ -1657,54 +1538,6 @@ body.admin-console-page .wrapper {
   border: 1px solid var(--admin-outline);
   border-radius: 12px;
   box-shadow: 0 18px 36px var(--admin-shadow);
-}
-
-.admin-console-activity-feed {
-  display: flex;
-  flex-direction: column;
-  max-height: 232px;
-  overflow-y: auto;
-}
-
-.admin-activity-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 0;
-  border-top: 1px solid var(--admin-outline);
-}
-
-.admin-activity-row:first-child {
-  border-top: none;
-  padding-top: 6px;
-}
-
-.admin-activity-row-main {
-  min-width: 0;
-}
-
-.admin-activity-title {
-  font-family: "Public Sans", var(--font-heading);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--admin-ink);
-}
-
-.admin-activity-copy {
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--admin-muted);
-}
-
-.admin-activity-time {
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--admin-muted);
 }
 
 .admin-console-split {
@@ -1958,25 +1791,20 @@ body.admin-console-page .wrapper {
 }
 
 @media (max-width: 1180px) {
-  .admin-console-topbar,
-  .admin-console-title-row {
+  .admin-console-topbar {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .admin-console-topbar-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
     flex-wrap: wrap;
   }
 
-  .admin-console-overview-grid,
   #menus-mgmt-list,
   .admin-console-split {
     grid-template-columns: 1fr;
-  }
-
-  .admin-console-activity-feed {
-    max-height: none;
   }
 
   .admin-users-head,
@@ -2025,8 +1853,6 @@ body.admin-console-page .wrapper {
 
 @media (max-width: 640px) {
   .admin-console-topbar,
-  .admin-console-summary-card,
-  .admin-console-activity-card,
   .admin-console-section,
   .admin-console-page .config-card,
   .restaurant-row {
@@ -2048,7 +1874,6 @@ body.admin-console-page .wrapper {
     width: 100%;
   }
 
-  .admin-console-metric-stack,
   .admin-users-head,
   .admin-user-row {
     grid-template-columns: 1fr;

@@ -49,13 +49,12 @@
   <div id="manager-view" class="admin-console-shell" style="display:none">
     <aside class="admin-console-rail" aria-label="Admin console sections">
       <div class="admin-console-rail-brand">
-        <p class="admin-console-rail-kicker">The Gallery</p>
-        <h1 class="admin-console-rail-title">Command Center</h1>
+        <p class="admin-console-rail-kicker">Admin</p>
+        <h1 class="admin-console-rail-title">Console</h1>
       </div>
 
       <nav class="admin-console-rail-nav">
-        <button class="settings-rail-btn active" type="button" data-target="admin-overview-section" onclick="focusSettingsSection('admin-overview-section', this)">Overview</button>
-        <button class="settings-rail-btn" type="button" data-target="admin-restaurants-section" onclick="focusSettingsSection('admin-restaurants-section', this)">Restaurants</button>
+        <button class="settings-rail-btn active" type="button" data-target="admin-restaurants-section" onclick="focusSettingsSection('admin-restaurants-section', this)">Restaurants</button>
         <button class="settings-rail-btn" type="button" data-target="admin-notifications-section" onclick="focusSettingsSection('admin-notifications-section', this)">Notifications</button>
         <button class="settings-rail-btn" type="button" data-target="admin-users-section" onclick="focusSettingsSection('admin-users-section', this)">Users</button>
       </nav>
@@ -69,16 +68,8 @@
     <main class="admin-console-stage" id="admin-main-content">
       <header class="admin-console-topbar">
         <div class="admin-console-topbar-copy">
-          <p class="admin-console-kicker">System Admin Console</p>
-          <div class="admin-console-title-row">
-            <h2>Architectural control room for live menu operations.</h2>
-            <div class="admin-console-status-pill">
-              <span class="admin-console-status-dot" aria-hidden="true"></span>
-              <span id="admin-supabase-status" class="db-status">Checking...</span>
-            </div>
-          </div>
-          <p class="admin-console-topbar-sub" id="admin-overview-summary">Live summaries will populate as admin data loads.</p>
-          <div class="header-sub admin-console-last-updated" id="last-updated-label">Last Updated: —</div>
+          <p class="admin-console-kicker">Admin Console</p>
+          <h2>Edit restaurants, notification settings, and staff access.</h2>
         </div>
 
         <div class="admin-console-topbar-actions">
@@ -106,51 +97,6 @@
           </div>
         </div>
       </header>
-
-      <section class="admin-console-overview" id="admin-overview-section">
-        <div class="admin-console-overview-grid">
-          <article class="admin-console-summary-card">
-            <div class="admin-console-card-head">
-              <p class="admin-console-card-kicker">System Summary</p>
-              <p class="admin-console-card-caption">Live counts driven by the current admin runtime.</p>
-            </div>
-            <div class="admin-console-summary-metrics">
-              <div>
-                <span class="admin-console-summary-value" id="admin-overview-restaurants">--</span>
-                <p class="admin-console-summary-label">Restaurants</p>
-              </div>
-              <div>
-                <span class="admin-console-summary-value" id="admin-overview-menus">--</span>
-                <p class="admin-console-summary-label">Menus</p>
-              </div>
-            </div>
-            <div class="admin-console-summary-foot">
-              <span class="admin-console-summary-pill">Locked model, live data</span>
-            </div>
-          </article>
-
-          <div class="admin-console-metric-stack">
-            <article class="admin-console-metric-card">
-              <span class="admin-console-metric-value" id="admin-overview-staff">--</span>
-              <p class="admin-console-metric-label">Staff Accounts</p>
-            </article>
-            <article class="admin-console-metric-card admin-console-metric-card--alert">
-              <span class="admin-console-metric-value" id="admin-overview-pending">--</span>
-              <p class="admin-console-metric-label">Pending Approvals</p>
-            </article>
-          </div>
-        </div>
-
-        <article class="admin-console-activity-card">
-          <div class="admin-console-card-head">
-            <p class="admin-console-card-kicker">Recent Admin Activity</p>
-            <p class="admin-console-card-caption">Latest sent updates across the four fixed menus.</p>
-          </div>
-          <div id="admin-activity-feed" class="admin-console-activity-feed">
-            <p class="db-empty">Loading recent activity...</p>
-          </div>
-        </article>
-      </section>
 
       <div id="admin-panel" class="admin-console-panels" style="display:none">
         <section class="settings-section admin-console-section" id="admin-restaurants-section">
