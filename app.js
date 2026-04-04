@@ -1287,28 +1287,28 @@ function renderCategoriesTab() {
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
         <div class="catmgr-actions">
-          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
-          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
-          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">✏️</button>
-          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')">×</button>
+          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
+          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
+          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
         </div>
       </div>
       <div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
         <div class="catmgr-field-row">
-          <label>Icon</label>
-          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
+          <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
+          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" name="category-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji…" autocomplete="off" spellcheck="false"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Title</label>
-          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title"/>
+          <label for="ce-title-${escHtml(cat.id)}">Title</label>
+          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" name="category-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title…" autocomplete="off"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Subtitle</label>
-          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
+          <label for="ce-sub-${escHtml(cat.id)}">Subtitle</label>
+          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" name="category-subtitle-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description…" autocomplete="off"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Hint text</label>
-          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
+          <label for="ce-ph-${escHtml(cat.id)}">Hint text</label>
+          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" name="category-hint-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint…" autocomplete="off"/>
         </div>
         <div class="catmgr-save-row">
           <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
@@ -1419,7 +1419,7 @@ async function confirmAddCategory() {
   const title = document.getElementById('new-cat-title')?.value.trim();
   if (!title) { showToast('Category title is required.', 'error'); return; }
   const sub = document.getElementById('new-cat-sub')?.value.trim() || '';
-  const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item...`;
+  const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item…`;
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
   // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
@@ -2437,6 +2437,9 @@ function focusSettingsSection(sectionId, trigger) {
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
   closeSettingsDrawer();
+  const url = new URL(window.location.href);
+  url.hash = sectionId;
+  history.replaceState({}, '', url.toString());
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -3263,7 +3266,7 @@ function renderManagerCategories() {
         <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item…')}" aria-label="Add item to ${escHtml(cat.title)}" autocomplete="off"
               oninput="showAutocomplete('${escHtml(cat.id)}')"
               onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
               onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"/>
@@ -3294,7 +3297,7 @@ function renderManagerCategories() {
       <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
       <div class="add-item-wrap">
         <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…"
+          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…" aria-label="Add item to uncategorized pool" autocomplete="off"
             onkeydown="if(event.key==='Enter'){event.preventDefault();addUncategorizedItem()}"/>
           <button class="add-item-btn" onclick="addUncategorizedItem()" aria-label="Add item to uncategorized pool">+</button>
         </div>
@@ -3358,14 +3361,14 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
 
 function buildManagerItemEditorHtml(item, catId, itemId, ingredients) {
   return `<div class="desc-row" id="desc-row-${itemId}">
-      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it..."
+      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
         onblur="saveDesc('${catId}','${itemId}',this.value)">${escHtml(item.desc || '')}</textarea>
     </div>
     <div class="recipe-row" id="recipe-row-${itemId}">
       <div class="recipe-ingredient-list" id="recipe-list-${itemId}">${buildRecipeListHtml(catId, itemId, ingredients)}</div>
       <div class="add-ingredient-area">
         <input class="add-ingredient-input" id="ingredient-input-${itemId}" type="text"
-          placeholder="Add ingredient..."
+          placeholder="Add ingredient…"
           onkeydown="handleIngredientKeydown(event,'${catId}','${itemId}')"/>
         <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${itemId}')">+</button>
       </div>
@@ -3378,8 +3381,8 @@ function buildUncategorizedItemHtml(item) {
   const hasRecipe = ingredients.length > 0;
   return `<div class="current-item">
       <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
     </div>
     ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
@@ -3393,11 +3396,11 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
   const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
   const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
   return `<div class="${rowClass}">
-      <span class="item-drag-handle" draggable="true"
+      <button class="item-drag-handle" type="button" draggable="true"
         ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
         ondragend="endManagerItemDrag(event)"
         title="Drag to reorder"
-        aria-hidden="true">⋮⋮</span>
+        aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
       <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
       <div class="item-name"><input type="text" value="${escHtml(item.name)}"
         aria-label="Item name"
@@ -3406,11 +3409,11 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
       <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
         onblur="savePrice('${catId}','${item.id}',this.value)"
         value="${escHtml(item.price||'')}"/>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
         style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
-      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
+      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" aria-label="${item.visibility === 'off_menu' ? `Make ${escHtml(item.name)} public` : `Move ${escHtml(item.name)} off menu`}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
       <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
     </div>
     ${buildManagerItemEditorHtml(item, catId, item.id, ingredients)}`;
@@ -3992,10 +3995,10 @@ function updateDraftIndicator() {
   const diff = getCachedDiff();
   const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
   if (total > 0) {
-    btn.innerHTML = `🔥 SEND UPDATE <span class="send-update-count">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
+    btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
     btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
   } else {
-    btn.innerHTML = '🔥 SEND UPDATE';
+    btn.innerHTML = 'Send Update';
     btn.style.boxShadow = '';
   }
   renderManagerOverviewStats();
@@ -4201,7 +4204,7 @@ async function sendUpdate() {
 
   const confirmBtn = document.getElementById('confirm-btn');
   confirmBtn.disabled = true;
-  confirmBtn.textContent = 'SENDING...';
+  confirmBtn.textContent = 'SENDING…';
 
   try {
     const authHeaders = currentUser?.accessToken
@@ -4302,7 +4305,7 @@ document.getElementById('prune-items-wrap')?.addEventListener('click', e => {
 async function loadUsers() {
   const wrap = document.getElementById('users-list');
   if (!wrap) return;
-  wrap.innerHTML = '<div class="db-empty">Loading...</div>';
+  wrap.innerHTML = '<div class="db-empty">Loading…</div>';
   try {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
@@ -4348,21 +4351,24 @@ function buildHistoryDetailHtml(diff) {
 }
 
 function buildChangeFeedHtml(logs) {
+  const locale = navigator.languages?.[0] || navigator.language || undefined;
+  const dateFormatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeFormatter = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
   return logs.map(log => {
     const d = new Date(log.created_at);
-    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const dateStr = dateFormatter.format(d);
+    const timeStr = timeFormatter.format(d);
     const diff = log.diff || [];
     const summary = summarizeHistoryDiff(diff);
     const detailHtml = buildHistoryDetailHtml(diff);
 
     return `<div class="history-entry">
-      <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
+      <button class="history-header" type="button" aria-expanded="false" onclick="this.parentElement.classList.toggle('expanded'); this.setAttribute('aria-expanded', this.parentElement.classList.contains('expanded') ? 'true' : 'false');">
         <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
         <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
         <span class="history-summary">${escHtml(summary)}</span>
         <span class="history-chevron">\u203A</span>
-      </div>
+      </button>
       <div class="history-detail">${detailHtml}</div>
     </div>`;
   }).join('');
@@ -4582,9 +4588,9 @@ function renderFeaturedTab() {
         <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
           value="${escHtml(slot.sellNote)}"
           onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''}>&#8593;</button>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''}>&#8595;</button>
-        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})">&#215;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'featured item')} up">&#8593;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'featured item')} down">&#8595;</button>
+        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})" aria-label="Remove ${escHtml(slot.item?.name || 'featured item')} from featured">&#215;</button>
       </div>`).join('');
 
     return `<div class="featured-mgr-group">
@@ -4929,13 +4935,13 @@ function filterDatabaseRows(rows, query) {
 function buildDatabaseTableHtml(rows) {
   return `
     <table class="db-table">
-      <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
+      <thead><tr><th>Item</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
       <tbody>${rows.map(r => `
         <tr>
-          <td class="db-name">${escHtml(r.name)}</td>
-          <td class="db-cat">${escHtml(r.category)}</td>
-          <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
-          <td>${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+          <td class="db-name" data-label="Item">${escHtml(r.name)}</td>
+          <td class="db-cat" data-label="Category">${escHtml(r.category)}</td>
+          <td class="db-recipe" data-label="Recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
+          <td data-label="Status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;

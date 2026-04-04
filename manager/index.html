@@ -12,6 +12,7 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="settings-shell-pending manager-stitch-shell">
+<a class="manager-shell-skip-link" href="#manager-main-content">Skip to Content</a>
 <main id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
     <p class="site-picker-kicker">Current Menu</p>
@@ -82,7 +83,7 @@
 
   <div id="loading-view">
     <div class="spinner"></div>
-    <p>Loading manager workspace...</p>
+    <p>Loading manager workspace…</p>
   </div>
 
   <div id="public-view" style="display:none;">
@@ -109,28 +110,23 @@
       <aside class="settings-rail manager-shell-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
         <div class="manager-shell-rail-head">
           <p class="settings-rail-kicker">Manager</p>
-          <p class="manager-shell-rail-note">One continuous service board with anchored sections.</p>
+          <p class="manager-shell-rail-note">Sections</p>
         </div>
-        <button class="settings-rail-btn active" type="button" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)">Overview</button>
-        <button class="settings-rail-btn" type="button" data-target="manager-categories-section" onclick="focusSettingsSection('manager-categories-section', this)">Categories</button>
-        <button class="settings-rail-btn" type="button" data-target="manager-edit-section" onclick="focusSettingsSection('manager-edit-section', this)">Edit Menu</button>
-        <button class="settings-rail-btn" type="button" data-target="manager-database-section" onclick="focusSettingsSection('manager-database-section', this)">Database</button>
+        <a class="settings-rail-btn active" href="#manager-overview-section" data-target="manager-overview-section" onclick="event.preventDefault();focusSettingsSection('manager-overview-section', this)">Overview</a>
+        <a class="settings-rail-btn" href="#manager-categories-section" data-target="manager-categories-section" onclick="event.preventDefault();focusSettingsSection('manager-categories-section', this)">Categories</a>
+        <a class="settings-rail-btn" href="#manager-edit-section" data-target="manager-edit-section" onclick="event.preventDefault();focusSettingsSection('manager-edit-section', this)">Edit Menu</a>
+        <a class="settings-rail-btn" href="#manager-database-section" data-target="manager-database-section" onclick="event.preventDefault();focusSettingsSection('manager-database-section', this)">Database</a>
       </aside>
 
-      <div class="settings-stage manager-shell-stage">
+      <main class="settings-stage manager-shell-stage" id="manager-main-content">
         <div id="manager-panel" class="settings-panel manager-shell-panel" style="display:none">
           <section class="settings-section manager-shell-overview" id="manager-overview-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Service Overview</p>
-                <h2>Current kitchen state and recent modifications.</h2>
+                <h2>Run service without losing the thread.</h2>
               </div>
-              <p class="manager-shell-section-copy">Save quietly while you work. Use Send Update only when you are ready to notify staff and refresh the public timestamp.</p>
-            </div>
-
-            <div id="setup-banner">
-              <h3>One-Time Setup</h3>
-              <p>Click <strong>Admin</strong> in the header to configure notification channels. Everything syncs to the cloud from this point on.</p>
+              <p class="manager-shell-section-copy">Save quietly while you work, then send one clean update when the board is ready.</p>
             </div>
 
             <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
@@ -164,7 +160,7 @@
                     <p class="settings-section-kicker">Featured</p>
                     <h3>Tonight's callouts</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Featured controls live here, and the confirmation prompt follows you into the floating action bar when it needs attention.</p>
+                  <p class="manager-shell-card-copy">Set the featured lineup here. If it still needs confirmation, the action bar will bring it back.</p>
                 </div>
                 <div id="featured-mgr-wrap"></div>
               </section>
@@ -175,7 +171,7 @@
                     <p class="settings-section-kicker">Recent Changes</p>
                     <h3>Last 7 days</h3>
                   </div>
-                  <p class="manager-shell-card-copy">This feed shows sent updates for the active menu only. Draft edits still live in the Send Update preview.</p>
+                  <p class="manager-shell-card-copy">Sent updates only. Draft work still stays in the Send Update preview.</p>
                 </div>
                 <div id="recent-changes-wrap"></div>
               </section>
@@ -188,7 +184,7 @@
                 <p class="settings-section-kicker">Edit Menu</p>
                 <h2>Refine descriptions, prices, availability, and category order.</h2>
               </div>
-              <p class="manager-shell-section-copy">Drag items within a category to reorder them. Expand item details only when you need to tune the sell copy or recipe notes.</p>
+              <p class="manager-shell-section-copy">Drag within a category to reorder. Expand details only when you need them.</p>
             </div>
             <div id="manager-categories"></div>
           </section>
@@ -199,7 +195,7 @@
                 <p class="settings-section-kicker">Category Management</p>
                 <h2>Organize your offerings into editorial sections.</h2>
               </div>
-              <p class="manager-shell-section-copy">Reorder, rename, and add categories without leaving the manager workspace.</p>
+              <p class="manager-shell-section-copy">Reorder, rename, and add categories without leaving the page.</p>
             </div>
 
             <div class="active-menu-context" id="categories-menu-context"></div>
@@ -207,20 +203,20 @@
             <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
               <h3>New Category</h3>
               <div class="catmgr-field-row">
-                <label>Icon</label>
-                <input type="text" id="new-cat-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji"/>
+                <label for="new-cat-icon">Icon</label>
+                <input type="text" id="new-cat-icon" name="new-category-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji…" autocomplete="off" spellcheck="false"/>
               </div>
               <div class="catmgr-field-row">
-                <label>Title</label>
-                <input type="text" id="new-cat-title" class="catmgr-input" placeholder="Category name (required)"/>
+                <label for="new-cat-title">Title</label>
+                <input type="text" id="new-cat-title" name="new-category-title" class="catmgr-input" placeholder="Category name (required)…" autocomplete="off"/>
               </div>
               <div class="catmgr-field-row">
-                <label>Subtitle</label>
-                <input type="text" id="new-cat-sub" class="catmgr-input" placeholder="Short description (optional)"/>
+                <label for="new-cat-sub">Subtitle</label>
+                <input type="text" id="new-cat-sub" name="new-category-subtitle" class="catmgr-input" placeholder="Short description (optional)…" autocomplete="off"/>
               </div>
               <div class="catmgr-field-row">
-                <label>Hint text</label>
-                <input type="text" id="new-cat-placeholder" class="catmgr-input" placeholder="Add item input hint (optional)"/>
+                <label for="new-cat-placeholder">Hint text</label>
+                <input type="text" id="new-cat-placeholder" name="new-category-hint" class="catmgr-input" placeholder="Add item input hint (optional)…" autocomplete="off"/>
               </div>
               <div class="catmgr-add-btn-row">
                 <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
@@ -236,13 +232,13 @@
                 <p class="settings-section-kicker">Item Repository</p>
                 <h2>The master database for all culinary assets.</h2>
               </div>
-              <p class="manager-shell-section-copy">Search active and off-menu items, then open the maintenance drawers only when you need to clean up hidden inventory or prune stale entries.</p>
+              <p class="manager-shell-section-copy">Search the full menu inventory, then open maintenance tools only when you need them.</p>
             </div>
 
             <div class="manager-shell-database-toolbar">
               <div class="db-search-row manager-shell-db-search">
                 <label class="manager-shell-field-label" for="db-search">Search Database</label>
-                <input type="text" id="db-search" placeholder="Search drinks, dishes, or ingredients…" oninput="filterDatabase()" />
+                <input type="search" id="db-search" name="database-search" placeholder="Search drinks, dishes, or ingredients…" autocomplete="off" spellcheck="false" oninput="filterDatabase()" />
               </div>
               <div class="manager-shell-db-filters">
                 <div class="manager-shell-filter-block">
@@ -296,7 +292,7 @@
         </div>
 
         <button class="logout-link manager-shell-exit" onclick="exitView()">← Back to menu view</button>
-      </div>
+      </main>
     </div>
 
     <div class="manager-shell-actionbar" id="manager-action-bar" hidden>
@@ -310,8 +306,8 @@
           <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
         </div>
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group" hidden>
-          <button class="save-btn" id="save-btn" onclick="saveMenu()">SAVE</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()">SEND UPDATE</button>
+          <button class="save-btn" id="save-btn" onclick="saveMenu()">Save</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()">Send Update</button>
         </div>
       </div>
       <div id="sync-status"></div>
@@ -324,13 +320,13 @@
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
       <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title">SIGN IN</h2>
+        <h2 class="auth-screen-title">Sign In</h2>
         <p class="auth-screen-subtitle">Sign in to your account</p>
         <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
+          <input type="email" id="signin-email" name="signin-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="signin-error"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
+          <input type="password" id="signin-password" name="signin-password" placeholder="Password" autocomplete="current-password" aria-label="Password" aria-describedby="signin-error"/>
         </div>
         <div class="auth-error" id="signin-error"></div>
         <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
@@ -342,25 +338,25 @@
       </div>
 
       <div id="auth-screen-signup" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
+        <h2 class="auth-screen-title">Create Account</h2>
         <p class="auth-screen-subtitle">Sign up with your work email</p>
         <div class="auth-field">
-          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
+          <input type="text" id="signup-firstname" name="signup-firstname" placeholder="First name" autocomplete="given-name" aria-label="First name"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
+          <input type="text" id="signup-lastname" name="signup-lastname" placeholder="Last name" autocomplete="family-name" aria-label="Last name"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
+          <input type="email" id="signup-email" name="signup-email" placeholder="Email address" autocomplete="email" aria-label="Email address"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
+          <input type="password" id="signup-password" name="signup-password" placeholder="Password" autocomplete="new-password" aria-label="Password"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
         </div>
@@ -371,10 +367,10 @@
       </div>
 
       <div id="auth-screen-forgot" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">RESET PASSWORD</h2>
+        <h2 class="auth-screen-title">Reset Password</h2>
         <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
         <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
+          <input type="email" id="forgot-email" name="forgot-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="forgot-error"/>
         </div>
         <div class="auth-error" id="forgot-error"></div>
         <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
@@ -382,13 +378,13 @@
       </div>
 
       <div id="auth-screen-reset" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
+        <h2 class="auth-screen-title">Set New Password</h2>
         <p class="auth-screen-subtitle">Choose a new password for your account</p>
         <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
+          <input type="password" id="reset-password" name="reset-password" placeholder="New password" autocomplete="new-password" aria-label="New password" aria-describedby="reset-error"/>
         </div>
         <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
+          <input type="password" id="reset-confirm" name="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password" aria-describedby="reset-error"/>
         </div>
         <div class="auth-error" id="reset-error"></div>
         <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
@@ -400,7 +396,7 @@
 
 <div class="modal-bg" id="modal-bg">
   <div class="modal">
-    <h2>PATCH NOTES PREVIEW</h2>
+    <h2>Patch Notes Preview</h2>
     <div class="modal-sub">Only changes since the last update will be sent.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
@@ -412,7 +408,7 @@
 
 <div id="menu-picker-overlay">
   <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
-    <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
+    <h2 class="picker-title" id="picker-title">Select a Menu</h2>
     <p class="picker-subtitle" id="picker-subtitle">Choose which menu to view</p>
     <div id="picker-menu-list" class="picker-menu-list"></div>
     <div class="picker-actions">
