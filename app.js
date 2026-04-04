@@ -2316,12 +2316,22 @@ function toggleUserDropdown(chipId = 'user-chip') {
   const chip = document.getElementById(chipId);
   if (!chip) return;
   closeRouteDropdowns();
+  closeUserChips(chipId);
   const isOpen = chip.classList.toggle('open');
   chip.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen) {
     const firstFocusable = chip.querySelector('button, a');
     if (firstFocusable) firstFocusable.focus();
   }
+}
+
+function closeUserChips(exceptChipId = '', target = null) {
+  document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
+    if (exceptChipId && chip.id === exceptChipId) return;
+    if (target && chip.contains(target)) return;
+    chip.classList.remove('open');
+    chip.setAttribute('aria-expanded', 'false');
+  });
 }
 
 function closeRouteDropdowns(exceptDropdownId = '') {
@@ -2342,6 +2352,7 @@ function toggleRouteDropdown(triggerId, dropdownId) {
   if (!trigger || !dropdown) return;
   const wrapper = trigger.closest('[data-route-dropdown]');
   const shouldOpen = dropdown.hidden;
+  closeUserChips();
   closeRouteDropdowns(shouldOpen ? dropdownId : '');
   if (!wrapper) return;
   wrapper.classList.toggle('open', shouldOpen);
@@ -2355,12 +2366,7 @@ function toggleRouteDropdown(triggerId, dropdownId) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
-  document.querySelectorAll('.user-chip, .ll-site-userchip').forEach(chip => {
-    if (!chip.contains(e.target)) {
-      chip.classList.remove('open');
-      chip.setAttribute('aria-expanded', 'false');
-    }
-  });
+  closeUserChips('', e.target);
   document.querySelectorAll('[data-route-dropdown]').forEach(wrapper => {
     if (!wrapper.contains(e.target)) {
       wrapper.classList.remove('open');
@@ -2375,7 +2381,7 @@ document.addEventListener('click', function(e) {
 // Close dropdown on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
-  document.querySelectorAll('.user-chip, .ll-site-userchip').forEach(chip => {
+  document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
     if (chip.classList.contains('open')) {
       chip.classList.remove('open');
       chip.setAttribute('aria-expanded', 'false');

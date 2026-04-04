@@ -65,6 +65,18 @@
   min-width: 0;
 }
 
+#restaurant-site-wrapper .ll-board-topbar-left {
+  justify-content: flex-start;
+}
+
+#restaurant-site-wrapper .ll-board-topbar-left::before {
+  content: '';
+  display: block;
+  width: clamp(11rem, 16vw, 15rem);
+  height: 1px;
+  pointer-events: none;
+}
+
 #restaurant-site-wrapper .ll-board-topbar-center {
   justify-content: center;
 }
