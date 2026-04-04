@@ -169,8 +169,14 @@ let _dirty = false;
 let _pollFailCount = 0;
 let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistState()
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
+let _managerDraggedItemId = '';
+let _managerDraggedCatId = '';
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
-function updateSaveBtn() { const btn = document.getElementById('save-btn'); if (btn) btn.disabled = !_dirty; }
+function updateSaveBtn() {
+  const btn = document.getElementById('save-btn');
+  if (btn) btn.disabled = !_dirty;
+  updateManagerActionBar();
+}
 function getCachedDiff() {
   if (_diffDirty) { _diffCache = computeDiff(); _diffDirty = false; }
   return _diffCache;
@@ -1003,6 +1009,60 @@ function updateManagerToolsContext() {
   if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
 }
 
+function renderManagerOverviewStats() {
+  const activeItems = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
+  ), 0);
+  const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
+  ), 0);
+  const draftCount = getCachedDiff().reduce((count, section) => (
+    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
+  ), 0);
+  const statusValue = document.getElementById('manager-overview-status-value');
+  const statusMeta = document.getElementById('manager-overview-status-meta');
+  const activeValue = document.getElementById('manager-overview-active-value');
+  const activeMeta = document.getElementById('manager-overview-active-meta');
+  const eightysixValue = document.getElementById('manager-overview-86-value');
+  const eightysixMeta = document.getElementById('manager-overview-86-meta');
+
+  if (statusValue) statusValue.textContent = draftCount > 0 ? 'Drafting' : 'Live';
+  if (statusMeta) statusMeta.textContent = draftCount > 0
+    ? `${draftCount} unsent change${draftCount === 1 ? '' : 's'}`
+    : 'No unsent changes';
+  if (activeValue) activeValue.textContent = String(activeItems);
+  if (activeMeta) activeMeta.textContent = activeItems === 1 ? 'active item' : 'active items';
+  if (eightysixValue) eightysixValue.textContent = String(eightySixed);
+  if (eightysixMeta) eightysixMeta.textContent = eightySixed === 1 ? "item 86'd" : "items 86'd";
+}
+
+function updateManagerActionBar() {
+  const bar = document.getElementById('manager-action-bar');
+  if (!bar) return;
+  const primaryGroup = document.getElementById('manager-primary-action-group');
+  const featuredGroup = document.getElementById('manager-featured-action-group');
+  const summary = document.getElementById('manager-action-bar-summary');
+  const featuredBanner = document.getElementById('featured-confirm-banner');
+  const hasFeaturedPrompt = !!featuredBanner && featuredBanner.style.display !== 'none';
+  const hasDraftChanges = !!_dirty;
+
+  if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
+  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
+  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+
+  if (summary) {
+    if (hasDraftChanges && hasFeaturedPrompt) {
+      summary.textContent = 'Draft changes are ready to review, and featured items still need confirmation.';
+    } else if (hasDraftChanges) {
+      summary.textContent = 'Draft changes are ready to save quietly or review before sending.';
+    } else if (hasFeaturedPrompt) {
+      summary.textContent = "Today's featured lineup still needs confirmation.";
+    } else {
+      summary.textContent = '';
+    }
+  }
+}
+
 function renderManagerWorkspace(options = {}) {
   renderManagerCategories();
   renderFeaturedTab();
@@ -1012,7 +1072,9 @@ function renderManagerWorkspace(options = {}) {
   renderDatabaseTab();
   renderPruneSection();
   updateActiveMenuBar();
+  renderManagerOverviewStats();
   if (options.includeRecentChanges !== false) renderRecentChanges();
+  updateManagerActionBar();
 }
 
 function renderAdminWorkspace() {
@@ -2348,11 +2410,33 @@ function setActiveSettingsSection(sectionId) {
   });
 }
 
+function setSettingsDrawerOpen(isOpen) {
+  const drawer = document.getElementById('manager-settings-rail');
+  const backdrop = document.getElementById('settings-drawer-backdrop');
+  const toggle = document.getElementById('settings-drawer-toggle');
+  if (!drawer || !backdrop) return;
+  drawer.classList.toggle('is-open', !!isOpen);
+  backdrop.hidden = !isOpen;
+  document.body.classList.toggle('settings-drawer-open', !!isOpen);
+  if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function toggleSettingsDrawer() {
+  const drawer = document.getElementById('manager-settings-rail');
+  if (!drawer) return;
+  setSettingsDrawerOpen(!drawer.classList.contains('is-open'));
+}
+
+function closeSettingsDrawer() {
+  setSettingsDrawerOpen(false);
+}
+
 function focusSettingsSection(sectionId, trigger) {
   const section = document.getElementById(sectionId);
   if (!section) return;
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
+  closeSettingsDrawer();
   section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -2392,6 +2476,7 @@ function enterAdmin() {
   _setDisplayById('public-view', 'none');
   _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
+  closeSettingsDrawer();
   settingsView.style.display = 'block';
   adminPanel.style.display = 'block';
   renderUserHeader();
@@ -2404,6 +2489,7 @@ function exitAdmin() {
   document.body.classList.remove('manager-mode');
   _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
+  closeSettingsDrawer();
   renderUserHeader();
   if (isSettingsPage()) {
     navigateToPage(getPublicHrefForCurrentMenu());
@@ -2910,6 +2996,7 @@ function enterManager() {
   _setDisplayById('public-view', 'none');
   _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
+  closeSettingsDrawer();
   settingsView.style.display = 'block';
   managerPanel.style.display = 'block';
   renderUserHeader();
@@ -2925,6 +3012,7 @@ function exitManager() {
   document.body.classList.remove('manager-mode');
   _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
+  closeSettingsDrawer();
   renderUserHeader();
   if (isSettingsPage()) {
     navigateToPage(getPublicHrefForCurrentMenu());
@@ -3305,6 +3393,11 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
   const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
   const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
   return `<div class="${rowClass}">
+      <span class="item-drag-handle" draggable="true"
+        ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
+        ondragend="endManagerItemDrag(event)"
+        title="Drag to reorder"
+        aria-hidden="true">⋮⋮</span>
       <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
       <div class="item-name"><input type="text" value="${escHtml(item.name)}"
         aria-label="Item name"
@@ -3340,9 +3433,68 @@ function renderManagerItems(catId) {
     const wrapper  = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
+    wrapper.dataset.catId = catId;
+    wrapper.dataset.itemId = item.id;
     wrapper.innerHTML = buildManagerItemHtml(item, catId, lastSentNames);
+    const row = wrapper.querySelector('.current-item');
+    if (row) {
+      row.addEventListener('dragover', event => allowManagerItemDrop(event, catId, item.id));
+      row.addEventListener('drop', event => handleManagerItemDrop(event, catId, item.id));
+    }
     listEl.appendChild(wrapper);
   });
+}
+
+function startManagerItemDrag(event, catId, itemId) {
+  _managerDraggedCatId = catId;
+  _managerDraggedItemId = itemId;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', itemId);
+  }
+  document.getElementById(`wrapper-${itemId}`)?.classList.add('is-dragging');
+}
+
+function endManagerItemDrag(event) {
+  const wrapper = event?.target?.closest('.item-wrapper');
+  if (wrapper) wrapper.classList.remove('is-dragging');
+  document.querySelectorAll('.item-wrapper.is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
+  _managerDraggedCatId = '';
+  _managerDraggedItemId = '';
+}
+
+function allowManagerItemDrop(event, catId, itemId) {
+  if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === itemId) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.item-wrapper.is-drop-target').forEach(el => {
+    if (el.dataset.itemId !== itemId) el.classList.remove('is-drop-target');
+  });
+  document.getElementById(`wrapper-${itemId}`)?.classList.add('is-drop-target');
+}
+
+function handleManagerItemDrop(event, catId, targetItemId) {
+  if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === targetItemId) return;
+  event.preventDefault();
+  const items = menuState[catId]?.items || [];
+  const visibleItems = items.filter(item => item.onMenu !== false);
+  const fromIndex = visibleItems.findIndex(item => item.id === _managerDraggedItemId);
+  const toIndex = visibleItems.findIndex(item => item.id === targetItemId);
+  if (fromIndex < 0 || toIndex < 0) return;
+
+  const reorderedVisible = [...visibleItems];
+  const [movedItem] = reorderedVisible.splice(fromIndex, 1);
+  reorderedVisible.splice(toIndex, 0, movedItem);
+  menuState[catId].items = [
+    ...reorderedVisible,
+    ...items.filter(item => item.onMenu === false),
+  ];
+
+  invalidateDiff();
+  renderManagerItems(catId);
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  showToast('Item order updated.', 'success');
 }
 
 function buildCategoryUpsertRows() {
@@ -3846,6 +3998,8 @@ function updateDraftIndicator() {
     btn.innerHTML = '🔥 SEND UPDATE';
     btn.style.boxShadow = '';
   }
+  renderManagerOverviewStats();
+  updateManagerActionBar();
 }
 
 // ─── DIFF ─────────────────────────────────────────────────────────────────────
@@ -4077,6 +4231,8 @@ async function sendUpdate() {
           last_sent_categories: diff.map(d => d.id),
           last_sent_featured:   currentFeaturedIds,
         });
+        _dirty = false;
+        updateSaveBtn();
         updateLastUpdatedLabel();
         renderManagerWorkspace({ includeRecentChanges: false });
         updateDraftIndicator();
@@ -4555,6 +4711,7 @@ function checkFeaturedConfirmation() {
   if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
 
   if (banner) banner.style.display = '';
+  updateManagerActionBar();
 }
 
 async function confirmFeaturedToday() {
@@ -4574,6 +4731,7 @@ async function confirmFeaturedToday() {
     sessionStorage.setItem('featured_confirmed', '1');
     const banner = document.getElementById('featured-confirm-banner');
     if (banner) banner.style.display = 'none';
+    updateManagerActionBar();
     showToast('Featured items confirmed for today!', 'success');
   } catch(e) { showToast('Failed to confirm.', 'error'); }
 }
@@ -4582,6 +4740,7 @@ function editFeaturedFromBanner() {
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
   sessionStorage.setItem('featured_confirmed', '1');
+  updateManagerActionBar();
   focusSettingsSection('manager-edit-section');
 }
 
