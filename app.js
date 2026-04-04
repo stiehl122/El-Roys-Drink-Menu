@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.3';
+const APP_VERSION = 'v0.8.4';
 const RESTAURANTS = {
   LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
   ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
@@ -878,15 +878,20 @@ async function loadLocalConfig() {
 }
 
 function showConfigModal() {
+  const output = document.getElementById('config-json-output');
+  const modal = document.getElementById('config-modal-bg');
+  if (!output || !modal) return;
   const json = JSON.stringify({ groupme: { botId: BOT_ID } }, null, 2);
-  document.getElementById('config-json-output').value = json;
-  document.getElementById('config-modal-bg').classList.add('open');
+  output.value = json;
+  modal.classList.add('open');
 }
 function closeConfigModal() {
-  document.getElementById('config-modal-bg').classList.remove('open');
+  document.getElementById('config-modal-bg')?.classList.remove('open');
 }
 async function copyConfigJson() {
-  await navigator.clipboard.writeText(document.getElementById('config-json-output').value);
+  const output = document.getElementById('config-json-output');
+  if (!output) return;
+  await navigator.clipboard.writeText(output.value);
   showToast('Copied!', 'success');
 }
 
@@ -993,14 +998,36 @@ async function renderPublicViews() {
   updateLastUpdatedLabel();
 }
 
-function refreshManagerViews() {
+function updateManagerToolsContext() {
+  const ctx = document.getElementById('categories-menu-context');
+  if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+}
+
+function renderManagerWorkspace(options = {}) {
   renderManagerCategories();
   renderFeaturedTab();
   renderOffMenuSection();
+  renderCategoriesTab();
+  updateManagerToolsContext();
+  renderDatabaseTab();
+  renderPruneSection();
+  updateActiveMenuBar();
+  if (options.includeRecentChanges !== false) renderRecentChanges();
+}
+
+function renderAdminWorkspace() {
+  checkAdminSupabaseStatus();
+  renderMenusPanel();
+  initAdminSwitcherTab('notif');
+  loadUsers();
+  renderFeaturedAdmin();
+}
+
+function refreshManagerViews() {
+  renderManagerWorkspace({ includeRecentChanges: false });
 }
 
 function refreshCategoryAdminViews() {
-  renderCategoriesTab();
   refreshManagerViews();
   renderPublicView();
 }
@@ -2315,6 +2342,20 @@ function applyRole(role) {
   renderUserHeader();
 }
 
+function setActiveSettingsSection(sectionId) {
+  document.querySelectorAll('.settings-rail-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.target === sectionId);
+  });
+}
+
+function focusSettingsSection(sectionId, trigger) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
+  else setActiveSettingsSection(sectionId);
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
   const targetPath = getManagerHrefForMenuId(MENU_ID);
@@ -2334,10 +2375,9 @@ function onAdminBtnClick() {
 }
 
 function enterAdmin() {
-  const managerView = document.getElementById('manager-view');
-  const managerPanel = document.getElementById('manager-panel');
+  const settingsView = document.getElementById('manager-view');
   const adminPanel = document.getElementById('admin-panel');
-  if (!managerView || !managerPanel || !adminPanel) {
+  if (!settingsView || !adminPanel) {
     navigateToPage(SHARED_PAGE_PATHS.admin);
     return;
   }
@@ -2349,21 +2389,20 @@ function enterAdmin() {
   _clearSettingsRedirectPrompt();
   stopPolling();
   document.body.classList.add('manager-mode');
-  document.getElementById('public-view').style.display     = 'none';
-  document.getElementById('loading-view').style.display    = 'none';
+  _setDisplayById('public-view', 'none');
+  _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
-  managerView.style.display    = 'block';
-  managerPanel.style.display   = 'none';
-  adminPanel.style.display     = 'block';
+  settingsView.style.display = 'block';
+  adminPanel.style.display = 'block';
   renderUserHeader();
-  checkAdminSupabaseStatus();
-  switchAdminTab('admin-restaurants');
+  renderAdminWorkspace();
+  setActiveSettingsSection('admin-overview-section');
 }
 
 function exitAdmin() {
   isAdminMode = false;
   document.body.classList.remove('manager-mode');
-  document.getElementById('manager-view').style.display = 'none';
+  _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
   renderUserHeader();
   if (isSettingsPage()) {
@@ -2646,12 +2685,10 @@ async function onSwitchMenuClick() {
     await loadActiveMenuState();
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
-    refreshManagerViews();
-    if (typeof renderCatManager  === 'function') renderCatManager();
-    if (typeof renderDatabase    === 'function') renderDatabase();
-    if (typeof renderUsersList   === 'function') renderUsersList();
+    renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
+    checkFeaturedConfirmation();
   }, { managerOnly: true });
 }
 
@@ -2845,10 +2882,9 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
-  const managerView = document.getElementById('manager-view');
+  const settingsView = document.getElementById('manager-view');
   const managerPanel = document.getElementById('manager-panel');
-  const adminPanel = document.getElementById('admin-panel');
-  if (!managerView || !managerPanel || !adminPanel) {
+  if (!settingsView || !managerPanel) {
     navigateToPage(SHARED_PAGE_PATHS.manager);
     return;
   }
@@ -2871,25 +2907,23 @@ function enterManager() {
   _clearSettingsRedirectPrompt();
   stopPolling();
   document.body.classList.add('manager-mode');
-  document.getElementById('public-view').style.display    = 'none';
-  document.getElementById('loading-view').style.display   = 'none';
+  _setDisplayById('public-view', 'none');
+  _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
-  managerView.style.display   = 'block';
-  managerPanel.style.display  = 'block';
-  adminPanel.style.display    = 'none';
+  settingsView.style.display = 'block';
+  managerPanel.style.display = 'block';
   renderUserHeader();
-  switchManagerTab('edit-menu');
+  renderManagerWorkspace();
+  setActiveSettingsSection('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  renderManagerCategories();
-  updateActiveMenuBar();
   checkFeaturedConfirmation();
 }
 
 function exitManager() {
   isManagerMode = false;
   document.body.classList.remove('manager-mode');
-  document.getElementById('manager-view').style.display = 'none';
+  _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
   renderUserHeader();
   if (isSettingsPage()) {
@@ -3707,9 +3741,11 @@ function removeItem(catId, itemId) {
 function renderPruneSection() {
   const isAdmin = currentUser?.role === 'admin';
   const section = document.getElementById('prune-section');
+  if (!section) return;
   section.style.display = isAdmin ? '' : 'none';
   if (!isAdmin) return;
   const wrap = document.getElementById('prune-items-wrap');
+  if (!wrap) return;
   const allOffMenu = [];
   CATEGORY_DEFS.forEach(cat => {
     (menuState[cat.id]?.items || []).filter(i => i.onMenu === false).forEach(item => {
@@ -3915,6 +3951,8 @@ function openPreview() {
   const diff = getCachedDiff();
   const content = document.getElementById('preview-content');
   const confirmBtn = document.getElementById('confirm-btn');
+  const modal = document.getElementById('modal-bg');
+  if (!content || !confirmBtn || !modal) return;
   content.innerHTML = '';
   if (!diff.length) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
@@ -3928,9 +3966,9 @@ function openPreview() {
       content.appendChild(block);
     });
   }
-  document.getElementById('modal-bg').classList.add('open');
+  modal.classList.add('open');
 }
-function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
 function buildPatchMessage(diff) {
@@ -3979,18 +4017,23 @@ function applySentState(diff, ts) {
 }
 
 async function logUpdate(diff, patchMessage) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-    body: JSON.stringify({
-      menu_id:   MENU_ID,
-      user_id:   currentUser.uid,
-      user_name: currentUser.name || currentUser.email || '',
-      diff:      diff,
-      message:   patchMessage,
-    }),
-  }).catch(() => {});
+  if (!SUPABASE_URL || !currentUser?.accessToken) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({
+        menu_id:   MENU_ID,
+        user_id:   currentUser.uid,
+        user_name: currentUser.name || currentUser.email || '',
+        diff:      diff,
+        message:   patchMessage,
+      }),
+    });
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function sendUpdate() {
@@ -4035,9 +4078,10 @@ async function sendUpdate() {
           last_sent_featured:   currentFeaturedIds,
         });
         updateLastUpdatedLabel();
-        renderManagerCategories();
+        renderManagerWorkspace({ includeRecentChanges: false });
         updateDraftIndicator();
-        logUpdate(diff, patchMessage);
+        await logUpdate(diff, patchMessage);
+        renderRecentChanges();
       } catch (syncError) {
         console.warn('sendUpdate post-send sync failed:', syncError);
         showToast('⚠️  Update sent but local cache failed to sync', 'warning');
@@ -4054,7 +4098,7 @@ async function sendUpdate() {
   }
 
   confirmBtn.disabled = false;
-  confirmBtn.textContent = 'SEND TO GROUP';
+  confirmBtn.textContent = 'SEND UPDATE';
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
@@ -4101,6 +4145,7 @@ document.getElementById('prune-items-wrap')?.addEventListener('click', e => {
 // ─── USER MANAGEMENT ─────────────────────────────────────────────────────────
 async function loadUsers() {
   const wrap = document.getElementById('users-list');
+  if (!wrap) return;
   wrap.innerHTML = '<div class="db-empty">Loading...</div>';
   try {
     // Fetch menus list for menu access checkboxes
@@ -4146,47 +4191,55 @@ function buildHistoryDetailHtml(diff) {
   ).join('');
 }
 
-async function renderUpdateHistory() {
-  const wrap = document.getElementById('update-history-wrap');
-  if (!wrap) return;
-  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
+function buildChangeFeedHtml(logs) {
+  return logs.map(log => {
+    const d = new Date(log.created_at);
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const diff = log.diff || [];
+    const summary = summarizeHistoryDiff(diff);
+    const detailHtml = buildHistoryDetailHtml(diff);
 
-  // Determine which menu to show history for — use the admin switcher if available
-  const menuId = _adminSwitcherState.notif?.menuId || MENU_ID;
-  if (!menuId) { wrap.innerHTML = '<p class="db-empty">Select a menu to view history.</p>'; return; }
+    return `<div class="history-entry">
+      <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
+        <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
+        <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
+        <span class="history-summary">${escHtml(summary)}</span>
+        <span class="history-chevron">\u203A</span>
+      </div>
+      <div class="history-detail">${detailHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderRecentChanges() {
+  const wrap = document.getElementById('recent-changes-wrap');
+  if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) {
+    wrap.innerHTML = '<p class="db-empty">Recent changes are unavailable until you are signed in.</p>';
+    return;
+  }
+  if (!MENU_ID) {
+    wrap.innerHTML = '<p class="db-empty">Select a menu to view recent changes.</p>';
+    return;
+  }
 
   wrap.innerHTML = '<p class="db-empty">Loading\u2026</p>';
   try {
+    const sinceIso = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString();
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${menuId}&select=*&order=created_at.desc&limit=20`,
+      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${MENU_ID}&created_at=gte.${encodeURIComponent(sinceIso)}&select=*&order=created_at.desc&limit=25`,
       { headers: sbHeaders() }
     );
     if (!r.ok) throw new Error('fetch failed');
     const logs = await r.json();
     if (!logs.length) {
-      wrap.innerHTML = '<p class="db-empty">No updates sent yet for this menu.</p>';
+      wrap.innerHTML = '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
       return;
     }
-    wrap.innerHTML = logs.map(log => {
-      const d = new Date(log.created_at);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      const diff = log.diff || [];
-      const summary = summarizeHistoryDiff(diff);
-      const detailHtml = buildHistoryDetailHtml(diff);
-
-      return `<div class="history-entry">
-        <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
-          <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
-          <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
-          <span class="history-summary">${escHtml(summary)}</span>
-          <span class="history-chevron">\u203A</span>
-        </div>
-        <div class="history-detail">${detailHtml}</div>
-      </div>`;
-    }).join('');
+    wrap.innerHTML = buildChangeFeedHtml(logs);
   } catch(e) {
-    wrap.innerHTML = `<p class="db-empty db-error">Failed to load history.</p>`;
+    wrap.innerHTML = '<p class="db-empty db-error">Failed to load recent changes.</p>';
   }
 }
 
@@ -4330,18 +4383,23 @@ async function saveUserName(userId) {
 
 function openInviteModal() {
   const url = MENU_URL || window.location.origin;
-  const brand = document.getElementById('design-brand-name')?.value?.trim() || 'the menu';
-  document.getElementById('invite-text-output').value =
+  const brand = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'the menu';
+  const output = document.getElementById('invite-text-output');
+  const modal = document.getElementById('invite-modal-bg');
+  if (!output || !modal) return;
+  output.value =
     `You've been invited to manage ${brand}!\n\nVisit ${url} and tap "Sign In" to create your account. Once you've signed up, ask an admin to approve your access.`;
-  document.getElementById('invite-modal-bg').classList.add('open');
+  modal.classList.add('open');
 }
 
 function closeInviteModal() {
-  document.getElementById('invite-modal-bg').classList.remove('open');
+  document.getElementById('invite-modal-bg')?.classList.remove('open');
 }
 
 async function copyInviteText() {
-  await navigator.clipboard.writeText(document.getElementById('invite-text-output').value);
+  const output = document.getElementById('invite-text-output');
+  if (!output) return;
+  await navigator.clipboard.writeText(output.value);
   showToast('Copied!', 'success');
 }
 
@@ -4484,6 +4542,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
 
 function checkFeaturedConfirmation() {
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = 'none';
   if (sessionStorage.getItem('featured_confirmed')) return;
   const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
     if (!s.confirmedAt) return true;
@@ -4494,7 +4554,6 @@ function checkFeaturedConfirmation() {
   }));
   if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
 
-  const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = '';
 }
 
@@ -4523,7 +4582,7 @@ function editFeaturedFromBanner() {
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
   sessionStorage.setItem('featured_confirmed', '1');
-  switchManagerTab('edit-menu');
+  focusSettingsSection('manager-edit-section');
 }
 
 // ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
@@ -4616,33 +4675,40 @@ async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
-  ['edit-menu', 'categories', 'database'].forEach(t => {
-    const btn   = document.getElementById('tab-btn-' + t);
-    const panel = document.getElementById('tab-panel-' + t);
-    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
-    if (panel) panel.classList.toggle('active', t === name);
-  });
-  if (name === 'edit-menu')   { renderFeaturedTab(); renderOffMenuSection(); }
-  if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
+  if (name === 'edit-menu') {
+    renderFeaturedTab();
+    renderOffMenuSection();
+    focusSettingsSection('manager-edit-section');
+  }
   if (name === 'categories') {
     renderCategoriesTab();
-    const ctx = document.getElementById('categories-menu-context');
-    if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+    updateManagerToolsContext();
+    focusSettingsSection('manager-categories-section');
+  }
+  if (name === 'database') {
+    renderDatabaseTab();
+    renderPruneSection();
+    focusSettingsSection('manager-database-section');
   }
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
-    const btn   = document.getElementById('tab-btn-' + t);
-    const panel = document.getElementById('tab-panel-' + t);
-    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
-    if (panel) panel.classList.toggle('active', t === name);
-  });
-  if (name === 'admin-restaurants')   { renderMenusPanel(); }
-  if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
-  if (name === 'admin-users')         { loadUsers(); }
-  if (name === 'admin-featured')      { renderFeaturedAdmin(); }
-  if (name === 'admin-history')       { renderUpdateHistory(); }
+  if (name === 'admin-restaurants') {
+    renderMenusPanel();
+    focusSettingsSection('admin-restaurants-section');
+  }
+  if (name === 'admin-notifications') {
+    initAdminSwitcherTab('notif');
+    focusSettingsSection('admin-notifications-section');
+  }
+  if (name === 'admin-users') {
+    loadUsers();
+    focusSettingsSection('admin-users-section');
+  }
+  if (name === 'admin-featured') {
+    renderFeaturedAdmin();
+    focusSettingsSection('admin-featured-section');
+  }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
