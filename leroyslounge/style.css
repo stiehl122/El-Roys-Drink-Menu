@@ -363,10 +363,27 @@ body.route-restaurant.route-restaurant--leroy {
   right: 0;
   top: calc(100% + 8px);
   min-width: 188px;
+  width: min(188px, calc(100vw - 2rem));
   border-radius: 12px;
   border-color: rgb(0 0 0 / 0.18);
   background: rgb(246 244 241 / 1);
   box-shadow: 0 18px 36px rgb(0 0 0 / 0.28);
+}
+
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-name {
+  color: var(--ll-board-ink);
+}
+
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-role {
+  color: rgb(17 24 39 / 0.7);
+}
+
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-divider {
+  background: rgb(17 24 39 / 0.12);
+}
+
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-signout {
+  color: var(--ll-board-red);
 }
 
 #restaurant-site-wrapper .ll-board-route-dropdown {
@@ -861,7 +878,8 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar-left,
-  #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-action-cluster {
+  #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-action-cluster,
+  #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-userchip {
     opacity: 0;
     max-height: 0;
     margin: 0;
