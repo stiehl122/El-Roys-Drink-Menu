@@ -194,6 +194,44 @@
     if (userChip) userChip.style.display = isAuthed ? '' : 'none';
   }
 
+  function renderBootShell() {
+    const template = document.getElementById('leroy-route-template');
+    const container = document.getElementById('restaurant-site-wrapper');
+    if (!template || !container) return false;
+
+    container.innerHTML = '';
+    container.appendChild(template.content.cloneNode(true));
+
+    const statusTsEl = document.getElementById('ll-route-status-timestamp');
+    if (statusTsEl) statusTsEl.textContent = 'Loading live menu...';
+
+    const footerTsEl = document.getElementById('ll-route-footer-timestamp');
+    if (footerTsEl) footerTsEl.textContent = 'Loading live menu...';
+
+    const featuredWrap = document.getElementById('ll-route-specials');
+    if (featuredWrap) {
+      featuredWrap.innerHTML = '<p class="ll-route-boot-copy">Loading specials...</p>';
+    }
+
+    const categoryWrap = document.getElementById('ll-route-sections');
+    if (categoryWrap) {
+      categoryWrap.innerHTML = `
+        <section class="ll-slat-section ll-route-boot-section" aria-hidden="true">
+          <div class="ll-slat-section-head"><h2 class="ll-slat-section-title">On The Board</h2></div>
+          <div class="ll-route-boot-rows">
+            <span class="ll-route-boot-line ll-route-boot-line--wide"></span>
+            <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
+            <span class="ll-route-boot-line ll-route-boot-line--narrow"></span>
+          </div>
+        </section>
+      `;
+    }
+
+    return true;
+  }
+
+  window.renderRouteBootShell = renderBootShell;
+
   window.initializeRoute = function initializeRoute(menuState, authState) {
     const template = document.getElementById('leroy-route-template');
     const container = document.getElementById('restaurant-site-wrapper');

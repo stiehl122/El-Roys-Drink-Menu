@@ -397,6 +397,7 @@ function _togglePublicShellMode(mode) {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const defaultShell = document.getElementById('public-default-shell');
   const useSiteWrapper = mode === 'site' && !!siteWrapper;
+  document.body.classList.remove('route-shell-pending');
   if (siteWrapper) {
     if (useSiteWrapper) siteWrapper.removeAttribute('hidden');
     else siteWrapper.setAttribute('hidden', 'hidden');
@@ -1364,6 +1365,7 @@ async function init() {
   _appPageMode = getAppPageModeFromPath();
   const detectedSiteRestaurant = getSiteRestaurantFromPath();
   _siteRestaurant = isValidRestaurant(detectedSiteRestaurant?.id) ? detectedSiteRestaurant : null;
+  const isDedicatedRoute = isDedicatedRestaurantPage();
   if (_appPageMode === 'picker') {
     showPickerPage();
     return;
@@ -1371,14 +1373,19 @@ async function init() {
   showAppShell();
   migrateLocalStorage();
   if (MENU_ID && !KNOWN_MENU_ORDER.includes(MENU_ID)) _clearActiveMenuContext({ clearCache: true });
-  document.getElementById('loading-view').style.display = 'block';
-  document.getElementById('public-view').style.display = 'none';
+  document.getElementById('loading-view').style.display = isDedicatedRoute ? 'none' : 'block';
+  document.getElementById('public-view').style.display = isDedicatedRoute ? 'block' : 'none';
 
   if (_siteRestaurant && !new URLSearchParams(location.search).get('menu')) {
     primeSiteRestaurantMenu(_siteRestaurant);
   }
 
-  await Promise.all([loadLocalConfig(), loadSupabaseConfig()]);
+  if (_siteRestaurant) {
+    showRouteBootView();
+  }
+
+  loadLocalConfig();
+  await loadSupabaseConfig();
 
   if (SUPABASE_URL) await sbResolveMenu();
 
@@ -1391,12 +1398,12 @@ async function init() {
       menuState = defaultState();
     }
     applyDesign(currentDesign);
-    showPublicView();
+    await showPublicView();
   } else {
     try {
       await loadActiveMenuState();
       applyDesign(currentDesign);
-      showPublicView();
+      await showPublicView();
     } catch(e) {
       // Fallback to localStorage cache
       const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
@@ -1406,7 +1413,7 @@ async function init() {
         menuState = defaultState();
       }
       applyDesign(currentDesign);
-      showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
+      await showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
     }
   }
 
@@ -1496,25 +1503,56 @@ async function _tryRestoreSession() {
   }
 }
 
-function showPublicView() {
+async function showPublicView() {
   document.getElementById('loading-view').style.display = 'none';
-  document.getElementById('public-view').style.display = 'block';
-  _togglePublicShellMode('default');
   const switchBtn = document.getElementById('public-switch-menu-btn');
   if (switchBtn) switchBtn.style.display = _hasMultipleMenus ? '' : 'none';
+  if (!isDedicatedRestaurantPage()) _togglePublicShellMode('default');
+  document.getElementById('public-view').style.display = 'block';
   updateLastUpdatedLabel();
-  renderPublicView();
+  await renderPublicView();
   startPolling();
 }
 
-function showPublicViewWithError(msg) {
+async function showPublicViewWithError(msg) {
   document.getElementById('loading-view').style.display = 'none';
   document.getElementById('public-view').style.display = 'block';
+  if (showRouteLoadError(msg)) return;
   _togglePublicShellMode('default');
   const el = document.getElementById('public-error');
   el.textContent = msg;
   el.classList.add('visible');
-  renderPublicView();
+  await renderPublicView();
+}
+
+function showRouteBootView() {
+  if (!isDedicatedRestaurantPage()) return;
+  const publicView = document.getElementById('public-view');
+  const loadingView = document.getElementById('loading-view');
+  if (loadingView) loadingView.style.display = 'none';
+  if (publicView) publicView.style.display = 'block';
+  if (typeof window.renderRouteBootShell === 'function') {
+    const didRender = window.renderRouteBootShell();
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  }
+  _togglePublicShellMode('site');
+}
+
+function showRouteLoadError(message) {
+  if (!isDedicatedRestaurantPage()) return false;
+  showRouteBootView();
+  const siteWrapper = document.getElementById('restaurant-site-wrapper');
+  if (!siteWrapper) return false;
+  siteWrapper.querySelector('.route-load-error')?.remove();
+  const banner = document.createElement('div');
+  banner.className = 'error-banner visible route-load-error';
+  banner.setAttribute('role', 'alert');
+  banner.textContent = message;
+  siteWrapper.prepend(banner);
+  return true;
 }
 
 function _setLoadingMessage(message, opts = {}) {
@@ -1946,194 +1984,6 @@ function _renderDefaultPublicView() {
   updateCollapseAllBtn();
 }
 
-function _getVisiblePublicItemsForRoute(categoryId) {
-  const state = menuState[categoryId] || { items: [] };
-  return (state.items || []).filter(item => item.onMenu !== false && item.visibility !== 'off_menu');
-}
-
-function _buildLeroyRouteItemHtml(item, options = {}) {
-  const {
-    badgeText = '',
-  } = options;
-  const is86 = !!item?.eightySixed;
-  const desc = (item?.desc || '').trim();
-  const hasDesc = !!desc;
-  const rowClasses = ['ll-board-row', hasDesc ? 'll-board-row--expandable' : '', is86 ? 'll-board-row--sold' : ''].filter(Boolean).join(' ');
-  const cardClasses = ['ll-board-item', 'menu-item', hasDesc ? 'has-detail' : '', is86 ? 'menu-item-86d ll-board-item--sold' : ''].filter(Boolean).join(' ');
-  const toggleHandler = hasDesc ? ' onclick="togglePublicDesc(this.closest(\'.menu-item\'))"' : '';
-  const expandIcon = hasDesc
-    ? `<span class="material-symbols-outlined item-expand-icon ll-board-expand" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">expand_more</span>`
-    : '';
-  return `<article class="${cardClasses}">
-    <div class="${rowClasses}"${toggleHandler}>
-      ${is86 ? '<span class="ll-board-strike" aria-hidden="true"></span>' : ''}
-      <div class="ll-board-item-main">
-        <div class="ll-board-item-name-wrap">
-          <h3 class="ll-board-item-name menu-item-name">${escHtml(item?.name || '')}</h3>
-          ${badgeText ? `<span class="ll-board-chip">${escHtml(badgeText)}</span>` : ''}
-        </div>
-      </div>
-      <div class="ll-board-item-side">
-        ${is86 ? '<span class="ll-board-stamp">Sold Out</span>' : ''}
-        ${item?.price ? `<span class="ll-board-price menu-item-price">${escHtml(item.price)}</span>` : ''}
-        ${expandIcon}
-      </div>
-    </div>
-    ${hasDesc ? `<div class="item-detail-panel ll-board-detail"><p class="ll-board-item-desc menu-item-desc">${escHtml(desc)}</p></div>` : ''}
-  </article>`;
-}
-
-function _buildLeroyRouteFeaturedItemsHtml() {
-  const featuredSlots = _featuredGroups.flatMap(group => group.slots || []).filter(slot => slot.item);
-  if (!featuredSlots.length) {
-    const fallbackItems = _getVisiblePublicItemsForRoute('special').slice(0, 3);
-    if (!fallbackItems.length) return '<p class="ll-route-empty">Nothing featured right now.</p>';
-    return fallbackItems.map((item, index) => _buildLeroyRouteItemHtml(item, {
-      badgeText: index === 0 ? 'Chef\'s Choice' : '',
-    })).join('');
-  }
-
-  return featuredSlots.slice(0, 3).map((slot, index) => _buildLeroyRouteItemHtml(slot.item, {
-    badgeText: index === 0 ? 'Chef\'s Choice' : '',
-  })).join('');
-}
-
-function _buildLeroyRouteCategoryHtml(cat) {
-  const items = _getVisiblePublicItemsForRoute(cat.id);
-  if (!items.length) return '';
-  return `<section class="ll-board-section menu-category" data-category="${escHtml(cat.id)}">
-    <div class="ll-board-section-head">
-      <h2 class="ll-board-section-title">${escHtml(cat.title)}</h2>
-    </div>
-    <div class="ll-board-rows">${items.map(item => _buildLeroyRouteItemHtml(item)).join('')}</div>
-  </section>`;
-}
-
-function _getLeroyRouteMenus() {
-  return sortKnownMenus(
-    knownMenuList()
-      .filter(menu => menu.restaurantId === RESTAURANTS.LEROYS.id)
-      .map(menu => ({
-        id: menu.id,
-        name: menu.name,
-        slug: menu.slug,
-        type: menu.type,
-        restaurant_id: menu.restaurantId,
-      }))
-  );
-}
-
-function _renderLeroyRouteSettingsDropdown() {
-  const wrapper = document.querySelector('[data-route-settings]');
-  const dropdown = document.getElementById('ll-route-settings-dropdown');
-  if (!wrapper || !dropdown) return;
-
-  const role = currentUser?.role || 'none';
-  const accessibleIds = currentUser?.accessibleMenuIds || [];
-  const options = [];
-
-  if (role === 'admin' || accessibleIds.length > 0) {
-    options.push({ label: 'Manager', icon: 'tune', onClick: () => onActionBtnClick() });
-  }
-  if (role === 'admin') {
-    options.push({ label: 'Admin', icon: 'shield_person', onClick: () => onAdminBtnClick() });
-  }
-
-  wrapper.style.display = options.length ? '' : 'none';
-  dropdown.innerHTML = options.map(option => `
-    <button class="ll-board-route-option" type="button" data-route-settings-option="${escHtml(option.label)}">
-      <span class="ll-board-route-option-label">${escHtml(option.label)}</span>
-      <span class="material-symbols-outlined ll-board-route-option-icon" aria-hidden="true">${escHtml(option.icon)}</span>
-    </button>
-  `).join('');
-
-  dropdown.querySelectorAll('[data-route-settings-option]').forEach((button, index) => {
-    button.onclick = () => {
-      closeRouteDropdowns();
-      options[index]?.onClick?.();
-    };
-  });
-}
-
-async function onLeroyRouteMenuSelect(menuId) {
-  const menu = _getLeroyRouteMenus().find(entry => entry.id === menuId);
-  if (!menu) return;
-
-  closeRouteDropdowns();
-  selectMenu(menu.id, menu.slug, menu.name, menu.type, menu.restaurant_id);
-
-  const targetHref = getPublicHrefForCurrentMenu();
-  const currentHref = `${window.location.pathname}${window.location.search}`;
-  if (targetHref && targetHref !== currentHref) {
-    navigateToPage(targetHref);
-    return;
-  }
-
-  await loadActiveMenuState();
-  applyDesign(currentDesign);
-  renderPublicViews();
-}
-
-function _renderLeroyRouteSwapDropdown() {
-  const dropdown = document.getElementById('ll-route-swap-dropdown');
-  const trigger = document.getElementById('ll-route-swap-trigger');
-  if (!dropdown || !trigger) return;
-
-  const menus = _getLeroyRouteMenus();
-  trigger.style.display = menus.length > 1 ? '' : 'none';
-  dropdown.innerHTML = menus.map(menu => {
-    const isActive = menu.id === MENU_ID;
-    return `
-      <button class="ll-board-route-option${isActive ? ' is-active' : ''}" type="button" data-route-menu-option="${escHtml(menu.id)}">
-        <span class="ll-board-route-option-label">${escHtml(getMenuTypeLabel(menu.type))}</span>
-        <span class="material-symbols-outlined ll-board-route-option-icon" aria-hidden="true">${menu.type === 'food' ? 'restaurant_menu' : 'sports_bar'}</span>
-      </button>
-    `;
-  }).join('');
-
-  dropdown.querySelectorAll('[data-route-menu-option]').forEach(button => {
-    button.onclick = async () => {
-      await onLeroyRouteMenuSelect(button.getAttribute('data-route-menu-option') || '');
-    };
-  });
-}
-
-function _renderLeroyRoutePage(container) {
-  const template = document.getElementById('leroy-route-template');
-  if (!template) return false;
-  container.innerHTML = '';
-  container.appendChild(template.content.cloneNode(true));
-
-  const timestamp = getLastUpdatedTs();
-  const timestampText = timestamp ? formatUpdatedAt(timestamp, '') : 'Awaiting first update';
-  const menuNameEl = document.getElementById('ll-route-menu-name');
-  if (menuNameEl) menuNameEl.textContent = _activeMenuName || "Leroy's Lounge";
-  const statusTsEl = document.getElementById('ll-route-status-timestamp');
-  if (statusTsEl) statusTsEl.textContent = timestampText;
-  const footerTsEl = document.getElementById('ll-route-footer-timestamp');
-  if (footerTsEl) footerTsEl.textContent = timestampText;
-  const footerVersionEl = document.getElementById('ll-route-footer-version');
-  if (footerVersionEl) footerVersionEl.innerHTML = APP_VERSION + (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
-
-  const featuredWrap = document.getElementById('ll-route-specials');
-  if (featuredWrap) featuredWrap.innerHTML = _buildLeroyRouteFeaturedItemsHtml();
-
-  const categoryWrap = document.getElementById('ll-route-sections');
-  if (categoryWrap) {
-    const categoriesHtml = CATEGORY_DEFS
-      .filter(cat => cat.id !== 'special')
-      .map(_buildLeroyRouteCategoryHtml)
-      .filter(Boolean)
-      .join('');
-    categoryWrap.innerHTML = categoriesHtml || '<p class="ll-route-empty">Nothing on the menu yet.</p>';
-  }
-
-  _renderLeroyRouteSwapDropdown();
-  _renderLeroyRouteSettingsDropdown();
-
-  return true;
-}
-
 async function _renderCustomDesignView() {
   const fallbackContainer = document.getElementById('public-categories');
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
@@ -2166,11 +2016,6 @@ async function _renderCustomDesignView() {
       _togglePublicShellMode('site');
       return;
     }
-  }
-
-  if (renderIntoSiteWrapper && _siteRestaurant?.id === RESTAURANTS.LEROYS.id && _renderLeroyRoutePage(container)) {
-    _togglePublicShellMode('site');
-    return;
   }
 
   _togglePublicShellMode('default');
@@ -2401,8 +2246,6 @@ function renderUserHeader() {
   if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
     renderPublicView();
   }
-
-  _renderLeroyRouteSettingsDropdown();
 }
 
 function applyRole(role) {
