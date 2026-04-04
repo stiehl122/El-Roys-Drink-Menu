@@ -1,4 +1,7 @@
 (function() {
+  const MOBILE_BREAKPOINT_PX = 820;
+  let teardownMobileHeader = null;
+
   function esc(value) {
     if (typeof window.escHtml === 'function') return window.escHtml(value || '');
     return String(value || '')
@@ -196,6 +199,83 @@
     if (userChip) userChip.style.display = isAuthed ? '' : 'none';
   }
 
+  function addMediaListener(mql, handler) {
+    if (!mql) return () => {};
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', handler);
+      return () => mql.removeEventListener('change', handler);
+    }
+    if (typeof mql.addListener === 'function') {
+      mql.addListener(handler);
+      return () => mql.removeListener(handler);
+    }
+    return () => {};
+  }
+
+  function bindMobileHeader(page) {
+    teardownMobileHeader?.();
+    if (!page) return;
+
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT_PX}px)`);
+    let lastY = Math.max(window.scrollY || 0, 0);
+    let isCompact = false;
+    let ticking = false;
+
+    function applyState(nextCompact, nearTop) {
+      page.classList.toggle('is-mobile-compact', !!nextCompact);
+      page.classList.toggle('is-mobile-expanded', !nextCompact);
+      page.classList.toggle('is-near-top', !!nearTop);
+    }
+
+    function evaluate() {
+      const currentY = Math.max(window.scrollY || 0, 0);
+      const nearTop = currentY <= 8;
+      const isMobile = mql.matches;
+
+      if (!isMobile) {
+        isCompact = false;
+        applyState(false, true);
+        lastY = currentY;
+        return;
+      }
+
+      if (nearTop || currentY < 18) {
+        isCompact = false;
+      } else if (isCompact) {
+        if (currentY < lastY - 36) isCompact = false;
+      } else if (currentY > lastY + 6 && currentY > 24) {
+        isCompact = true;
+      }
+
+      applyState(isCompact, nearTop);
+      lastY = currentY;
+    }
+
+    function requestEvaluate() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        ticking = false;
+        evaluate();
+      });
+    }
+
+    const onScroll = () => requestEvaluate();
+    const onResize = () => requestEvaluate();
+    const removeMediaListener = addMediaListener(mql, requestEvaluate);
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize);
+    requestEvaluate();
+
+    teardownMobileHeader = () => {
+      removeMediaListener();
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      page.classList.remove('is-mobile-compact', 'is-mobile-expanded', 'is-near-top');
+    };
+  }
+
   function renderBootShell() {
     const template = document.getElementById('leroy-route-template');
     const container = document.getElementById('restaurant-site-wrapper');
@@ -205,14 +285,14 @@
     container.appendChild(template.content.cloneNode(true));
 
     const statusTsEl = document.getElementById('ll-route-status-timestamp');
-    if (statusTsEl) statusTsEl.textContent = 'Loading live menu...';
+    if (statusTsEl) statusTsEl.textContent = 'Loading live menu…';
 
     const footerTsEl = document.getElementById('ll-route-footer-timestamp');
-    if (footerTsEl) footerTsEl.textContent = 'Loading live menu...';
+    if (footerTsEl) footerTsEl.textContent = 'Loading live menu…';
 
     const featuredWrap = document.getElementById('ll-route-specials');
     if (featuredWrap) {
-      featuredWrap.innerHTML = '<p class="ll-route-boot-copy">Loading specials...</p>';
+      featuredWrap.innerHTML = '<p class="ll-route-boot-copy">Loading specials…</p>';
     }
 
     const categoryWrap = document.getElementById('ll-route-sections');
@@ -229,6 +309,7 @@
       `;
     }
 
+    bindMobileHeader(container.querySelector('.ll-board-page'));
     return true;
   }
 
@@ -282,6 +363,7 @@
     renderSwapDropdown(sharedState);
     renderSettingsDropdown(sharedState);
     bindMenuToggles(sharedState);
+    bindMobileHeader(container.querySelector('.ll-board-page'));
 
     return true;
   };
