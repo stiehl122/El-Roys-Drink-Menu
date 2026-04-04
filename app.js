@@ -1366,6 +1366,7 @@ async function init() {
   const detectedSiteRestaurant = getSiteRestaurantFromPath();
   _siteRestaurant = isValidRestaurant(detectedSiteRestaurant?.id) ? detectedSiteRestaurant : null;
   const isDedicatedRoute = isDedicatedRestaurantPage();
+  const isSettingsRoute = isSettingsPage();
   if (_appPageMode === 'picker') {
     showPickerPage();
     return;
@@ -1373,7 +1374,7 @@ async function init() {
   showAppShell();
   migrateLocalStorage();
   if (MENU_ID && !KNOWN_MENU_ORDER.includes(MENU_ID)) _clearActiveMenuContext({ clearCache: true });
-  document.getElementById('loading-view').style.display = isDedicatedRoute ? 'none' : 'block';
+  document.getElementById('loading-view').style.display = (isDedicatedRoute || isSettingsRoute) ? 'none' : 'block';
   document.getElementById('public-view').style.display = isDedicatedRoute ? 'block' : 'none';
 
   if (_siteRestaurant && !new URLSearchParams(location.search).get('menu')) {
@@ -1386,6 +1387,15 @@ async function init() {
 
   loadLocalConfig();
   await loadSupabaseConfig();
+
+  if (isSettingsRoute) {
+    const handledRecovery = await _tryHandleRecoveryCallback();
+    if (!handledRecovery) await _tryRestoreSession();
+    await _syncRequestedPageMode();
+    const redirectNotice = consumeRedirectNotice();
+    if (redirectNotice) showToast(redirectNotice, 'error');
+    return;
+  }
 
   if (SUPABASE_URL) await sbResolveMenu();
 
@@ -1555,9 +1565,15 @@ function showRouteLoadError(message) {
   return true;
 }
 
+function _setSettingsShellPending(isPending) {
+  if (!isSettingsPage()) return;
+  document.body.classList.toggle('settings-shell-pending', !!isPending);
+}
+
 function _setLoadingMessage(message, opts = {}) {
   const loadingView = document.getElementById('loading-view');
   if (!loadingView) return;
+  _setSettingsShellPending(false);
   const spinner = loadingView.querySelector('.spinner');
   const textEl = loadingView.querySelector('p');
   loadingView.style.display = 'block';
@@ -1657,6 +1673,7 @@ function showManagerAccessDenied(message = 'Manager access required for this pag
 async function showManagerMenuSelector(menuIds) {
   const accessibleMenuIds = normalizeAccessibleMenuIds(menuIds);
   const entryMenuIds = accessibleMenuIds.length ? accessibleMenuIds : getAccessibleManagerMenuIds();
+  _setSettingsShellPending(false);
   showMenuPicker(async () => {
     _managerMenuPicked = true;
     _setLoadingMessage('Loading settings…');
@@ -2277,6 +2294,7 @@ function enterAdmin() {
     return;
   }
   document.getElementById('custom-design-style')?.remove();
+  _setSettingsShellPending(false);
   _togglePublicShellMode('default');
   if (isManagerMode) { isManagerMode = false; document.body.classList.remove('manager-mode'); }
   isAdminMode = true;
@@ -2627,6 +2645,7 @@ function _authFocusTrap(e) {
 }
 
 function openAuthOverlay(screen) {
+  _setSettingsShellPending(false);
   _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
   overlay.classList.add('open');
@@ -2786,6 +2805,7 @@ function enterManager() {
     return;
   }
   document.getElementById('custom-design-style')?.remove();
+  _setSettingsShellPending(false);
   _togglePublicShellMode('default');
   if (!MENU_ID) {
     showToast('Select a menu from the public view first.', 'info');

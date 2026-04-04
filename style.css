@@ -76,6 +76,9 @@
   body.route-restaurant.route-shell-pending #app-shell > header,
   body.route-restaurant.route-shell-pending #loading-view,
   body.route-restaurant.route-shell-pending #public-default-shell { display: none !important; }
+  body.settings-shell-pending #app-shell > header,
+  body.settings-shell-pending #loading-view,
+  body.settings-shell-pending #public-default-shell { display: none !important; }
   body.route-restaurant.restaurant-public-site { padding: 0; }
   body.route-restaurant.restaurant-public-site #app-shell > header { display: none !important; }
   body.route-restaurant #restaurant-site-wrapper > .route-load-error {
@@ -592,10 +595,10 @@
   }
 
   /* ── HEADER ── */
-  header { background: var(--teal); margin: 0 -16px; padding: 24px 24px 20px; text-align: center; margin-bottom: 22px; position: relative; border-radius: 0 0 22px 22px; box-shadow: 0 6px 24px rgba(18,133,120,0.28); }
+  #app-shell > header { background: var(--teal); margin: 0 -16px; padding: 24px 24px 20px; text-align: center; margin-bottom: 22px; position: relative; border-radius: 0 0 22px 22px; box-shadow: 0 6px 24px rgba(18,133,120,0.28); }
   .hf-logo { display: block; width: 88px; height: 88px; object-fit: contain; margin: 0 auto 8px; filter: drop-shadow(0 2px 10px rgba(0,0,0,0.35)); }
   .logo-mark { font-family: var(--font-accent); font-size: 12px; letter-spacing: 3px; color: var(--yellow); display: block; margin-bottom: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
-  header h1 { font-family: var(--font-heading); font-size: 40px; letter-spacing: 2px; line-height: 1; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+  #app-shell > header h1 { font-family: var(--font-heading); font-size: 40px; letter-spacing: 2px; line-height: 1; color: var(--cream); text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
   .header-sub { margin-top: 5px; color: rgba(253,244,236,0.72); font-family: var(--font-accent); font-size: 12px; letter-spacing: 0.5px; }
   .header-action-group { position: absolute; top: 18px; left: 14px; display: flex; gap: 6px; }
   .manager-btn { background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
@@ -617,8 +620,8 @@
   .user-dropdown-divider { height: 1px; background: var(--border); margin: 10px 0; }
   .user-dropdown-signout { background: none; border: none; color: var(--red); font-size: 13px; cursor: pointer; padding: 0; font-family: var(--font-body); }
   /* Manager mode header */
-  body.manager-mode header { background: #111; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--border); }
-  body.manager-mode header h1 { color: var(--text); }
+  body.manager-mode #app-shell > header { background: #111; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--border); }
+  body.manager-mode #app-shell > header h1 { color: var(--text); }
   body.manager-mode .header-sub { color: var(--muted); font-family: var(--font-body); }
   body.manager-mode .hf-logo { filter: brightness(0.85); }
   body.manager-mode .logo-mark { color: var(--terra); }
@@ -1185,12 +1188,12 @@
 
 @media (max-width: 640px) {
   body { padding: 0 12px 64px; }
-  header {
+  #app-shell > header {
     margin: 0 -12px 18px;
     padding: 68px 16px 18px;
     border-radius: 0 0 18px 18px;
   }
-  header h1 {
+  #app-shell > header h1 {
     font-size: 32px;
     letter-spacing: 1px;
   }
