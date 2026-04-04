@@ -1071,7 +1071,7 @@ async function renderAdminOverviewActivity() {
   feed.innerHTML = '<p class="db-empty">Loading recent activity...</p>';
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/update_log?select=menu_id,user_name,diff,created_at&order=created_at.desc&limit=6`,
+      `${SUPABASE_URL}/rest/v1/update_log?select=menu_id,user_name,diff,created_at&order=created_at.desc&limit=4`,
       { headers: sbHeaders() }
     );
     if (!res.ok) throw new Error(`activity fetch: ${res.status}`);
@@ -2432,12 +2432,33 @@ function setActiveSettingsSection(sectionId) {
   });
 }
 
-function focusSettingsSection(sectionId, trigger) {
+function _getSettingsSectionHashId() {
+  const hash = window.location.hash.replace(/^#/, '').trim();
+  if (!hash || hash.includes('=')) return '';
+  return document.getElementById(hash) ? hash : '';
+}
+
+function _syncSettingsSectionFromLocation(defaultSectionId) {
+  const targetSectionId = _getSettingsSectionHashId() || defaultSectionId;
+  if (!targetSectionId) return;
+  requestAnimationFrame(() => {
+    focusSettingsSection(targetSectionId, null, { behavior: 'auto', updateUrl: false });
+  });
+}
+
+function focusSettingsSection(sectionId, trigger, options = {}) {
   const section = document.getElementById(sectionId);
   if (!section) return;
+  const behavior = options.behavior || 'smooth';
+  const shouldUpdateUrl = options.updateUrl !== false;
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (shouldUpdateUrl && isSettingsPage()) {
+    const url = new URL(window.location.href);
+    url.hash = sectionId;
+    history.replaceState({}, '', url.toString());
+  }
+  section.scrollIntoView({ behavior, block: 'start' });
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -2479,7 +2500,7 @@ function enterAdmin() {
   adminPanel.style.display = 'block';
   renderUserHeader();
   renderAdminWorkspace();
-  setActiveSettingsSection('admin-overview-section');
+  _syncSettingsSectionFromLocation('admin-overview-section');
 }
 
 function exitAdmin() {
@@ -2586,6 +2607,13 @@ document.addEventListener('keydown', function(e) {
     }
     if (panel) panel.hidden = true;
   });
+});
+
+window.addEventListener('hashchange', () => {
+  if (!isSettingsPage()) return;
+  const sectionId = _getSettingsSectionHashId();
+  if (!sectionId) return;
+  focusSettingsSection(sectionId, null, { behavior: 'auto', updateUrl: false });
 });
 
 // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
@@ -2997,7 +3025,7 @@ function enterManager() {
   managerPanel.style.display = 'block';
   renderUserHeader();
   renderManagerWorkspace();
-  setActiveSettingsSection('manager-overview-section');
+  _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
   checkFeaturedConfirmation();

@@ -1255,6 +1255,26 @@ body.admin-console-page .wrapper {
   margin: 0 auto;
 }
 
+.admin-skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--admin-sidebar);
+  color: var(--admin-panel);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+
+.admin-skip-link:focus-visible {
+  top: 16px;
+}
+
 .admin-console-loading {
   min-height: 56vh;
   display: flex;
@@ -1275,7 +1295,10 @@ body.admin-console-page .wrapper {
 .admin-console-rail {
   position: sticky;
   top: 16px;
-  min-height: calc(100vh - 32px);
+  align-self: start;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1520,13 +1543,15 @@ body.admin-console-page .wrapper {
 .admin-console-section {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  scroll-margin-top: 110px;
 }
 
 .admin-console-overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(250px, 0.95fr);
+  gap: 18px;
+  align-items: start;
 }
 
 .admin-console-summary-card,
@@ -1539,12 +1564,12 @@ body.admin-console-page .wrapper {
 }
 
 .admin-console-summary-card {
-  min-height: 300px;
-  padding: 28px;
+  min-height: 0;
+  padding: 22px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 24px;
+  gap: 18px;
 }
 
 .admin-console-card-head {
@@ -1555,7 +1580,7 @@ body.admin-console-page .wrapper {
 
 .admin-console-summary-metrics {
   display: flex;
-  gap: 40px;
+  gap: 24px;
   flex-wrap: wrap;
 }
 
@@ -1569,19 +1594,19 @@ body.admin-console-page .wrapper {
 }
 
 .admin-console-summary-value {
-  font-size: clamp(58px, 7vw, 92px);
+  font-size: clamp(40px, 5vw, 64px);
   line-height: 0.9;
 }
 
 .admin-console-metric-stack {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .admin-console-metric-card {
-  min-height: 142px;
-  padding: 22px;
+  min-height: 104px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1589,7 +1614,7 @@ body.admin-console-page .wrapper {
 }
 
 .admin-console-metric-value {
-  font-size: 42px;
+  font-size: 32px;
   line-height: 0.95;
 }
 
@@ -1627,7 +1652,7 @@ body.admin-console-page .wrapper {
 .admin-console-activity-card,
 .admin-console-section,
 .admin-console-page .config-card {
-  padding: 24px;
+  padding: 20px;
   background: var(--admin-panel);
   border: 1px solid var(--admin-outline);
   border-radius: 12px;
@@ -1637,6 +1662,8 @@ body.admin-console-page .wrapper {
 .admin-console-activity-feed {
   display: flex;
   flex-direction: column;
+  max-height: 232px;
+  overflow-y: auto;
 }
 
 .admin-activity-row {
@@ -1644,7 +1671,7 @@ body.admin-console-page .wrapper {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 0;
+  padding: 14px 0;
   border-top: 1px solid var(--admin-outline);
 }
 
@@ -1946,6 +1973,10 @@ body.admin-console-page .wrapper {
   #menus-mgmt-list,
   .admin-console-split {
     grid-template-columns: 1fr;
+  }
+
+  .admin-console-activity-feed {
+    max-height: none;
   }
 
   .admin-users-head,

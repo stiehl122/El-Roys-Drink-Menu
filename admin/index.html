@@ -11,7 +11,8 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body class="settings-shell-pending admin-console-page">
-<main id="site-picker-view" class="site-picker-view" hidden>
+<a class="admin-skip-link" href="#admin-main-content">Skip to Content</a>
+<section id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
     <p class="site-picker-kicker">Current Menu</p>
     <h1 class="site-picker-title">Choose a restaurant</h1>
@@ -20,7 +21,7 @@
       <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
     </div>
   </div>
-</main>
+</section>
 
 <div class="wrapper admin-console-wrapper" id="app-shell">
   <div id="loading-view" class="admin-console-loading">
@@ -65,7 +66,7 @@
       </div>
     </aside>
 
-    <div class="admin-console-stage">
+    <main class="admin-console-stage" id="admin-main-content">
       <header class="admin-console-topbar">
         <div class="admin-console-topbar-copy">
           <p class="admin-console-kicker">System Admin Console</p>
@@ -321,7 +322,7 @@
           <div id="users-list" class="admin-console-users-wrap"></div>
         </section>
       </div>
-    </div>
+    </main>
   </div>
 </div>
 
