@@ -65,6 +65,7 @@ let _settingsRedirectCleanup = null;
 let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
 let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
+let _menuMetaSupportsLastSentFeatured = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -156,9 +157,15 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot
 // Escape a string for safe embedding inside an inline JS string within an HTML attribute.
 // Uses JSON.stringify (which handles quotes/backslashes) then HTML-escapes the result.
 function escAttrJs(s) { return escHtml(JSON.stringify(String(s))); }
-function lsSet(key, val) {
-  try { localStorage.setItem(key, val); }
-  catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
+function lsSet(key, val, options = {}) {
+  const { silent = false } = options;
+  try {
+    localStorage.setItem(key, val);
+    return true;
+  } catch(e) {
+    if (!silent) showToast('⚠️ Storage full — data not saved locally.', 'error');
+    return false;
+  }
 }
 function findItem(catId, itemId) {
   return menuState[catId]?.items.find(i => i.id === itemId) ?? null;
@@ -702,6 +709,7 @@ function hydrateState({ cats, meta, restaurant }) {
       lastSentTs:         meta.last_sent_ts?.toString()     || '',
       lastSentCategories: meta.last_sent_categories         || [],
     };
+    _menuMetaSupportsLastSentFeatured = Object.prototype.hasOwnProperty.call(meta, 'last_sent_featured');
     if (meta.bot_id) BOT_ID = meta.bot_id;
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
@@ -775,7 +783,119 @@ async function sbPatchMenuMeta(update) {
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify(update),
   });
-  if (!r.ok) throw new Error(`menu_meta patch: ${r.status}`);
+  if (!r.ok) {
+    let detail = '';
+    try { detail = (await r.text()).trim(); } catch (_) { /* ignore */ }
+    throw new Error(detail ? `menu_meta patch: ${r.status} ${detail}` : `menu_meta patch: ${r.status}`);
+  }
+}
+
+function snapshotCurrentItemsAsLastSent() {
+  const lastSentState = {};
+  CATEGORY_DEFS.forEach(cat => {
+    lastSentState[cat.id] = (menuState[cat.id]?.items || []).map(item => ({ ...item }));
+  });
+  return lastSentState;
+}
+
+function buildMenuCacheSnapshot() {
+  const cats = CATEGORY_DEFS.map((cat, index) => ({
+    id: cat._uuid || `local-${cat.id}`,
+    key: cat.id,
+    label: cat.title,
+    icon: cat.icon || '',
+    color: cat.color || '',
+    sub: cat.sub || '',
+    placeholder: cat.placeholder || '',
+    display_order: index,
+    items: (menuState[cat.id]?.items || []).map((item, itemIndex) => ({
+      id: item.id,
+      name: item.name,
+      desc: item.desc || '',
+      recipe: Array.isArray(item.recipe) ? item.recipe : recipeArray(item.recipe),
+      price: item.price || '',
+      is_eighty_sixed: !!item.eightySixed,
+      on_menu: item.onMenu !== false,
+      visibility: item.visibility || 'public',
+      display_order: itemIndex,
+    })),
+  }));
+  const uncategorizedItems = menuState[UNCATEGORIZED_ID]?.items || [];
+  if (uncategorizedItems.length || _uncatCategoryUuid) {
+    cats.push({
+      id: _uncatCategoryUuid || `local-${UNCATEGORIZED_ID}`,
+      key: UNCATEGORIZED_ID,
+      label: 'Uncategorized',
+      icon: '',
+      color: '',
+      sub: '',
+      placeholder: '',
+      display_order: 9999,
+      items: uncategorizedItems.map((item, itemIndex) => ({
+        id: item.id,
+        name: item.name,
+        desc: item.desc || '',
+        recipe: Array.isArray(item.recipe) ? item.recipe : recipeArray(item.recipe),
+        price: item.price || '',
+        is_eighty_sixed: !!item.eightySixed,
+        on_menu: false,
+        visibility: item.visibility || 'public',
+        display_order: itemIndex,
+      })),
+    });
+  }
+  const meta = {
+    bot_id: BOT_ID || '',
+    notifications: NOTIFICATIONS || {},
+    last_updated_ts: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+    last_sent_ts: menuState._meta?.lastSentTs ? Number(menuState._meta.lastSentTs) : null,
+    last_sent_state: snapshotLastSentState(),
+    last_sent_categories: menuState._meta?.lastSentCategories || [],
+  };
+  if (_menuMetaSupportsLastSentFeatured !== false) {
+    meta.last_sent_featured = Array.from(_lastSentFeaturedIds);
+  }
+  const restaurant = isValidRestaurant(RESTAURANT_ID)
+    ? {
+        id: RESTAURANT_ID,
+        name: _activeRestaurantName || getRestaurantById(RESTAURANT_ID)?.name || '',
+        design: currentDesign,
+        use_custom_design: _restaurantCustomDesignEnabled,
+      }
+    : null;
+  return { cats, meta, restaurant };
+}
+
+function syncLocalMenuCache(options = {}) {
+  return lsSet(LS_KEYS.menuCache, JSON.stringify(buildMenuCacheSnapshot()), options);
+}
+
+function isMissingColumnError(error, columnName) {
+  const message = `${error?.message || error || ''}`.toLowerCase();
+  return message.includes(columnName.toLowerCase()) &&
+    (message.includes('column') || message.includes('schema cache'));
+}
+
+async function patchMenuMetaWithCompatibility(update) {
+  const payload = { ...update };
+  if (_menuMetaSupportsLastSentFeatured === false) {
+    delete payload.last_sent_featured;
+  }
+  try {
+    await sbPatchMenuMeta(payload);
+    if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured')) {
+      _menuMetaSupportsLastSentFeatured = true;
+    }
+    return { downgradedFields: [] };
+  } catch (error) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured') && isMissingColumnError(error, 'last_sent_featured')) {
+      const { last_sent_featured, ...fallbackPayload } = payload;
+      await sbPatchMenuMeta(fallbackPayload);
+      _menuMetaSupportsLastSentFeatured = false;
+      return { downgradedFields: ['last_sent_featured'] };
+    }
+    throw error;
+  }
 }
 
 async function sbPatchRestaurantDesign(design) {
@@ -3643,12 +3763,13 @@ async function saveMenu() {
   try {
     const persisted = await persistState();
     if (!persisted) return;
-    await sbPatchMenuMeta({ last_updated_ts: ts });
+    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
     menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
     lsSet(LS_KEYS.lastUpdated, ts.toString());
     _dirty = false;
     updateSaveBtn();
     updateLastUpdatedLabel();
+    syncLocalMenuCache({ silent: true });
     showToast('✅ Menu saved!', 'success');
   } catch(e) {
     finalizePersistStatus(false);
@@ -4221,29 +4342,37 @@ async function sendUpdate() {
       const ts = Date.now();
       closeModal();
       try {
-        applySentState(diff, ts);
         const persisted = await persistState();
         if (!persisted) throw new Error('persist failed');
-        const lastSentState = snapshotLastSentState();
+        const lastSentState = snapshotCurrentItemsAsLastSent();
         const currentFeaturedIds = getCurrentFeaturedIds();
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await sbPatchMenuMeta({
+        const compat = await patchMenuMetaWithCompatibility({
           last_updated_ts:      ts,
           last_sent_ts:         ts,
           last_sent_state:      lastSentState,
           last_sent_categories: diff.map(d => d.id),
           last_sent_featured:   currentFeaturedIds,
         });
+        if (compat.downgradedFields.length) {
+          console.warn('sendUpdate metadata compatibility fallback:', compat.downgradedFields.join(', '));
+        }
+        _lastSentFeaturedIds = new Set(currentFeaturedIds);
+        applySentState(diff, ts);
         _dirty = false;
         updateSaveBtn();
         updateLastUpdatedLabel();
         renderManagerWorkspace({ includeRecentChanges: false });
         updateDraftIndicator();
-        await logUpdate(diff, patchMessage);
+        const cacheSynced = syncLocalMenuCache({ silent: true });
+        if (!cacheSynced) {
+          showToast('⚠️ Update sent, but this device could not refresh its local cache.', 'warning');
+        }
+        const logged = await logUpdate(diff, patchMessage);
+        if (!logged) console.warn('sendUpdate audit log insert failed');
         renderRecentChanges();
       } catch (syncError) {
         console.warn('sendUpdate post-send sync failed:', syncError);
-        showToast('⚠️  Update sent but local cache failed to sync', 'warning');
+        showToast('⚠️ Update sent, but database sync needs attention. Refresh before sending again.', 'warning');
       }
     } else if (r1.status === 401) {
       showToast('❌ Not authorized. Please sign in.', 'error');
