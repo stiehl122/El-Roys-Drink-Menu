@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fcf6e8">
 <title>El Roy's Cantina | Current Menu</title>
 <link rel="icon" type="image/png" href="/HFLOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,12 +27,13 @@
 
 <template id="elroy-route-template">
   <div class="erc-page">
+    <a class="erc-skip-link" href="#erc-route-main">Skip to menu content</a>
     <header class="erc-topbar">
       <div class="erc-topbar-inner">
         <div class="erc-brand-group">
           <h1 class="erc-brand">El Roy's Cantina</h1>
           <a class="erc-sister-link" href="/leroyslounge" aria-label="Open Leroy's Lounge menu">
-            <img class="erc-sister-badge" src="/assets/el-roys-cantina/cantina-badge.png" alt="Leroy's Lounge">
+            <img class="erc-sister-badge" src="/assets/el-roys-cantina/cantina-badge.png" alt="Leroy's Lounge" width="495" height="335">
           </a>
         </div>
 
@@ -107,7 +109,7 @@
       <div class="erc-topbar-divider"></div>
     </header>
 
-    <main class="erc-main">
+    <main class="erc-main" id="erc-route-main" tabindex="-1">
       <div class="erc-hero">
         <div class="erc-hero-copy">
           <span class="erc-kicker">Our Daily Offering</span>
@@ -134,7 +136,7 @@
       <div class="erc-footer-main">
         <div class="erc-footer-copy">
           <h2 class="erc-footer-title">El Roy's Cantina</h2>
-          <p class="erc-footer-quote">"The sun never sets on the perfect taco."</p>
+          <p class="erc-footer-quote">“The sun never sets on the perfect taco.”</p>
         </div>
         <div class="erc-footer-meta">
           <p class="erc-footer-updated">Updated: <span id="erc-route-footer-timestamp">Awaiting first update</span></p>
