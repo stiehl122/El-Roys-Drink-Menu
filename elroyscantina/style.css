@@ -1,5 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400..800;1,400..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap');
 
+html {
+  background: rgb(252 246 232 / 1);
+}
+
+body.route-restaurant.route-restaurant--elroy {
+  background: rgb(252 246 232 / 1);
+}
+
 #restaurant-site-wrapper {
   --erc-safe-top: env(safe-area-inset-top, 0px);
   --erc-safe-right: env(safe-area-inset-right, 0px);
@@ -60,9 +68,20 @@
   position: sticky;
   top: 0;
   z-index: 40;
+  isolation: isolate;
   background: rgb(252 246 232 / 0.8);
   backdrop-filter: blur(12px);
   transition: background-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+#restaurant-site-wrapper .erc-topbar::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--erc-safe-top) * -1) 0 0 0;
+  height: calc(100% + var(--erc-safe-top));
+  background: rgb(252 246 232 / 0.9);
+  z-index: -1;
+  pointer-events: none;
 }
 
 #restaurant-site-wrapper .erc-topbar-inner {
@@ -673,6 +692,9 @@
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-topbar-inner {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.6rem;
     padding-top: calc(0.55rem + var(--erc-safe-top));
     padding-bottom: 0.55rem;
@@ -693,6 +715,8 @@
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-menu-toggle {
+    width: auto;
+    max-width: 13.5rem;
     box-shadow: 0 10px 24px rgb(139 75 0 / 0.08);
   }
 
@@ -702,7 +726,7 @@
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-actions {
-    gap: 0.35rem;
+    display: none;
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-login-btn {

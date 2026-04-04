@@ -237,11 +237,11 @@
         return;
       }
 
-      if (nearTop || currentY < 24) {
+      if (nearTop || currentY < 18) {
         isCompact = false;
       } else if (isCompact) {
         if (currentY < lastY - 36) isCompact = false;
-      } else if (currentY > lastY + 12 && currentY > 48) {
+      } else if (currentY > lastY + 6 && currentY > 24) {
         isCompact = true;
       }
 
