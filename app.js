@@ -1020,7 +1020,91 @@ function renderAdminWorkspace() {
   renderMenusPanel();
   initAdminSwitcherTab('notif');
   loadUsers();
-  renderFeaturedAdmin();
+  renderAdminOverview();
+}
+
+function _setAdminOverviewValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function _renderAdminOverviewMetrics() {
+  const restaurantsCount = _adminRestaurants.length || knownRestaurantList().length;
+  const menusCount = _adminAllMenus.length || knownMenuList().length;
+  const hasUserData = Array.isArray(window._adminUserList);
+  const users = hasUserData ? window._adminUserList : [];
+  const staffCount = users.length;
+  const pendingCount = users.filter(user => user.role === 'none').length;
+
+  _setAdminOverviewValue('admin-overview-restaurants', String(restaurantsCount).padStart(2, '0'));
+  _setAdminOverviewValue('admin-overview-menus', String(menusCount).padStart(2, '0'));
+  _setAdminOverviewValue('admin-overview-staff', hasUserData ? String(staffCount).padStart(2, '0') : '--');
+  _setAdminOverviewValue('admin-overview-pending', hasUserData ? String(pendingCount).padStart(2, '0') : '--');
+
+  const summary = document.getElementById('admin-overview-summary');
+  if (!summary) return;
+
+  if (!hasUserData) {
+    summary.textContent = `${restaurantsCount} restaurants and ${menusCount} menus are available. Staff summaries will populate after the users API responds.`;
+    return;
+  }
+
+  summary.textContent = `${restaurantsCount} restaurants, ${menusCount} live menus, ${staffCount} staff accounts, and ${pendingCount} pending approvals are currently in scope.`;
+}
+
+function _adminActivityLabelForMenu(menuId) {
+  const menu = (_adminAllMenus || []).find(entry => entry.id === menuId)
+    || knownMenuList().find(entry => entry.id === menuId);
+  if (!menu) return 'Unknown menu';
+  return formatMenuDisplayName(menu.name, menu.type, menu.restaurant_id);
+}
+
+async function renderAdminOverviewActivity() {
+  const feed = document.getElementById('admin-activity-feed');
+  if (!feed) return;
+
+  if (!SUPABASE_URL || !currentUser?.accessToken) {
+    feed.innerHTML = '<p class="db-empty">Recent admin activity is available once you are signed in.</p>';
+    return;
+  }
+
+  feed.innerHTML = '<p class="db-empty">Loading recent activity...</p>';
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/update_log?select=menu_id,user_name,diff,created_at&order=created_at.desc&limit=6`,
+      { headers: sbHeaders() }
+    );
+    if (!res.ok) throw new Error(`activity fetch: ${res.status}`);
+    const logs = await res.json();
+    if (!logs.length) {
+      feed.innerHTML = '<p class="db-empty">No sent updates yet.</p>';
+      return;
+    }
+
+    feed.innerHTML = logs.map(log => {
+      const timestamp = new Date(log.created_at);
+      const timeLabel = timestamp.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+      return `<article class="admin-activity-row">
+        <div class="admin-activity-row-main">
+          <p class="admin-activity-title">${escHtml(_adminActivityLabelForMenu(log.menu_id))}</p>
+          <p class="admin-activity-copy">${escHtml(log.user_name || 'Unknown user')} sent an update. ${escHtml(summarizeHistoryDiff(log.diff || []))}.</p>
+        </div>
+        <time class="admin-activity-time">${escHtml(timeLabel)}</time>
+      </article>`;
+    }).join('');
+  } catch (e) {
+    feed.innerHTML = '<p class="db-empty db-error">Failed to load recent activity.</p>';
+  }
+}
+
+function renderAdminOverview() {
+  _renderAdminOverviewMetrics();
+  renderAdminOverviewActivity();
 }
 
 function refreshManagerViews() {
@@ -2388,7 +2472,6 @@ function enterAdmin() {
   isAdminMode = true;
   _clearSettingsRedirectPrompt();
   stopPolling();
-  document.body.classList.add('manager-mode');
   _setDisplayById('public-view', 'none');
   _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
@@ -4147,11 +4230,13 @@ async function loadUsers() {
   const wrap = document.getElementById('users-list');
   if (!wrap) return;
   wrap.innerHTML = '<div class="db-empty">Loading...</div>';
+  window._adminUserList = null;
+  _renderAdminOverviewMetrics();
   try {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
       const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name&archived=eq.false&order=created_at.asc`,
+        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id&archived=eq.false&order=created_at.asc`,
         { headers: sbHeaders() }
       );
       if (menusRes.ok) window._adminMenuList = await menusRes.json();
@@ -4163,8 +4248,10 @@ async function loadUsers() {
     const users = await r.json();
     window._adminUserList = users;
     renderUsersTab(users);
+    _renderAdminOverviewMetrics();
   } catch (e) {
     wrap.innerHTML = '<div class="db-empty db-error">Failed to load users.</div>';
+    _renderAdminOverviewMetrics();
   }
 }
 
@@ -4250,19 +4337,33 @@ function renderUsersTab(users) {
     return;
   }
   const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
-  wrap.innerHTML = users.map(u => {
+  wrap.innerHTML = `
+    <div class="admin-users-table">
+      <div class="admin-users-head">
+        <span>Identity</span>
+        <span>Role</span>
+        <span>Menu Access</span>
+        <span>Status</span>
+      </div>
+      ${users.map(u => {
     const isSelf = u.id === currentUser?.uid;
+    const parts = (u.name || u.email || '?').trim().split(/\s+/).filter(Boolean);
+    const initials = parts.length >= 2
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      : (parts[0]?.slice(0, 2) || '?').toUpperCase();
+    const statusLabel = isSelf ? 'Current Session' : (u.role === 'none' ? 'Pending Approval' : 'Active');
+    const statusClass = isSelf ? 'admin-user-status-pill--current' : (u.role === 'none' ? 'admin-user-status-pill--pending' : 'admin-user-status-pill--active');
 
     // Role controls
     const roleControls = isSelf
       ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
-      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
+      : `<div class="admin-user-role-editor"><select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
                  onchange="renderMenuAccessForUser('${escHtml(u.id)}')">
            <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
            <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
            <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
          </select>
-         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button>`;
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button></div>`;
 
     // Menu access section (only for non-self users)
     const menuAccessSection = isSelf ? '' : `
@@ -4271,32 +4372,41 @@ function renderUsersTab(users) {
       </div>`;
 
     return `
-      <div class="config-card">
-        <div class="user-mgmt-top">
+      <article class="admin-user-row">
+        <div class="admin-user-cell admin-user-cell--identity">
+          <div class="admin-user-avatar">${escHtml(initials)}</div>
           <div class="user-mgmt-identity">
-            <div class="input-row">
+            <div class="input-row admin-user-name-row">
               <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" />
               <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save</button>
             </div>
             <div class="user-mgmt-email">${escHtml(u.email)}</div>
           </div>
-          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
         </div>
-        <div class="input-row user-mgmt-role-row">${roleControls}</div>
-        ${menuAccessSection}
-      </div>`;
-  }).join('');
+        <div class="admin-user-cell admin-user-cell--role">
+          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
+          <div class="input-row user-mgmt-role-row">${roleControls}</div>
+        </div>
+        <div class="admin-user-cell admin-user-cell--access">
+          ${menuAccessSection || '<p class="admin-user-access-note">This account always has access to the current session.</p>'}
+        </div>
+        <div class="admin-user-cell admin-user-cell--status">
+          <span class="admin-user-status-pill ${statusClass}">${escHtml(statusLabel)}</span>
+        </div>
+      </article>`;
+  }).join('')}
+    </div>`;
 }
 
 function buildMenuAccessHTML(u) {
   const role = document.getElementById(`user-role-${u.id}`)?.value ?? u.role;
   if (role === 'admin') {
-    return `<p class="hint" style="margin:6px 0 0">Admin — access to all menus.</p>`;
+    return '<p class="admin-user-access-note">Admin access automatically spans all four menus.</p>';
   }
-  if (role === 'none') return '';
+  if (role === 'none') return '<p class="admin-user-access-note">Approve this account and assign menus to activate manager access.</p>';
   // role === 'manager': show checkboxes for each menu
   const menus = window._adminMenuList || [];
-  if (!menus.length) return `<p class="hint" style="margin:6px 0 0">No menus found.</p>`;
+  if (!menus.length) return '<p class="admin-user-access-note">No menus found.</p>';
   const checkboxes = menus.map(m => {
     const checked = (u.menuAccess || []).includes(m.id) ? 'checked' : '';
     return `<label class="user-menu-access-label">
@@ -4306,8 +4416,7 @@ function buildMenuAccessHTML(u) {
     </label>`;
   }).join('');
   return `<div class="user-menu-access-row">
-    <span class="config-input-label" style="margin-bottom:4px">Menu Access</span>
-    ${checkboxes}
+    <div class="user-menu-access-grid">${checkboxes}</div>
     <button class="btn-small" onclick="saveMenuAccess('${escHtml(u.id)}')">Save Access</button>
   </div>`;
 }
@@ -4330,7 +4439,7 @@ async function patchUser(payload) {
 }
 
 function updateUserRoleBadge(select, role) {
-  const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
+  const badge = select.closest('.config-card, .admin-user-row')?.querySelector('.user-role-badge');
   if (!badge) return;
   const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
   badge.className = `user-role-badge user-role-badge--${role}`;
@@ -4870,8 +4979,13 @@ function buildRestaurantRowHtml(restaurant, menus) {
   const chipsHtml = menus.map(buildMenuChipHtml).join('');
   return `
     <div class="restaurant-header">
-      <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      <div>
+        <p class="restaurant-kicker">Fixed Instance</p>
+        <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      </div>
+      <span class="restaurant-summary-pill">${escHtml(String(menus.length).padStart(2, '0'))} Menu${menus.length === 1 ? '' : 's'}</span>
     </div>
+    <p class="restaurant-copy">These menu links are read directly from the known restaurant and menu IDs the admin console expects.</p>
     <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
       ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">Expected menus are missing from the database.</span>'}
     </div>`;
@@ -4898,8 +5012,10 @@ async function renderMenusPanel() {
       row.innerHTML = buildRestaurantRowHtml(restaurant, menus);
       listEl.appendChild(row);
     });
+    _renderAdminOverviewMetrics();
   } catch(e) {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
+    _renderAdminOverviewMetrics();
   }
 }
 
