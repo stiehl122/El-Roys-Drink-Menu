@@ -89,9 +89,9 @@
     </div>
 
     <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
-      <span>Today's featured items haven't been confirmed yet.</span>
-      <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
-      <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
+      <span>Today's specials haven't been confirmed yet.</span>
+      <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Specials</button>
+      <button class="btn-small" onclick="editFeaturedFromBanner()">Update Specials</button>
     </div>
 
     <!-- MANAGER PANEL: Edit Menu, Categories, Database -->
@@ -195,7 +195,6 @@
         <button class="tab-btn active" id="tab-btn-admin-restaurants"   role="tab" aria-selected="true"  aria-controls="tab-panel-admin-restaurants"   onclick="switchAdminTab('admin-restaurants')">RESTAURANTS</button>
         <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
         <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
-        <button class="tab-btn"        id="tab-btn-admin-featured"      role="tab" aria-selected="false" aria-controls="tab-panel-admin-featured"      onclick="switchAdminTab('admin-featured')">FEATURED</button>
         <button class="tab-btn"        id="tab-btn-admin-history"       role="tab" aria-selected="false" aria-controls="tab-panel-admin-history"       onclick="switchAdminTab('admin-history')">HISTORY</button>
       </div>
 
@@ -333,16 +332,6 @@
         </div>
         <div id="users-list"></div>
       </div>
-      <!-- FEATURED SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-featured" role="tabpanel" aria-labelledby="tab-btn-admin-featured">
-        <div class="section-label">Featured Groups</div>
-        <div id="featured-admin-wrap"></div>
-        <div class="input-row" style="margin-top:6px">
-          <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
-          <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
-        </div>
-      </div>
-
       <!-- HISTORY SUB-PANEL -->
       <div class="tab-panel" id="tab-panel-admin-history" role="tabpanel" aria-labelledby="tab-btn-admin-history">
         <div class="section-label">Update History</div>

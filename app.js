@@ -62,9 +62,11 @@ let _pickerOnClose     = null;
 let _settingsRedirectTimer = null;
 let _settingsRedirectCleanup = null;
 
-let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
+let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
-let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
+let _restaurantSpecialsSiblingCatalog = [];
+let _restaurantSpecialsCatalogKey = '';
+let _restaurantSpecialsCatalogPromise = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -104,6 +106,10 @@ const KNOWN_MENU_ORDER = [
   MENUS.ELROYS_DRINKS.id,
   MENUS.ELROYS_FOOD.id,
 ];
+const RESTAURANT_SPECIALS = {
+  [RESTAURANTS.LEROYS.id]: { name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
+  [RESTAURANTS.ELROYS.id]: { name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
+};
 const LEGACY_MENU_SLUG_ALIASES = {
   'el-roys': MENUS.ELROYS_DRINKS.slug,
 };
@@ -216,6 +222,29 @@ function getMenuById(menuId) {
   return knownMenuList().find(menu => menu.id === menuId) || null;
 }
 
+function getRestaurantMenuIds(restaurantId) {
+  return knownMenuList()
+    .filter(menu => menu.restaurantId === restaurantId)
+    .map(menu => menu.id);
+}
+
+function getRestaurantSpecialConfig(restaurantId = RESTAURANT_ID) {
+  return restaurantId ? RESTAURANT_SPECIALS[restaurantId] || null : null;
+}
+
+function getRestaurantSpecialLabel(restaurantId = RESTAURANT_ID) {
+  return getRestaurantSpecialConfig(restaurantId)?.name || 'Specials';
+}
+
+function isLegacySpecialCategory(catOrId) {
+  const id = typeof catOrId === 'string' ? catOrId : catOrId?.id;
+  return id === 'special';
+}
+
+function getManagedCategoryDefs() {
+  return CATEGORY_DEFS.filter(cat => !isLegacySpecialCategory(cat));
+}
+
 function getMenuBySlug(slug) {
   const normalizedSlug = normalizeKnownMenuSlug(slug || '');
   return knownMenuList().find(menu => menu.slug === normalizedSlug) || null;
@@ -239,6 +268,20 @@ function currentUserCanManageMenu(menuId = MENU_ID, user = currentUser) {
   if (user.role === 'admin') return true;
   if (user.role !== 'manager') return false;
   return normalizeAccessibleMenuIds(user.accessibleMenuIds).includes(menuId);
+}
+
+function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user = currentUser) {
+  if (!restaurantId || !user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'manager') return false;
+  const requiredMenuIds = getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId);
+  if (!requiredMenuIds.length) return false;
+  const accessibleMenuIds = new Set(normalizeAccessibleMenuIds(user.accessibleMenuIds));
+  return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
+}
+
+function getFeaturedConfirmationKey(restaurantId = RESTAURANT_ID) {
+  return `featured_confirmed:${restaurantId || 'unknown'}`;
 }
 
 function getMenuTypeLabel(menuType) {
@@ -729,8 +772,117 @@ function getFeaturedSnapshot() {
   })));
 }
 
+function resetRestaurantSpecialsCatalog() {
+  _restaurantSpecialsSiblingCatalog = [];
+  _restaurantSpecialsCatalogKey = '';
+  _restaurantSpecialsCatalogPromise = null;
+}
+
+function buildCurrentMenuSpecialsCatalog() {
+  const currentMenu = getMenuById(MENU_ID);
+  return getManagedCategoryDefs().flatMap(cat =>
+    (menuState[cat.id]?.items || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      cat: cat.title,
+      menuId: MENU_ID,
+      menuLabel: currentMenu ? getMenuTypeLabel(currentMenu.type) : 'Current Menu',
+      onMenu: item.onMenu,
+      visibility: item.visibility || 'public',
+    }))
+  );
+}
+
+function getRestaurantSpecialsCatalog() {
+  return [...buildCurrentMenuSpecialsCatalog(), ..._restaurantSpecialsSiblingCatalog];
+}
+
+async function ensureRestaurantSpecialsGroup(restaurantId = RESTAURANT_ID) {
+  if (!restaurantId || !currentUser?.accessToken) return;
+  try {
+    await fetch('/api/specials', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${currentUser.accessToken}`,
+      },
+      body: JSON.stringify({ action: 'ensure', restaurantId }),
+    });
+  } catch (_) {
+    /* allow reads to continue with legacy fallback */
+  }
+}
+
+async function refreshRestaurantSpecialsCatalog(restaurantId = RESTAURANT_ID) {
+  const cacheKey = `${restaurantId || ''}:${MENU_ID || ''}`;
+  if (!restaurantId || !currentUserCanEditRestaurantSpecials(restaurantId)) {
+    resetRestaurantSpecialsCatalog();
+    return [];
+  }
+  if (_restaurantSpecialsCatalogKey === cacheKey && _restaurantSpecialsCatalogPromise) {
+    return _restaurantSpecialsCatalogPromise;
+  }
+
+  const siblingMenuIds = (getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId))
+    .filter(menuId => menuId && menuId !== MENU_ID);
+  if (!siblingMenuIds.length) {
+    _restaurantSpecialsSiblingCatalog = [];
+    _restaurantSpecialsCatalogKey = cacheKey;
+    _restaurantSpecialsCatalogPromise = Promise.resolve([]);
+    return _restaurantSpecialsCatalogPromise;
+  }
+
+  _restaurantSpecialsCatalogKey = cacheKey;
+  _restaurantSpecialsCatalogPromise = (async () => {
+    const requestKey = cacheKey;
+    try {
+      const categories = await sbReadJsonOrThrow(
+        `${SUPABASE_URL}/rest/v1/categories?menu_id=in.(${siblingMenuIds.join(',')})&select=menu_id,key,label,items(id,name,visibility,on_menu)&order=display_order.asc`,
+        { headers: sbHeaders() }
+      );
+      const menusById = knownMenuList().reduce((acc, menu) => {
+        acc[menu.id] = menu;
+        return acc;
+      }, {});
+      const catalog = categories
+        .filter(category => category.key !== UNCATEGORIZED_ID && !isLegacySpecialCategory(category.key))
+        .flatMap(category =>
+        (category.items || []).map(item => ({
+          id: item.id,
+          name: item.name,
+          cat: category.label || '',
+          menuId: category.menu_id,
+          menuLabel: getMenuTypeLabel(menusById[category.menu_id]?.type || ''),
+          onMenu: item.on_menu,
+          visibility: item.visibility || 'public',
+        }))
+      );
+      if (_restaurantSpecialsCatalogKey === requestKey) {
+        _restaurantSpecialsSiblingCatalog = catalog;
+      }
+    } catch (_) {
+      if (_restaurantSpecialsCatalogKey === requestKey) {
+        _restaurantSpecialsSiblingCatalog = [];
+      }
+    }
+    return _restaurantSpecialsSiblingCatalog;
+  })();
+  return _restaurantSpecialsCatalogPromise;
+}
+
 async function refreshFeaturedForActiveMenu() {
-  _featuredGroups = MENU_ID ? await sbReadFeatured(MENU_ID) : [];
+  if (!RESTAURANT_ID) {
+    _featuredGroups = [];
+    resetRestaurantSpecialsCatalog();
+    return _featuredGroups;
+  }
+  if (currentUserCanEditRestaurantSpecials(RESTAURANT_ID) && currentUser?.accessToken) {
+    await ensureRestaurantSpecialsGroup(RESTAURANT_ID);
+    await refreshRestaurantSpecialsCatalog(RESTAURANT_ID);
+  } else {
+    resetRestaurantSpecialsCatalog();
+  }
+  _featuredGroups = await sbReadRestaurantSpecials(RESTAURANT_ID);
   return _featuredGroups;
 }
 
@@ -763,8 +915,12 @@ async function loadActiveMenuState(options = {}) {
 }
 
 async function sbPatchMenuMeta(update) {
-  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}`, {
+  return sbPatchMenuMetaForMenu(MENU_ID, update);
+}
+
+async function sbPatchMenuMetaForMenu(menuId, update) {
+  if (!SUPABASE_URL || !menuId || !currentUser?.accessToken) return;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${menuId}`, {
     method:  'PATCH',
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify(update),
@@ -782,34 +938,95 @@ async function sbPatchRestaurantDesign(design) {
   if (!r.ok) throw new Error(`restaurant patch: ${r.status}`);
 }
 
-async function sbReadFeatured(menuId) {
+async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
+  const { createIfMissing = false } = options;
+  const config = getRestaurantSpecialConfig(restaurantId);
+  if (!SUPABASE_URL || !config?.name) return null;
+  try {
+    const groups = await sbReadJsonOrThrow(
+      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+      { headers: sbHeaders() }
+    );
+    if (groups?.[0]) return groups[0];
+    if (!createIfMissing || !currentUser?.accessToken) return null;
+    const created = await sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify({ name: config.name }),
+    });
+    return created?.[0] || null;
+  } catch (e) {
+    if (!createIfMissing) return null;
+    try {
+      const groups = await sbReadJsonOrThrow(
+        `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+        { headers: sbHeaders() }
+      );
+      return groups?.[0] || null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+async function sbReadLegacyFeatured(menuId = MENU_ID) {
   if (!SUPABASE_URL || !menuId) return [];
   try {
-    // 1. Get featured groups linked to this menu
-    const mgRes = await fetch(
+    const menuGroups = await sbReadJsonOrThrow(
       `${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&select=display_order,featured_groups(id,name)&order=display_order.asc`,
       { headers: sbHeaders() }
     );
-    if (!mgRes.ok) return [];
-    const menuGroups = await mgRes.json();
     if (!menuGroups.length) return [];
-
-    // 2. Get slots for those groups with item details
-    const groupIds = menuGroups.map(mg => mg.featured_groups.id);
-    const slotsRes = await fetch(
+    const groupIds = menuGroups.map(menuGroup => menuGroup.featured_groups.id);
+    const allSlots = await sbReadJsonOrThrow(
       `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
+      { headers: sbHeaders() }
+    );
+    return menuGroups.map(menuGroup => ({
+      id: menuGroup.featured_groups.id,
+      name: menuGroup.featured_groups.name,
+      displayOrder: menuGroup.display_order,
+      slots: allSlots
+        .filter(slot => slot.featured_group_id === menuGroup.featured_groups.id)
+        .map(slot => ({
+          id: slot.id,
+          itemId: slot.item_id,
+          sellNote: slot.sell_note || '',
+          displayOrder: slot.display_order,
+          confirmedAt: slot.confirmed_at,
+          confirmedBy: slot.confirmed_by,
+          item: slot.items ? {
+            id: slot.items.id,
+            name: slot.items.name,
+            price: slot.items.price || '',
+            visibility: slot.items.visibility || 'public',
+            eightySixed: slot.items.is_eighty_sixed,
+            desc: slot.items.desc || '',
+          } : null,
+        }))
+        .filter(slot => slot.item !== null),
+    }));
+  } catch (_) {
+    return [];
+  }
+}
+
+async function sbReadRestaurantSpecials(restaurantId = RESTAURANT_ID) {
+  if (!SUPABASE_URL || !restaurantId) return [];
+  try {
+    const group = await sbGetRestaurantSpecialGroup(restaurantId);
+    if (!group?.id) return sbReadLegacyFeatured(MENU_ID);
+    const slotsRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=eq.${group.id}&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
       { headers: sbHeaders() }
     );
     if (!slotsRes.ok) return [];
     const allSlots = await slotsRes.json();
-
-    // 3. Assemble into structured groups
-    return menuGroups.map(mg => ({
-      id: mg.featured_groups.id,
-      name: mg.featured_groups.name,
-      displayOrder: mg.display_order,
+    return [{
+      id: group.id,
+      name: group.name,
+      displayOrder: 0,
       slots: allSlots
-        .filter(s => s.featured_group_id === mg.featured_groups.id)
         .map(s => ({
           id: s.id,
           itemId: s.item_id,
@@ -826,8 +1043,8 @@ async function sbReadFeatured(menuId) {
             desc: s.items.desc || '',
           } : null,
         }))
-        .filter(s => s.item !== null), // exclude slots whose items were deleted
-    }));
+        .filter(s => s.item !== null),
+    }];
   } catch(e) { return []; }
 }
 
@@ -1184,12 +1401,13 @@ function renderCategoriesTab() {
   const container = document.getElementById('catmgr-list');
   if (!container) return;
   container.innerHTML = '';
-  CATEGORY_DEFS.forEach((cat, idx) => {
+  const managedCategories = getManagedCategoryDefs();
+  managedCategories.forEach((cat, idx) => {
     const card = document.createElement('div');
     card.className = 'catmgr-card';
     card.id = 'catmgr-' + cat.id;
     const isFirst = idx === 0;
-    const isLast  = idx === CATEGORY_DEFS.length - 1;
+    const isLast  = idx === managedCategories.length - 1;
     card.innerHTML = `
       <div class="catmgr-row">
         <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
@@ -1231,12 +1449,14 @@ function renderCategoriesTab() {
 }
 
 function toggleCategoryEdit(catId) {
+  if (isLegacySpecialCategory(catId)) return;
   const el = document.getElementById('catmgr-edit-' + catId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 async function saveCategoryEdit(catId) {
+  if (isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const icon  = document.getElementById('ce-icon-'  + catId)?.value.trim() || cat.icon;
@@ -1252,6 +1472,7 @@ async function saveCategoryEdit(catId) {
 }
 
 async function moveCategoryUp(catId) {
+  if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
@@ -1260,6 +1481,7 @@ async function moveCategoryUp(catId) {
 }
 
 async function moveCategoryDown(catId) {
+  if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
@@ -1268,6 +1490,7 @@ async function moveCategoryDown(catId) {
 }
 
 async function deleteCategory(catId) {
+  if (isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const items = menuState[catId]?.items || [];
@@ -2020,7 +2243,7 @@ function _renderDefaultPublicView() {
   container.innerHTML = '';
   renderFeaturedPublicSection();
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
-  CATEGORY_DEFS.forEach(cat => {
+  getManagedCategoryDefs().forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
     const section = buildPublicCategorySection(cat, state, lastSentCats);
     if (section) container.appendChild(section);
@@ -2033,6 +2256,13 @@ async function _renderCustomDesignView() {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
   const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
+  const restaurantSpecials = _featuredGroups.length > 1
+    ? {
+        id: '__restaurant_specials__',
+        name: getRestaurantSpecialLabel(RESTAURANT_ID),
+        slots: _featuredGroups.flatMap(group => group.slots || []),
+      }
+    : (_featuredGroups[0] || null);
   if (!_restaurantCustomDesignEnabled || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
@@ -2045,7 +2275,8 @@ async function _renderCustomDesignView() {
     const didRender = window.initializeRoute(menuState, {
       activeMenuName: _activeMenuName,
       appVersion: APP_VERSION,
-      categoryDefs: CATEGORY_DEFS,
+      canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+      categoryDefs: getManagedCategoryDefs(),
       currentUser,
       featuredGroups: _featuredGroups,
       isPreview: IS_PREVIEW,
@@ -2053,6 +2284,7 @@ async function _renderCustomDesignView() {
       lastUpdatedTs: getLastUpdatedTs(),
       menuId: MENU_ID,
       menuType: MENU_TYPE,
+      restaurantSpecials,
       restaurantId: RESTAURANT_ID,
       siteRestaurant: _siteRestaurant,
     });
@@ -3123,7 +3355,7 @@ function renderManagerCategories() {
   // Preserve uncategorized expansion state across re-renders
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
 
-  CATEGORY_DEFS.forEach(cat => {
+  getManagedCategoryDefs().forEach(cat => {
     const card = document.createElement('div');
     card.className = 'cat-card';
     card.id = 'mgr-card-' + cat.id;
@@ -3887,12 +4119,20 @@ function computeFeaturedDiff() {
     }
   });
   if (!featuredAdded.length && !featuredRemoved.length) return null;
-  return { id: '__featured__', icon: '⭐', label: 'Featured', added: featuredAdded, removed: featuredRemoved, eightySixed: [], restored: [] };
+  return {
+    id: '__featured__',
+    icon: '⭐',
+    label: getRestaurantSpecialLabel(RESTAURANT_ID),
+    added: featuredAdded,
+    removed: featuredRemoved,
+    eightySixed: [],
+    restored: [],
+  };
 }
 
 function computeDiff() {
   const results = [];
-  CATEGORY_DEFS.forEach(cat => {
+  getManagedCategoryDefs().forEach(cat => {
     const diff = computeCategoryDiff(cat);
     if (diff) results.push(diff);
   });
@@ -4026,14 +4266,22 @@ async function sendUpdate() {
         if (!persisted) throw new Error('persist failed');
         const lastSentState = snapshotLastSentState();
         const currentFeaturedIds = getCurrentFeaturedIds();
+        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
+          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
+          : [];
         _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await sbPatchMenuMeta({
-          last_updated_ts:      ts,
-          last_sent_ts:         ts,
-          last_sent_state:      lastSentState,
-          last_sent_categories: diff.map(d => d.id),
-          last_sent_featured:   currentFeaturedIds,
-        });
+        await Promise.all([
+          sbPatchMenuMeta({
+            last_updated_ts:      ts,
+            last_sent_ts:         ts,
+            last_sent_state:      lastSentState,
+            last_sent_categories: diff.map(d => d.id),
+            last_sent_featured:   currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== MENU_ID)
+            .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
+        ]);
         updateLastUpdatedLabel();
         renderManagerCategories();
         updateDraftIndicator();
@@ -4351,130 +4599,218 @@ document.getElementById('invite-modal-bg')?.addEventListener('click', e => {
 
 // ─── FEATURED ITEMS ──────────────────────────────────────────────────────────
 
+function getActiveRestaurantSpecialGroup() {
+  return _featuredGroups[0] || null;
+}
+
+async function callRestaurantSpecialsApi(action, payload = {}) {
+  const response = await fetch('/api/specials', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
+    },
+    body: JSON.stringify({
+      action,
+      restaurantId: RESTAURANT_ID,
+      ...payload,
+    }),
+  });
+  let data = {};
+  try {
+    data = await response.json();
+  } catch (_) {
+    data = {};
+  }
+  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+  return data;
+}
+
 function renderFeaturedTab() {
   const wrap = document.getElementById('featured-mgr-wrap');
   if (!wrap) return;
-
-  if (!_featuredGroups.length) {
-    wrap.innerHTML = '<p class="db-empty">No featured groups linked to this menu. Ask an admin to create one in the Admin panel.</p>';
+  if (!currentUserCanEditRestaurantSpecials()) {
+    wrap.innerHTML = '';
     return;
   }
+  const group = getActiveRestaurantSpecialGroup();
+  const groupId = group?.id || '';
+  const slotCount = group?.slots?.length || 0;
+  const restaurantName = getRestaurantById(RESTAURANT_ID)?.name || 'this restaurant';
+  const slotsHtml = slotCount
+    ? group.slots.map((slot, idx) => {
+        const badges = [
+          slot.item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
+          slot.item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
+        ].filter(Boolean).join('');
+        const priceHtml = slot.item?.price ? `<span class="featured-special-price">${escHtml(slot.item.price)}</span>` : '';
+        return `<div class="current-item featured-special-item" data-slot-id="${escHtml(slot.id)}">
+          <div class="item-status-dot"></div>
+          <div class="item-name featured-special-name">
+            <span class="item-name-static">${escHtml(slot.item?.name || '(deleted)')}</span>
+            ${priceHtml}
+            ${badges}
+          </div>
+          <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
+            aria-label="Sell note for ${escHtml(slot.item?.name || 'special')}"
+            value="${escHtml(slot.sellNote)}"
+            onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
+          <div class="featured-special-actions">
+            <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} up">&#8593;</button>
+            <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} down">&#8595;</button>
+            <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(groupId)})" aria-label="Remove ${escHtml(slot.item?.name || 'special')} from specials">&#215;</button>
+          </div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-state"><span class="empty-state-icon">+</span><span>No specials yet. Add up to five items for ${escHtml(restaurantName)}.</span></div>`;
 
-  wrap.innerHTML = _featuredGroups.map(group => {
-    const slotCount = group.slots.length;
-    const slotsHtml = group.slots.map((slot, idx) => `
-      <div class="featured-mgr-slot" data-slot-id="${escHtml(slot.id)}">
-        <span class="featured-mgr-slot-name">${escHtml(slot.item?.name || '(deleted)')}</span>
-        <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
-          value="${escHtml(slot.sellNote)}"
-          onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''}>&#8593;</button>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''}>&#8595;</button>
-        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})">&#215;</button>
-      </div>`).join('');
-
-    return `<div class="featured-mgr-group">
-      <div class="featured-mgr-group-header">
-        <span class="featured-mgr-group-name">${escHtml(group.name)}</span>
-        <span class="featured-count">${slotCount} / 5</span>
+  const inputKey = groupId || 'pending';
+  wrap.innerHTML = `<div class="cat-card featured-specials-card">
+    <div class="cat-header">
+      <div class="cat-icon featured-specials-icon">⭐</div>
+      <div>
+        <div class="cat-title">${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</div>
+        <div class="cat-sub">Shared across both menus for ${escHtml(restaurantName)}</div>
       </div>
-      ${slotsHtml}
+      <span class="featured-count">${slotCount} / 5</span>
+    </div>
+    <div class="current-section">
+      <div class="current-label">On Menu Now</div>
+      <div class="current-items">${slotsHtml}</div>
       ${slotCount < 5 ? `
-        <div class="featured-add-row">
-          <input type="text" class="featured-add-input" id="featured-add-${escHtml(group.id)}"
-            placeholder="Search items to feature…" oninput="filterFeaturedPicker(${escAttrJs(group.id)},this.value)"/>
-          <div class="featured-picker-list" id="featured-picker-${escHtml(group.id)}"></div>
+        <div class="add-item-wrap featured-special-add">
+          <div class="add-item-area">
+            <input type="text" class="add-item-input featured-add-input" id="featured-add-${escHtml(inputKey)}"
+              placeholder="Search items to add to specials…"
+              oninput="filterFeaturedPicker(${escAttrJs(groupId)},this.value)"
+              onblur="setTimeout(()=>filterFeaturedPicker(${escAttrJs(groupId)},''),150)"
+              onkeydown="handleFeaturedAddKeydown(event,${escAttrJs(groupId)})"/>
+            <button class="add-item-btn" onclick="addFeaturedSlotFromInput(${escAttrJs(groupId)})" aria-label="Add item to ${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}">+</button>
+          </div>
+          <div class="featured-picker-list" id="featured-picker-${escHtml(inputKey)}"></div>
         </div>` : ''}
-    </div>`;
-  }).join('');
+    </div>
+  </div>`;
 }
 
 function getFeatureableMatches(groupId, query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  const group = _featuredGroups.find(g => g.id === groupId);
+  const group = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
   const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
-  const matches = [];
-  CATEGORY_DEFS.forEach(cat => {
-    (menuState[cat.id]?.items || []).forEach(item => {
-      if (item.onMenu === false || existingItemIds.has(item.id) || !item.name.toLowerCase().includes(q)) return;
-      matches.push({ id: item.id, name: item.name, cat: cat.title, visibility: item.visibility });
-    });
-  });
-  return matches;
+  return getRestaurantSpecialsCatalog()
+    .filter(item =>
+      item.onMenu !== false &&
+      !existingItemIds.has(item.id) &&
+      String(item.name || '').toLowerCase().includes(q)
+    )
+    .slice(0, 8);
 }
 
 function filterFeaturedPicker(groupId, query) {
-  const list = document.getElementById('featured-picker-' + groupId);
+  const listId = 'featured-picker-' + (groupId || 'pending');
+  const list = document.getElementById(listId);
   if (!list) return;
+  if (!currentUserCanEditRestaurantSpecials()) {
+    list.innerHTML = '';
+    return;
+  }
   const matches = getFeatureableMatches(groupId, query);
   if (!query.trim()) { list.innerHTML = ''; return; }
-  list.innerHTML = matches.slice(0, 8).map(m =>
+  list.innerHTML = matches.map(m =>
     `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
-      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(m.cat)}</span>
+      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(`${m.menuLabel} · ${m.cat}`)}</span>
       ${m.visibility === 'off_menu' ? '<span class="featured-picker-offmenu">off-menu</span>' : ''}
     </div>`
   ).join('') || '<div class="featured-picker-empty">No matches</div>';
 }
 
+function handleFeaturedAddKeydown(event, groupId) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    addFeaturedSlotFromInput(groupId);
+    return;
+  }
+  if (event.key === 'Escape') filterFeaturedPicker(groupId, '');
+}
+
+async function addFeaturedSlotFromInput(groupId) {
+  const inputId = 'featured-add-' + (groupId || 'pending');
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const query = input.value.trim();
+  if (!query) return;
+  const matches = getFeatureableMatches(groupId, query);
+  if (!matches.length) {
+    showToast('No matching items found for specials.', 'info');
+    return;
+  }
+  const exactMatch = matches.find(match => match.name.trim().toLowerCase() === query.toLowerCase());
+  await addFeaturedSlot(groupId, (exactMatch || matches[0]).id);
+}
+
 async function addFeaturedSlot(groupId, itemId) {
+  if (!currentUserCanEditRestaurantSpecials()) {
+    showToast('Specials require access to both menus for this restaurant.', 'error');
+    return;
+  }
   try {
-    const group = _featuredGroups.find(g => g.id === groupId);
-    if (!group || group.slots.length >= 5) { showToast('Max 5 featured items per group.', 'info'); return; }
-    const nextOrder = group.slots.length;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/featured_slots`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ featured_group_id: groupId, item_id: itemId, display_order: nextOrder }),
-    });
-    if (!r.ok) throw new Error('insert failed');
+    const existingGroup = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
+    const slotCount = existingGroup?.slots?.length || 0;
+    if (slotCount >= 5) { showToast('Max 5 specials per restaurant.', 'info'); return; }
+    if ((existingGroup?.slots || []).some(slot => slot.itemId === itemId)) {
+      showToast('That item is already in specials.', 'info');
+      return;
+    }
+    await callRestaurantSpecialsApi('add', { itemId });
     await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
     invalidateDiff();
     updateDraftIndicator();
-    showToast('Item featured!', 'success');
-  } catch(e) { showToast('Failed to add featured item.', 'error'); }
+    const input = document.getElementById('featured-add-' + (groupId || 'pending'));
+    if (input) input.value = '';
+    filterFeaturedPicker(groupId, '');
+    showToast('Special added!', 'success');
+  } catch(e) { showToast('Failed to add special.', 'error'); }
 }
 
 async function removeFeaturedSlot(slotId, groupId) {
+  if (!currentUserCanEditRestaurantSpecials()) {
+    showToast('Specials require access to both menus for this restaurant.', 'error');
+    return;
+  }
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
-      method: 'DELETE', headers: sbHeaders(),
-    });
+    await callRestaurantSpecialsApi('remove', { slotId });
     await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
     invalidateDiff();
     updateDraftIndicator();
-    showToast('Featured item removed.', 'success');
+    showToast('Special removed.', 'success');
   } catch(e) { showToast('Failed to remove.', 'error'); }
 }
 
 async function saveFeaturedSellNote(slotId, note) {
+  if (!currentUserCanEditRestaurantSpecials()) return;
   try {
-    await fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slotId}`, {
-      method: 'PATCH',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ sell_note: note }),
-    });
+    await callRestaurantSpecialsApi('note', { slotId, note });
   } catch(e) {}
 }
 
 async function moveFeaturedSlot(groupId, slotId, direction) {
-  const group = _featuredGroups.find(g => g.id === groupId);
+  if (!currentUserCanEditRestaurantSpecials()) {
+    showToast('Specials require access to both menus for this restaurant.', 'error');
+    return;
+  }
+  const group = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
   if (!group) return;
   const idx = group.slots.findIndex(s => s.id === slotId);
   if (idx < 0) return;
   const newIdx = idx + direction;
   if (newIdx < 0 || newIdx >= group.slots.length) return;
-  // Swap display_order values
-  const a = group.slots[idx], b = group.slots[newIdx];
   try {
-    await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${a.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: b.displayOrder }) }),
-      fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${b.id}`, { method: 'PATCH', headers: sbHeaders({ 'Prefer': 'return=minimal' }), body: JSON.stringify({ display_order: a.displayOrder }) }),
-    ]);
+    await callRestaurantSpecialsApi('move', { slotId, direction });
     await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
@@ -4484,7 +4820,12 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
 
 function checkFeaturedConfirmation() {
-  if (sessionStorage.getItem('featured_confirmed')) return;
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner && !currentUserCanEditRestaurantSpecials()) {
+    banner.style.display = 'none';
+    return;
+  }
+  if (sessionStorage.getItem(getFeaturedConfirmationKey())) return;
   const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
     if (!s.confirmedAt) return true;
     const confirmed = new Date(s.confirmedAt);
@@ -4493,125 +4834,29 @@ function checkFeaturedConfirmation() {
     return confirmed < today;
   }));
   if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
-
-  const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = '';
 }
 
 async function confirmFeaturedToday() {
-  const now = new Date().toISOString();
+  if (!currentUserCanEditRestaurantSpecials()) {
+    showToast('Specials require access to both menus for this restaurant.', 'error');
+    return;
+  }
   try {
-    const requests = [];
-    for (const group of _featuredGroups) {
-      for (const slot of group.slots) {
-        requests.push(fetch(`${SUPABASE_URL}/rest/v1/featured_slots?id=eq.${slot.id}`, {
-          method: 'PATCH',
-          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify({ confirmed_at: now, confirmed_by: currentUser?.uid || null }),
-        }));
-      }
-    }
-    await Promise.all(requests);
-    sessionStorage.setItem('featured_confirmed', '1');
+    await callRestaurantSpecialsApi('confirm');
+    sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
     const banner = document.getElementById('featured-confirm-banner');
     if (banner) banner.style.display = 'none';
-    showToast('Featured items confirmed for today!', 'success');
+    showToast('Specials confirmed for today!', 'success');
   } catch(e) { showToast('Failed to confirm.', 'error'); }
 }
 
 function editFeaturedFromBanner() {
+  if (!currentUserCanEditRestaurantSpecials()) return;
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
-  sessionStorage.setItem('featured_confirmed', '1');
+  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
   switchManagerTab('edit-menu');
-}
-
-// ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
-
-async function renderFeaturedAdmin() {
-  const wrap = document.getElementById('featured-admin-wrap');
-  if (!wrap) return;
-  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
-  wrap.innerHTML = '<p class="db-empty">Loading…</p>';
-  try {
-    if (!_adminAllMenus.length) await loadAdminSwitcherData();
-    const [groups, links] = await Promise.all([
-      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?select=id,name&order=name.asc`, { headers: sbHeaders() }),
-      sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?select=menu_id,featured_group_id`, { headers: sbHeaders() }),
-    ]);
-
-    if (!groups.length) {
-      wrap.innerHTML = '<p class="db-empty">No featured groups yet.</p>';
-      return;
-    }
-
-    // Get all menus for the link checkboxes
-    const allMenus = _adminAllMenus || [];
-
-    wrap.innerHTML = groups.map(g => {
-      const linkedMenuIds = new Set(links.filter(l => l.featured_group_id === g.id).map(l => l.menu_id));
-      const menuCheckboxes = allMenus.map(m =>
-        `<label class="featured-admin-menu-label"><input type="checkbox" ${linkedMenuIds.has(m.id) ? 'checked' : ''} onchange="toggleFeaturedGroupMenu(${escAttrJs(g.id)},${escAttrJs(m.id)},this.checked)"/> ${escHtml(formatMenuDisplayName(m.name, m.type, m.restaurant_id))}</label>`
-      ).join('');
-      return `<div class="featured-admin-group">
-        <div class="featured-admin-group-header">
-          <strong>${escHtml(g.name)}</strong>
-          <button class="btn-small btn-danger" onclick="deleteFeaturedGroup(${escAttrJs(g.id)})">Delete</button>
-        </div>
-        <div class="featured-admin-menus">${menuCheckboxes || '<span class="hint">No menus available</span>'}</div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    console.error('renderFeaturedAdmin failed:', e);
-    const errorMsg = e.message || String(e) || 'Unknown error';
-    wrap.innerHTML = `<p class="db-empty db-error">Failed to load featured groups: ${escHtml(errorMsg)}</p>`;
-  }
-}
-
-async function addFeaturedGroup() {
-  const input = document.getElementById('new-featured-group-name');
-  const name = input?.value?.trim();
-  if (!name) return;
-  try {
-    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
-      method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ name }),
-    });
-    input.value = '';
-    await renderFeaturedAdmin();
-    showToast('Featured group created!', 'success');
-  } catch(e) { showToast(e.message || 'Failed to create group.', 'error'); }
-}
-
-async function deleteFeaturedGroup(groupId) {
-  if (!confirm('Delete this featured group? This removes it from all menus.')) return;
-  try {
-    await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${groupId}`, {
-      method: 'DELETE', headers: sbHeaders(),
-    });
-    await renderFeaturedAdmin();
-    _featuredGroups = await sbReadFeatured(MENU_ID);
-    renderPublicView();
-    showToast('Group deleted.', 'success');
-  } catch(e) { showToast(e.message || 'Failed to delete.', 'error'); }
-}
-
-async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
-  try {
-    if (checked) {
-      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups`, {
-        method: 'POST', headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify({ menu_id: menuId, featured_group_id: groupId, display_order: 0 }),
-      });
-    } else {
-      await sbFetchOrThrow(`${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&featured_group_id=eq.${groupId}`, {
-        method: 'DELETE', headers: sbHeaders(),
-      });
-    }
-    await renderFeaturedAdmin();
-    _featuredGroups = await sbReadFeatured(MENU_ID);
-    renderPublicView();
-  } catch(e) { showToast(e.message || 'Failed to update.', 'error'); }
 }
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
@@ -4632,7 +4877,7 @@ function switchManagerTab(name) {
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
+  ['admin-restaurants', 'admin-notifications', 'admin-users', 'admin-history'].forEach(t => {
     const btn   = document.getElementById('tab-btn-' + t);
     const panel = document.getElementById('tab-panel-' + t);
     if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
@@ -4641,7 +4886,6 @@ function switchAdminTab(name) {
   if (name === 'admin-restaurants')   { renderMenusPanel(); }
   if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
   if (name === 'admin-users')         { loadUsers(); }
-  if (name === 'admin-featured')      { renderFeaturedAdmin(); }
   if (name === 'admin-history')       { renderUpdateHistory(); }
 }
 
