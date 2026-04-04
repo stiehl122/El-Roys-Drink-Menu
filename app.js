@@ -212,6 +212,35 @@ function getRestaurantById(id) {
   return knownRestaurantList().find(restaurant => restaurant.id === id) || null;
 }
 
+function getMenuById(menuId) {
+  return knownMenuList().find(menu => menu.id === menuId) || null;
+}
+
+function getMenuBySlug(slug) {
+  const normalizedSlug = normalizeKnownMenuSlug(slug || '');
+  return knownMenuList().find(menu => menu.slug === normalizedSlug) || null;
+}
+
+function getRequestedMenuForSettingsPage() {
+  const requestedSlug = new URLSearchParams(location.search).get('menu') || '';
+  if (requestedSlug) return getMenuBySlug(requestedSlug);
+  if (MENU_ID) return getMenuById(MENU_ID);
+  return null;
+}
+
+function getFirstAccessibleManagerMenuId(user = currentUser) {
+  if (user?.role === 'admin') return KNOWN_MENU_ORDER[0] || '';
+  const allowedIds = new Set(normalizeAccessibleMenuIds(user?.accessibleMenuIds));
+  return KNOWN_MENU_ORDER.find(menuId => allowedIds.has(menuId)) || '';
+}
+
+function currentUserCanManageMenu(menuId = MENU_ID, user = currentUser) {
+  if (!menuId || !KNOWN_MENU_ORDER.includes(menuId) || !user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'manager') return false;
+  return normalizeAccessibleMenuIds(user.accessibleMenuIds).includes(menuId);
+}
+
 function getMenuTypeLabel(menuType) {
   return (menuType || '').toLowerCase() === 'food' ? 'Food' : 'Drinks';
 }
@@ -315,13 +344,25 @@ function getDefaultPublicPath() {
   return '/';
 }
 
-function getPublicHrefForCurrentMenu() {
-  const menu = knownMenuList().find(entry => entry.id === MENU_ID) || null;
+function getPublicHrefForMenuId(menuId) {
+  const menu = getMenuById(menuId);
   const basePath = menu?.restaurantId && SITE_PATHS[menu.restaurantId]
     ? SITE_PATHS[menu.restaurantId]
     : getDefaultPublicPath();
   if (!menu?.slug) return basePath;
   const url = new URL(basePath, window.location.origin);
+  url.searchParams.set('menu', menu.slug);
+  return `${url.pathname}${url.search}`;
+}
+
+function getPublicHrefForCurrentMenu() {
+  return getPublicHrefForMenuId(MENU_ID);
+}
+
+function getManagerHrefForMenuId(menuId) {
+  const menu = getMenuById(menuId);
+  if (!menu?.slug) return SHARED_PAGE_PATHS.manager;
+  const url = new URL(SHARED_PAGE_PATHS.manager, window.location.origin);
   url.searchParams.set('menu', menu.slug);
   return `${url.pathname}${url.search}`;
 }
@@ -1615,7 +1656,10 @@ function _clearSettingsRedirectPrompt() {
   }
 }
 
-function _showSettingsRedirectMessage(message) {
+function _showSettingsRedirectMessage(message, opts = {}) {
+  const targetPath = opts.targetPath || '/';
+  const redirectLabel = opts.redirectLabel || 'the menu selector';
+  const actionLabel = opts.actionLabel || 'Return to the restaurant selector';
   _clearSettingsRedirectPrompt();
   isManagerMode = false;
   isAdminMode = false;
@@ -1628,12 +1672,12 @@ function _showSettingsRedirectMessage(message) {
   if (managerView) managerView.style.display = 'none';
 
   closeMenuPicker({ skipOnClose: true });
-  _setLoadingMessage(`${message} Redirecting to the menu selector…`, { hideSpinner: true });
+  _setLoadingMessage(`${message} Redirecting to ${redirectLabel}…`, { hideSpinner: true });
 
   const loadingView = document.getElementById('loading-view');
   const redirectNow = () => {
     _clearSettingsRedirectPrompt();
-    navigateToPage('/');
+    navigateToPage(targetPath);
   };
 
   if (loadingView) {
@@ -1646,7 +1690,7 @@ function _showSettingsRedirectMessage(message) {
     loadingView.classList.add('loading-view-actionable');
     loadingView.tabIndex = 0;
     loadingView.setAttribute('role', 'button');
-    loadingView.setAttribute('aria-label', 'Return to the restaurant selector');
+    loadingView.setAttribute('aria-label', actionLabel);
     loadingView.addEventListener('click', onClick);
     loadingView.addEventListener('keydown', onKeyDown);
     _settingsRedirectCleanup = () => {
@@ -1666,31 +1710,8 @@ function showAdminAccessDenied(message = 'Admin access required for this page.')
   _showSettingsRedirectMessage(message);
 }
 
-function showManagerAccessDenied(message = 'Manager access required for this page.') {
-  _showSettingsRedirectMessage(message);
-}
-
-async function showManagerMenuSelector(menuIds) {
-  const accessibleMenuIds = normalizeAccessibleMenuIds(menuIds);
-  const entryMenuIds = accessibleMenuIds.length ? accessibleMenuIds : getAccessibleManagerMenuIds();
-  _setSettingsShellPending(false);
-  showMenuPicker(async () => {
-    _managerMenuPicked = true;
-    _setLoadingMessage('Loading settings…');
-    const hasMenuContext = await _loadSettingsPageMenuContext(MENU_ID);
-    if (!hasMenuContext) {
-      showManagerAccessDenied('Selected menu is no longer available for this account.');
-      return;
-    }
-    enterManager();
-  }, {
-    menuIds: entryMenuIds,
-    title: 'CHOOSE MENU TO EDIT',
-    subtitle: 'Select the menu you want to manage.',
-    closeLabel: 'Back to menu selector',
-    emptyMessage: 'No accessible menus found.',
-    onClose: () => navigateToPage('/'),
-  });
+function showManagerAccessDenied(message = 'Manager access required for this page.', opts = {}) {
+  _showSettingsRedirectMessage(message, opts);
 }
 
 async function _syncRequestedPageMode() {
@@ -1715,8 +1736,6 @@ async function _syncRequestedPageMode() {
   }
 
   const isAdmin = currentUser.role === 'admin';
-  const isManager = currentUser.role === 'manager';
-
   if (_appPageMode === 'admin') {
     if (!isAdmin) {
       showAdminAccessDenied();
@@ -1734,36 +1753,44 @@ async function _syncRequestedPageMode() {
     return;
   }
 
-  if (!isAdmin && !isManager) {
-    showManagerAccessDenied();
+  _setLoadingMessage('Checking manager access…');
+  await refreshCurrentUserProfile();
+
+  const requestedMenu = getRequestedMenuForSettingsPage();
+  if (!requestedMenu) {
+    showManagerAccessDenied('No menu context available for this page.');
     return;
   }
 
-  const accessibleMenuIds = getAccessibleManagerMenuIds();
-  if (!accessibleMenuIds.length) {
-    showManagerAccessDenied('No accessible menu found for this account.');
-    return;
-  }
-
-  if (accessibleMenuIds.length === 1) {
-    _managerMenuPicked = false;
-    _setLoadingMessage('Loading settings…');
-    const hasMenuContext = await _loadSettingsPageMenuContext(accessibleMenuIds[0]);
-    if (!hasMenuContext) {
-      showManagerAccessDenied('Selected menu is no longer available for this account.');
-      return;
+  if (!currentUserCanManageMenu(requestedMenu.id)) {
+    const fallbackMenuId = getFirstAccessibleManagerMenuId();
+    if (fallbackMenuId) {
+      const targetPath = getManagerHrefForMenuId(fallbackMenuId);
+      if (targetPath) {
+        navigateToPage(targetPath);
+        return;
+      }
     }
-    enterManager();
+    showManagerAccessDenied('You don\'t have manager access to this menu.', {
+      targetPath: getPublicHrefForMenuId(requestedMenu.id),
+      redirectLabel: 'the public menu',
+      actionLabel: 'Return to the public menu',
+    });
     return;
   }
 
-  isManagerMode = false;
-  isAdminMode = false;
-  document.body.classList.remove('manager-mode');
-  publicView.style.display = 'none';
-  managerView.style.display = 'none';
-  _setLoadingMessage('Select a menu to manage.', { hideSpinner: true });
-  showManagerMenuSelector(accessibleMenuIds);
+  _managerMenuPicked = true;
+  _setLoadingMessage('Loading settings…');
+  const hasMenuContext = await _loadSettingsPageMenuContext(requestedMenu.id);
+  if (!hasMenuContext) {
+    showManagerAccessDenied('Selected menu is no longer available for this account.', {
+      targetPath: getPublicHrefForMenuId(requestedMenu.id),
+      redirectLabel: 'the public menu',
+      actionLabel: 'Return to the public menu',
+    });
+    return;
+  }
+  enterManager();
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
@@ -2115,6 +2142,25 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '', accessibleMenuIds: normalizeAccessibleMenuIds(accessibleMenuIds) };
 }
 
+function updateCurrentUserProfile(profile = {}) {
+  if (!currentUser) return profile;
+  currentUser.name = profile.name || '';
+  currentUser.role = profile.role || 'none';
+  currentUser.accessibleMenuIds = normalizeAccessibleMenuIds(profile.accessibleMenuIds);
+  applyRole(currentUser.role);
+  return profile;
+}
+
+async function refreshCurrentUserProfile() {
+  if (!currentUser?.accessToken) return { role: 'none', name: '', accessibleMenuIds: [] };
+  try {
+    const profile = await sbGetProfile(currentUser.accessToken);
+    return updateCurrentUserProfile(profile);
+  } catch (_) {
+    return updateCurrentUserProfile({ role: 'none', name: currentUser?.name || '', accessibleMenuIds: [] });
+  }
+}
+
 async function sbResetPasswordForEmail(email) {
   const redirectTo = window.location.origin + window.location.pathname;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
@@ -2205,10 +2251,7 @@ function renderUserHeader() {
     : (parts[0]?.[0] || '?').toUpperCase();
   const roleLabel = { none: 'User', manager: 'Manager', admin: 'Admin' }[role] || 'User';
 
-  // Access to the manager panel requires either admin role or explicit menu access.
-  // Show the button if the manager has access to ANY menu (MENU_ID may not be set yet).
-  const accessibleIds = currentUser?.accessibleMenuIds || [];
-  const hasMenuAccess = isAdmin || accessibleIds.length > 0;
+  const canManageCurrentMenu = currentUserCanManageMenu();
 
   _setDisplayById('signin-btn', signedIn ? 'none' : '');
   _setDisplayById('user-chip', signedIn ? '' : 'none');
@@ -2220,7 +2263,7 @@ function renderUserHeader() {
   const adminBtn  = document.getElementById('admin-btn');
 
   if (actionBtn) {
-    actionBtn.style.display = (signedIn && hasMenuAccess) ? '' : 'none';
+    actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
     actionBtn.textContent   = (isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager';
     actionBtn.classList.toggle('active', isManagerMode);
   }
@@ -2229,7 +2272,7 @@ function renderUserHeader() {
     adminBtn.classList.toggle('active', isAdminMode);
   }
 
-  _setDisplayBySelector('[data-route-manager]', (signedIn && hasMenuAccess) ? '' : 'none');
+  _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
   _setDisplayBySelector('[data-route-admin]', (signedIn && isAdmin) ? '' : 'none');
   document.querySelectorAll('[data-route-manager]').forEach(el => {
     el.textContent = isManagerMode ? 'Exit' : 'Manager';
@@ -2274,8 +2317,13 @@ function applyRole(role) {
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
-  if (_appPageMode !== 'manager') {
-    navigateToPage(SHARED_PAGE_PATHS.manager);
+  const targetPath = getManagerHrefForMenuId(MENU_ID);
+  if (!MENU_ID || targetPath === SHARED_PAGE_PATHS.manager) {
+    showToast('Select a menu from the public view first.', 'info');
+    return;
+  }
+  if (_appPageMode !== 'manager' || `${window.location.pathname}${window.location.search}` !== targetPath) {
+    navigateToPage(targetPath);
   }
 }
 

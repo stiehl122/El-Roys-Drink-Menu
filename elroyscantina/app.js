@@ -81,10 +81,12 @@
     if (!wrapper || !dropdown) return;
 
     const role = sharedState.currentUser?.role || 'none';
-    const accessibleIds = sharedState.currentUser?.accessibleMenuIds || [];
+    const canManageCurrentMenu = typeof window.currentUserCanManageMenu === 'function'
+      ? window.currentUserCanManageMenu(sharedState.menuId, sharedState.currentUser)
+      : (role === 'admin');
     const options = [];
 
-    if (role === 'admin' || accessibleIds.length > 0) {
+    if (canManageCurrentMenu) {
       options.push({ label: 'Manager', icon: 'tune', onClick: () => window.onActionBtnClick?.() });
     }
     if (role === 'admin') {
