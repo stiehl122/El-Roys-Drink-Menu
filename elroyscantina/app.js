@@ -81,10 +81,12 @@
     if (!wrapper || !dropdown) return;
 
     const role = sharedState.currentUser?.role || 'none';
-    const accessibleIds = sharedState.currentUser?.accessibleMenuIds || [];
+    const canManageCurrentMenu = typeof window.currentUserCanManageMenu === 'function'
+      ? window.currentUserCanManageMenu(sharedState.menuId, sharedState.currentUser)
+      : (role === 'admin');
     const options = [];
 
-    if (role === 'admin' || accessibleIds.length > 0) {
+    if (canManageCurrentMenu) {
       options.push({ label: 'Manager', icon: 'tune', onClick: () => window.onActionBtnClick?.() });
     }
     if (role === 'admin') {
@@ -140,6 +142,47 @@
     if (signInButton) signInButton.style.display = isAuthed ? 'none' : '';
     if (userChip) userChip.style.display = isAuthed ? '' : 'none';
   }
+
+  function renderBootShell() {
+    const template = document.getElementById('elroy-route-template');
+    const container = document.getElementById('restaurant-site-wrapper');
+    if (!template || !container) return false;
+
+    container.innerHTML = '';
+    container.appendChild(template.content.cloneNode(true));
+
+    const statusTsEl = document.getElementById('erc-route-status-timestamp');
+    if (statusTsEl) statusTsEl.textContent = 'Loading live menu...';
+
+    const footerTsEl = document.getElementById('erc-route-footer-timestamp');
+    if (footerTsEl) footerTsEl.textContent = 'Loading live menu...';
+
+    const featuredWrap = document.getElementById('erc-route-specials');
+    if (featuredWrap) {
+      featuredWrap.innerHTML = '<p class="erc-route-boot-copy">Loading specials...</p>';
+    }
+
+    const categoryWrap = document.getElementById('erc-route-sections');
+    if (categoryWrap) {
+      categoryWrap.innerHTML = `
+        <section class="erc-section erc-route-boot-section" aria-hidden="true">
+          <div class="erc-section-head">
+            <h3 class="erc-section-title">Preparing The Menu</h3>
+            <div class="erc-section-line"></div>
+          </div>
+          <div class="erc-route-boot-rows">
+            <span class="erc-route-boot-line erc-route-boot-line--wide"></span>
+            <span class="erc-route-boot-line erc-route-boot-line--mid"></span>
+            <span class="erc-route-boot-line erc-route-boot-line--narrow"></span>
+          </div>
+        </section>
+      `;
+    }
+
+    return true;
+  }
+
+  window.renderRouteBootShell = renderBootShell;
 
   window.initializeRoute = function initializeRoute(menuState, authState) {
     const template = document.getElementById('elroy-route-template');

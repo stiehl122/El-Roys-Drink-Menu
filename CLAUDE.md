@@ -7,13 +7,13 @@ A zero-dependency web app that runs the live public and manager-facing menus for
 - **Leroy's Lounge**
 - **El Roy's Cantina**
 
-Each restaurant has two menus, **Drinks** and **Food**, for four total menus. Managers are still assigned per menu, so bartenders and kitchen staff can have separate access. Public rendering is now **custom-design first**: each restaurant is expected to provide uploaded HTML/CSS design files, and the legacy category-accordion renderer exists only as a fallback when a design is disabled or missing.
+Each restaurant has two menus, **Drinks** and **Food**, for four total menus. Managers are still assigned per menu, so bartenders and kitchen staff can have separate access. Public rendering is now **custom-design first**: each restaurant's public page is owned by its route files, and the legacy category-accordion renderer exists only as a fallback when a route implementation is disabled or unavailable.
 
 ## Architecture
 
 - **Three files:** `index.html` (markup), `style.css` (styles), `app.js` (logic). No build step, bundler, or package manager.
 - **Supabase PostgREST** — primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, and update history.
-- **localStorage fallback** — caches menu state, timestamps, and auth/session state for degraded or offline reads.
+- **localStorage/session cache** — legacy cache paths still exist in parts of the shared runtime, but live public menu behavior is database-backed and refreshed through polling.
 - **Supabase Auth + role API** — email/password auth in the client; `/api/role` and `/api/users` enforce role and per-menu access.
 - **Route-owned public pages** — restaurant public designs now live directly in the repo route files such as `leroyslounge/index.html` and `elroyscantina/index.html`. Stitch is the source of truth for those pages.
 - **Vercel API routes** — required for config, roles, notifications, and user management.
@@ -113,21 +113,22 @@ New accounts still start with `role: none`. Admins grant access per menu across 
 - Do not introduce dependencies.
 - No build tools.
 - Preserve Supabase auth and role flows.
-- Preserve offline/localStorage fallback behavior.
+- Preserve live polling, database-backed menu updates, Supabase auth, and role flows.
 - Ignore `supabase/migrations/*.sql` during normal UI/API work unless the task is explicitly about schema/data changes.
 - In `style.css`, use CSS custom properties for colors. No hardcoded hex values in new style rules.
 - Preserve accessibility patterns: tab widgets, dialog behavior, keyboard support, ARIA states, and live regions.
 
 ## Custom Design / Stitch Workflow
 
-Both restaurants are expected to run on uploaded custom HTML/CSS designs.
+Both restaurants are expected to run on route-owned public pages sourced from Stitch.
 
 ### Runtime behavior
 
 1. `renderPublicView()` always tries the route-specific public implementation first.
 2. Public restaurant design lives in the route files, not in `designs/` and not in an admin-upload flow.
 3. If a dedicated route implementation is unavailable or disabled, the app falls back to the default accordion renderer.
-4. Route-specific public styling is part of the page implementation and manager/admin mode exits back to the shared interface.
+4. Dedicated restaurant routes boot directly into their route-owned shell so they do not flash the shared `CURRENT MENU` loading shell on first paint.
+5. Route-specific public styling is part of the page implementation and manager/admin mode exits back to the shared interface.
 
 ### `/stitch`
 

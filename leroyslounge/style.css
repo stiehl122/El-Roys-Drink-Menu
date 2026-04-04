@@ -65,6 +65,18 @@
   min-width: 0;
 }
 
+#restaurant-site-wrapper .ll-board-topbar-left {
+  justify-content: flex-start;
+}
+
+#restaurant-site-wrapper .ll-board-topbar-left::before {
+  content: '';
+  display: block;
+  width: clamp(11rem, 16vw, 15rem);
+  height: 1px;
+  pointer-events: none;
+}
+
 #restaurant-site-wrapper .ll-board-topbar-center {
   justify-content: center;
 }
@@ -595,6 +607,43 @@
   text-transform: uppercase;
 }
 
+#restaurant-site-wrapper .ll-route-boot-copy {
+  margin: 0;
+  color: rgb(17 24 39 / 0.88);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-route-boot-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+#restaurant-site-wrapper .ll-route-boot-line {
+  display: block;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgb(17 24 39 / 0.1), rgb(255 255 255 / 0.5), rgb(17 24 39 / 0.1));
+  background-size: 200% 100%;
+  animation: ll-route-boot-sheen 1.4s linear infinite;
+}
+
+#restaurant-site-wrapper .ll-route-boot-line--wide {
+  width: min(100%, 24rem);
+}
+
+#restaurant-site-wrapper .ll-route-boot-line--mid {
+  width: min(82%, 18rem);
+}
+
+#restaurant-site-wrapper .ll-route-boot-line--narrow {
+  width: min(68%, 14rem);
+}
+
 #restaurant-site-wrapper .ll-board-footer {
   padding: 0 2rem 1.5rem;
   text-align: right;
@@ -626,6 +675,16 @@
   55% {
     opacity: 0.95;
     filter: brightness(1.05) drop-shadow(0 0 12px rgb(255 68 68 / 1));
+  }
+}
+
+@keyframes ll-route-boot-sheen {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
   }
 }
 
@@ -701,5 +760,59 @@
   #restaurant-site-wrapper .ll-board-footer {
     padding-inline: 0.75rem;
     text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  #restaurant-site-wrapper .ll-board-topbar {
+    grid-template-columns: 1fr auto;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-topbar-left {
+    display: none;
+  }
+
+  #restaurant-site-wrapper .ll-board-topbar-center,
+  #restaurant-site-wrapper .ll-board-topbar-right {
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  #restaurant-site-wrapper .ll-board-topbar-right {
+    gap: 0.625rem;
+  }
+
+  #restaurant-site-wrapper .ll-menu-toggle,
+  #restaurant-site-wrapper .ll-board-action-cluster {
+    width: 100%;
+    justify-content: center;
+  }
+
+  #restaurant-site-wrapper .ll-board-jump-link,
+  #restaurant-site-wrapper .ll-board-swap-trigger {
+    min-height: 32px;
+    padding-inline: 10px;
+  }
+
+  #restaurant-site-wrapper .ll-board-route-dropdown {
+    right: 50%;
+    transform: translateX(50%);
+  }
+
+  #restaurant-site-wrapper .ll-board-main {
+    width: calc(100% - 0.5rem);
+    padding: 0.875rem 0.25rem 1.5rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-row {
+    align-items: flex-start;
+  }
+
+  #restaurant-site-wrapper .ll-board-item-side {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 42%;
   }
 }

@@ -11,7 +11,7 @@ Each restaurant has two menus, Drinks and Food, for four total menus. The public
 
 - `index.html`, `style.css`, `app.js`: no build step, bundler, or package manager
 - Supabase PostgREST: primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, history, and auth-backed user data
-- `localStorage`: offline/degraded-read cache for menu data, timestamps, and session state
+- `localStorage`: session/cache layer used by parts of the shared runtime; live menu behavior is database-backed
 - Supabase Auth: client email/password auth with recovery handling
 - Vercel API routes in [`api/`](api): config delivery, role lookup, user management, and notifications
 - Route-owned public pages in [`leroyslounge/index.html`](leroyslounge/index.html) and [`elroyscantina/index.html`](elroyscantina/index.html)
@@ -47,7 +47,7 @@ Current app version in code: `v0.8.1` from [`app.js:2`](app.js#L2).
 - Leroy's Lounge public route: `/leroyslounge`
 - El Roy's Cantina public route: `/elroyscantina`
 
-The shared app detects route ownership and renders the matching public restaurant page when possible. Manager/admin flows still live in the shared app shell.
+The shared app detects route ownership and renders the matching public restaurant page when possible. Dedicated restaurant routes now boot route-first so they do not first-paint the shared `CURRENT MENU` shell. Manager/admin flows still live in the shared app shell.
 
 ## Repo Layout
 
@@ -195,7 +195,7 @@ When doing normal UI work:
 - do not add dependencies
 - do not add a bundler
 - keep the app working as plain HTML/CSS/JS
-- preserve Supabase auth and localStorage fallback behavior
+- preserve Supabase auth, live polling, and database-backed menu updates
 
 ## Database Files
 
