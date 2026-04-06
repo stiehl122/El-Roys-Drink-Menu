@@ -1198,11 +1198,9 @@ function renderManagerWorkspace(options = {}) {
 }
 
 function renderAdminWorkspace() {
-  checkAdminSupabaseStatus();
   renderMenusPanel();
   initAdminSwitcherTab('notif');
   loadUsers();
-  renderFeaturedAdmin();
 }
 
 function refreshManagerViews() {
@@ -2551,16 +2549,34 @@ function closeSettingsDrawer() {
   setSettingsDrawerOpen(false);
 }
 
-function focusSettingsSection(sectionId, trigger) {
+function _getSettingsSectionHashId() {
+  const hash = window.location.hash.replace(/^#/, '').trim();
+  if (!hash || hash.includes('=')) return '';
+  return document.getElementById(hash) ? hash : '';
+}
+
+function _syncSettingsSectionFromLocation(defaultSectionId) {
+  const targetSectionId = _getSettingsSectionHashId() || defaultSectionId;
+  if (!targetSectionId) return;
+  requestAnimationFrame(() => {
+    focusSettingsSection(targetSectionId, null, { behavior: 'auto', updateUrl: false });
+  });
+}
+
+function focusSettingsSection(sectionId, trigger, options = {}) {
   const section = document.getElementById(sectionId);
   if (!section) return;
+  const behavior = options.behavior || 'smooth';
+  const shouldUpdateUrl = options.updateUrl !== false;
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
   closeSettingsDrawer();
-  const url = new URL(window.location.href);
-  url.hash = sectionId;
-  history.replaceState({}, '', url.toString());
-  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (shouldUpdateUrl && isSettingsPage()) {
+    const url = new URL(window.location.href);
+    url.hash = sectionId;
+    history.replaceState({}, '', url.toString());
+  }
+  section.scrollIntoView({ behavior, block: 'start' });
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -2595,7 +2611,6 @@ function enterAdmin() {
   isAdminMode = true;
   _clearSettingsRedirectPrompt();
   stopPolling();
-  document.body.classList.add('manager-mode');
   _setDisplayById('public-view', 'none');
   _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
@@ -2604,7 +2619,7 @@ function enterAdmin() {
   adminPanel.style.display = 'block';
   renderUserHeader();
   renderAdminWorkspace();
-  setActiveSettingsSection('admin-overview-section');
+  _syncSettingsSectionFromLocation('admin-restaurants-section');
 }
 
 function exitAdmin() {
@@ -2712,6 +2727,13 @@ document.addEventListener('keydown', function(e) {
     }
     if (panel) panel.hidden = true;
   });
+});
+
+window.addEventListener('hashchange', () => {
+  if (!isSettingsPage()) return;
+  const sectionId = _getSettingsSectionHashId();
+  if (!sectionId) return;
+  focusSettingsSection(sectionId, null, { behavior: 'auto', updateUrl: false });
 });
 
 // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
@@ -3124,7 +3146,7 @@ function enterManager() {
   managerPanel.style.display = 'block';
   renderUserHeader();
   renderManagerWorkspace();
-  setActiveSettingsSection('manager-overview-section');
+  _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
   checkFeaturedConfirmation();
@@ -4435,11 +4457,12 @@ async function loadUsers() {
   const wrap = document.getElementById('users-list');
   if (!wrap) return;
   wrap.innerHTML = '<div class="db-empty">Loading…</div>';
+  window._adminUserList = null;
   try {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
       const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name&archived=eq.false&order=created_at.asc`,
+        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id&archived=eq.false&order=created_at.asc`,
         { headers: sbHeaders() }
       );
       if (menusRes.ok) window._adminMenuList = await menusRes.json();
@@ -4541,19 +4564,33 @@ function renderUsersTab(users) {
     return;
   }
   const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
-  wrap.innerHTML = users.map(u => {
+  wrap.innerHTML = `
+    <div class="admin-users-table">
+      <div class="admin-users-head">
+        <span>Identity</span>
+        <span>Role</span>
+        <span>Menu Access</span>
+        <span>Status</span>
+      </div>
+      ${users.map(u => {
     const isSelf = u.id === currentUser?.uid;
+    const parts = (u.name || u.email || '?').trim().split(/\s+/).filter(Boolean);
+    const initials = parts.length >= 2
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      : (parts[0]?.slice(0, 2) || '?').toUpperCase();
+    const statusLabel = isSelf ? 'Current Session' : (u.role === 'none' ? 'Pending Approval' : 'Active');
+    const statusClass = isSelf ? 'admin-user-status-pill--current' : (u.role === 'none' ? 'admin-user-status-pill--pending' : 'admin-user-status-pill--active');
 
     // Role controls
     const roleControls = isSelf
       ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
-      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
+      : `<div class="admin-user-role-editor"><select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
                  onchange="renderMenuAccessForUser('${escHtml(u.id)}')">
            <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
            <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
            <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
          </select>
-         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button>`;
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button></div>`;
 
     // Menu access section (only for non-self users)
     const menuAccessSection = isSelf ? '' : `
@@ -4562,32 +4599,41 @@ function renderUsersTab(users) {
       </div>`;
 
     return `
-      <div class="config-card">
-        <div class="user-mgmt-top">
+      <article class="admin-user-row">
+        <div class="admin-user-cell admin-user-cell--identity">
+          <div class="admin-user-avatar">${escHtml(initials)}</div>
           <div class="user-mgmt-identity">
-            <div class="input-row">
+            <div class="input-row admin-user-name-row">
               <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" />
               <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save</button>
             </div>
             <div class="user-mgmt-email">${escHtml(u.email)}</div>
           </div>
-          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
         </div>
-        <div class="input-row user-mgmt-role-row">${roleControls}</div>
-        ${menuAccessSection}
-      </div>`;
-  }).join('');
+        <div class="admin-user-cell admin-user-cell--role">
+          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
+          <div class="input-row user-mgmt-role-row">${roleControls}</div>
+        </div>
+        <div class="admin-user-cell admin-user-cell--access">
+          ${menuAccessSection || '<p class="admin-user-access-note">This account always has access to the current session.</p>'}
+        </div>
+        <div class="admin-user-cell admin-user-cell--status">
+          <span class="admin-user-status-pill ${statusClass}">${escHtml(statusLabel)}</span>
+        </div>
+      </article>`;
+  }).join('')}
+    </div>`;
 }
 
 function buildMenuAccessHTML(u) {
   const role = document.getElementById(`user-role-${u.id}`)?.value ?? u.role;
   if (role === 'admin') {
-    return `<p class="hint" style="margin:6px 0 0">Admin — access to all menus.</p>`;
+    return '<p class="admin-user-access-note">Admin access automatically spans all four menus.</p>';
   }
-  if (role === 'none') return '';
+  if (role === 'none') return '<p class="admin-user-access-note">Approve this account and assign menus to activate manager access.</p>';
   // role === 'manager': show checkboxes for each menu
   const menus = window._adminMenuList || [];
-  if (!menus.length) return `<p class="hint" style="margin:6px 0 0">No menus found.</p>`;
+  if (!menus.length) return '<p class="admin-user-access-note">No menus found.</p>';
   const checkboxes = menus.map(m => {
     const checked = (u.menuAccess || []).includes(m.id) ? 'checked' : '';
     return `<label class="user-menu-access-label">
@@ -4597,8 +4643,7 @@ function buildMenuAccessHTML(u) {
     </label>`;
   }).join('');
   return `<div class="user-menu-access-row">
-    <span class="config-input-label" style="margin-bottom:4px">Menu Access</span>
-    ${checkboxes}
+    <div class="user-menu-access-grid">${checkboxes}</div>
     <button class="btn-small" onclick="saveMenuAccess('${escHtml(u.id)}')">Save Access</button>
   </div>`;
 }
@@ -4621,7 +4666,7 @@ async function patchUser(payload) {
 }
 
 function updateUserRoleBadge(select, role) {
-  const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
+  const badge = select.closest('.config-card, .admin-user-row')?.querySelector('.user-role-badge');
   if (!badge) return;
   const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
   badge.className = `user-role-badge user-role-badge--${role}`;
@@ -5164,8 +5209,13 @@ function buildRestaurantRowHtml(restaurant, menus) {
   const chipsHtml = menus.map(buildMenuChipHtml).join('');
   return `
     <div class="restaurant-header">
-      <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      <div>
+        <p class="restaurant-kicker">Fixed Instance</p>
+        <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      </div>
+      <span class="restaurant-summary-pill">${escHtml(String(menus.length).padStart(2, '0'))} Menu${menus.length === 1 ? '' : 's'}</span>
     </div>
+    <p class="restaurant-copy">These menu links are read directly from the known restaurant and menu IDs the admin console expects.</p>
     <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
       ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">Expected menus are missing from the database.</span>'}
     </div>`;

@@ -20,6 +20,26 @@
     --gold: #f6ad55;
     --green: #2ecc71;
     --red: #e74c3c;
+    --admin-canvas: #f7f9fb;
+    --admin-canvas-glass: rgba(247,249,251,0.94);
+    --admin-panel: #ffffff;
+    --admin-panel-soft: #f2f4f6;
+    --admin-panel-strong: #eceef0;
+    --admin-ink: #191c1e;
+    --admin-muted: #76777d;
+    --admin-sidebar: #002116;
+    --admin-sidebar-text: #8bd6b6;
+    --admin-sidebar-dim: rgba(139,214,182,0.68);
+    --admin-sidebar-active: rgba(166,242,209,0.12);
+    --admin-sidebar-hover: rgba(255,255,255,0.04);
+    --admin-outline: rgba(198,198,205,0.52);
+    --admin-outline-strong: rgba(69,70,77,0.12);
+    --admin-accent: #1b6b51;
+    --admin-pill: #a6f2d1;
+    --admin-alert: #ba1a1a;
+    --admin-alert-bg: #ffdad6;
+    --admin-status-glow: rgba(166,242,209,0.18);
+    --admin-shadow: rgba(25,28,30,0.08);
     /* Badge and danger semantic vars */
     --badge-on-bg: #e6f4ea;
     --badge-on-text: #1a7f37;
@@ -1220,6 +1240,685 @@
 .featured-admin-group { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; }
 .featured-admin-group-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .featured-admin-menu-label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); margin-right: 10px; }
+
+/* ─── ADMIN STITCH SHELL ─────────────────────────────────────────────────── */
+body.admin-console-page {
+  --bg: var(--admin-canvas);
+  --surface: var(--admin-panel-soft);
+  --card: var(--admin-panel);
+  --border: var(--admin-outline);
+  --text: var(--admin-ink);
+  --muted: var(--admin-muted);
+  --font-heading: "Public Sans", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-accent: "Inter", sans-serif;
+  background: var(--admin-canvas);
+  color: var(--admin-ink);
+  align-items: stretch;
+  padding: 16px;
+  color-scheme: light;
+}
+
+body.admin-console-page .wrapper {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.admin-skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--admin-sidebar);
+  color: var(--admin-panel);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+
+.admin-skip-link:focus-visible {
+  top: 16px;
+}
+
+.admin-console-loading {
+  min-height: 56vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--admin-muted);
+}
+
+.admin-console-shell {
+  display: block;
+  min-height: calc(100vh - 32px);
+}
+
+.admin-console-rail {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  bottom: 16px;
+  width: 236px;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--admin-sidebar);
+  color: var(--admin-sidebar-text);
+  border-radius: 16px;
+  padding: 22px 16px 18px;
+  box-shadow: 0 24px 40px var(--admin-shadow);
+}
+
+.admin-console-rail-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-console-rail-kicker {
+  font-size: 11px;
+  font-family: "Public Sans", var(--font-heading);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--admin-sidebar-text);
+}
+
+.admin-console-rail-title {
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--admin-panel);
+}
+
+.admin-console-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-console-rail .settings-rail-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--admin-sidebar-dim);
+}
+
+.admin-console-rail .settings-rail-btn:hover,
+.admin-console-rail .settings-rail-btn:focus-visible {
+  border-color: transparent;
+  background: var(--admin-sidebar-hover);
+  color: var(--admin-sidebar-text);
+  transform: none;
+  outline: none;
+}
+
+.admin-console-rail .settings-rail-btn.active {
+  background: var(--admin-sidebar-active);
+  color: var(--admin-panel);
+  border-color: transparent;
+}
+
+.admin-console-rail-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-console-rail-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--admin-sidebar-dim);
+}
+
+.admin-console-back-link {
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  color: var(--admin-sidebar-text);
+}
+
+.admin-console-stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-left: calc(236px + 36px);
+  width: min(1280px, calc(100vw - 236px - 68px));
+}
+
+.admin-console-topbar {
+  position: sticky;
+  top: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--admin-canvas-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  box-shadow: 0 10px 22px var(--admin-shadow);
+}
+
+.admin-console-topbar-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-console-kicker,
+.admin-console-card-kicker,
+.restaurant-kicker,
+.admin-users-head,
+.admin-console-summary-label,
+.admin-console-metric-label {
+  font-size: 11px;
+  font-family: "Inter", var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.admin-console-kicker,
+.admin-console-card-kicker,
+.restaurant-kicker {
+  color: var(--admin-muted);
+}
+
+.admin-console-topbar-copy h2 {
+  font-family: "Public Sans", var(--font-heading);
+  font-size: clamp(16px, 1.8vw, 21px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: var(--admin-ink);
+  text-wrap: balance;
+}
+
+.admin-console-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-console-topbar .header-action-group,
+.admin-console-topbar .header-signin-btn,
+.admin-console-topbar .user-chip {
+  position: static;
+}
+
+.admin-console-topbar .header-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-console-topbar .manager-btn,
+.admin-console-topbar .header-signin-btn,
+.admin-console-topbar .user-chip {
+  min-height: 38px;
+  border-radius: 4px;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-outline);
+  color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.admin-console-topbar .manager-btn.active {
+  background: var(--admin-pill);
+  border-color: transparent;
+  color: var(--admin-sidebar);
+}
+
+.admin-console-topbar .manager-btn:hover,
+.admin-console-topbar .header-signin-btn:hover,
+.admin-console-topbar .user-chip:hover {
+  background: var(--admin-panel-soft);
+}
+
+.admin-console-topbar .user-chip {
+  gap: 8px;
+  border-radius: 999px;
+  padding-inline: 12px;
+}
+
+.admin-console-topbar .user-dropdown {
+  background: var(--admin-panel);
+  border-color: var(--admin-outline);
+  color: var(--admin-ink);
+}
+
+.admin-console-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-margin-top: 110px;
+}
+
+.restaurant-summary-pill,
+.admin-user-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.restaurant-summary-pill,
+.admin-user-status-pill--active,
+.admin-user-status-pill--current {
+  background: var(--admin-pill);
+  color: var(--admin-sidebar);
+}
+
+.admin-user-status-pill--pending {
+  background: var(--admin-alert-bg);
+  color: var(--admin-alert);
+}
+
+.admin-console-section,
+.admin-console-page .config-card {
+  padding: 20px;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  box-shadow: 0 18px 36px var(--admin-shadow);
+}
+
+.admin-console-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 24px;
+}
+
+.admin-console-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-console-fold {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-console-fold summary {
+  list-style: none;
+}
+
+.admin-console-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-console-fold-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--admin-ink);
+}
+
+.admin-console-fold-note {
+  font-family: "Inter", var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+}
+
+.admin-console-fold[open] .admin-console-fold-summary {
+  border-bottom: 1px solid var(--admin-outline);
+}
+
+.admin-console-fold .config-hint,
+.admin-console-fold .notif-cred-row,
+.admin-console-fold .admin-console-url-row,
+.admin-console-fold .admin-console-button-row {
+  margin-inline: 20px;
+}
+
+.admin-console-fold .config-hint {
+  margin-top: 18px;
+}
+
+.admin-console-button-row {
+  margin-top: 16px;
+}
+
+.admin-console-primary-btn {
+  background: var(--admin-ink);
+  border-color: var(--admin-ink);
+  color: var(--admin-panel);
+}
+
+.admin-console-primary-btn:hover {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: var(--admin-panel);
+}
+
+.admin-context-switcher--admin {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom-color: var(--admin-outline);
+}
+
+#menus-mgmt-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.restaurant-row {
+  margin: 0;
+  padding: 24px;
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  background: var(--admin-panel);
+  box-shadow: 0 18px 36px var(--admin-shadow);
+}
+
+.restaurant-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0;
+  background: transparent;
+}
+
+.restaurant-name {
+  display: block;
+  margin-top: 6px;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.restaurant-copy {
+  margin-top: 16px;
+}
+
+.restaurant-menus {
+  padding: 20px 0 0;
+  gap: 10px;
+}
+
+.menu-chip {
+  background: var(--admin-panel-soft);
+  border-color: var(--admin-outline);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--admin-ink);
+}
+
+.menu-type-badge {
+  background: var(--admin-panel);
+  border-color: var(--admin-outline-strong);
+  color: var(--admin-muted);
+}
+
+.admin-users-toolbar {
+  margin-bottom: 0;
+}
+
+.admin-users-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--admin-panel);
+}
+
+.admin-users-head,
+.admin-user-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(180px, 0.8fr) minmax(240px, 1.15fr) 132px;
+  gap: 16px;
+}
+
+.admin-users-head {
+  padding: 16px 20px;
+  background: var(--admin-panel-soft);
+  color: var(--admin-muted);
+}
+
+.admin-user-row {
+  align-items: start;
+  padding: 20px;
+  border-top: 1px solid var(--admin-outline);
+}
+
+.admin-user-row:first-of-type {
+  border-top: none;
+}
+
+.admin-user-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-user-cell--identity {
+  flex-direction: row;
+  align-items: center;
+}
+
+.admin-user-avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--admin-panel-strong);
+  color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-user-name-row,
+.admin-user-role-editor {
+  align-items: stretch;
+}
+
+.admin-user-name-row .btn-small,
+.admin-user-role-editor .btn-small,
+.user-menu-access-row .btn-small {
+  align-self: stretch;
+}
+
+.admin-user-cell--role {
+  align-items: flex-start;
+}
+
+.admin-user-cell--status {
+  align-items: flex-end;
+}
+
+.user-menu-access {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.user-menu-access-row {
+  gap: 10px;
+}
+
+.user-menu-access-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.user-menu-access-label {
+  padding: 9px 10px;
+  border: 1px solid var(--admin-outline);
+  border-radius: 10px;
+  background: var(--admin-panel-soft);
+  font-size: 12px;
+}
+
+.admin-user-status-pill {
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .admin-console-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-console-topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  #menus-mgmt-list,
+  .admin-console-split {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-head,
+  .admin-user-row {
+    grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 0.8fr);
+  }
+
+  .admin-user-cell--access,
+  .admin-user-cell--status {
+    grid-column: 1 / -1;
+  }
+
+  .admin-user-cell--status {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  body.admin-console-page {
+    padding: 12px;
+  }
+
+  body.admin-console-page .wrapper {
+    max-width: none;
+  }
+
+  .admin-console-shell {
+    min-height: 0;
+  }
+
+  .admin-console-rail {
+    position: static;
+    left: auto;
+    top: auto;
+    bottom: auto;
+    width: auto;
+    margin-bottom: 12px;
+    min-height: 0;
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .admin-console-rail-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .admin-console-rail .settings-rail-btn {
+    flex: 0 0 auto;
+  }
+
+  .admin-console-stage {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-console-topbar,
+  .admin-console-section,
+  .admin-console-page .config-card,
+  .restaurant-row {
+    padding: 18px;
+  }
+
+  .admin-console-topbar-actions,
+  .admin-console-topbar .header-action-group {
+    width: 100%;
+  }
+
+  .admin-console-topbar .manager-btn,
+  .admin-console-topbar .header-signin-btn,
+  .admin-console-topbar .user-chip,
+  .admin-console-primary-btn,
+  .admin-user-name-row .btn-small,
+  .admin-user-role-editor .btn-small,
+  .user-menu-access-row .btn-small {
+    width: 100%;
+  }
+
+  .admin-users-head,
+  .admin-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-cell--identity {
+    align-items: flex-start;
+  }
+
+  .admin-user-name-row,
+  .admin-user-role-editor,
+  .admin-console-url-row,
+  .notif-cred-row {
+    flex-direction: column;
+  }
+
+  .notif-cred-label {
+    min-width: 0;
+    width: 100%;
+  }
+}
 
 @media (max-width: 900px) {
   .settings-workspace { grid-template-columns: 1fr; }
