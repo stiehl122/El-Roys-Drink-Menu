@@ -1,12 +1,7 @@
 # CLAUDE.local.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Local workflow notes:
 
-## My Role
-
-Familiar with the app's structure and behavior, but the code is built and maintained by agents. I review, direct, and approve changes rather than write them myself.
-
-## Workflow Preferences
-
-- **Plan before coding:** Propose an approach and wait for my approval before touching any files.
-- **Testing:** No fixed sandbox URL — I review changes via Vercel preview deployments created per branch.
+- I review and approve agent-authored changes rather than writing most code by hand.
+- For larger or riskier changes, start with a short plan. Small fixes and documentation cleanups can proceed directly.
+- I review behavior through Vercel preview deployments. There is no fixed sandbox URL.

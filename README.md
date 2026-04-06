@@ -1,150 +1,54 @@
 # El Roy's Drink Menu
 
-Zero-dependency web app for the live public and manager-facing menus of exactly two restaurants:
+Zero-dependency web app for the live public and staff-facing menus of exactly two restaurants:
 
 - Leroy's Lounge
 - El Roy's Cantina
 
-Each restaurant has two menus, Drinks and Food, for four total menus. The public experience is custom-design first: each restaurant's public page is owned by its route files, and the shared app falls back to the default accordion renderer only when a route-specific design is unavailable or disabled.
+Each restaurant has two fixed menus, Drinks and Food. Public pages are route-owned and custom-design first.
 
-## Current Architecture
+## Route Map
 
-- `index.html`, `style.css`, `app.js`: no build step, bundler, or package manager
-- Supabase PostgREST: primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, history, and auth-backed user data
-- `localStorage`: session/cache layer used by parts of the shared runtime; live menu behavior is database-backed
-- Supabase Auth: client email/password auth with recovery handling
-- Vercel API routes in [`api/`](api): config delivery, role lookup, user management, and notifications
-- Route-owned public pages in [`leroyslounge/index.html`](leroyslounge/index.html) and [`elroyscantina/index.html`](elroyscantina/index.html)
-- Supabase migrations in [`supabase/migrations/`](supabase/migrations) as the database history and provisioning source of truth
+- `/`: site picker
+- `/leroyslounge`: Leroy's Lounge public route
+- `/elroyscantina`: El Roy's Cantina public route
+- `/manager`: manager workspace
+- `/admin`: admin console
 
-## Fixed Restaurant And Menu Model
+Route rewrites live in [`vercel.json`](vercel.json).
 
-The app is intentionally centered on four known menus, not arbitrary multi-restaurant CRUD:
+## Architecture
 
-- Leroy's Lounge Drinks
-- Leroy's Lounge Food
-- El Roy's Cantina Drinks
-- El Roy's Cantina Food
+- Shared runtime: [`app.js`](app.js) for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
+- Shared styles: [`style.css`](style.css)
+- Route-owned public shells: [`leroyslounge/index.html`](leroyslounge/index.html), [`leroyslounge/style.css`](leroyslounge/style.css), [`leroyslounge/app.js`](leroyslounge/app.js), [`elroyscantina/index.html`](elroyscantina/index.html), [`elroyscantina/style.css`](elroyscantina/style.css), [`elroyscantina/app.js`](elroyscantina/app.js)
+- Shared settings shells: [`manager/index.html`](manager/index.html), [`admin/index.html`](admin/index.html)
+- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js)
 
-Those IDs and slugs are hardcoded in [`app.js`](app.js). Legacy `?menu=el-roys` links still normalize to El Roy's Cantina Drinks.
+Supabase is the source of truth for menus, categories, items, featured groups, history, notification config, and auth-backed access. Local storage is still used for session/cache support, but live menu state is database-backed.
 
-## Key Behaviors
+## Fixed Domain Model
 
-- `Save` persists current state without notifying anyone
-- `Send Update` persists, sends notifications, and updates the public timestamp
-- Draft indicators show unsent item changes
-- 86'd items remain visible publicly with a strike-through and badge
-- Item descriptions and optional prices are supported in public and manager views
-- Food menus hide recipe controls and use food defaults
-- Managers have per-menu access; admins have global access
-- Public footer shows `APP_VERSION` and last-updated time; preview deployments show a `PREVIEW` badge
+This app is intentionally centered on four known menus, not arbitrary multi-restaurant CRUD: Leroy's Lounge Drinks, Leroy's Lounge Food, El Roy's Cantina Drinks, and El Roy's Cantina Food.
 
-Current app version in code: `v0.8.1` from [`app.js:2`](app.js#L2).
+The canonical constants live in [`app.js`](app.js) under `RESTAURANTS` and `MENUS`. Legacy `?menu=el-roys` links still normalize to El Roy's Cantina Drinks.
 
-## Public Routes
+## Behaviors To Preserve
 
-- Root app shell: `/`
-- Leroy's Lounge public route: `/leroyslounge`
-- El Roy's Cantina public route: `/elroyscantina`
-
-The shared app detects route ownership and renders the matching public restaurant page when possible. Dedicated restaurant routes now boot route-first so they do not first-paint the shared `CURRENT MENU` shell. Manager/admin flows still live in the shared app shell.
-
-## Repo Layout
-
-```text
-El-Roys-Drink-Menu/
-├── index.html
-├── style.css
-├── app.js
-├── api/
-│   ├── _auth.js
-│   ├── config.js
-│   ├── role.js
-│   ├── send-groupme.js
-│   ├── send-notification.js
-│   └── users.js
-├── leroyslounge/
-│   └── index.html
-├── elroyscantina/
-│   └── index.html
-├── assets/
-├── docs/
-├── scripts/
-└── supabase/
-    ├── config.toml
-    └── migrations/
-```
-
-## Setup
-
-### 1. Create A Supabase Project
-
-1. Create a Supabase project.
-2. Under Project Settings, copy:
-   - project URL
-   - anon/public key
-   - service role key
-3. Enable Email auth.
-4. Apply the repo migrations so the project has the expected schema and seed state.
-
-If you use the Supabase CLI locally, this repo is configured to apply migrations during `db push` / `db reset` via [`supabase/config.toml`](supabase/config.toml).
-
-### 2. Configure Vercel
-
-This app requires Vercel for full functionality. The API routes are not optional if you need authenticated role checks, user management, or notification delivery.
-
-Set these required environment variables in Vercel:
-
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-Optional notification environment variables:
-
-- `GROUPME_BOT_ID`
-- `DISCORD_WEBHOOK_URL`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_FROM_NUMBER`
-- `TWILIO_TO_NUMBERS`
-- `GENERIC_WEBHOOK_URL`
-- `GENERIC_WEBHOOK_SECRET`
-
-Per-restaurant notification credential mapping is stored in the database; the app can point a restaurant's notification channels at any of the configured env var names.
-
-### 3. Deploy
-
-1. Import the repo into Vercel.
-2. Set the environment variables above.
-3. Deploy.
-4. Open the deployment URL and verify `/api/config` returns the Supabase config payload.
-
-Static-only hosting is insufficient for the full app.
-
-## First-Time Bootstrapping
-
-1. Run the Supabase migrations against the target project.
-2. Deploy to Vercel with the required env vars.
-3. Open the app and create a user through the Sign Up flow.
-4. Promote the first admin directly in Supabase if needed.
-5. Use the Admin tab to assign menu access for managers across the four fixed menus.
-
-New accounts start with `role: none`.
-
-## Access Model
-
-| Capability | `manager` | `admin` |
-|---|---|---|
-| Edit/save/send for assigned menus | Yes | Yes |
-| View Admin tab | No | Yes |
-| Change categories | No | Yes |
-| Manage users and menu access | No | Yes |
-| Configure notification credentials | No | Yes |
-| Manage featured groups/history/design toggles | No | Yes |
+- `Save` persists current state without notifying anyone.
+- `Send Update` persists, sends notifications, and updates the public timestamp/history.
+- Draft indicators reflect unsent changes.
+- 86'd items remain visible publicly with strike-through or badge treatment.
+- Item descriptions and optional prices are supported in public and manager views.
+- Food menus hide recipe controls and use food defaults.
+- Managers have per-menu access; admins have global access.
+- Recovery session data stays in memory only and is never written to localStorage.
+- Public footer shows `APP_VERSION` and last-updated time; preview deployments show a `PREVIEW` badge.
+- Public routes boot route-first and should not flash the shared loading shell.
 
 ## Categories
 
-Drink defaults:
+Drink defaults live in `DEFAULT_CATEGORY_DEFS`.
 
 - `beer`
 - `canned`
@@ -153,7 +57,7 @@ Drink defaults:
 - `frozen`
 - `special`
 
-Food defaults:
+Food defaults live in `DEFAULT_FOOD_CATEGORY_DEFS`.
 
 - `starters`
 - `tacos`
@@ -161,17 +65,15 @@ Food defaults:
 - `sides`
 - `desserts`
 
-Categories remain admin-configurable at runtime. Deleting a category moves its items into the hidden `__uncategorized__` pool.
+Categories stay admin-configurable at runtime. Deleting a category moves its items into the hidden `__uncategorized__` pool.
 
-## Public Design Workflow
+## Auth And Access
 
-Stitch is the source of truth for each restaurant's public design.
-
-- Leroy's Lounge design lives in [`leroyslounge/index.html`](leroyslounge/index.html)
-- El Roy's Cantina design lives in [`elroyscantina/index.html`](elroyscantina/index.html)
-- Shared fallback rendering still exists in [`app.js`](app.js)
-
-When a design changes, update the route page directly instead of introducing a separate generated design artifact.
+- Client auth uses Supabase Auth email/password flows.
+- Role and per-menu access checks are enforced through [`api/role.js`](api/role.js) and [`api/users.js`](api/users.js).
+- New accounts start with `role: none`.
+- Managers can edit only their assigned menus.
+- Admins can manage all four menus, users, categories, notifications, and settings shells.
 
 ## Notifications
 
@@ -184,25 +86,51 @@ Supported channels:
 - Discord webhook
 - Generic webhook
 
-Enabled/disabled channels are stored per menu. Credential-env-key mapping is stored per restaurant.
+Channel enablement is stored per menu. Credential key mapping is stored per restaurant and resolved against Vercel environment variables.
 
-## Local Development
+## Setup And Deploy
 
-There is no build step. Serve the repo with any static file server and use the Vercel deployment for full API behavior, or run a local Vercel-compatible dev flow if you need serverless routes locally.
+### 1. Create Supabase
 
-When doing normal UI work:
+1. Create a Supabase project.
+2. Copy the project URL, anon key, and service role key.
+3. Enable email auth.
+4. Apply the migrations in [`supabase/migrations/`](supabase/migrations).
 
-- do not add dependencies
-- do not add a bundler
-- keep the app working as plain HTML/CSS/JS
-- preserve Supabase auth, live polling, and database-backed menu updates
+### 2. Configure Vercel
 
-## Database Files
+Required environment variables:
 
-The `.sql` files under [`supabase/migrations/`](supabase/migrations) are not used by the browser at runtime, but they are still needed as schema/data migration history and for provisioning a fresh Supabase project.
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 
-## Release Notes
+Optional notification variables:
 
-- `APP_VERSION` must be updated for every release, including patches
-- preview Vercel deployments show a `PREVIEW` badge in the public footer
-- schema changes belong in Supabase migrations, not ad hoc dashboard edits
+- `GROUPME_BOT_ID`
+- `DISCORD_WEBHOOK_URL`
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_FROM_NUMBER`
+- `TWILIO_TO_NUMBERS`
+- `GENERIC_WEBHOOK_URL`
+- `GENERIC_WEBHOOK_SECRET`
+
+### 3. Deploy
+
+1. Import the repo into Vercel.
+2. Set the environment variables.
+3. Deploy.
+4. Verify `/api/config` returns the Supabase config payload.
+
+Vercel is required for full functionality. Static-only hosting will not support authenticated writes, config delivery, role lookup, or notifications.
+
+## Development Guardrails
+
+- Do not add dependencies.
+- Do not add a bundler or build step.
+- Keep the app working as plain HTML, CSS, and JavaScript.
+- Preserve Supabase auth, live polling, database-backed menu updates, and per-menu access control.
+- Use CSS custom properties for new colors in [`style.css`](style.css).
+- Put schema changes in [`supabase/migrations/`](supabase/migrations), not ad hoc dashboard edits.
+- For public page redesigns, update the route files directly. Stitch is the design source, but the route files are the implementation destination.
