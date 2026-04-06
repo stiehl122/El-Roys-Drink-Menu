@@ -20,6 +20,26 @@
     --gold: #f6ad55;
     --green: #2ecc71;
     --red: #e74c3c;
+    --admin-canvas: #f7f9fb;
+    --admin-canvas-glass: rgba(247,249,251,0.94);
+    --admin-panel: #ffffff;
+    --admin-panel-soft: #f2f4f6;
+    --admin-panel-strong: #eceef0;
+    --admin-ink: #191c1e;
+    --admin-muted: #76777d;
+    --admin-sidebar: #002116;
+    --admin-sidebar-text: #8bd6b6;
+    --admin-sidebar-dim: rgba(139,214,182,0.68);
+    --admin-sidebar-active: rgba(166,242,209,0.12);
+    --admin-sidebar-hover: rgba(255,255,255,0.04);
+    --admin-outline: rgba(198,198,205,0.52);
+    --admin-outline-strong: rgba(69,70,77,0.12);
+    --admin-accent: #1b6b51;
+    --admin-pill: #a6f2d1;
+    --admin-alert: #ba1a1a;
+    --admin-alert-bg: #ffdad6;
+    --admin-status-glow: rgba(166,242,209,0.18);
+    --admin-shadow: rgba(25,28,30,0.08);
     /* Badge and danger semantic vars */
     --badge-on-bg: #e6f4ea;
     --badge-on-text: #1a7f37;
@@ -1218,6 +1238,685 @@
 .featured-picker-offmenu { font-size: 10px; color: var(--ember); font-style: italic; }
 .featured-picker-empty { padding: 6px 8px; color: var(--muted); font-size: 12px; }
 
+/* ─── ADMIN STITCH SHELL ─────────────────────────────────────────────────── */
+body.admin-console-page {
+  --bg: var(--admin-canvas);
+  --surface: var(--admin-panel-soft);
+  --card: var(--admin-panel);
+  --border: var(--admin-outline);
+  --text: var(--admin-ink);
+  --muted: var(--admin-muted);
+  --font-heading: "Public Sans", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-accent: "Inter", sans-serif;
+  background: var(--admin-canvas);
+  color: var(--admin-ink);
+  align-items: stretch;
+  padding: 16px;
+  color-scheme: light;
+}
+
+body.admin-console-page .wrapper {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.admin-skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  z-index: 20;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: var(--admin-sidebar);
+  color: var(--admin-panel);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: top 0.18s ease;
+}
+
+.admin-skip-link:focus-visible {
+  top: 16px;
+}
+
+.admin-console-loading {
+  min-height: 56vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--admin-muted);
+}
+
+.admin-console-shell {
+  display: block;
+  min-height: calc(100vh - 32px);
+}
+
+.admin-console-rail {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  bottom: 16px;
+  width: 236px;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background: var(--admin-sidebar);
+  color: var(--admin-sidebar-text);
+  border-radius: 16px;
+  padding: 22px 16px 18px;
+  box-shadow: 0 24px 40px var(--admin-shadow);
+}
+
+.admin-console-rail-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.admin-console-rail-kicker {
+  font-size: 11px;
+  font-family: "Public Sans", var(--font-heading);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--admin-sidebar-text);
+}
+
+.admin-console-rail-title {
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--admin-panel);
+}
+
+.admin-console-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-console-rail .settings-rail-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 10px 12px;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--admin-sidebar-dim);
+}
+
+.admin-console-rail .settings-rail-btn:hover,
+.admin-console-rail .settings-rail-btn:focus-visible {
+  border-color: transparent;
+  background: var(--admin-sidebar-hover);
+  color: var(--admin-sidebar-text);
+  transform: none;
+  outline: none;
+}
+
+.admin-console-rail .settings-rail-btn.active {
+  background: var(--admin-sidebar-active);
+  color: var(--admin-panel);
+  border-color: transparent;
+}
+
+.admin-console-rail-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-console-rail-note {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--admin-sidebar-dim);
+}
+
+.admin-console-back-link {
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+  color: var(--admin-sidebar-text);
+}
+
+.admin-console-stage {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-left: calc(236px + 36px);
+  width: min(1280px, calc(100vw - 236px - 68px));
+}
+
+.admin-console-topbar {
+  position: sticky;
+  top: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--admin-canvas-glass);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  box-shadow: 0 10px 22px var(--admin-shadow);
+}
+
+.admin-console-topbar-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.admin-console-kicker,
+.admin-console-card-kicker,
+.restaurant-kicker,
+.admin-users-head,
+.admin-console-summary-label,
+.admin-console-metric-label {
+  font-size: 11px;
+  font-family: "Inter", var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.admin-console-kicker,
+.admin-console-card-kicker,
+.restaurant-kicker {
+  color: var(--admin-muted);
+}
+
+.admin-console-topbar-copy h2 {
+  font-family: "Public Sans", var(--font-heading);
+  font-size: clamp(16px, 1.8vw, 21px);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: var(--admin-ink);
+  text-wrap: balance;
+}
+
+.admin-console-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-console-topbar .header-action-group,
+.admin-console-topbar .header-signin-btn,
+.admin-console-topbar .user-chip {
+  position: static;
+}
+
+.admin-console-topbar .header-action-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-console-topbar .manager-btn,
+.admin-console-topbar .header-signin-btn,
+.admin-console-topbar .user-chip {
+  min-height: 38px;
+  border-radius: 4px;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-outline);
+  color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  letter-spacing: 0;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.admin-console-topbar .manager-btn.active {
+  background: var(--admin-pill);
+  border-color: transparent;
+  color: var(--admin-sidebar);
+}
+
+.admin-console-topbar .manager-btn:hover,
+.admin-console-topbar .header-signin-btn:hover,
+.admin-console-topbar .user-chip:hover {
+  background: var(--admin-panel-soft);
+}
+
+.admin-console-topbar .user-chip {
+  gap: 8px;
+  border-radius: 999px;
+  padding-inline: 12px;
+}
+
+.admin-console-topbar .user-dropdown {
+  background: var(--admin-panel);
+  border-color: var(--admin-outline);
+  color: var(--admin-ink);
+}
+
+.admin-console-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  scroll-margin-top: 110px;
+}
+
+.restaurant-summary-pill,
+.admin-user-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.restaurant-summary-pill,
+.admin-user-status-pill--active,
+.admin-user-status-pill--current {
+  background: var(--admin-pill);
+  color: var(--admin-sidebar);
+}
+
+.admin-user-status-pill--pending {
+  background: var(--admin-alert-bg);
+  color: var(--admin-alert);
+}
+
+.admin-console-section,
+.admin-console-page .config-card {
+  padding: 20px;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  box-shadow: 0 18px 36px var(--admin-shadow);
+}
+
+.admin-console-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+  gap: 24px;
+}
+
+.admin-console-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.admin-console-fold {
+  padding: 0;
+  overflow: hidden;
+}
+
+.admin-console-fold summary {
+  list-style: none;
+}
+
+.admin-console-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-console-fold-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  cursor: pointer;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--admin-ink);
+}
+
+.admin-console-fold-note {
+  font-family: "Inter", var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--admin-muted);
+}
+
+.admin-console-fold[open] .admin-console-fold-summary {
+  border-bottom: 1px solid var(--admin-outline);
+}
+
+.admin-console-fold .config-hint,
+.admin-console-fold .notif-cred-row,
+.admin-console-fold .admin-console-url-row,
+.admin-console-fold .admin-console-button-row {
+  margin-inline: 20px;
+}
+
+.admin-console-fold .config-hint {
+  margin-top: 18px;
+}
+
+.admin-console-button-row {
+  margin-top: 16px;
+}
+
+.admin-console-primary-btn {
+  background: var(--admin-ink);
+  border-color: var(--admin-ink);
+  color: var(--admin-panel);
+}
+
+.admin-console-primary-btn:hover {
+  background: var(--admin-accent);
+  border-color: var(--admin-accent);
+  color: var(--admin-panel);
+}
+
+.admin-context-switcher--admin {
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom-color: var(--admin-outline);
+}
+
+#menus-mgmt-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.restaurant-row {
+  margin: 0;
+  padding: 24px;
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  background: var(--admin-panel);
+  box-shadow: 0 18px 36px var(--admin-shadow);
+}
+
+.restaurant-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0;
+  background: transparent;
+}
+
+.restaurant-name {
+  display: block;
+  margin-top: 6px;
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.05em;
+}
+
+.restaurant-copy {
+  margin-top: 16px;
+}
+
+.restaurant-menus {
+  padding: 20px 0 0;
+  gap: 10px;
+}
+
+.menu-chip {
+  background: var(--admin-panel-soft);
+  border-color: var(--admin-outline);
+  border-radius: 999px;
+  padding: 7px 12px;
+  color: var(--admin-ink);
+}
+
+.menu-type-badge {
+  background: var(--admin-panel);
+  border-color: var(--admin-outline-strong);
+  color: var(--admin-muted);
+}
+
+.admin-users-toolbar {
+  margin-bottom: 0;
+}
+
+.admin-users-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--admin-outline);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--admin-panel);
+}
+
+.admin-users-head,
+.admin-user-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(180px, 0.8fr) minmax(240px, 1.15fr) 132px;
+  gap: 16px;
+}
+
+.admin-users-head {
+  padding: 16px 20px;
+  background: var(--admin-panel-soft);
+  color: var(--admin-muted);
+}
+
+.admin-user-row {
+  align-items: start;
+  padding: 20px;
+  border-top: 1px solid var(--admin-outline);
+}
+
+.admin-user-row:first-of-type {
+  border-top: none;
+}
+
+.admin-user-cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-user-cell--identity {
+  flex-direction: row;
+  align-items: center;
+}
+
+.admin-user-avatar {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--admin-panel-strong);
+  color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-user-name-row,
+.admin-user-role-editor {
+  align-items: stretch;
+}
+
+.admin-user-name-row .btn-small,
+.admin-user-role-editor .btn-small,
+.user-menu-access-row .btn-small {
+  align-self: stretch;
+}
+
+.admin-user-cell--role {
+  align-items: flex-start;
+}
+
+.admin-user-cell--status {
+  align-items: flex-end;
+}
+
+.user-menu-access {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.user-menu-access-row {
+  gap: 10px;
+}
+
+.user-menu-access-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.user-menu-access-label {
+  padding: 9px 10px;
+  border: 1px solid var(--admin-outline);
+  border-radius: 10px;
+  background: var(--admin-panel-soft);
+  font-size: 12px;
+}
+
+.admin-user-status-pill {
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .admin-console-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-console-topbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  #menus-mgmt-list,
+  .admin-console-split {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-users-head,
+  .admin-user-row {
+    grid-template-columns: minmax(220px, 1.3fr) minmax(180px, 0.8fr);
+  }
+
+  .admin-user-cell--access,
+  .admin-user-cell--status {
+    grid-column: 1 / -1;
+  }
+
+  .admin-user-cell--status {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  body.admin-console-page {
+    padding: 12px;
+  }
+
+  body.admin-console-page .wrapper {
+    max-width: none;
+  }
+
+  .admin-console-shell {
+    min-height: 0;
+  }
+
+  .admin-console-rail {
+    position: static;
+    left: auto;
+    top: auto;
+    bottom: auto;
+    width: auto;
+    margin-bottom: 12px;
+    min-height: 0;
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .admin-console-rail-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .admin-console-rail .settings-rail-btn {
+    flex: 0 0 auto;
+  }
+
+  .admin-console-stage {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-console-topbar,
+  .admin-console-section,
+  .admin-console-page .config-card,
+  .restaurant-row {
+    padding: 18px;
+  }
+
+  .admin-console-topbar-actions,
+  .admin-console-topbar .header-action-group {
+    width: 100%;
+  }
+
+  .admin-console-topbar .manager-btn,
+  .admin-console-topbar .header-signin-btn,
+  .admin-console-topbar .user-chip,
+  .admin-console-primary-btn,
+  .admin-user-name-row .btn-small,
+  .admin-user-role-editor .btn-small,
+  .user-menu-access-row .btn-small {
+    width: 100%;
+  }
+
+  .admin-users-head,
+  .admin-user-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-cell--identity {
+    align-items: flex-start;
+  }
+
+  .admin-user-name-row,
+  .admin-user-role-editor,
+  .admin-console-url-row,
+  .notif-cred-row {
+    flex-direction: column;
+  }
+
+  .notif-cred-label {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 @media (max-width: 900px) {
   .settings-workspace { grid-template-columns: 1fr; }
   .settings-rail { position: static; flex-direction: row; flex-wrap: nowrap; overflow-x: auto; }
@@ -1347,5 +2046,1252 @@
   .picker-menu-card {
     flex-wrap: wrap;
     gap: 8px;
+  }
+}
+
+/* ─── MANAGER STITCH SHELL ───────────────────────────────────────────────── */
+body.manager-stitch-shell,
+body.manager-mode.manager-stitch-shell {
+  --font-heading: 'Noto Serif', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-accent: 'Inter', sans-serif;
+  --manager-shell-bg: #faf9f6;
+  --manager-shell-surface: #ffffff;
+  --manager-shell-surface-muted: #f4f3f0;
+  --manager-shell-surface-strong: #e9e8e5;
+  --manager-shell-border: rgba(25, 37, 25, 0.12);
+  --manager-shell-border-strong: rgba(25, 37, 25, 0.2);
+  --manager-shell-text: #1a1c1a;
+  --manager-shell-muted: #5f5e5e;
+  --manager-shell-primary: #192519;
+  --manager-shell-primary-soft: #2e3b2e;
+  --manager-shell-primary-faint: rgba(46, 59, 46, 0.12);
+  --manager-shell-accent: #301f08;
+  --manager-shell-accent-soft: #fdddb9;
+  --manager-shell-error: #ba1a1a;
+  --manager-shell-success: #315f31;
+  --manager-shell-overlay: rgba(26, 28, 26, 0.28);
+  --manager-shell-shadow: rgba(25, 37, 25, 0.08);
+  --manager-shell-shadow-strong: rgba(25, 37, 25, 0.16);
+  --manager-shell-glass-bg: rgba(250, 249, 246, 0.82);
+  --manager-shell-actionbar-bg: rgba(255, 255, 255, 0.88);
+  --bg: var(--manager-shell-bg);
+  --surface: var(--manager-shell-surface);
+  --card: var(--manager-shell-surface-muted);
+  --border: var(--manager-shell-border);
+  --text: var(--manager-shell-text);
+  --muted: var(--manager-shell-muted);
+  --fire: var(--manager-shell-primary);
+  --ember: var(--manager-shell-primary-soft);
+  --gold: var(--manager-shell-accent);
+  --green: var(--manager-shell-success);
+  --red: var(--manager-shell-error);
+  --danger-bg: var(--manager-shell-primary-faint);
+  --danger-border: var(--manager-shell-border-strong);
+  --prune-divider: var(--manager-shell-border);
+  background: var(--manager-shell-bg);
+  color: var(--manager-shell-text);
+  font-family: 'Inter', sans-serif;
+  color-scheme: light;
+  align-items: stretch;
+  overflow-x: hidden;
+  padding: 0 0 calc(164px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.manager-stitch-shell,
+  body.manager-mode.manager-stitch-shell {
+    --manager-shell-bg: #171a17;
+    --manager-shell-surface: #202420;
+    --manager-shell-surface-muted: #262b26;
+    --manager-shell-surface-strong: #303630;
+    --manager-shell-border: rgba(242, 241, 238, 0.12);
+    --manager-shell-border-strong: rgba(242, 241, 238, 0.2);
+    --manager-shell-text: #f2f1ee;
+    --manager-shell-muted: #bcc1b8;
+    --manager-shell-primary: #d8e7d4;
+    --manager-shell-primary-soft: #bccbb9;
+    --manager-shell-primary-faint: rgba(216, 231, 212, 0.1);
+    --manager-shell-accent: #fdddb9;
+    --manager-shell-accent-soft: rgba(253, 221, 185, 0.16);
+    --manager-shell-error: #ffb4ab;
+    --manager-shell-success: #a9d6a7;
+    --manager-shell-overlay: rgba(0, 0, 0, 0.46);
+    --manager-shell-shadow: rgba(0, 0, 0, 0.26);
+    --manager-shell-shadow-strong: rgba(0, 0, 0, 0.38);
+    --manager-shell-glass-bg: rgba(23, 26, 23, 0.82);
+    --manager-shell-actionbar-bg: rgba(32, 36, 32, 0.9);
+    color-scheme: dark;
+  }
+}
+
+body.manager-stitch-shell a,
+body.manager-stitch-shell button,
+body.manager-stitch-shell input,
+body.manager-stitch-shell textarea,
+body.manager-stitch-shell summary {
+  touch-action: manipulation;
+}
+
+body.manager-stitch-shell a:focus-visible,
+body.manager-stitch-shell button:focus-visible,
+body.manager-stitch-shell input:focus-visible,
+body.manager-stitch-shell textarea:focus-visible,
+body.manager-stitch-shell summary:focus-visible,
+body.manager-stitch-shell .user-chip:focus-visible,
+body.manager-stitch-shell .settings-rail-btn:focus-visible {
+  outline: 2px solid var(--manager-shell-primary);
+  outline-offset: 2px;
+}
+
+body.manager-stitch-shell .manager-shell-skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 90;
+  padding: 10px 14px;
+  background: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+  text-decoration: none;
+  transform: translateY(-140%);
+  transition: transform 0.18s ease;
+}
+
+body.manager-stitch-shell .manager-shell-skip-link:focus {
+  transform: translateY(0);
+}
+
+body.manager-stitch-shell .wrapper {
+  width: 100%;
+  max-width: none;
+}
+
+body.manager-stitch-shell #app-shell {
+  width: 100%;
+  max-width: none;
+}
+
+body.manager-stitch-shell #app-shell > header.manager-shell-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 55;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: var(--manager-shell-glass-bg);
+  border-bottom: 1px solid var(--manager-shell-border);
+  box-shadow: none;
+  backdrop-filter: blur(18px);
+}
+
+body.manager-stitch-shell .manager-shell-topbar-inner {
+  width: min(1320px, calc(100% - 48px));
+  margin: 0 auto;
+  min-height: calc(88px + env(safe-area-inset-top));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: env(safe-area-inset-top);
+}
+
+body.manager-stitch-shell .manager-shell-brand-wrap {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+body.manager-stitch-shell .manager-shell-menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 2px;
+  background: var(--manager-shell-surface-muted);
+  color: var(--manager-shell-primary);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+body.manager-stitch-shell .manager-shell-brand-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body.manager-stitch-shell .manager-shell-brand-mark,
+body.manager-stitch-shell .manager-shell-stat-label,
+body.manager-stitch-shell .manager-shell-field-label,
+body.manager-stitch-shell .manager-shell-disclosure summary span:first-child,
+body.manager-stitch-shell .db-filter-btn,
+body.manager-stitch-shell .btn-small,
+body.manager-stitch-shell .save-btn,
+body.manager-stitch-shell .send-btn {
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-brand-mark {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+body.manager-stitch-shell .manager-shell-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+body.manager-stitch-shell #app-shell > header h1 {
+  margin: 0;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-shadow: none;
+}
+
+body.manager-stitch-shell .header-action-group {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+body.manager-stitch-shell .manager-btn,
+body.manager-stitch-shell .header-signin-btn {
+  position: static;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 2px;
+  background: var(--manager-shell-surface-muted);
+  color: var(--manager-shell-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 10px 14px;
+  backdrop-filter: none;
+}
+
+body.manager-stitch-shell #action-btn {
+  display: none !important;
+}
+
+body.manager-stitch-shell .manager-btn:hover,
+body.manager-stitch-shell .header-signin-btn:hover,
+body.manager-stitch-shell .manager-btn.active {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .admin-btn {
+  border-color: var(--manager-shell-border-strong);
+}
+
+body.manager-stitch-shell .manager-shell-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+body.manager-stitch-shell .header-sub {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-menu-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 14px;
+  background: var(--manager-shell-surface-muted);
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 2px;
+}
+
+body.manager-stitch-shell .active-menu-label {
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .active-menu-name-text {
+  color: var(--manager-shell-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+body.manager-stitch-shell .manager-shell-switch-btn,
+body.manager-stitch-shell .btn-small {
+  border-radius: 2px;
+  background: var(--manager-shell-surface);
+  border: 1px solid var(--manager-shell-border);
+  color: var(--manager-shell-primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 10px 14px;
+}
+
+body.manager-stitch-shell .manager-shell-switch-btn:hover,
+body.manager-stitch-shell .btn-small:hover {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .manager-shell-user-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+body.manager-stitch-shell .user-chip {
+  position: static;
+  border-radius: 2px;
+  background: var(--manager-shell-surface-muted);
+  border: 1px solid var(--manager-shell-border);
+  color: var(--manager-shell-primary);
+  padding: 10px 12px;
+}
+
+body.manager-stitch-shell .user-chip:hover {
+  background: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .user-dropdown {
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
+  border-radius: 2px;
+  box-shadow: 0 20px 36px var(--manager-shell-shadow-strong);
+}
+
+body.manager-stitch-shell .user-dropdown-name,
+body.manager-stitch-shell .user-dropdown-signout {
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell .user-dropdown-role {
+  color: var(--manager-shell-muted);
+}
+
+body.manager-stitch-shell #loading-view {
+  min-height: 52vh;
+  padding-top: calc(164px + env(safe-area-inset-top));
+}
+
+body.manager-stitch-shell .spinner {
+  box-shadow: 0 0 0 8px var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell #manager-view {
+  width: 100%;
+}
+
+body.manager-stitch-shell .manager-shell-layout {
+  width: min(1320px, calc(100% - 48px));
+  margin: 0 auto;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  padding-top: calc(120px + env(safe-area-inset-top));
+}
+
+body.manager-stitch-shell #manager-overview-section,
+body.manager-stitch-shell #manager-categories-section,
+body.manager-stitch-shell #manager-edit-section,
+body.manager-stitch-shell #manager-database-section {
+  scroll-margin-top: calc(108px + env(safe-area-inset-top));
+}
+
+body.manager-stitch-shell .manager-shell-stage {
+  gap: 32px;
+}
+
+body.manager-stitch-shell .manager-shell-panel {
+  gap: 32px;
+}
+
+body.manager-stitch-shell .manager-shell-rail {
+  position: sticky;
+  top: 112px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px 18px;
+  border: none;
+  border-radius: 0;
+  background: var(--manager-shell-surface-muted);
+  box-shadow: none;
+}
+
+body.manager-stitch-shell .manager-shell-rail-head {
+  margin-bottom: 16px;
+}
+
+body.manager-stitch-shell .manager-shell-rail-note {
+  color: var(--manager-shell-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+body.manager-stitch-shell .settings-rail-btn {
+  display: block;
+  border: none;
+  border-left: 4px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--manager-shell-muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 14px 14px 14px 18px;
+  text-decoration: none;
+}
+
+body.manager-stitch-shell .settings-rail-btn:hover,
+body.manager-stitch-shell .settings-rail-btn.active {
+  transform: none;
+  background: transparent;
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell .settings-section,
+body.manager-stitch-shell .manager-shell-overview-card,
+body.manager-stitch-shell .cat-card,
+body.manager-stitch-shell .catmgr-card,
+body.manager-stitch-shell .featured-mgr-group,
+body.manager-stitch-shell .history-entry,
+body.manager-stitch-shell .manager-shell-disclosure,
+body.manager-stitch-shell .workspace-actions,
+body.manager-stitch-shell .modal,
+body.manager-stitch-shell .picker-box,
+body.manager-stitch-shell .auth-box {
+  border-radius: 2px;
+}
+
+body.manager-stitch-shell .settings-section,
+body.manager-stitch-shell .manager-shell-overview-card {
+  padding: 32px;
+  border: 1px solid var(--manager-shell-border);
+  background: var(--manager-shell-surface-muted);
+  box-shadow: none;
+}
+
+body.manager-stitch-shell .manager-shell-section-header,
+body.manager-stitch-shell .manager-shell-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+body.manager-stitch-shell .manager-shell-section-header h2,
+body.manager-stitch-shell .manager-shell-card-head h3 {
+  margin: 6px 0 0;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: 36px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+body.manager-stitch-shell .manager-shell-card-head h3 {
+  font-size: 26px;
+}
+
+body.manager-stitch-shell .manager-shell-section-copy,
+body.manager-stitch-shell .manager-shell-card-copy,
+body.manager-stitch-shell .settings-section-copy,
+body.manager-stitch-shell .workspace-actions-sub,
+body.manager-stitch-shell .hint {
+  max-width: 34rem;
+  color: var(--manager-shell-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+body.manager-stitch-shell #setup-banner {
+  display: none;
+  margin-bottom: 24px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 2px;
+  background: var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell #setup-banner h3 {
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell #setup-banner p,
+body.manager-stitch-shell #setup-banner strong {
+  color: var(--manager-shell-muted);
+}
+
+body.manager-stitch-shell .featured-confirm-banner {
+  margin: 0 0 24px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, var(--manager-shell-primary-soft), var(--manager-shell-primary));
+  border: none;
+  color: var(--manager-shell-bg);
+  padding: 22px 24px;
+}
+
+body.manager-stitch-shell .featured-confirm-banner .btn-small {
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-surface);
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell .featured-confirm-banner .btn-small:hover {
+  background: var(--manager-shell-accent-soft);
+  border-color: var(--manager-shell-accent-soft);
+  color: var(--manager-shell-accent);
+}
+
+body.manager-stitch-shell .manager-shell-stats-grid,
+body.manager-stitch-shell .manager-shell-overview-grid {
+  display: grid;
+  gap: 20px;
+}
+
+body.manager-stitch-shell .manager-shell-stats-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 24px;
+}
+
+body.manager-stitch-shell .manager-shell-overview-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+}
+
+body.manager-stitch-shell .manager-shell-stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 164px;
+  padding: 24px;
+  background: var(--manager-shell-surface);
+  border: 1px solid var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+  color: var(--manager-shell-error);
+}
+
+body.manager-stitch-shell .manager-shell-stat-value {
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: 40px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+body.manager-stitch-shell .manager-shell-stat-meta {
+  color: var(--manager-shell-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+body.manager-stitch-shell .featured-mgr-group,
+body.manager-stitch-shell .history-entry,
+body.manager-stitch-shell .cat-card,
+body.manager-stitch-shell .catmgr-card,
+body.manager-stitch-shell .manager-shell-disclosure {
+  background: var(--manager-shell-surface);
+  border: 1px solid var(--manager-shell-border);
+  box-shadow: none;
+}
+
+body.manager-stitch-shell .featured-mgr-group {
+  padding: 18px;
+  margin-bottom: 14px;
+}
+
+body.manager-stitch-shell .featured-mgr-group-header {
+  margin-bottom: 14px;
+}
+
+body.manager-stitch-shell .featured-mgr-group-name,
+body.manager-stitch-shell .cat-title,
+body.manager-stitch-shell .catmgr-title,
+body.manager-stitch-shell .history-user {
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+}
+
+body.manager-stitch-shell .featured-mgr-slot,
+body.manager-stitch-shell .prune-item {
+  border-bottom-color: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .featured-sell-note-input,
+body.manager-stitch-shell .featured-add-input,
+body.manager-stitch-shell .config-card input,
+body.manager-stitch-shell .catmgr-input,
+body.manager-stitch-shell .add-item-input,
+body.manager-stitch-shell .add-ingredient-input,
+body.manager-stitch-shell .desc-input,
+body.manager-stitch-shell .price-input,
+body.manager-stitch-shell .db-search-row input {
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
+  color: var(--manager-shell-text);
+  border-radius: 0;
+}
+
+body.manager-stitch-shell .manager-btn,
+body.manager-stitch-shell .header-signin-btn,
+body.manager-stitch-shell .user-chip,
+body.manager-stitch-shell .settings-rail-btn,
+body.manager-stitch-shell .btn-small,
+body.manager-stitch-shell .save-btn,
+body.manager-stitch-shell .send-btn,
+body.manager-stitch-shell .current-item,
+body.manager-stitch-shell .manager-shell-actionbar,
+body.manager-stitch-shell .manager-shell-skip-link {
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+
+body.manager-stitch-shell .featured-add-input,
+body.manager-stitch-shell .db-search-row input {
+  min-height: 48px;
+}
+
+body.manager-stitch-shell .cat-card {
+  margin-bottom: 18px;
+  overflow: hidden;
+}
+
+body.manager-stitch-shell .cat-header {
+  padding: 22px 24px 18px;
+  gap: 14px;
+}
+
+body.manager-stitch-shell .cat-icon,
+body.manager-stitch-shell .catmgr-icon {
+  border-radius: 2px;
+}
+
+body.manager-stitch-shell .cat-title,
+body.manager-stitch-shell .catmgr-title {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+
+body.manager-stitch-shell .cat-sub,
+body.manager-stitch-shell .catmgr-sub,
+body.manager-stitch-shell .current-label,
+body.manager-stitch-shell .history-date,
+body.manager-stitch-shell .history-summary,
+body.manager-stitch-shell .featured-count,
+body.manager-stitch-shell .prune-item-cat,
+body.manager-stitch-shell .prune-empty,
+body.manager-stitch-shell .db-empty,
+body.manager-stitch-shell .db-no-recipe {
+  color: var(--manager-shell-muted);
+}
+
+body.manager-stitch-shell .current-section {
+  padding: 0 24px 24px;
+}
+
+body.manager-stitch-shell .current-items {
+  gap: 12px;
+}
+
+body.manager-stitch-shell .item-wrapper {
+  position: relative;
+}
+
+body.manager-stitch-shell .item-wrapper.is-dragging {
+  opacity: 0.5;
+}
+
+body.manager-stitch-shell .item-wrapper.is-drop-target .current-item {
+  border-color: var(--manager-shell-primary);
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell .current-item {
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--manager-shell-surface);
+  border: 1px solid transparent;
+  border-radius: 0;
+}
+
+body.manager-stitch-shell .item-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  min-height: 36px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--manager-shell-muted);
+  cursor: grab;
+  user-select: none;
+}
+
+body.manager-stitch-shell .item-status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+body.manager-stitch-shell .item-name input,
+body.manager-stitch-shell .item-name-static {
+  font-size: 15px;
+}
+
+body.manager-stitch-shell .item-name {
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+body.manager-stitch-shell .item-name input {
+  font-weight: 600;
+}
+
+body.manager-stitch-shell .desc-btn,
+body.manager-stitch-shell .recipe-btn,
+body.manager-stitch-shell .eighty-six-btn,
+body.manager-stitch-shell .visibility-btn,
+body.manager-stitch-shell .del-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+body.manager-stitch-shell .price-input {
+  width: 88px;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+body.manager-stitch-shell .desc-row,
+body.manager-stitch-shell .recipe-row {
+  margin-top: 0;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--manager-shell-border);
+  border-right: 1px solid var(--manager-shell-border);
+  border-bottom: 1px solid var(--manager-shell-border);
+  border-left: 1px solid var(--manager-shell-border);
+  border-radius: 0;
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell .ingredient-row {
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
+  border-radius: 0;
+}
+
+body.manager-stitch-shell .catmgr-card {
+  margin-bottom: 14px;
+}
+
+body.manager-stitch-shell .catmgr-row,
+body.manager-stitch-shell .history-header {
+  padding: 18px 20px;
+}
+
+body.manager-stitch-shell .history-header {
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+}
+
+body.manager-stitch-shell .catmgr-edit {
+  border-top-color: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .catmgr-add-form {
+  margin-bottom: 16px;
+  border-radius: 2px;
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .manager-shell-database-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 24px;
+  background: var(--manager-shell-surface);
+  border: 1px solid var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .manager-shell-db-search {
+  padding: 0;
+}
+
+body.manager-stitch-shell .manager-shell-db-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+body.manager-stitch-shell .manager-shell-filter-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.manager-stitch-shell .db-filter-group {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+body.manager-stitch-shell .db-filter-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 2px;
+  border-color: var(--manager-shell-border);
+  background: var(--manager-shell-surface-muted);
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+body.manager-stitch-shell .db-filter-btn.active,
+body.manager-stitch-shell .db-filter-btn:hover {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .db-table {
+  margin-top: 0;
+  background: var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell .db-table th {
+  background: var(--manager-shell-surface-muted);
+  border-bottom-color: var(--manager-shell-border);
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+}
+
+body.manager-stitch-shell .db-table td {
+  border-bottom-color: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .db-name {
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell .db-ing {
+  background: var(--manager-shell-surface-muted);
+  border-color: var(--manager-shell-border);
+  border-radius: 0;
+}
+
+body.manager-stitch-shell .db-badge {
+  border-radius: 2px;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure {
+  margin-top: 16px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 22px;
+  cursor: pointer;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure-copy {
+  color: var(--manager-shell-muted);
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure-body {
+  padding: 0 22px 22px;
+}
+
+body.manager-stitch-shell .manager-shell-disclosure--danger summary {
+  background: var(--manager-shell-primary-faint);
+}
+
+body.manager-stitch-shell .prune-section {
+  margin-top: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+body.manager-stitch-shell .section-label {
+  color: var(--manager-shell-error);
+}
+
+body.manager-stitch-shell .section-label::after {
+  background: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .btn-danger {
+  background: var(--manager-shell-surface) !important;
+  color: var(--manager-shell-error) !important;
+  border-color: var(--manager-shell-border) !important;
+}
+
+body.manager-stitch-shell .btn-danger:hover {
+  background: var(--manager-shell-error) !important;
+  border-color: var(--manager-shell-error) !important;
+  color: var(--manager-shell-bg) !important;
+}
+
+body.manager-stitch-shell .manager-shell-exit {
+  margin-top: 0;
+  padding: 0 0 12px;
+  color: var(--manager-shell-muted);
+  text-align: left;
+}
+
+body.manager-stitch-shell .manager-shell-exit:hover {
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell #manager-action-bar[hidden] {
+  display: none;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar {
+  position: fixed;
+  left: 288px;
+  right: 24px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  background: var(--manager-shell-actionbar-bg);
+  border: 1px solid var(--manager-shell-border);
+  box-shadow: 0 -12px 40px var(--manager-shell-shadow);
+  backdrop-filter: blur(18px);
+  overscroll-behavior: contain;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar-copy {
+  min-width: 0;
+  max-width: 32rem;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar-groups {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar-featured,
+body.manager-stitch-shell .manager-shell-actionbar-primary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar-primary {
+  margin-top: 0;
+}
+
+body.manager-stitch-shell .save-btn,
+body.manager-stitch-shell .send-btn {
+  min-height: 50px;
+  padding: 0 22px;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .save-btn {
+  background: var(--manager-shell-surface-muted);
+  color: var(--manager-shell-primary);
+  border: 1px solid var(--manager-shell-border);
+  box-shadow: none;
+}
+
+body.manager-stitch-shell .save-btn:hover {
+  background: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+  opacity: 1;
+}
+
+body.manager-stitch-shell .send-btn {
+  min-width: 220px;
+  background: linear-gradient(135deg, var(--manager-shell-primary), var(--manager-shell-primary-soft));
+  box-shadow: 0 18px 30px var(--manager-shell-shadow);
+}
+
+body.manager-stitch-shell .send-btn:hover {
+  transform: translateY(-1px);
+}
+
+body.manager-stitch-shell #sync-status {
+  min-width: max-content;
+}
+
+body.manager-stitch-shell .toast {
+  bottom: 108px;
+}
+
+body.manager-stitch-shell .manager-shell-backdrop {
+  display: none;
+}
+
+body.manager-stitch-shell #auth-overlay,
+body.manager-stitch-shell .modal-bg,
+body.manager-stitch-shell #menu-picker-overlay {
+  overscroll-behavior: contain;
+}
+
+body.manager-stitch-shell.settings-drawer-open {
+  overflow: hidden;
+}
+
+@media (max-width: 1100px) {
+  body.manager-stitch-shell .manager-shell-topbar-inner,
+  body.manager-stitch-shell .manager-shell-layout {
+    width: calc(100% - 32px);
+  }
+
+  body.manager-stitch-shell .manager-shell-overview-grid,
+  body.manager-stitch-shell .manager-shell-database-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-stitch-shell .manager-shell-db-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 920px) {
+  body.manager-stitch-shell {
+    padding-bottom: calc(192px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-menu-toggle {
+    display: inline-flex;
+  }
+
+  body.manager-stitch-shell .manager-shell-topbar-inner {
+    width: calc(100% - 24px);
+    min-height: 82px;
+  }
+
+  body.manager-stitch-shell .manager-shell-layout {
+    width: calc(100% - 24px);
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding-top: 108px;
+  }
+
+  body.manager-stitch-shell .manager-shell-rail {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(80vw, 320px);
+    padding: 104px 18px 24px;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 70;
+    overscroll-behavior: contain;
+  }
+
+  body.manager-stitch-shell .manager-shell-rail.is-open {
+    transform: translateX(0);
+  }
+
+  body.manager-stitch-shell .manager-shell-backdrop:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    background: var(--manager-shell-overlay);
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-copy,
+  body.manager-stitch-shell .manager-shell-actionbar-groups,
+  body.manager-stitch-shell .manager-shell-actionbar-featured,
+  body.manager-stitch-shell .manager-shell-actionbar-primary {
+    width: 100%;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured,
+  body.manager-stitch-shell .manager-shell-actionbar-primary {
+    flex-direction: column;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .save-btn,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 720px) {
+  body.manager-stitch-shell .manager-shell-topbar-inner {
+    align-items: flex-start;
+    padding: 14px 0;
+  }
+
+  body.manager-stitch-shell .manager-shell-title-row,
+  body.manager-stitch-shell .manager-shell-header-meta,
+  body.manager-stitch-shell .manager-shell-user-tools,
+  body.manager-stitch-shell .manager-shell-db-filters {
+    width: 100%;
+  }
+
+  body.manager-stitch-shell .manager-shell-topbar-inner,
+  body.manager-stitch-shell .manager-shell-brand-wrap,
+  body.manager-stitch-shell .manager-shell-user-tools {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  body.manager-stitch-shell #app-shell > header h1 {
+    font-size: 28px;
+  }
+
+  body.manager-stitch-shell .manager-shell-stats-grid,
+  body.manager-stitch-shell .manager-shell-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-stitch-shell .settings-section,
+  body.manager-stitch-shell .manager-shell-overview-card {
+    padding: 24px 18px;
+  }
+
+  body.manager-stitch-shell .manager-shell-section-copy,
+  body.manager-stitch-shell .manager-shell-card-copy,
+  body.manager-stitch-shell .manager-shell-rail-note {
+    display: none;
+  }
+
+  body.manager-stitch-shell .manager-shell-section-header h2,
+  body.manager-stitch-shell .manager-shell-card-head h3,
+  body.manager-stitch-shell .cat-title,
+  body.manager-stitch-shell .catmgr-title {
+    font-size: 24px;
+  }
+
+  body.manager-stitch-shell .cat-header,
+  body.manager-stitch-shell .current-section,
+  body.manager-stitch-shell .catmgr-row,
+  body.manager-stitch-shell .history-header {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  body.manager-stitch-shell .current-item {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  body.manager-stitch-shell .price-input {
+    order: 8;
+    width: 100%;
+  }
+
+  body.manager-stitch-shell .item-name {
+    flex-basis: calc(100% - 44px);
+  }
+
+  body.manager-stitch-shell .db-table,
+  body.manager-stitch-shell .db-table thead,
+  body.manager-stitch-shell .db-table tbody,
+  body.manager-stitch-shell .db-table tr,
+  body.manager-stitch-shell .db-table td {
+    display: block;
+    width: 100%;
+  }
+
+  body.manager-stitch-shell .db-table thead {
+    display: none;
+  }
+
+  body.manager-stitch-shell .db-table tr {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--manager-shell-border);
+  }
+
+  body.manager-stitch-shell .db-table td {
+    padding: 6px 0;
+    border-bottom: none;
+  }
+
+  body.manager-stitch-shell .db-table td::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 4px;
+    color: var(--manager-shell-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
   }
 }

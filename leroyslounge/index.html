@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#d30b0b">
 <title>Leroy's Lounge | Current Menu</title>
 <link rel="icon" type="image/png" href="/HFLOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,11 +27,12 @@
 
 <template id="leroy-route-template">
   <div class="ll-board-page">
+    <a class="ll-skip-link" href="#ll-route-main">Skip to menu content</a>
     <header class="ll-board-topbar neon-header-full">
       <div class="ll-board-topbar-left" aria-hidden="true"></div>
       <div class="ll-board-topbar-center">
         <button class="ll-board-logo-btn ll-board-logo-btn--center" data-route-signin data-route-signin-persistent type="button" onclick="openAuthOverlay()" aria-label="Sign in">
-          <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge">
+          <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge" width="495" height="335">
         </button>
       </div>
       <div class="ll-board-topbar-right">
@@ -125,7 +127,7 @@
     </header>
 
     <div class="ll-board-bg">
-    <main class="ll-board-main">
+    <main class="ll-board-main" id="ll-route-main" tabindex="-1">
       <section class="ll-slat-section menu-category" data-category="special">
         <div class="ll-slat-section-head">
           <h2 class="ll-slat-section-title">Specials</h2>
