@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.3';
+const APP_VERSION = 'v0.8.4';
 const RESTAURANTS = {
   LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
   ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
@@ -65,6 +65,7 @@ let _settingsRedirectCleanup = null;
 let _featuredGroups     = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
 let _featuredMenuGroups = []; // [{menu_id, featured_group_id, display_order}]
+let _menuMetaSupportsLastSentFeatured = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const ICON_COLOR_PALETTE = [
@@ -156,9 +157,15 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot
 // Escape a string for safe embedding inside an inline JS string within an HTML attribute.
 // Uses JSON.stringify (which handles quotes/backslashes) then HTML-escapes the result.
 function escAttrJs(s) { return escHtml(JSON.stringify(String(s))); }
-function lsSet(key, val) {
-  try { localStorage.setItem(key, val); }
-  catch(e) { showToast('⚠️ Storage full — data not saved locally.', 'error'); }
+function lsSet(key, val, options = {}) {
+  const { silent = false } = options;
+  try {
+    localStorage.setItem(key, val);
+    return true;
+  } catch(e) {
+    if (!silent) showToast('⚠️ Storage full — data not saved locally.', 'error');
+    return false;
+  }
 }
 function findItem(catId, itemId) {
   return menuState[catId]?.items.find(i => i.id === itemId) ?? null;
@@ -169,8 +176,14 @@ let _dirty = false;
 let _pollFailCount = 0;
 let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistState()
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
+let _managerDraggedItemId = '';
+let _managerDraggedCatId = '';
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
-function updateSaveBtn() { const btn = document.getElementById('save-btn'); if (btn) btn.disabled = !_dirty; }
+function updateSaveBtn() {
+  const btn = document.getElementById('save-btn');
+  if (btn) btn.disabled = !_dirty;
+  updateManagerActionBar();
+}
 function getCachedDiff() {
   if (_diffDirty) { _diffCache = computeDiff(); _diffDirty = false; }
   return _diffCache;
@@ -696,6 +709,7 @@ function hydrateState({ cats, meta, restaurant }) {
       lastSentTs:         meta.last_sent_ts?.toString()     || '',
       lastSentCategories: meta.last_sent_categories         || [],
     };
+    _menuMetaSupportsLastSentFeatured = Object.prototype.hasOwnProperty.call(meta, 'last_sent_featured');
     if (meta.bot_id) BOT_ID = meta.bot_id;
     if (meta.notifications) NOTIFICATIONS = meta.notifications;
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
@@ -769,7 +783,119 @@ async function sbPatchMenuMeta(update) {
     headers: sbHeaders({ 'Prefer': 'return=minimal' }),
     body:    JSON.stringify(update),
   });
-  if (!r.ok) throw new Error(`menu_meta patch: ${r.status}`);
+  if (!r.ok) {
+    let detail = '';
+    try { detail = (await r.text()).trim(); } catch (_) { /* ignore */ }
+    throw new Error(detail ? `menu_meta patch: ${r.status} ${detail}` : `menu_meta patch: ${r.status}`);
+  }
+}
+
+function snapshotCurrentItemsAsLastSent() {
+  const lastSentState = {};
+  CATEGORY_DEFS.forEach(cat => {
+    lastSentState[cat.id] = (menuState[cat.id]?.items || []).map(item => ({ ...item }));
+  });
+  return lastSentState;
+}
+
+function buildMenuCacheSnapshot() {
+  const cats = CATEGORY_DEFS.map((cat, index) => ({
+    id: cat._uuid || `local-${cat.id}`,
+    key: cat.id,
+    label: cat.title,
+    icon: cat.icon || '',
+    color: cat.color || '',
+    sub: cat.sub || '',
+    placeholder: cat.placeholder || '',
+    display_order: index,
+    items: (menuState[cat.id]?.items || []).map((item, itemIndex) => ({
+      id: item.id,
+      name: item.name,
+      desc: item.desc || '',
+      recipe: Array.isArray(item.recipe) ? item.recipe : recipeArray(item.recipe),
+      price: item.price || '',
+      is_eighty_sixed: !!item.eightySixed,
+      on_menu: item.onMenu !== false,
+      visibility: item.visibility || 'public',
+      display_order: itemIndex,
+    })),
+  }));
+  const uncategorizedItems = menuState[UNCATEGORIZED_ID]?.items || [];
+  if (uncategorizedItems.length || _uncatCategoryUuid) {
+    cats.push({
+      id: _uncatCategoryUuid || `local-${UNCATEGORIZED_ID}`,
+      key: UNCATEGORIZED_ID,
+      label: 'Uncategorized',
+      icon: '',
+      color: '',
+      sub: '',
+      placeholder: '',
+      display_order: 9999,
+      items: uncategorizedItems.map((item, itemIndex) => ({
+        id: item.id,
+        name: item.name,
+        desc: item.desc || '',
+        recipe: Array.isArray(item.recipe) ? item.recipe : recipeArray(item.recipe),
+        price: item.price || '',
+        is_eighty_sixed: !!item.eightySixed,
+        on_menu: false,
+        visibility: item.visibility || 'public',
+        display_order: itemIndex,
+      })),
+    });
+  }
+  const meta = {
+    bot_id: BOT_ID || '',
+    notifications: NOTIFICATIONS || {},
+    last_updated_ts: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+    last_sent_ts: menuState._meta?.lastSentTs ? Number(menuState._meta.lastSentTs) : null,
+    last_sent_state: snapshotLastSentState(),
+    last_sent_categories: menuState._meta?.lastSentCategories || [],
+  };
+  if (_menuMetaSupportsLastSentFeatured !== false) {
+    meta.last_sent_featured = Array.from(_lastSentFeaturedIds);
+  }
+  const restaurant = isValidRestaurant(RESTAURANT_ID)
+    ? {
+        id: RESTAURANT_ID,
+        name: _activeRestaurantName || getRestaurantById(RESTAURANT_ID)?.name || '',
+        design: currentDesign,
+        use_custom_design: _restaurantCustomDesignEnabled,
+      }
+    : null;
+  return { cats, meta, restaurant };
+}
+
+function syncLocalMenuCache(options = {}) {
+  return lsSet(LS_KEYS.menuCache, JSON.stringify(buildMenuCacheSnapshot()), options);
+}
+
+function isMissingColumnError(error, columnName) {
+  const message = `${error?.message || error || ''}`.toLowerCase();
+  return message.includes(columnName.toLowerCase()) &&
+    (message.includes('column') || message.includes('schema cache'));
+}
+
+async function patchMenuMetaWithCompatibility(update) {
+  const payload = { ...update };
+  if (_menuMetaSupportsLastSentFeatured === false) {
+    delete payload.last_sent_featured;
+  }
+  try {
+    await sbPatchMenuMeta(payload);
+    if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured')) {
+      _menuMetaSupportsLastSentFeatured = true;
+    }
+    return { downgradedFields: [] };
+  } catch (error) {
+    if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured') && isMissingColumnError(error, 'last_sent_featured')) {
+      const { last_sent_featured, ...fallbackPayload } = payload;
+      await sbPatchMenuMeta(fallbackPayload);
+      _menuMetaSupportsLastSentFeatured = false;
+      return { downgradedFields: ['last_sent_featured'] };
+    }
+    throw error;
+  }
 }
 
 async function sbPatchRestaurantDesign(design) {
@@ -878,15 +1004,20 @@ async function loadLocalConfig() {
 }
 
 function showConfigModal() {
+  const output = document.getElementById('config-json-output');
+  const modal = document.getElementById('config-modal-bg');
+  if (!output || !modal) return;
   const json = JSON.stringify({ groupme: { botId: BOT_ID } }, null, 2);
-  document.getElementById('config-json-output').value = json;
-  document.getElementById('config-modal-bg').classList.add('open');
+  output.value = json;
+  modal.classList.add('open');
 }
 function closeConfigModal() {
-  document.getElementById('config-modal-bg').classList.remove('open');
+  document.getElementById('config-modal-bg')?.classList.remove('open');
 }
 async function copyConfigJson() {
-  await navigator.clipboard.writeText(document.getElementById('config-json-output').value);
+  const output = document.getElementById('config-json-output');
+  if (!output) return;
+  await navigator.clipboard.writeText(output.value);
   showToast('Copied!', 'success');
 }
 
@@ -993,14 +1124,90 @@ async function renderPublicViews() {
   updateLastUpdatedLabel();
 }
 
-function refreshManagerViews() {
+function updateManagerToolsContext() {
+  const ctx = document.getElementById('categories-menu-context');
+  if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+}
+
+function renderManagerOverviewStats() {
+  const activeItems = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
+  ), 0);
+  const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
+  ), 0);
+  const draftCount = getCachedDiff().reduce((count, section) => (
+    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
+  ), 0);
+  const statusValue = document.getElementById('manager-overview-status-value');
+  const statusMeta = document.getElementById('manager-overview-status-meta');
+  const activeValue = document.getElementById('manager-overview-active-value');
+  const activeMeta = document.getElementById('manager-overview-active-meta');
+  const eightysixValue = document.getElementById('manager-overview-86-value');
+  const eightysixMeta = document.getElementById('manager-overview-86-meta');
+
+  if (statusValue) statusValue.textContent = draftCount > 0 ? 'Drafting' : 'Live';
+  if (statusMeta) statusMeta.textContent = draftCount > 0
+    ? `${draftCount} unsent change${draftCount === 1 ? '' : 's'}`
+    : 'No unsent changes';
+  if (activeValue) activeValue.textContent = String(activeItems);
+  if (activeMeta) activeMeta.textContent = activeItems === 1 ? 'active item' : 'active items';
+  if (eightysixValue) eightysixValue.textContent = String(eightySixed);
+  if (eightysixMeta) eightysixMeta.textContent = eightySixed === 1 ? "item 86'd" : "items 86'd";
+}
+
+function updateManagerActionBar() {
+  const bar = document.getElementById('manager-action-bar');
+  if (!bar) return;
+  const primaryGroup = document.getElementById('manager-primary-action-group');
+  const featuredGroup = document.getElementById('manager-featured-action-group');
+  const summary = document.getElementById('manager-action-bar-summary');
+  const featuredBanner = document.getElementById('featured-confirm-banner');
+  const hasFeaturedPrompt = !!featuredBanner && featuredBanner.style.display !== 'none';
+  const hasDraftChanges = !!_dirty;
+
+  if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
+  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
+  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+
+  if (summary) {
+    if (hasDraftChanges && hasFeaturedPrompt) {
+      summary.textContent = 'Draft changes are ready to review, and featured items still need confirmation.';
+    } else if (hasDraftChanges) {
+      summary.textContent = 'Draft changes are ready to save quietly or review before sending.';
+    } else if (hasFeaturedPrompt) {
+      summary.textContent = "Today's featured lineup still needs confirmation.";
+    } else {
+      summary.textContent = '';
+    }
+  }
+}
+
+function renderManagerWorkspace(options = {}) {
   renderManagerCategories();
   renderFeaturedTab();
   renderOffMenuSection();
+  renderCategoriesTab();
+  updateManagerToolsContext();
+  renderDatabaseTab();
+  renderPruneSection();
+  updateActiveMenuBar();
+  renderManagerOverviewStats();
+  if (options.includeRecentChanges !== false) renderRecentChanges();
+  updateManagerActionBar();
+}
+
+function renderAdminWorkspace() {
+  renderMenusPanel();
+  initAdminSwitcherTab('notif');
+  loadUsers();
+}
+
+function refreshManagerViews() {
+  renderManagerWorkspace({ includeRecentChanges: false });
 }
 
 function refreshCategoryAdminViews() {
-  renderCategoriesTab();
   refreshManagerViews();
   renderPublicView();
 }
@@ -1198,28 +1405,28 @@ function renderCategoriesTab() {
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
         <div class="catmgr-actions">
-          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up">↑</button>
-          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down">↓</button>
-          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">✏️</button>
-          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')">×</button>
+          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
+          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
+          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
+          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
         </div>
       </div>
       <div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
         <div class="catmgr-field-row">
-          <label>Icon</label>
-          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji"/>
+          <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
+          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" name="category-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji…" autocomplete="off" spellcheck="false"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Title</label>
-          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title"/>
+          <label for="ce-title-${escHtml(cat.id)}">Title</label>
+          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" name="category-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title…" autocomplete="off"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Subtitle</label>
-          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description"/>
+          <label for="ce-sub-${escHtml(cat.id)}">Subtitle</label>
+          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" name="category-subtitle-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description…" autocomplete="off"/>
         </div>
         <div class="catmgr-field-row">
-          <label>Hint text</label>
-          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint"/>
+          <label for="ce-ph-${escHtml(cat.id)}">Hint text</label>
+          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" name="category-hint-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint…" autocomplete="off"/>
         </div>
         <div class="catmgr-save-row">
           <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
@@ -1330,7 +1537,7 @@ async function confirmAddCategory() {
   const title = document.getElementById('new-cat-title')?.value.trim();
   if (!title) { showToast('Category title is required.', 'error'); return; }
   const sub = document.getElementById('new-cat-sub')?.value.trim() || '';
-  const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item...`;
+  const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item…`;
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
   // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
@@ -2315,6 +2522,63 @@ function applyRole(role) {
   renderUserHeader();
 }
 
+function setActiveSettingsSection(sectionId) {
+  document.querySelectorAll('.settings-rail-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.target === sectionId);
+  });
+}
+
+function setSettingsDrawerOpen(isOpen) {
+  const drawer = document.getElementById('manager-settings-rail');
+  const backdrop = document.getElementById('settings-drawer-backdrop');
+  const toggle = document.getElementById('settings-drawer-toggle');
+  if (!drawer || !backdrop) return;
+  drawer.classList.toggle('is-open', !!isOpen);
+  backdrop.hidden = !isOpen;
+  document.body.classList.toggle('settings-drawer-open', !!isOpen);
+  if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function toggleSettingsDrawer() {
+  const drawer = document.getElementById('manager-settings-rail');
+  if (!drawer) return;
+  setSettingsDrawerOpen(!drawer.classList.contains('is-open'));
+}
+
+function closeSettingsDrawer() {
+  setSettingsDrawerOpen(false);
+}
+
+function _getSettingsSectionHashId() {
+  const hash = window.location.hash.replace(/^#/, '').trim();
+  if (!hash || hash.includes('=')) return '';
+  return document.getElementById(hash) ? hash : '';
+}
+
+function _syncSettingsSectionFromLocation(defaultSectionId) {
+  const targetSectionId = _getSettingsSectionHashId() || defaultSectionId;
+  if (!targetSectionId) return;
+  requestAnimationFrame(() => {
+    focusSettingsSection(targetSectionId, null, { behavior: 'auto', updateUrl: false });
+  });
+}
+
+function focusSettingsSection(sectionId, trigger, options = {}) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  const behavior = options.behavior || 'smooth';
+  const shouldUpdateUrl = options.updateUrl !== false;
+  if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
+  else setActiveSettingsSection(sectionId);
+  closeSettingsDrawer();
+  if (shouldUpdateUrl && isSettingsPage()) {
+    const url = new URL(window.location.href);
+    url.hash = sectionId;
+    history.replaceState({}, '', url.toString());
+  }
+  section.scrollIntoView({ behavior, block: 'start' });
+}
+
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
   const targetPath = getManagerHrefForMenuId(MENU_ID);
@@ -2334,10 +2598,9 @@ function onAdminBtnClick() {
 }
 
 function enterAdmin() {
-  const managerView = document.getElementById('manager-view');
-  const managerPanel = document.getElementById('manager-panel');
+  const settingsView = document.getElementById('manager-view');
   const adminPanel = document.getElementById('admin-panel');
-  if (!managerView || !managerPanel || !adminPanel) {
+  if (!settingsView || !adminPanel) {
     navigateToPage(SHARED_PAGE_PATHS.admin);
     return;
   }
@@ -2348,23 +2611,23 @@ function enterAdmin() {
   isAdminMode = true;
   _clearSettingsRedirectPrompt();
   stopPolling();
-  document.body.classList.add('manager-mode');
-  document.getElementById('public-view').style.display     = 'none';
-  document.getElementById('loading-view').style.display    = 'none';
+  _setDisplayById('public-view', 'none');
+  _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
-  managerView.style.display    = 'block';
-  managerPanel.style.display   = 'none';
-  adminPanel.style.display     = 'block';
+  closeSettingsDrawer();
+  settingsView.style.display = 'block';
+  adminPanel.style.display = 'block';
   renderUserHeader();
-  checkAdminSupabaseStatus();
-  switchAdminTab('admin-restaurants');
+  renderAdminWorkspace();
+  _syncSettingsSectionFromLocation('admin-restaurants-section');
 }
 
 function exitAdmin() {
   isAdminMode = false;
   document.body.classList.remove('manager-mode');
-  document.getElementById('manager-view').style.display = 'none';
+  _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
+  closeSettingsDrawer();
   renderUserHeader();
   if (isSettingsPage()) {
     navigateToPage(getPublicHrefForCurrentMenu());
@@ -2464,6 +2727,13 @@ document.addEventListener('keydown', function(e) {
     }
     if (panel) panel.hidden = true;
   });
+});
+
+window.addEventListener('hashchange', () => {
+  if (!isSettingsPage()) return;
+  const sectionId = _getSettingsSectionHashId();
+  if (!sectionId) return;
+  focusSettingsSection(sectionId, null, { behavior: 'auto', updateUrl: false });
 });
 
 // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
@@ -2646,12 +2916,10 @@ async function onSwitchMenuClick() {
     await loadActiveMenuState();
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
-    refreshManagerViews();
-    if (typeof renderCatManager  === 'function') renderCatManager();
-    if (typeof renderDatabase    === 'function') renderDatabase();
-    if (typeof renderUsersList   === 'function') renderUsersList();
+    renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
+    checkFeaturedConfirmation();
   }, { managerOnly: true });
 }
 
@@ -2845,10 +3113,9 @@ function signOut() {
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
 function enterManager() {
-  const managerView = document.getElementById('manager-view');
+  const settingsView = document.getElementById('manager-view');
   const managerPanel = document.getElementById('manager-panel');
-  const adminPanel = document.getElementById('admin-panel');
-  if (!managerView || !managerPanel || !adminPanel) {
+  if (!settingsView || !managerPanel) {
     navigateToPage(SHARED_PAGE_PATHS.manager);
     return;
   }
@@ -2871,26 +3138,26 @@ function enterManager() {
   _clearSettingsRedirectPrompt();
   stopPolling();
   document.body.classList.add('manager-mode');
-  document.getElementById('public-view').style.display    = 'none';
-  document.getElementById('loading-view').style.display   = 'none';
+  _setDisplayById('public-view', 'none');
+  _setDisplayById('loading-view', 'none');
   closeMenuPicker({ skipOnClose: true });
-  managerView.style.display   = 'block';
-  managerPanel.style.display  = 'block';
-  adminPanel.style.display    = 'none';
+  closeSettingsDrawer();
+  settingsView.style.display = 'block';
+  managerPanel.style.display = 'block';
   renderUserHeader();
-  switchManagerTab('edit-menu');
+  renderManagerWorkspace();
+  _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  renderManagerCategories();
-  updateActiveMenuBar();
   checkFeaturedConfirmation();
 }
 
 function exitManager() {
   isManagerMode = false;
   document.body.classList.remove('manager-mode');
-  document.getElementById('manager-view').style.display = 'none';
+  _setDisplayById('manager-view', 'none');
   _setRestaurantPublicMode(false);
+  closeSettingsDrawer();
   renderUserHeader();
   if (isSettingsPage()) {
     navigateToPage(getPublicHrefForCurrentMenu());
@@ -3141,7 +3408,7 @@ function renderManagerCategories() {
         <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item...')}"
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item…')}" aria-label="Add item to ${escHtml(cat.title)}" autocomplete="off"
               oninput="showAutocomplete('${escHtml(cat.id)}')"
               onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
               onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"/>
@@ -3172,7 +3439,7 @@ function renderManagerCategories() {
       <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
       <div class="add-item-wrap">
         <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…"
+          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…" aria-label="Add item to uncategorized pool" autocomplete="off"
             onkeydown="if(event.key==='Enter'){event.preventDefault();addUncategorizedItem()}"/>
           <button class="add-item-btn" onclick="addUncategorizedItem()" aria-label="Add item to uncategorized pool">+</button>
         </div>
@@ -3236,14 +3503,14 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
 
 function buildManagerItemEditorHtml(item, catId, itemId, ingredients) {
   return `<div class="desc-row" id="desc-row-${itemId}">
-      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it..."
+      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
         onblur="saveDesc('${catId}','${itemId}',this.value)">${escHtml(item.desc || '')}</textarea>
     </div>
     <div class="recipe-row" id="recipe-row-${itemId}">
       <div class="recipe-ingredient-list" id="recipe-list-${itemId}">${buildRecipeListHtml(catId, itemId, ingredients)}</div>
       <div class="add-ingredient-area">
         <input class="add-ingredient-input" id="ingredient-input-${itemId}" type="text"
-          placeholder="Add ingredient..."
+          placeholder="Add ingredient…"
           onkeydown="handleIngredientKeydown(event,'${catId}','${itemId}')"/>
         <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${itemId}')">+</button>
       </div>
@@ -3256,8 +3523,8 @@ function buildUncategorizedItemHtml(item) {
   const hasRecipe = ingredients.length > 0;
   return `<div class="current-item">
       <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
     </div>
     ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
@@ -3271,6 +3538,11 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
   const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
   const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
   return `<div class="${rowClass}">
+      <button class="item-drag-handle" type="button" draggable="true"
+        ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
+        ondragend="endManagerItemDrag(event)"
+        title="Drag to reorder"
+        aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
       <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
       <div class="item-name"><input type="text" value="${escHtml(item.name)}"
         aria-label="Item name"
@@ -3279,11 +3551,11 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
       <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
         onblur="savePrice('${catId}','${item.id}',this.value)"
         value="${escHtml(item.price||'')}"/>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" onclick="toggleItemRecipe('${item.id}')"
+      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
         style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
-      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
+      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" aria-label="${item.visibility === 'off_menu' ? `Make ${escHtml(item.name)} public` : `Move ${escHtml(item.name)} off menu`}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
       <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
     </div>
     ${buildManagerItemEditorHtml(item, catId, item.id, ingredients)}`;
@@ -3306,9 +3578,68 @@ function renderManagerItems(catId) {
     const wrapper  = document.createElement('div');
     wrapper.className = 'item-wrapper';
     wrapper.id = 'wrapper-' + item.id;
+    wrapper.dataset.catId = catId;
+    wrapper.dataset.itemId = item.id;
     wrapper.innerHTML = buildManagerItemHtml(item, catId, lastSentNames);
+    const row = wrapper.querySelector('.current-item');
+    if (row) {
+      row.addEventListener('dragover', event => allowManagerItemDrop(event, catId, item.id));
+      row.addEventListener('drop', event => handleManagerItemDrop(event, catId, item.id));
+    }
     listEl.appendChild(wrapper);
   });
+}
+
+function startManagerItemDrag(event, catId, itemId) {
+  _managerDraggedCatId = catId;
+  _managerDraggedItemId = itemId;
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', itemId);
+  }
+  document.getElementById(`wrapper-${itemId}`)?.classList.add('is-dragging');
+}
+
+function endManagerItemDrag(event) {
+  const wrapper = event?.target?.closest('.item-wrapper');
+  if (wrapper) wrapper.classList.remove('is-dragging');
+  document.querySelectorAll('.item-wrapper.is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
+  _managerDraggedCatId = '';
+  _managerDraggedItemId = '';
+}
+
+function allowManagerItemDrop(event, catId, itemId) {
+  if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === itemId) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.item-wrapper.is-drop-target').forEach(el => {
+    if (el.dataset.itemId !== itemId) el.classList.remove('is-drop-target');
+  });
+  document.getElementById(`wrapper-${itemId}`)?.classList.add('is-drop-target');
+}
+
+function handleManagerItemDrop(event, catId, targetItemId) {
+  if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === targetItemId) return;
+  event.preventDefault();
+  const items = menuState[catId]?.items || [];
+  const visibleItems = items.filter(item => item.onMenu !== false);
+  const fromIndex = visibleItems.findIndex(item => item.id === _managerDraggedItemId);
+  const toIndex = visibleItems.findIndex(item => item.id === targetItemId);
+  if (fromIndex < 0 || toIndex < 0) return;
+
+  const reorderedVisible = [...visibleItems];
+  const [movedItem] = reorderedVisible.splice(fromIndex, 1);
+  reorderedVisible.splice(toIndex, 0, movedItem);
+  menuState[catId].items = [
+    ...reorderedVisible,
+    ...items.filter(item => item.onMenu === false),
+  ];
+
+  invalidateDiff();
+  renderManagerItems(catId);
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  showToast('Item order updated.', 'success');
 }
 
 function buildCategoryUpsertRows() {
@@ -3454,12 +3785,13 @@ async function saveMenu() {
   try {
     const persisted = await persistState();
     if (!persisted) return;
-    await sbPatchMenuMeta({ last_updated_ts: ts });
+    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
     menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
     lsSet(LS_KEYS.lastUpdated, ts.toString());
     _dirty = false;
     updateSaveBtn();
     updateLastUpdatedLabel();
+    syncLocalMenuCache({ silent: true });
     showToast('✅ Menu saved!', 'success');
   } catch(e) {
     finalizePersistStatus(false);
@@ -3707,9 +4039,11 @@ function removeItem(catId, itemId) {
 function renderPruneSection() {
   const isAdmin = currentUser?.role === 'admin';
   const section = document.getElementById('prune-section');
+  if (!section) return;
   section.style.display = isAdmin ? '' : 'none';
   if (!isAdmin) return;
   const wrap = document.getElementById('prune-items-wrap');
+  if (!wrap) return;
   const allOffMenu = [];
   CATEGORY_DEFS.forEach(cat => {
     (menuState[cat.id]?.items || []).filter(i => i.onMenu === false).forEach(item => {
@@ -3804,12 +4138,14 @@ function updateDraftIndicator() {
   const diff = getCachedDiff();
   const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
   if (total > 0) {
-    btn.innerHTML = `🔥 SEND UPDATE <span class="send-update-count">(${total} CHANGE${total > 1 ? 'S' : ''})</span>`;
+    btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
     btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
   } else {
-    btn.innerHTML = '🔥 SEND UPDATE';
+    btn.innerHTML = 'Send Update';
     btn.style.boxShadow = '';
   }
+  renderManagerOverviewStats();
+  updateManagerActionBar();
 }
 
 // ─── DIFF ─────────────────────────────────────────────────────────────────────
@@ -3915,6 +4251,8 @@ function openPreview() {
   const diff = getCachedDiff();
   const content = document.getElementById('preview-content');
   const confirmBtn = document.getElementById('confirm-btn');
+  const modal = document.getElementById('modal-bg');
+  if (!content || !confirmBtn || !modal) return;
   content.innerHTML = '';
   if (!diff.length) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
@@ -3928,9 +4266,9 @@ function openPreview() {
       content.appendChild(block);
     });
   }
-  document.getElementById('modal-bg').classList.add('open');
+  modal.classList.add('open');
 }
-function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
 function buildPatchMessage(diff) {
@@ -3979,18 +4317,23 @@ function applySentState(diff, ts) {
 }
 
 async function logUpdate(diff, patchMessage) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
-  fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-    body: JSON.stringify({
-      menu_id:   MENU_ID,
-      user_id:   currentUser.uid,
-      user_name: currentUser.name || currentUser.email || '',
-      diff:      diff,
-      message:   patchMessage,
-    }),
-  }).catch(() => {});
+  if (!SUPABASE_URL || !currentUser?.accessToken) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({
+        menu_id:   MENU_ID,
+        user_id:   currentUser.uid,
+        user_name: currentUser.name || currentUser.email || '',
+        diff:      diff,
+        message:   patchMessage,
+      }),
+    });
+    return response.ok;
+  } catch (_) {
+    return false;
+  }
 }
 
 async function sendUpdate() {
@@ -4004,7 +4347,7 @@ async function sendUpdate() {
 
   const confirmBtn = document.getElementById('confirm-btn');
   confirmBtn.disabled = true;
-  confirmBtn.textContent = 'SENDING...';
+  confirmBtn.textContent = 'SENDING…';
 
   try {
     const authHeaders = currentUser?.accessToken
@@ -4021,26 +4364,37 @@ async function sendUpdate() {
       const ts = Date.now();
       closeModal();
       try {
-        applySentState(diff, ts);
         const persisted = await persistState();
         if (!persisted) throw new Error('persist failed');
-        const lastSentState = snapshotLastSentState();
+        const lastSentState = snapshotCurrentItemsAsLastSent();
         const currentFeaturedIds = getCurrentFeaturedIds();
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await sbPatchMenuMeta({
+        const compat = await patchMenuMetaWithCompatibility({
           last_updated_ts:      ts,
           last_sent_ts:         ts,
           last_sent_state:      lastSentState,
           last_sent_categories: diff.map(d => d.id),
           last_sent_featured:   currentFeaturedIds,
         });
+        if (compat.downgradedFields.length) {
+          console.warn('sendUpdate metadata compatibility fallback:', compat.downgradedFields.join(', '));
+        }
+        _lastSentFeaturedIds = new Set(currentFeaturedIds);
+        applySentState(diff, ts);
+        _dirty = false;
+        updateSaveBtn();
         updateLastUpdatedLabel();
-        renderManagerCategories();
+        renderManagerWorkspace({ includeRecentChanges: false });
         updateDraftIndicator();
-        logUpdate(diff, patchMessage);
+        const cacheSynced = syncLocalMenuCache({ silent: true });
+        if (!cacheSynced) {
+          showToast('⚠️ Update sent, but this device could not refresh its local cache.', 'warning');
+        }
+        const logged = await logUpdate(diff, patchMessage);
+        if (!logged) console.warn('sendUpdate audit log insert failed');
+        renderRecentChanges();
       } catch (syncError) {
         console.warn('sendUpdate post-send sync failed:', syncError);
-        showToast('⚠️  Update sent but local cache failed to sync', 'warning');
+        showToast('⚠️ Update sent, but database sync needs attention. Refresh before sending again.', 'warning');
       }
     } else if (r1.status === 401) {
       showToast('❌ Not authorized. Please sign in.', 'error');
@@ -4054,7 +4408,7 @@ async function sendUpdate() {
   }
 
   confirmBtn.disabled = false;
-  confirmBtn.textContent = 'SEND TO GROUP';
+  confirmBtn.textContent = 'SEND UPDATE';
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
@@ -4101,12 +4455,14 @@ document.getElementById('prune-items-wrap')?.addEventListener('click', e => {
 // ─── USER MANAGEMENT ─────────────────────────────────────────────────────────
 async function loadUsers() {
   const wrap = document.getElementById('users-list');
-  wrap.innerHTML = '<div class="db-empty">Loading...</div>';
+  if (!wrap) return;
+  wrap.innerHTML = '<div class="db-empty">Loading…</div>';
+  window._adminUserList = null;
   try {
     // Fetch menus list for menu access checkboxes
     if (SUPABASE_URL) {
       const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name&archived=eq.false&order=created_at.asc`,
+        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id&archived=eq.false&order=created_at.asc`,
         { headers: sbHeaders() }
       );
       if (menusRes.ok) window._adminMenuList = await menusRes.json();
@@ -4146,47 +4502,58 @@ function buildHistoryDetailHtml(diff) {
   ).join('');
 }
 
-async function renderUpdateHistory() {
-  const wrap = document.getElementById('update-history-wrap');
-  if (!wrap) return;
-  if (!SUPABASE_URL || !currentUser?.accessToken) { wrap.innerHTML = ''; return; }
+function buildChangeFeedHtml(logs) {
+  const locale = navigator.languages?.[0] || navigator.language || undefined;
+  const dateFormatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
+  const timeFormatter = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  return logs.map(log => {
+    const d = new Date(log.created_at);
+    const dateStr = dateFormatter.format(d);
+    const timeStr = timeFormatter.format(d);
+    const diff = log.diff || [];
+    const summary = summarizeHistoryDiff(diff);
+    const detailHtml = buildHistoryDetailHtml(diff);
 
-  // Determine which menu to show history for — use the admin switcher if available
-  const menuId = _adminSwitcherState.notif?.menuId || MENU_ID;
-  if (!menuId) { wrap.innerHTML = '<p class="db-empty">Select a menu to view history.</p>'; return; }
+    return `<div class="history-entry">
+      <button class="history-header" type="button" aria-expanded="false" onclick="this.parentElement.classList.toggle('expanded'); this.setAttribute('aria-expanded', this.parentElement.classList.contains('expanded') ? 'true' : 'false');">
+        <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
+        <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
+        <span class="history-summary">${escHtml(summary)}</span>
+        <span class="history-chevron">\u203A</span>
+      </button>
+      <div class="history-detail">${detailHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+async function renderRecentChanges() {
+  const wrap = document.getElementById('recent-changes-wrap');
+  if (!wrap) return;
+  if (!SUPABASE_URL || !currentUser?.accessToken) {
+    wrap.innerHTML = '<p class="db-empty">Recent changes are unavailable until you are signed in.</p>';
+    return;
+  }
+  if (!MENU_ID) {
+    wrap.innerHTML = '<p class="db-empty">Select a menu to view recent changes.</p>';
+    return;
+  }
 
   wrap.innerHTML = '<p class="db-empty">Loading\u2026</p>';
   try {
+    const sinceIso = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString();
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${menuId}&select=*&order=created_at.desc&limit=20`,
+      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${MENU_ID}&created_at=gte.${encodeURIComponent(sinceIso)}&select=*&order=created_at.desc&limit=25`,
       { headers: sbHeaders() }
     );
     if (!r.ok) throw new Error('fetch failed');
     const logs = await r.json();
     if (!logs.length) {
-      wrap.innerHTML = '<p class="db-empty">No updates sent yet for this menu.</p>';
+      wrap.innerHTML = '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
       return;
     }
-    wrap.innerHTML = logs.map(log => {
-      const d = new Date(log.created_at);
-      const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-      const diff = log.diff || [];
-      const summary = summarizeHistoryDiff(diff);
-      const detailHtml = buildHistoryDetailHtml(diff);
-
-      return `<div class="history-entry">
-        <div class="history-header" onclick="this.parentElement.classList.toggle('expanded')">
-          <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
-          <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
-          <span class="history-summary">${escHtml(summary)}</span>
-          <span class="history-chevron">\u203A</span>
-        </div>
-        <div class="history-detail">${detailHtml}</div>
-      </div>`;
-    }).join('');
+    wrap.innerHTML = buildChangeFeedHtml(logs);
   } catch(e) {
-    wrap.innerHTML = `<p class="db-empty db-error">Failed to load history.</p>`;
+    wrap.innerHTML = '<p class="db-empty db-error">Failed to load recent changes.</p>';
   }
 }
 
@@ -4197,19 +4564,33 @@ function renderUsersTab(users) {
     return;
   }
   const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
-  wrap.innerHTML = users.map(u => {
+  wrap.innerHTML = `
+    <div class="admin-users-table">
+      <div class="admin-users-head">
+        <span>Identity</span>
+        <span>Role</span>
+        <span>Menu Access</span>
+        <span>Status</span>
+      </div>
+      ${users.map(u => {
     const isSelf = u.id === currentUser?.uid;
+    const parts = (u.name || u.email || '?').trim().split(/\s+/).filter(Boolean);
+    const initials = parts.length >= 2
+      ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
+      : (parts[0]?.slice(0, 2) || '?').toUpperCase();
+    const statusLabel = isSelf ? 'Current Session' : (u.role === 'none' ? 'Pending Approval' : 'Active');
+    const statusClass = isSelf ? 'admin-user-status-pill--current' : (u.role === 'none' ? 'admin-user-status-pill--pending' : 'admin-user-status-pill--active');
 
     // Role controls
     const roleControls = isSelf
       ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
-      : `<select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
+      : `<div class="admin-user-role-editor"><select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
                  onchange="renderMenuAccessForUser('${escHtml(u.id)}')">
            <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
            <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
            <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
          </select>
-         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button>`;
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button></div>`;
 
     // Menu access section (only for non-self users)
     const menuAccessSection = isSelf ? '' : `
@@ -4218,32 +4599,41 @@ function renderUsersTab(users) {
       </div>`;
 
     return `
-      <div class="config-card">
-        <div class="user-mgmt-top">
+      <article class="admin-user-row">
+        <div class="admin-user-cell admin-user-cell--identity">
+          <div class="admin-user-avatar">${escHtml(initials)}</div>
           <div class="user-mgmt-identity">
-            <div class="input-row">
+            <div class="input-row admin-user-name-row">
               <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" />
               <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save</button>
             </div>
             <div class="user-mgmt-email">${escHtml(u.email)}</div>
           </div>
-          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
         </div>
-        <div class="input-row user-mgmt-role-row">${roleControls}</div>
-        ${menuAccessSection}
-      </div>`;
-  }).join('');
+        <div class="admin-user-cell admin-user-cell--role">
+          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
+          <div class="input-row user-mgmt-role-row">${roleControls}</div>
+        </div>
+        <div class="admin-user-cell admin-user-cell--access">
+          ${menuAccessSection || '<p class="admin-user-access-note">This account always has access to the current session.</p>'}
+        </div>
+        <div class="admin-user-cell admin-user-cell--status">
+          <span class="admin-user-status-pill ${statusClass}">${escHtml(statusLabel)}</span>
+        </div>
+      </article>`;
+  }).join('')}
+    </div>`;
 }
 
 function buildMenuAccessHTML(u) {
   const role = document.getElementById(`user-role-${u.id}`)?.value ?? u.role;
   if (role === 'admin') {
-    return `<p class="hint" style="margin:6px 0 0">Admin — access to all menus.</p>`;
+    return '<p class="admin-user-access-note">Admin access automatically spans all four menus.</p>';
   }
-  if (role === 'none') return '';
+  if (role === 'none') return '<p class="admin-user-access-note">Approve this account and assign menus to activate manager access.</p>';
   // role === 'manager': show checkboxes for each menu
   const menus = window._adminMenuList || [];
-  if (!menus.length) return `<p class="hint" style="margin:6px 0 0">No menus found.</p>`;
+  if (!menus.length) return '<p class="admin-user-access-note">No menus found.</p>';
   const checkboxes = menus.map(m => {
     const checked = (u.menuAccess || []).includes(m.id) ? 'checked' : '';
     return `<label class="user-menu-access-label">
@@ -4253,8 +4643,7 @@ function buildMenuAccessHTML(u) {
     </label>`;
   }).join('');
   return `<div class="user-menu-access-row">
-    <span class="config-input-label" style="margin-bottom:4px">Menu Access</span>
-    ${checkboxes}
+    <div class="user-menu-access-grid">${checkboxes}</div>
     <button class="btn-small" onclick="saveMenuAccess('${escHtml(u.id)}')">Save Access</button>
   </div>`;
 }
@@ -4277,7 +4666,7 @@ async function patchUser(payload) {
 }
 
 function updateUserRoleBadge(select, role) {
-  const badge = select.closest('.config-card')?.querySelector('.user-role-badge');
+  const badge = select.closest('.config-card, .admin-user-row')?.querySelector('.user-role-badge');
   if (!badge) return;
   const label = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
   badge.className = `user-role-badge user-role-badge--${role}`;
@@ -4330,18 +4719,23 @@ async function saveUserName(userId) {
 
 function openInviteModal() {
   const url = MENU_URL || window.location.origin;
-  const brand = document.getElementById('design-brand-name')?.value?.trim() || 'the menu';
-  document.getElementById('invite-text-output').value =
+  const brand = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'the menu';
+  const output = document.getElementById('invite-text-output');
+  const modal = document.getElementById('invite-modal-bg');
+  if (!output || !modal) return;
+  output.value =
     `You've been invited to manage ${brand}!\n\nVisit ${url} and tap "Sign In" to create your account. Once you've signed up, ask an admin to approve your access.`;
-  document.getElementById('invite-modal-bg').classList.add('open');
+  modal.classList.add('open');
 }
 
 function closeInviteModal() {
-  document.getElementById('invite-modal-bg').classList.remove('open');
+  document.getElementById('invite-modal-bg')?.classList.remove('open');
 }
 
 async function copyInviteText() {
-  await navigator.clipboard.writeText(document.getElementById('invite-text-output').value);
+  const output = document.getElementById('invite-text-output');
+  if (!output) return;
+  await navigator.clipboard.writeText(output.value);
   showToast('Copied!', 'success');
 }
 
@@ -4368,9 +4762,9 @@ function renderFeaturedTab() {
         <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
           value="${escHtml(slot.sellNote)}"
           onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''}>&#8593;</button>
-        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''}>&#8595;</button>
-        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})">&#215;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'featured item')} up">&#8593;</button>
+        <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(group.id)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'featured item')} down">&#8595;</button>
+        <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(group.id)})" aria-label="Remove ${escHtml(slot.item?.name || 'featured item')} from featured">&#215;</button>
       </div>`).join('');
 
     return `<div class="featured-mgr-group">
@@ -4484,6 +4878,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
 
 function checkFeaturedConfirmation() {
+  const banner = document.getElementById('featured-confirm-banner');
+  if (banner) banner.style.display = 'none';
   if (sessionStorage.getItem('featured_confirmed')) return;
   const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
     if (!s.confirmedAt) return true;
@@ -4494,8 +4890,8 @@ function checkFeaturedConfirmation() {
   }));
   if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
 
-  const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = '';
+  updateManagerActionBar();
 }
 
 async function confirmFeaturedToday() {
@@ -4515,6 +4911,7 @@ async function confirmFeaturedToday() {
     sessionStorage.setItem('featured_confirmed', '1');
     const banner = document.getElementById('featured-confirm-banner');
     if (banner) banner.style.display = 'none';
+    updateManagerActionBar();
     showToast('Featured items confirmed for today!', 'success');
   } catch(e) { showToast('Failed to confirm.', 'error'); }
 }
@@ -4523,7 +4920,8 @@ function editFeaturedFromBanner() {
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
   sessionStorage.setItem('featured_confirmed', '1');
-  switchManagerTab('edit-menu');
+  updateManagerActionBar();
+  focusSettingsSection('manager-edit-section');
 }
 
 // ─── FEATURED ADMIN ──────────────────────────────────────────────────────────
@@ -4616,33 +5014,40 @@ async function toggleFeaturedGroupMenu(groupId, menuId, checked) {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
-  ['edit-menu', 'categories', 'database'].forEach(t => {
-    const btn   = document.getElementById('tab-btn-' + t);
-    const panel = document.getElementById('tab-panel-' + t);
-    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
-    if (panel) panel.classList.toggle('active', t === name);
-  });
-  if (name === 'edit-menu')   { renderFeaturedTab(); renderOffMenuSection(); }
-  if (name === 'database')   { renderDatabaseTab(); renderPruneSection(); }
+  if (name === 'edit-menu') {
+    renderFeaturedTab();
+    renderOffMenuSection();
+    focusSettingsSection('manager-edit-section');
+  }
   if (name === 'categories') {
     renderCategoriesTab();
-    const ctx = document.getElementById('categories-menu-context');
-    if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+    updateManagerToolsContext();
+    focusSettingsSection('manager-categories-section');
+  }
+  if (name === 'database') {
+    renderDatabaseTab();
+    renderPruneSection();
+    focusSettingsSection('manager-database-section');
   }
 }
 
 function switchAdminTab(name) {
-  ['admin-restaurants', 'admin-notifications', 'admin-users', 'admin-featured', 'admin-history'].forEach(t => {
-    const btn   = document.getElementById('tab-btn-' + t);
-    const panel = document.getElementById('tab-panel-' + t);
-    if (btn)   { btn.classList.toggle('active', t === name); btn.setAttribute('aria-selected', t === name ? 'true' : 'false'); }
-    if (panel) panel.classList.toggle('active', t === name);
-  });
-  if (name === 'admin-restaurants')   { renderMenusPanel(); }
-  if (name === 'admin-notifications') { initAdminSwitcherTab('notif'); }
-  if (name === 'admin-users')         { loadUsers(); }
-  if (name === 'admin-featured')      { renderFeaturedAdmin(); }
-  if (name === 'admin-history')       { renderUpdateHistory(); }
+  if (name === 'admin-restaurants') {
+    renderMenusPanel();
+    focusSettingsSection('admin-restaurants-section');
+  }
+  if (name === 'admin-notifications') {
+    initAdminSwitcherTab('notif');
+    focusSettingsSection('admin-notifications-section');
+  }
+  if (name === 'admin-users') {
+    loadUsers();
+    focusSettingsSection('admin-users-section');
+  }
+  if (name === 'admin-featured') {
+    renderFeaturedAdmin();
+    focusSettingsSection('admin-featured-section');
+  }
 }
 
 const dbFilters = { recipe: 'all', status: 'all' };
@@ -4704,13 +5109,13 @@ function filterDatabaseRows(rows, query) {
 function buildDatabaseTableHtml(rows) {
   return `
     <table class="db-table">
-      <thead><tr><th>Drink</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
+      <thead><tr><th>Item</th><th>Category</th><th>Recipe</th><th>Status</th></tr></thead>
       <tbody>${rows.map(r => `
         <tr>
-          <td class="db-name">${escHtml(r.name)}</td>
-          <td class="db-cat">${escHtml(r.category)}</td>
-          <td class="db-recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
-          <td>${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
+          <td class="db-name" data-label="Item">${escHtml(r.name)}</td>
+          <td class="db-cat" data-label="Category">${escHtml(r.category)}</td>
+          <td class="db-recipe" data-label="Recipe">${r.recipe.length ? r.recipe.map(ing => `<span class="db-ing">${escHtml(ing)}</span>`).join('') : '<span class="db-no-recipe">—</span>'}</td>
+          <td data-label="Status">${r.eightySixed ? '<span class="db-badge db-badge--86">86\'d</span>' : r.onMenu ? '<span class="db-badge db-badge--on">On Menu</span>' : '<span class="db-badge db-badge--off">Off Menu</span>'}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -4804,8 +5209,13 @@ function buildRestaurantRowHtml(restaurant, menus) {
   const chipsHtml = menus.map(buildMenuChipHtml).join('');
   return `
     <div class="restaurant-header">
-      <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      <div>
+        <p class="restaurant-kicker">Fixed Instance</p>
+        <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
+      </div>
+      <span class="restaurant-summary-pill">${escHtml(String(menus.length).padStart(2, '0'))} Menu${menus.length === 1 ? '' : 's'}</span>
     </div>
+    <p class="restaurant-copy">These menu links are read directly from the known restaurant and menu IDs the admin console expects.</p>
     <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
       ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">Expected menus are missing from the database.</span>'}
     </div>`;

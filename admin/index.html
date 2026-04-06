@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin | Current Menu</title>
 <link rel="icon" type="image/png" href="/HFLOGO.png">
-<link rel="stylesheet" href="/lib/fonts/fonts.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Public+Sans:wght@500;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
-<body class="settings-shell-pending">
-<main id="site-picker-view" class="site-picker-view" hidden>
+<body class="settings-shell-pending admin-console-page">
+<a class="admin-skip-link" href="#admin-main-content">Skip to Content</a>
+<section id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
     <p class="site-picker-kicker">Current Menu</p>
     <h1 class="site-picker-title">Choose a restaurant</h1>
@@ -18,45 +21,14 @@
       <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
     </div>
   </div>
-</main>
+</section>
 
-<div class="wrapper" id="app-shell">
-  <header>
-    <img class="hf-logo" src="" alt="Logo" style="display:none"/>
-    <span class="logo-mark" style="display:none"></span>
-    <h1>CURRENT MENU</h1>
-    <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-    <div class="header-action-group">
-      <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
-      <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
-    </div>
-    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
-    <div class="user-chip" id="user-chip" style="display:none"
-         onclick="toggleUserDropdown()"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-         tabindex="0"
-         role="button"
-         aria-haspopup="true"
-         aria-expanded="false"
-         aria-label="User menu">
-      <span id="user-initials">?</span>
-      <span>▾</span>
-      <div class="user-dropdown" id="user-dropdown">
-        <div class="user-dropdown-name" id="user-dropdown-name"></div>
-        <div class="user-dropdown-role" id="user-dropdown-role"></div>
-        <div class="user-dropdown-divider"></div>
-        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- LOADING -->
-  <div id="loading-view">
+<div class="wrapper admin-console-wrapper" id="app-shell">
+  <div id="loading-view" class="admin-console-loading">
     <div class="spinner"></div>
-    <p>Loading menu...</p>
+    <p>Loading admin console...</p>
   </div>
 
-  <!-- PUBLIC VIEW -->
   <div id="public-view" style="display:none;">
     <div id="restaurant-site-wrapper" hidden></div>
     <div id="public-default-shell">
@@ -74,301 +46,244 @@
     </div>
   </div>
 
-  <!-- MANAGER VIEW -->
-  <div id="manager-view">
-    <div id="setup-banner">
-      <h3>⚙️ One-Time Setup</h3>
-      <p>Click <strong style="color:var(--ember)">⚙ Admin</strong> in the header to configure notification channels. Everything syncs to the cloud from this point on.</p>
-    </div>
-
-    <!-- ACTIVE MENU BAR -->
-    <div id="active-menu-bar" style="display:none;" aria-live="polite">
-      <span class="active-menu-label">MENU</span>
-      <span id="active-menu-name" class="active-menu-name-text"></span>
-      <button class="btn-small" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch</button>
-    </div>
-
-    <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
-      <span>Today's featured items haven't been confirmed yet.</span>
-      <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
-      <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
-    </div>
-
-    <!-- MANAGER PANEL: Edit Menu, Categories, Database -->
-    <div id="manager-panel" style="display:none">
-      <div class="tab-bar" role="tablist" id="manager-tab-bar">
-        <button class="tab-btn active" id="tab-btn-edit-menu"  role="tab" aria-selected="true"  aria-controls="tab-panel-edit-menu"  onclick="switchManagerTab('edit-menu')">MANAGER</button>
-        <button class="tab-btn"        id="tab-btn-categories" role="tab" aria-selected="false" aria-controls="tab-panel-categories" onclick="switchManagerTab('categories')">CATEGORIES</button>
-        <button class="tab-btn"        id="tab-btn-database"   role="tab" aria-selected="false" aria-controls="tab-panel-database"   onclick="switchManagerTab('database')">DATABASE</button>
+  <div id="manager-view" class="admin-console-shell" style="display:none">
+    <aside class="admin-console-rail" aria-label="Admin console sections">
+      <div class="admin-console-rail-brand">
+        <p class="admin-console-rail-kicker">Admin</p>
+        <h1 class="admin-console-rail-title">Console</h1>
       </div>
 
-      <!-- EDIT MENU TAB -->
-      <div class="tab-panel active" id="tab-panel-edit-menu" role="tabpanel" aria-labelledby="tab-btn-edit-menu">
-        <div class="section-label">Edit Menu</div>
-        <div id="featured-mgr-wrap"></div>
-        <div id="manager-categories"></div>
-        <div class="btn-row">
-          <button class="save-btn" id="save-btn" onclick="saveMenu()">💾 SAVE</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()">🔥 SEND UPDATE</button>
-        </div>
-        <div id="sync-status"></div>
-        <div id="off-menu-section" class="prune-section" style="display:none;">
-          <div class="prune-section-header">
-            <div class="section-label prune-section-label">Off Menu Items</div>
-          </div>
-          <p class="hint">Staff-only items hidden from the public menu. Visible to managers and admins.</p>
-          <div id="off-menu-items-wrap"></div>
-        </div>
-      </div>
+      <nav class="admin-console-rail-nav">
+        <button class="settings-rail-btn active" type="button" data-target="admin-restaurants-section" onclick="focusSettingsSection('admin-restaurants-section', this)">Restaurants</button>
+        <button class="settings-rail-btn" type="button" data-target="admin-notifications-section" onclick="focusSettingsSection('admin-notifications-section', this)">Notifications</button>
+        <button class="settings-rail-btn" type="button" data-target="admin-users-section" onclick="focusSettingsSection('admin-users-section', this)">Users</button>
+      </nav>
 
-      <!-- CATEGORIES TAB -->
-      <div class="tab-panel" id="tab-panel-categories" role="tabpanel" aria-labelledby="tab-btn-categories">
-        <div class="section-label">Menu Categories</div>
-        <div class="active-menu-context" id="categories-menu-context"></div>
-        <div id="catmgr-list"></div>
-        <div class="catmgr-add-form" id="catmgr-add-form" style="display:none">
-          <h3>New Category</h3>
-          <div class="catmgr-field-row">
-            <label>Icon</label>
-            <input type="text" id="new-cat-icon" class="catmgr-input catmgr-icon-input" value="🍸" maxlength="4" placeholder="Emoji"/>
-          </div>
-          <div class="catmgr-field-row">
-            <label>Title</label>
-            <input type="text" id="new-cat-title" class="catmgr-input" placeholder="Category name (required)"/>
-          </div>
-          <div class="catmgr-field-row">
-            <label>Subtitle</label>
-            <input type="text" id="new-cat-sub" class="catmgr-input" placeholder="Short description (optional)"/>
-          </div>
-          <div class="catmgr-field-row">
-            <label>Hint text</label>
-            <input type="text" id="new-cat-placeholder" class="catmgr-input" placeholder="Add item input hint (optional)"/>
-          </div>
-          <div class="catmgr-add-btn-row">
-            <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
-            <button class="btn-small" onclick="document.getElementById('catmgr-add-form').style.display='none'">Cancel</button>
-          </div>
-        </div>
-        <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()" style="margin-top:4px">+ Add Category</button>
+      <div class="admin-console-rail-footer">
+        <p class="admin-console-rail-note">Fixed to Leroy's Lounge and El Roy's Cantina with four live menus.</p>
+        <button class="logout-link admin-console-back-link" onclick="exitView()">Return to menu view</button>
       </div>
+    </aside>
 
-      <!-- DATABASE TAB -->
-      <div class="tab-panel" id="tab-panel-database" role="tabpanel" aria-labelledby="tab-btn-database">
-        <div class="section-label">Recipe Database</div>
-        <div class="db-search-row">
-          <input type="text" id="db-search" placeholder="Search drinks or ingredients…" oninput="filterDatabase()" />
+    <main class="admin-console-stage" id="admin-main-content">
+      <header class="admin-console-topbar">
+        <div class="admin-console-topbar-copy">
+          <p class="admin-console-kicker">Admin Console</p>
+          <h2>Edit restaurants, notification settings, and staff access.</h2>
         </div>
-        <div class="db-filter-row">
-          <span class="db-filter-label">Recipe:</span>
-          <div class="db-filter-group" id="db-filter-recipe">
-            <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('recipe','all')">All</button>
-            <button class="db-filter-btn"        data-value="yes"  onclick="setDbFilter('recipe','yes')">With Recipe</button>
-            <button class="db-filter-btn"        data-value="no"   onclick="setDbFilter('recipe','no')">No Recipe</button>
+
+        <div class="admin-console-topbar-actions">
+          <div class="header-action-group admin-console-action-group">
+            <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Manager</button>
+            <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin</button>
           </div>
-          <span class="db-filter-label">Status:</span>
-          <div class="db-filter-group" id="db-filter-status">
-            <button class="db-filter-btn active" data-value="all"  onclick="setDbFilter('status','all')">All</button>
-            <button class="db-filter-btn"        data-value="on"   onclick="setDbFilter('status','on')">On Menu</button>
-            <button class="db-filter-btn"        data-value="off"  onclick="setDbFilter('status','off')">Off Menu</button>
-          </div>
-        </div>
-        <div id="db-table-wrap"></div>
-        <div id="prune-section" class="prune-section" style="display:none;">
-          <div class="prune-section-header">
-            <div class="section-label prune-section-label">Prune Database</div>
-            <button id="prune-all-btn" class="btn-small btn-danger">Clear All</button>
-          </div>
-          <p class="hint">Permanently removes off-menu items from Supabase (autocomplete trash). Live menu items are unaffected.</p>
-          <div id="prune-items-wrap"></div>
-        </div>
-      </div>
-
-    </div><!-- /manager-panel -->
-
-    <!-- ADMIN PANEL: Restaurants, Notifications, Design, Users -->
-    <div id="admin-panel" style="display:none">
-      <div id="admin-status-bar" class="admin-status-bar">
-        <span id="admin-supabase-status" class="db-status">Checking…</span>
-        <button class="btn-small btn-tiny" onclick="checkAdminSupabaseStatus()">↺</button>
-      </div>
-      <div class="tab-bar" role="tablist" id="admin-tab-bar">
-        <button class="tab-btn active" id="tab-btn-admin-restaurants"   role="tab" aria-selected="true"  aria-controls="tab-panel-admin-restaurants"   onclick="switchAdminTab('admin-restaurants')">RESTAURANTS</button>
-        <button class="tab-btn"        id="tab-btn-admin-notifications" role="tab" aria-selected="false" aria-controls="tab-panel-admin-notifications" onclick="switchAdminTab('admin-notifications')">NOTIFICATIONS</button>
-        <button class="tab-btn"        id="tab-btn-admin-users"         role="tab" aria-selected="false" aria-controls="tab-panel-admin-users"         onclick="switchAdminTab('admin-users')">USERS</button>
-        <button class="tab-btn"        id="tab-btn-admin-featured"      role="tab" aria-selected="false" aria-controls="tab-panel-admin-featured"      onclick="switchAdminTab('admin-featured')">FEATURED</button>
-        <button class="tab-btn"        id="tab-btn-admin-history"       role="tab" aria-selected="false" aria-controls="tab-panel-admin-history"       onclick="switchAdminTab('admin-history')">HISTORY</button>
-      </div>
-
-      <!-- RESTAURANTS SUB-PANEL -->
-      <div class="tab-panel active" id="tab-panel-admin-restaurants" role="tabpanel" aria-labelledby="tab-btn-admin-restaurants">
-        <div class="section-label">Restaurants &amp; Menus</div>
-        <p class="config-hint">This build is locked to Leroy's Lounge and El Roy's Cantina. Managers are assigned at the menu level across the four fixed menus.</p>
-        <div id="menus-mgmt-list"></div>
-      </div>
-
-      <!-- NOTIFICATIONS SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-notifications" role="tabpanel" aria-labelledby="tab-btn-admin-notifications">
-        <div class="section-label">Notifications</div>
-        <div class="admin-context-switcher">
-          <label class="switcher-label" for="notif-restaurant-select">Restaurant</label>
-          <select id="notif-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('notif')"></select>
-          <label class="switcher-label" for="notif-menu-select">Menu</label>
-          <select id="notif-menu-select" class="switcher-select" onchange="onAdminSwitcherMenuChange('notif')"></select>
-        </div>
-        <div class="config-card">
-          <p class="config-hint">Toggle which channels fire when you send a menu update for the selected menu.</p>
-          <div class="notif-channel" id="notif-groupme">
-            <div class="notif-channel-header">
-              <label class="notif-toggle-label" for="notif-groupme-enabled">
-                <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')"/>
-                <span class="notif-channel-name">GroupMe</span>
-              </label>
+          <button class="header-signin-btn admin-console-signin" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+          <div class="user-chip admin-console-userchip" id="user-chip" style="display:none"
+               onclick="toggleUserDropdown()"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
+               tabindex="0"
+               role="button"
+               aria-haspopup="true"
+               aria-expanded="false"
+               aria-label="User menu">
+            <span id="user-initials">?</span>
+            <span>▾</span>
+            <div class="user-dropdown" id="user-dropdown">
+              <div class="user-dropdown-name" id="user-dropdown-name"></div>
+              <div class="user-dropdown-role" id="user-dropdown-role"></div>
+              <div class="user-dropdown-divider"></div>
+              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
             </div>
-            <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
-              <div class="notif-help">
-                <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID and add it as a Vercel environment variable:</p>
-                <p><code>GROUPME_BOT_ID</code></p>
+          </div>
+        </div>
+      </header>
+
+      <div id="admin-panel" class="admin-console-panels" style="display:none">
+        <section class="settings-section admin-console-section" id="admin-restaurants-section">
+          <div class="settings-section-head admin-console-section-head">
+            <div>
+              <p class="settings-section-kicker">Instance Management</p>
+              <h3>Restaurants &amp; Menus</h3>
+            </div>
+            <p class="settings-section-copy">A Stitch-inspired overview of the fixed restaurant model, without the generated placeholder imagery.</p>
+          </div>
+          <div id="menus-mgmt-list" class="admin-console-instance-grid"></div>
+        </section>
+
+        <section class="settings-section admin-console-section" id="admin-notifications-section">
+          <div class="settings-section-head admin-console-section-head">
+            <div>
+              <p class="settings-section-kicker">Integration Protocols</p>
+              <h3>Notifications</h3>
+            </div>
+            <p class="settings-section-copy">Preserve the Stitch composition up front, then tuck the runtime-specific credential and menu-url controls into secondary folds.</p>
+          </div>
+
+          <div class="admin-console-split">
+            <div class="config-card admin-console-protocol-card">
+              <div class="admin-context-switcher admin-context-switcher--admin">
+                <label class="switcher-label" for="notif-restaurant-select">Restaurant</label>
+                <select id="notif-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('notif')"></select>
+                <label class="switcher-label" for="notif-menu-select">Menu</label>
+                <select id="notif-menu-select" class="switcher-select" onchange="onAdminSwitcherMenuChange('notif')"></select>
+              </div>
+
+              <p class="config-hint">Toggle which channels fire when you send a menu update for the selected menu.</p>
+
+              <div class="notif-channel" id="notif-groupme">
+                <div class="notif-channel-header">
+                  <label class="notif-toggle-label" for="notif-groupme-enabled">
+                    <input type="checkbox" id="notif-groupme-enabled" class="notif-toggle" onchange="onNotifToggle('groupme')">
+                    <span class="notif-channel-name">GroupMe</span>
+                  </label>
+                </div>
+                <div class="notif-channel-body" id="notif-groupme-body" style="display:none">
+                  <div class="notif-help">
+                    <p>Go to <strong>dev.groupme.com → Bots → Create Bot</strong>. Set the callback URL to your Vercel deployment URL. Copy the Bot ID and add it as a Vercel environment variable:</p>
+                    <p><code>GROUPME_BOT_ID</code></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="notif-channel" id="notif-sms">
+                <div class="notif-channel-header">
+                  <label class="notif-toggle-label" for="notif-sms-enabled">
+                    <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')">
+                    <span class="notif-channel-name">Twilio SMS</span>
+                  </label>
+                </div>
+                <div class="notif-channel-body" id="notif-sms-body" style="display:none">
+                  <div class="notif-help">
+                    <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Add these Vercel environment variables:</p>
+                    <p><code>TWILIO_ACCOUNT_SID</code><br><code>TWILIO_AUTH_TOKEN</code><br><code>TWILIO_FROM_NUMBER</code><br><code>TWILIO_TO_NUMBERS</code> <span class="notif-help-note">(comma-separated E.164 numbers, e.g. +15551234567,+15559876543)</span></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="notif-channel" id="notif-discord">
+                <div class="notif-channel-header">
+                  <label class="notif-toggle-label" for="notif-discord-enabled">
+                    <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')">
+                    <span class="notif-channel-name">Discord</span>
+                  </label>
+                </div>
+                <div class="notif-channel-body" id="notif-discord-body" style="display:none">
+                  <div class="notif-help">
+                    <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL and add it as a Vercel environment variable:</p>
+                    <p><code>DISCORD_WEBHOOK_URL</code></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="notif-channel" id="notif-webhook">
+                <div class="notif-channel-header">
+                  <label class="notif-toggle-label" for="notif-webhook-enabled">
+                    <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')">
+                    <span class="notif-channel-name">Generic Webhook</span>
+                  </label>
+                </div>
+                <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
+                  <div class="notif-help">
+                    <p>The full update payload will be POSTed as JSON to your endpoint. Add these Vercel environment variables:</p>
+                    <p><code>GENERIC_WEBHOOK_URL</code><br><code>GENERIC_WEBHOOK_SECRET</code> <span class="notif-help-note">(optional — sent as <code>X-Webhook-Secret</code> header)</span></p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="btn-row admin-console-button-row">
+                <button class="btn-small admin-console-primary-btn" onclick="saveNotifications()">Save Notifications</button>
               </div>
             </div>
-          </div>
-          <div class="notif-channel" id="notif-sms">
-            <div class="notif-channel-header">
-              <label class="notif-toggle-label" for="notif-sms-enabled">
-                <input type="checkbox" id="notif-sms-enabled" class="notif-toggle" onchange="onNotifToggle('sms')"/>
-                <span class="notif-channel-name">Twilio SMS</span>
-              </label>
-            </div>
-            <div class="notif-channel-body" id="notif-sms-body" style="display:none">
-              <div class="notif-help">
-                <p>Sign up at <strong>twilio.com</strong> and buy a phone number. Add these Vercel environment variables:</p>
-                <p><code>TWILIO_ACCOUNT_SID</code><br><code>TWILIO_AUTH_TOKEN</code><br><code>TWILIO_FROM_NUMBER</code><br><code>TWILIO_TO_NUMBERS</code> <span class="notif-help-note">(comma-separated E.164 numbers, e.g. +15551234567,+15559876543)</span></p>
-              </div>
-            </div>
-          </div>
-          <div class="notif-channel" id="notif-discord">
-            <div class="notif-channel-header">
-              <label class="notif-toggle-label" for="notif-discord-enabled">
-                <input type="checkbox" id="notif-discord-enabled" class="notif-toggle" onchange="onNotifToggle('discord')"/>
-                <span class="notif-channel-name">Discord</span>
-              </label>
-            </div>
-            <div class="notif-channel-body" id="notif-discord-body" style="display:none">
-              <div class="notif-help">
-                <p>In Discord, open a channel's <strong>Settings → Integrations → Webhooks → New Webhook</strong>. Copy the webhook URL and add it as a Vercel environment variable:</p>
-                <p><code>DISCORD_WEBHOOK_URL</code></p>
-              </div>
-            </div>
-          </div>
-          <div class="notif-channel" id="notif-webhook">
-            <div class="notif-channel-header">
-              <label class="notif-toggle-label" for="notif-webhook-enabled">
-                <input type="checkbox" id="notif-webhook-enabled" class="notif-toggle" onchange="onNotifToggle('webhook')"/>
-                <span class="notif-channel-name">Generic Webhook</span>
-              </label>
-            </div>
-            <div class="notif-channel-body" id="notif-webhook-body" style="display:none">
-              <div class="notif-help">
-                <p>The full update payload will be POSTed as JSON to your endpoint. Add these Vercel environment variables:</p>
-                <p><code>GENERIC_WEBHOOK_URL</code><br><code>GENERIC_WEBHOOK_SECRET</code> <span class="notif-help-note">(optional — sent as <code>X-Webhook-Secret</code> header)</span></p>
-              </div>
-            </div>
-          </div>
-          <div class="btn-row" style="margin-top:14px">
-            <button class="btn-small" onclick="saveNotifications()">Save Notifications</button>
-          </div>
-        </div>
-        <div class="config-card" style="margin-top:10px">
-          <h3>Credential Keys <span style="font-weight:300;color:var(--muted)">(per restaurant)</span></h3>
-          <p class="config-hint">Map each channel to a Vercel env var name. Leave blank to use the global defaults. Actual secrets stay in Vercel — only the key names are stored here.</p>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">GroupMe Bot ID</label>
-            <input type="text" id="notif-cred-groupme" class="notif-cred-input" placeholder="GROUPME_BOT_ID"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Discord Webhook URL</label>
-            <input type="text" id="notif-cred-discord" class="notif-cred-input" placeholder="DISCORD_WEBHOOK_URL"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Twilio SID</label>
-            <input type="text" id="notif-cred-sms-sid" class="notif-cred-input" placeholder="TWILIO_ACCOUNT_SID"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Twilio Auth Token</label>
-            <input type="text" id="notif-cred-sms-token" class="notif-cred-input" placeholder="TWILIO_AUTH_TOKEN"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Twilio From Number</label>
-            <input type="text" id="notif-cred-sms-from" class="notif-cred-input" placeholder="TWILIO_FROM_NUMBER"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Twilio To Numbers</label>
-            <input type="text" id="notif-cred-sms-to" class="notif-cred-input" placeholder="TWILIO_TO_NUMBERS"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Webhook URL</label>
-            <input type="text" id="notif-cred-webhook-url" class="notif-cred-input" placeholder="GENERIC_WEBHOOK_URL"/>
-          </div>
-          <div class="notif-cred-row">
-            <label class="notif-cred-label">Webhook Secret</label>
-            <input type="text" id="notif-cred-webhook-secret" class="notif-cred-input" placeholder="GENERIC_WEBHOOK_SECRET"/>
-          </div>
-          <div class="btn-row" style="margin-top:10px">
-            <button class="btn-small" onclick="saveNotifCredKeys()">Save Credential Keys</button>
-          </div>
-        </div>
-        <div class="config-card" style="margin-top:10px">
-          <h3>Menu Page URL <span style="font-weight:300;color:var(--muted)">(included in notifications)</span></h3>
-          <div class="input-row">
-            <input type="text" id="menu-url-input" placeholder="e.g. https://el-roys-drink-menu.vercel.app"/>
-            <button class="btn-small" onclick="saveMenuUrl()">Save</button>
-          </div>
-        </div>
-      </div>
 
-      <!-- USERS SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-users" role="tabpanel" aria-labelledby="tab-btn-admin-users">
-        <div class="section-label">Staff Accounts</div>
-        <div class="users-invite-row">
-          <button class="btn-small" onclick="openInviteModal()">+ Invite Staff</button>
-        </div>
-        <div id="users-list"></div>
-      </div>
-      <!-- FEATURED SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-featured" role="tabpanel" aria-labelledby="tab-btn-admin-featured">
-        <div class="section-label">Featured Groups</div>
-        <div id="featured-admin-wrap"></div>
-        <div class="input-row" style="margin-top:6px">
-          <input type="text" id="new-featured-group-name" placeholder="New group name…"/>
-          <button class="btn-small" onclick="addFeaturedGroup()">+ Add Group</button>
-        </div>
-      </div>
+            <div class="admin-console-side-stack">
+              <details class="config-card admin-console-fold" open>
+                <summary class="admin-console-fold-summary">
+                  <span>Credential Keys</span>
+                  <span class="admin-console-fold-note">Per restaurant</span>
+                </summary>
+                <p class="config-hint">Map each channel to a Vercel env var name. Leave blank to use the global defaults. Actual secrets stay in Vercel.</p>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-groupme">GroupMe Bot ID</label>
+                  <input type="text" id="notif-cred-groupme" class="notif-cred-input" placeholder="GROUPME_BOT_ID">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-discord">Discord Webhook URL</label>
+                  <input type="text" id="notif-cred-discord" class="notif-cred-input" placeholder="DISCORD_WEBHOOK_URL">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-sms-sid">Twilio SID</label>
+                  <input type="text" id="notif-cred-sms-sid" class="notif-cred-input" placeholder="TWILIO_ACCOUNT_SID">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-sms-token">Twilio Auth Token</label>
+                  <input type="text" id="notif-cred-sms-token" class="notif-cred-input" placeholder="TWILIO_AUTH_TOKEN">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-sms-from">Twilio From Number</label>
+                  <input type="text" id="notif-cred-sms-from" class="notif-cred-input" placeholder="TWILIO_FROM_NUMBER">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-sms-to">Twilio To Numbers</label>
+                  <input type="text" id="notif-cred-sms-to" class="notif-cred-input" placeholder="TWILIO_TO_NUMBERS">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-webhook-url">Webhook URL</label>
+                  <input type="text" id="notif-cred-webhook-url" class="notif-cred-input" placeholder="GENERIC_WEBHOOK_URL">
+                </div>
+                <div class="notif-cred-row">
+                  <label class="notif-cred-label" for="notif-cred-webhook-secret">Webhook Secret</label>
+                  <input type="text" id="notif-cred-webhook-secret" class="notif-cred-input" placeholder="GENERIC_WEBHOOK_SECRET">
+                </div>
+                <div class="btn-row admin-console-button-row">
+                  <button class="btn-small" onclick="saveNotifCredKeys()">Save Credential Keys</button>
+                </div>
+              </details>
 
-      <!-- HISTORY SUB-PANEL -->
-      <div class="tab-panel" id="tab-panel-admin-history" role="tabpanel" aria-labelledby="tab-btn-admin-history">
-        <div class="section-label">Update History</div>
-        <div id="update-history-wrap"></div>
-      </div>
-    </div><!-- /admin-panel -->
+              <details class="config-card admin-console-fold">
+                <summary class="admin-console-fold-summary">
+                  <span>Menu Page URL</span>
+                  <span class="admin-console-fold-note">Used in notifications</span>
+                </summary>
+                <div class="input-row admin-console-url-row">
+                  <input type="text" id="menu-url-input" placeholder="https://el-roys-drink-menu.vercel.app">
+                  <button class="btn-small" onclick="saveMenuUrl()">Save</button>
+                </div>
+              </details>
+            </div>
+          </div>
+        </section>
 
-    <button class="logout-link" onclick="exitView()">← Back to menu view</button>
+        <section class="settings-section admin-console-section" id="admin-users-section">
+          <div class="settings-section-head admin-console-section-head">
+            <div>
+              <p class="settings-section-kicker">Staff Directory</p>
+              <h3>Users &amp; Access</h3>
+            </div>
+            <p class="settings-section-copy">Keep the denser live management table, but restyle it so it still feels like the imported Stitch console.</p>
+          </div>
+
+          <div class="users-invite-row admin-console-users-toolbar">
+            <button class="btn-small admin-console-primary-btn" onclick="openInviteModal()">Invite Staff</button>
+          </div>
+          <div id="users-list" class="admin-console-users-wrap"></div>
+        </section>
+      </div>
+    </main>
   </div>
 </div>
 
-<!-- AUTH OVERLAY -->
 <div id="auth-overlay">
   <div class="auth-box" id="auth-box" role="dialog" aria-modal="true" aria-label="Sign In">
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
-
-      <!-- SIGN IN -->
       <div id="auth-screen-signin" class="auth-screen">
         <h2 class="auth-screen-title">SIGN IN</h2>
         <p class="auth-screen-subtitle">Sign in to your account</p>
         <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
+          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error">
         </div>
         <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
+          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error">
         </div>
         <div class="auth-error" id="signin-error"></div>
         <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
@@ -379,29 +294,28 @@
         </div>
       </div>
 
-      <!-- SIGN UP -->
       <div id="auth-screen-signup" class="auth-screen" style="display:none">
         <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
         <p class="auth-screen-subtitle">Sign up with your work email</p>
         <div class="auth-field">
           <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
                  aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}">
         </div>
         <div class="auth-field">
           <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
                  aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}">
         </div>
         <div class="auth-field">
           <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
                  aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}">
         </div>
         <div class="auth-field">
           <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
                  aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}">
         </div>
         <div class="auth-error" id="signup-error"></div>
         <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>
@@ -409,64 +323,34 @@
         <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
       </div>
 
-      <!-- FORGOT PASSWORD -->
       <div id="auth-screen-forgot" class="auth-screen" style="display:none">
         <h2 class="auth-screen-title">RESET PASSWORD</h2>
         <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
         <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
+          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error">
         </div>
         <div class="auth-error" id="forgot-error"></div>
         <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
         <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
       </div>
 
-      <!-- RESET PASSWORD -->
       <div id="auth-screen-reset" class="auth-screen" style="display:none">
         <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
         <p class="auth-screen-subtitle">Choose a new password for your account</p>
         <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
+          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error">
         </div>
         <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
+          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error">
         </div>
         <div class="auth-error" id="reset-error"></div>
         <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
       </div>
-
     </div>
     <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
   </div>
 </div>
 
-<!-- CONFIG JSON MODAL -->
-<div class="modal-bg" id="config-modal-bg">
-  <div class="modal">
-    <h2>UPDATE CONFIG FILE</h2>
-    <div class="modal-sub">Copy this into <code>lib/config/notifications.json</code> and reload the page.</div>
-    <textarea id="config-json-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
-      <button class="btn-confirm" onclick="copyConfigJson()">COPY JSON</button>
-    </div>
-  </div>
-</div>
-
-<!-- PREVIEW MODAL -->
-<div class="modal-bg" id="modal-bg">
-  <div class="modal">
-    <h2>PATCH NOTES PREVIEW</h2>
-    <div class="modal-sub">Only changes since the last update will be sent.</div>
-    <div id="preview-content"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
-    </div>
-  </div>
-</div>
-
-<!-- INVITE MODAL -->
 <div class="modal-bg" id="invite-modal-bg">
   <div class="modal">
     <h2>INVITE STAFF</h2>
@@ -479,7 +363,6 @@
   </div>
 </div>
 
-<!-- MENU PICKER OVERLAY -->
 <div id="menu-picker-overlay">
   <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
     <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
