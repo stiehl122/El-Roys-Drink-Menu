@@ -34,12 +34,10 @@
   }
 
   function buildFeaturedHtml(sharedState) {
-    const featuredSlots = (sharedState.featuredGroups || []).flatMap(group => group.slots || []).filter(slot => slot.item);
-    if (!featuredSlots.length) {
-      const fallbackItems = getVisibleItems(sharedState.menuState, 'special').slice(0, 3);
-      if (!fallbackItems.length) return '<p class="erc-route-empty">Nothing featured right now.</p>';
-      return fallbackItems.map((item, index) => buildItemHtml(item, { badgeText: index === 0 ? "Chef's Choice" : '' })).join('');
-    }
+    const featuredSlots = (sharedState.restaurantSpecials?.slots || [])
+      .filter(slot => slot.item)
+      .slice(0, 3);
+    if (!featuredSlots.length) return '<p class="erc-route-empty">Nothing featured right now.</p>';
 
     return featuredSlots.slice(0, 3).map((slot, index) => buildItemHtml(slot.item, {
       badgeText: index === 0 ? "Chef's Choice" : '',

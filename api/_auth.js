@@ -1,5 +1,22 @@
 // Shared auth helper — Vercel ignores files prefixed with _ as API endpoints.
 
+const RESTAURANT_SPECIALS = {
+  '00000000-0000-0000-0000-000000000010': {
+    name: "Leroy's Specials",
+    menuIds: [
+      '00000000-0000-0000-0000-000000000020',
+      '00000000-0000-0000-0000-000000000021',
+    ],
+  },
+  '00000000-0000-0000-0000-000000000001': {
+    name: "El Roy's Specials",
+    menuIds: [
+      '00000000-0000-0000-0000-000000000002',
+      '00000000-0000-0000-0000-000000000003',
+    ],
+  },
+};
+
 /**
  * Verifies the Bearer token in the Authorization header and checks that the
  * caller's role is one of the allowed roles.
@@ -51,4 +68,29 @@ export async function requireMenuAccess(uid, role, menuId) {
   if (!accessRes.ok) throw { status: 500, message: 'Failed to verify menu access' };
   const rows = await accessRes.json();
   if (!rows.length) throw { status: 403, message: 'Forbidden' };
+}
+
+export function getRestaurantSpecialConfig(restaurantId) {
+  return restaurantId ? RESTAURANT_SPECIALS[restaurantId] || null : null;
+}
+
+export async function requireRestaurantSpecialsAccess(uid, role, restaurantId) {
+  const sbUrl     = process.env.SUPABASE_URL;
+  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!sbUrl || !sbService) throw { status: 500, message: 'Server misconfigured' };
+  const config = getRestaurantSpecialConfig(restaurantId);
+  if (!config) throw { status: 400, message: 'Unsupported restaurant' };
+  if (role === 'admin') return config;
+
+  const accessRes = await fetch(
+    `${sbUrl}/rest/v1/menu_access?user_id=eq.${uid}&menu_id=in.(${config.menuIds.join(',')})&select=menu_id`,
+    { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+  );
+  if (!accessRes.ok) throw { status: 500, message: 'Failed to verify specials access' };
+  const rows = await accessRes.json();
+  const accessibleMenuIds = new Set(rows.map(row => row.menu_id));
+  if (!config.menuIds.every(menuId => accessibleMenuIds.has(menuId))) {
+    throw { status: 403, message: 'Forbidden' };
+  }
+  return config;
 }
