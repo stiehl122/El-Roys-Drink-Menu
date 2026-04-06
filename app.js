@@ -254,7 +254,11 @@ function isLegacySpecialCategory(catOrId) {
 }
 
 function getManagedCategoryDefs() {
-  return CATEGORY_DEFS.filter(cat => !isLegacySpecialCategory(cat));
+  return CATEGORY_DEFS.map(cat => (
+    isLegacySpecialCategory(cat)
+      ? { ...cat, deprecated: true, readOnly: true }
+      : cat
+  ));
 }
 
 function getMenuBySlug(slug) {
@@ -3622,6 +3626,7 @@ function renderManagerCategories() {
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
 
   getManagedCategoryDefs().forEach(cat => {
+    const isReadOnlyCategory = cat.readOnly || cat.deprecated;
     const card = document.createElement('div');
     card.className = 'cat-card';
     card.id = 'mgr-card-' + cat.id;
@@ -3639,11 +3644,11 @@ function renderManagerCategories() {
         <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(cat.placeholder || 'Add item…')}" aria-label="Add item to ${escHtml(cat.title)}" autocomplete="off"
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(isReadOnlyCategory ? 'Legacy category is read-only' : (cat.placeholder || 'Add item…'))}" aria-label="${escHtml(isReadOnlyCategory ? `${cat.title} is read-only` : `Add item to ${cat.title}`)}" autocomplete="off" ${isReadOnlyCategory ? 'disabled' : `
               oninput="showAutocomplete('${escHtml(cat.id)}')"
               onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
-              onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"/>
-            <button class="add-item-btn" onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}">+</button>
+              onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"`}/>
+            <button class="add-item-btn" ${isReadOnlyCategory ? 'disabled aria-disabled="true"' : `onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}"`}>+</button>
           </div>
           <div class="autocomplete-list" id="ac-${escHtml(cat.id)}"></div>
         </div>

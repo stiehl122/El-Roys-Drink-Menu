@@ -60,7 +60,6 @@ async function fetchLegacyRestaurantSeedRows(sbUrl, menuIds) {
       seenItemIds.add(slot.item_id);
       return true;
     })
-    .slice(0, 5)
     .map((slot, index) => ({
       item_id: slot.item_id,
       sell_note: slot.sell_note || '',
@@ -68,10 +67,7 @@ async function fetchLegacyRestaurantSeedRows(sbUrl, menuIds) {
     }));
 }
 
-async function seedRestaurantSpecialGroupFromLegacy(sbUrl, restaurantId, groupId) {
-  const config = getRestaurantSpecialConfig(restaurantId);
-  if (!config?.menuIds?.length) return;
-  const seedRows = await fetchLegacyRestaurantSeedRows(sbUrl, config.menuIds);
+async function insertRestaurantSpecialSeedRows(sbUrl, groupId, seedRows) {
   if (!seedRows.length) return;
   const insertRes = await fetch(`${sbUrl}/rest/v1/featured_slots`, {
     method: 'POST',
@@ -89,32 +85,65 @@ async function seedRestaurantSpecialGroupFromLegacy(sbUrl, restaurantId, groupId
   if (!insertRes.ok) throw new Error('Failed to seed specials');
 }
 
+async function migrateRestaurantSpecialGroup(sbUrl, restaurantId) {
+  const config = getRestaurantSpecialConfig(restaurantId);
+  if (!config?.menuIds?.length) return null;
+  const existingGroup = await fetchRestaurantSpecialGroup(sbUrl, restaurantId);
+  const group = existingGroup || await fetchRestaurantSpecialGroup(sbUrl, restaurantId, { createIfMissing: true });
+  if (!group?.id) throw new Error('Failed to resolve specials group');
+
+  const seedRows = await fetchLegacyRestaurantSeedRows(sbUrl, config.menuIds);
+  if (!seedRows.length) return group;
+
+  const existingSlots = await fetchGroupSlots(sbUrl, group.id);
+  const existingItemIds = new Set(existingSlots.map(slot => slot.item_id));
+  const nextDisplayOrder = existingSlots.reduce((maxOrder, slot) => {
+    const displayOrder = Number(slot.display_order);
+    return Number.isFinite(displayOrder) ? Math.max(maxOrder, displayOrder) : maxOrder;
+  }, -1) + 1;
+  const rowsToInsert = seedRows
+    .filter(row => !existingItemIds.has(row.item_id))
+    .map((row, index) => ({
+      ...row,
+      display_order: existingSlots.length ? nextDisplayOrder + index : row.display_order,
+    }));
+
+  await insertRestaurantSpecialSeedRows(sbUrl, group.id, rowsToInsert);
+  return group;
+}
+
 async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
   if (!config?.name) return null;
 
-  const groupRes = await fetch(
-    `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
-    { headers: serviceHeaders() }
-  );
-  if (!groupRes.ok) throw new Error('Failed to load specials group');
-  const groups = await groupRes.json();
-  if (groups?.[0]) return groups[0];
-  if (!createIfMissing) return null;
+  const selectGroup = async () => {
+    const groupRes = await fetch(
+      `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+      { headers: serviceHeaders() }
+    );
+    if (!groupRes.ok) throw new Error('Failed to load specials group');
+    const groups = await groupRes.json();
+    return groups?.[0] || null;
+  };
 
-  const createRes = await fetch(`${sbUrl}/rest/v1/featured_groups`, {
+  if (!createIfMissing) return selectGroup();
+
+  const createRes = await fetch(`${sbUrl}/rest/v1/featured_groups?on_conflict=name&select=id,name`, {
     method: 'POST',
     headers: serviceHeaders({
       'Content-Type': 'application/json',
-      Prefer: 'return=representation',
+      Prefer: 'resolution=ignore-duplicates,return=representation',
     }),
     body: JSON.stringify({ name: config.name }),
   });
-  if (!createRes.ok) throw new Error('Failed to create specials group');
+  if (!createRes.ok) throw new Error('Failed to upsert specials group');
   const created = await createRes.json();
-  const group = created?.[0] || null;
-  if (group?.id) await seedRestaurantSpecialGroupFromLegacy(sbUrl, restaurantId, group.id);
+  let group = created?.[0] || null;
+  if (group?.id) return group;
+
+  group = await selectGroup();
+  if (!group?.id) throw new Error('Failed to resolve specials group');
   return group;
 }
 
@@ -151,7 +180,9 @@ export default async function handler(req, res) {
   const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!sbUrl || !sbService) return res.status(500).json({ error: 'Server misconfigured' });
 
-  const { action, direction, itemId, note, restaurantId, slotId } = req.body || {};
+  const queryAction = typeof req.query?.action === 'string' ? req.query.action : '';
+  const { action: bodyAction, direction, itemId, note, restaurantId, slotId } = req.body || {};
+  const action = queryAction || bodyAction;
   if (!restaurantId) return res.status(400).json({ error: 'Missing restaurantId' });
   if (!action) return res.status(400).json({ error: 'Missing action' });
 
@@ -164,7 +195,12 @@ export default async function handler(req, res) {
 
   try {
     if (action === 'ensure') {
-      await fetchRestaurantSpecialGroup(sbUrl, restaurantId, { createIfMissing: true });
+      await fetchRestaurantSpecialGroup(sbUrl, restaurantId);
+      return res.status(204).end();
+    }
+
+    if (action === 'migrate') {
+      await migrateRestaurantSpecialGroup(sbUrl, restaurantId);
       return res.status(204).end();
     }
 
