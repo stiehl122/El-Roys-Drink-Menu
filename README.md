@@ -10,7 +10,7 @@ Each restaurant has two menus, Drinks and Food, for four total menus. The public
 ## Current Architecture
 
 - `index.html`, `style.css`, `app.js`: no build step, bundler, or package manager
-- Supabase PostgREST: primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, history, and auth-backed user data
+- Supabase PostgREST: primary read/write path for restaurants, menus, categories, items, menu metadata, restaurant specials, history, and auth-backed user data
 - `localStorage`: session/cache layer used by parts of the shared runtime; live menu behavior is database-backed
 - Supabase Auth: client email/password auth with recovery handling
 - Vercel API routes in [`api/`](api): config delivery, role lookup, user management, and notifications
@@ -39,7 +39,7 @@ Those IDs and slugs are hardcoded in [`app.js`](app.js). Legacy `?menu=el-roys` 
 - Managers have per-menu access; admins have global access
 - Public footer shows `APP_VERSION` and last-updated time; preview deployments show a `PREVIEW` badge
 
-Current app version in code: `v0.8.1` from [`app.js:2`](app.js#L2).
+Current app version in code: `v0.8.3` from [`app.js:2`](app.js#L2).
 
 ## Public Routes
 
@@ -140,7 +140,8 @@ New accounts start with `role: none`.
 | Change categories | No | Yes |
 | Manage users and menu access | No | Yes |
 | Configure notification credentials | No | Yes |
-| Manage featured groups/history/design toggles | No | Yes |
+| Manage history/design toggles | No | Yes |
+| Edit restaurant specials shared across both menus | Only with both menus for that restaurant | Yes |
 
 ## Categories
 

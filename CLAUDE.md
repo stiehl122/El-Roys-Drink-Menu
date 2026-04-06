@@ -9,10 +9,17 @@ A zero-dependency web app that runs the live public and manager-facing menus for
 
 Each restaurant has two menus, **Drinks** and **Food**, for four total menus. Managers are still assigned per menu, so bartenders and kitchen staff can have separate access. Public rendering is now **custom-design first**: each restaurant's public page is owned by its route files, and the legacy category-accordion renderer exists only as a fallback when a route implementation is disabled or unavailable.
 
+Restaurant specials are now hardcoded per restaurant instead of admin-created featured groups:
+
+- **Leroy's Specials**
+- **El Roy's Specials**
+
+Each specials collection is shared across that restaurant's Food and Drinks menus. Managers can edit a restaurant's specials only when they have access to both menus for that restaurant; admins can always edit them.
+
 ## Architecture
 
 - **Three files:** `index.html` (markup), `style.css` (styles), `app.js` (logic). No build step, bundler, or package manager.
-- **Supabase PostgREST** — primary read/write path for restaurants, menus, categories, items, menu metadata, featured groups, and update history.
+- **Supabase PostgREST** — primary read/write path for restaurants, menus, categories, items, menu metadata, restaurant specials, and update history.
 - **localStorage/session cache** — legacy cache paths still exist in parts of the shared runtime, but live public menu behavior is database-backed and refreshed through polling.
 - **Supabase Auth + role API** — email/password auth in the client; `/api/role` and `/api/users` enforce role and per-menu access.
 - **Route-owned public pages** — restaurant public designs now live directly in the repo route files such as `leroyslounge/index.html` and `elroyscantina/index.html`. Stitch is the source of truth for those pages.
@@ -91,7 +98,7 @@ New accounts still start with `role: none`. Admins grant access per menu across 
 | 2133-2584 | Manager entry, notifications, admin switchers | `enterManager()`, `saveNotifications()`, `loadAdminSwitcherData()` |
 | 2585-3400 | Manager editing and preview flows | `renderManagerItems()`, `persistState()`, `computeDiff()`, `openPreview()` |
 | 3401-3812 | Send update, toast, user management | `sendUpdate()`, `showToast()`, `patchUser()` |
-| 3813-4349 | Featured, tabs, fixed restaurant/menu admin, preview toolbar | `renderFeaturedAdmin()`, `switchAdminTab()`, `fetchRestaurantMenuIndex()`, `renderMenusPanel()`, `_initPreviewToolbar()` |
+| 3813-4349 | Specials, tabs, fixed restaurant/menu admin, preview toolbar | `computeFeaturedDiff()`, `renderFeaturedTab()`, `switchAdminTab()`, `fetchRestaurantMenuIndex()`, `renderMenusPanel()`, `_initPreviewToolbar()` |
 
 **`index.html` (~570 lines)**  
 
