@@ -30,7 +30,7 @@ const LS_KEYS = {
 
 let BOT_ID        = '';
 let NOTIFICATIONS = null; // per-menu notification channel config from menu_meta.notifications
-let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
+let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || ''; // legacy — kept for admin override; prefer getCanonicalMenuUrl()
 let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
 let SUPABASE_URL      = '';
@@ -149,6 +149,19 @@ let currentDesign = { ...DESIGN_DEFAULTS };
 let menuState = {};
 
 function defaultState() {
+  // Apply menu-type-appropriate category defaults if CATEGORY_DEFS haven't been
+  // hydrated from the database (still matching the initial default set).
+  const currentIds = CATEGORY_DEFS.map(c => c.id).sort().join(',');
+  const drinkIds = DEFAULT_CATEGORY_DEFS.map(c => c.id).sort().join(',');
+  const foodIds = DEFAULT_FOOD_CATEGORY_DEFS.map(c => c.key).sort().join(',');
+  if (MENU_TYPE === 'food' && currentIds === drinkIds) {
+    CATEGORY_DEFS = DEFAULT_FOOD_CATEGORY_DEFS.map(c => ({
+      id: c.key, icon: c.icon, color: c.color, title: c.label,
+      sub: c.sub || '', placeholder: c.placeholder || '',
+    }));
+  } else if (MENU_TYPE === 'drinks' && currentIds === foodIds) {
+    CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
+  }
   const s = {};
   CATEGORY_DEFS.forEach(c => { s[c.id] = s[c.id] || { items:[], lastSent:[] }; });
   return s;
@@ -431,6 +444,17 @@ function getPublicHrefForCurrentMenu() {
   return getPublicHrefForMenuId(MENU_ID);
 }
 
+function getCanonicalMenuUrl() {
+  // Derive the full public URL for the active menu from canonical route config.
+  // This replaces the device-local MENU_URL global for notification links.
+  const path = getPublicHrefForCurrentMenu();
+  try {
+    return new URL(path, window.location.origin).href;
+  } catch (_) {
+    return window.location.origin;
+  }
+}
+
 function getManagerHrefForMenuId(menuId) {
   const menu = getMenuById(menuId);
   if (!menu?.slug) return SHARED_PAGE_PATHS.manager;
@@ -443,17 +467,22 @@ function navigateToPage(path) {
   window.location.assign(path);
 }
 
-function readCachedMenuState(expectedRestaurantId = '') {
+function readCachedMenuState(expectedRestaurantId = '', expectedMenuType = '') {
   const cached = localStorage.getItem(LS_KEYS.menuCache);
   if (!cached) return null;
   try {
     const parsed = JSON.parse(cached);
     const cachedRestaurantId = parsed?.restaurant?.id || '';
+    const cachedMenuType = parsed?._menuType || 'drinks';
     if (!isValidRestaurant(cachedRestaurantId)) {
       _clearActiveMenuContext({ clearCache: true });
       return null;
     }
     if (expectedRestaurantId && cachedRestaurantId !== expectedRestaurantId) {
+      localStorage.removeItem(LS_KEYS.menuCache);
+      return null;
+    }
+    if (expectedMenuType && cachedMenuType !== expectedMenuType) {
       localStorage.removeItem(LS_KEYS.menuCache);
       return null;
     }
@@ -1035,7 +1064,7 @@ function buildMenuCacheSnapshot() {
         use_custom_design: _restaurantCustomDesignEnabled,
       }
     : null;
-  return { cats, meta, restaurant };
+  return { cats, meta, restaurant, _menuType: MENU_TYPE };
 }
 
 function syncLocalMenuCache(options = {}) {
@@ -1886,7 +1915,7 @@ async function init() {
 
   if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
-    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
+    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '', MENU_TYPE);
     if (cached) {
       try { hydrateState(cached); } catch(e) { menuState = defaultState(); }
     } else {
@@ -1901,7 +1930,7 @@ async function init() {
       await showPublicView();
     } catch(e) {
       // Fallback to localStorage cache
-      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
+      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '', MENU_TYPE);
       if (cached) {
         try { hydrateState(cached); } catch(e2) { menuState = defaultState(); }
       } else {
@@ -3603,7 +3632,7 @@ async function _loadAdminTabData(context) {
       return;
     }
     const urlInput = document.getElementById('menu-url-input');
-    if (urlInput) urlInput.value = MENU_URL || '';
+    if (urlInput) urlInput.value = MENU_URL || getCanonicalMenuUrl() || '';
     if (!menuId) { _populateAdminNotificationsPanel({}); }
     else {
       try {
@@ -3727,7 +3756,7 @@ async function addUncategorizedItem() {
   pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false });
   input.value = '';
   renderUncategorizedItems();
-  await persistState();
+  invalidateDiff();
 }
 
 function toggleManagerCategory(catId) {
@@ -3771,7 +3800,8 @@ function buildUncategorizedItemHtml(item) {
   return `<div class="current-item">
       <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
       <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
+        style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
     </div>
     ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
@@ -4013,10 +4043,7 @@ async function persistState() {
 
     await flushDeletedItems();
 
-    await Promise.all([
-      sbPatchMenuMeta({ bot_id: BOT_ID }),
-      sbPatchRestaurantDesign(currentDesign),
-    ]);
+    await sbPatchMenuMeta({ bot_id: BOT_ID });
 
     finalizePersistStatus(true);
     return true;
@@ -4540,7 +4567,8 @@ function buildPatchMessage(diff) {
     section.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
     lines.push('');
   });
-  if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
+  const canonicalUrl = getCanonicalMenuUrl();
+  if (canonicalUrl) lines.push(`📋 Full menu: ${canonicalUrl}`);
   return lines.join('\n').trim();
 }
 
@@ -4604,6 +4632,44 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING…';
 
   try {
+    // ── Step 1: Persist state + metadata BEFORE sending notifications ──
+    const ts = Date.now();
+    const persisted = await persistState();
+    if (!persisted) {
+      showToast('⚠️ Save failed. Update not sent — fix save errors first.', 'error');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'SEND UPDATE';
+      return;
+    }
+
+    const lastSentState = snapshotCurrentItemsAsLastSent();
+    const currentFeaturedIds = getCurrentFeaturedIds();
+    const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
+      ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
+      : [];
+    _lastSentFeaturedIds = new Set(currentFeaturedIds);
+
+    await Promise.all([
+      patchMenuMetaWithCompatibility({
+        last_updated_ts:      ts,
+        last_sent_ts:         ts,
+        last_sent_state:      lastSentState,
+        last_sent_categories: diff.map(d => d.id),
+        last_sent_featured:   currentFeaturedIds,
+      }),
+      ...restaurantMenuIds
+        .filter(menuId => menuId && menuId !== MENU_ID)
+        .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
+    ]);
+
+    // Metadata is now durable — apply local sent-state bookkeeping
+    applySentState(diff, ts);
+    _dirty = false;
+    updateSaveBtn();
+    updateLastUpdatedLabel();
+    syncLocalMenuCache({ silent: true });
+
+    // ── Step 2: Send notifications (state is already safe) ──
     const authHeaders = currentUser?.accessToken
       ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
       : {};
@@ -4613,7 +4679,12 @@ async function sendUpdate() {
       body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
     });
 
-    if (r1.status >= 200 && r1.status < 300) {
+    closeModal();
+
+    if (r1.status === 207) {
+      // Partial delivery — some channels succeeded, some failed
+      showToast(`⚠️ ${_activeMenuName || 'Menu'} update saved, but some notification channels failed. Check Admin settings.`, 'warning');
+    } else if (r1.status >= 200 && r1.status < 300) {
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
       closeModal();
       try {
@@ -4653,14 +4724,23 @@ async function sendUpdate() {
         showToast('⚠️ Update sent, but database sync needs attention. Refresh before sending again.', 'warning');
       }
     } else if (r1.status === 401) {
-      showToast('❌ Not authorized. Please sign in.', 'error');
+      showToast('⚠️ Menu saved, but notification failed: not authorized.', 'warning');
     } else if (r1.status === 403) {
-      showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
+      showToast('⚠️ Menu saved, but notification failed: access denied.', 'warning');
     } else {
-      showToast('❌ Notification error. Check channel config in Admin settings.', 'error');
+      showToast('⚠️ Menu saved, but notification delivery failed. Check channel config in Admin settings.', 'warning');
     }
+
+    // ── Step 3: Post-send bookkeeping (non-critical) ──
+    renderManagerWorkspace({ includeRecentChanges: false });
+    updateDraftIndicator();
+    const logged = await logUpdate(diff, patchMessage);
+    if (!logged) console.warn('sendUpdate audit log insert failed');
+    renderRecentChanges();
   } catch(e) {
-    showToast('❌ Network error. Check connection.', 'error');
+    // Persistence or network failure — do NOT clear draft state
+    console.error('sendUpdate failed:', e);
+    showToast('❌ Send failed. Your changes are still pending — please try again.', 'error');
   }
 
   confirmBtn.disabled = false;
@@ -4974,7 +5054,7 @@ async function saveUserName(userId) {
 }
 
 function openInviteModal() {
-  const url = MENU_URL || window.location.origin;
+  const url = getCanonicalMenuUrl() || window.location.origin;
   const brand = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'the menu';
   const output = document.getElementById('invite-text-output');
   const modal = document.getElementById('invite-modal-bg');
