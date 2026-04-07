@@ -184,6 +184,19 @@ let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ categor
 let _managerDraggedItemId = '';
 let _managerDraggedCatId = '';
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+
+// ─── SHARED MUTATION CONTRACT ────────────────────────────────────────────────
+// Every manager edit that changes menu state should go through applyMenuEdit().
+// It applies the edit, marks the draft dirty, and refreshes the manager view.
+// It does NOT call persistState() — that is Save's job (via commitMenuState).
+function applyMenuEdit(editFn, options = {}) {
+  editFn();
+  invalidateDiff();
+  if (options.renderCategory) renderManagerItems(options.renderCategory);
+  if (options.renderOffMenu) renderOffMenuSection();
+  updateDraftIndicator();
+}
+
 function updateSaveBtn() {
   const btn = document.getElementById('save-btn');
   if (btn) btn.disabled = !_dirty;
@@ -1665,7 +1678,7 @@ function toggleCategoryEdit(catId) {
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
-async function saveCategoryEdit(catId) {
+function saveCategoryEdit(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
@@ -1674,28 +1687,25 @@ async function saveCategoryEdit(catId) {
   if (!title) { showToast('Title is required.', 'error'); return; }
   const sub   = document.getElementById('ce-sub-'   + catId)?.value.trim() || '';
   const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
-  cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
+  applyMenuEdit(() => { cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph; });
   toggleCategoryEdit(catId);
-  await persistState();
   refreshAllViews();
   showToast('✅ Category updated!', 'success');
 }
 
-async function moveCategoryUp(catId) {
+function moveCategoryUp(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
-  [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
-  await persistState();
+  applyMenuEdit(() => { [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]]; });
   refreshAllViews();
 }
 
-async function moveCategoryDown(catId) {
+function moveCategoryDown(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
-  [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
-  await persistState();
+  applyMenuEdit(() => { [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]]; });
   refreshAllViews();
 }
 
@@ -1740,10 +1750,10 @@ async function deleteCategory(catId) {
   }
   // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
   if (cat._uuid) await sbDeleteCategory(cat._uuid);
-  CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
-  delete menuState[catId];
-  invalidateDiff();
-  await persistState();
+  applyMenuEdit(() => {
+    CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
+    delete menuState[catId];
+  });
   refreshAllViews();
   showToast('✅ Category deleted.', 'success');
 }
@@ -1758,7 +1768,7 @@ function toggleAddCategoryForm() {
   if (opening) document.getElementById('new-cat-title')?.focus();
 }
 
-async function confirmAddCategory() {
+function confirmAddCategory() {
   const icon  = document.getElementById('new-cat-icon')?.value.trim() || '🍸';
   const title = document.getElementById('new-cat-title')?.value.trim();
   if (!title) { showToast('Category title is required.', 'error'); return; }
@@ -1767,8 +1777,10 @@ async function confirmAddCategory() {
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
   // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
-  CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
-  menuState[id] = { items: [], lastSent: [] };
+  applyMenuEdit(() => {
+    CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
+    menuState[id] = { items: [], lastSent: [] };
+  });
   // Reset form
   ['new-cat-icon','new-cat-title','new-cat-sub','new-cat-placeholder'].forEach(fid => {
     const el = document.getElementById(fid); if (el) el.value = '';
@@ -1778,7 +1790,6 @@ async function confirmAddCategory() {
   document.getElementById('catmgr-add-form').style.display = 'none';
   const btn = document.getElementById('show-add-cat-btn');
   if (btn) btn.textContent = '+ Add Category';
-  await persistState();
   refreshAllViews();
   showToast(`✅ Category "${title}" added!`, 'success');
 }
@@ -4016,21 +4027,34 @@ async function persistState() {
   }
 }
 
-async function saveMenu() {
+// ─── SHARED SAVE/SEND ORCHESTRATOR ───────────────────────────────────────────
+// commitMenuState() is the single persistence seam shared by Save and Send Update.
+// It persists menu data, patches metadata, updates timestamps, syncs the local cache,
+// and returns { ok, ts } so callers can build on a known-good state.
+async function commitMenuState(metaOverrides = {}) {
   const ts = Date.now();
   try {
     const persisted = await persistState();
-    if (!persisted) return;
-    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
+    if (!persisted) return { ok: false, ts };
+    await patchMenuMetaWithCompatibility({ last_updated_ts: ts, ...metaOverrides });
     menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
     lsSet(LS_KEYS.lastUpdated, ts.toString());
     _dirty = false;
     updateSaveBtn();
     updateLastUpdatedLabel();
-    syncLocalMenuCache({ silent: true });
-    showToast('✅ Menu saved!', 'success');
+    const cacheSynced = syncLocalMenuCache({ silent: true });
+    return { ok: true, ts, cacheSynced };
   } catch(e) {
     finalizePersistStatus(false);
+    return { ok: false, ts };
+  }
+}
+
+async function saveMenu() {
+  const result = await commitMenuState();
+  if (result.ok) {
+    showToast('✅ Menu saved!', 'success');
+  } else {
     showToast('⚠️ Cloud save failed.', 'error');
   }
 }
@@ -4147,10 +4171,7 @@ function handleAddItemKeydown(event, catId) {
 function toggle86(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return;
-  item.eightySixed = !item.eightySixed;
-  invalidateDiff();
-  renderManagerItems(catId);
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.eightySixed = !item.eightySixed; }, { renderCategory: catId });
   // Trigger animation on the newly-rendered wrapper
   const wrapper = document.getElementById('wrapper-' + itemId);
   if (wrapper) {
@@ -4164,11 +4185,7 @@ function toggle86(catId, itemId) {
 function toggleVisibility(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return;
-  item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu';
-  invalidateDiff();
-  renderManagerItems(catId);
-  renderOffMenuSection();
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu'; }, { renderCategory: catId, renderOffMenu: true });
   showToast(item.visibility === 'off_menu' ? `"${item.name}" moved off menu` : `"${item.name}" made public`, 'info');
 }
 
@@ -4205,68 +4222,61 @@ function renderRecipeIngredients(catId, itemId) {
   list.innerHTML = buildRecipeListHtml(catId, itemId, ingredients);
 }
 
-async function addIngredient(catId, itemId) {
+function addIngredient(catId, itemId) {
   const input = document.getElementById('ingredient-input-' + itemId);
   const val = input.value.trim();
   if (!val) return;
   const item = findItem(catId, itemId);
   if (!item) return;
-  if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
-  item.recipe.push(val);
+  applyMenuEdit(() => {
+    if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
+    item.recipe.push(val);
+  });
   input.value = '';
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
   input.focus();
-  await persistState();
 }
 
-async function removeIngredient(catId, itemId, idx) {
+function removeIngredient(catId, itemId, idx) {
   const item = findItem(catId, itemId);
   if (!item || !Array.isArray(item.recipe)) return;
-  item.recipe.splice(idx, 1);
+  applyMenuEdit(() => { item.recipe.splice(idx, 1); });
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
-  await persistState();
 }
 
 function handleIngredientKeydown(event, catId, itemId) {
   if (event.key === 'Enter') { event.preventDefault(); addIngredient(catId, itemId); }
 }
 
-async function saveDesc(catId, itemId, val) {
+function saveDesc(catId, itemId, val) {
   const item = findItem(catId, itemId);
   if (!item) return;
   const desc = val.trim();
   if (item.desc !== desc) {
-    item.desc = desc;
+    applyMenuEdit(() => { item.desc = desc; });
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
-    await persistState();
   }
 }
 
-async function savePrice(catId, itemId, val) {
+function savePrice(catId, itemId, val) {
   const item = findItem(catId, itemId);
   if (!item) return;
   const price = val.trim();
-  if (item.price !== price) { item.price = price; await persistState(); }
+  if (item.price !== price) { applyMenuEdit(() => { item.price = price; }); }
 }
 
 function removeItem(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return false;
-  item.onMenu = false;
-  invalidateDiff();
-  renderManagerItems(catId);
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.onMenu = false; }, { renderCategory: catId });
   const removedName = item.name;
   showToast(`"${removedName}" removed`, 'info', () => {
-    item.onMenu = true;
-    invalidateDiff();
-    renderManagerItems(catId);
-    updateDraftIndicator();
+    applyMenuEdit(() => { item.onMenu = true; }, { renderCategory: catId });
     showToast(`"${removedName}" restored`, 'success');
   });
   return true;
@@ -4364,7 +4374,7 @@ function renameItem(catId, itemId, newName) {
     return;
   }
   const item = findItem(catId, itemId);
-  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); updateDraftIndicator(); }
+  if (item && item.name !== name) { applyMenuEdit(() => { item.name = name; }, { renderCategory: catId }); }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
@@ -4605,37 +4615,34 @@ async function sendUpdate() {
 
     if (r1.status >= 200 && r1.status < 300) {
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
-      const ts = Date.now();
       closeModal();
       try {
-        const persisted = await persistState();
-        if (!persisted) throw new Error('persist failed');
+        // Build send-specific metadata before committing
         const lastSentState = snapshotCurrentItemsAsLastSent();
         const currentFeaturedIds = getCurrentFeaturedIds();
+        const sendMeta = {
+          last_sent_ts:         Date.now(),
+          last_sent_state:      lastSentState,
+          last_sent_categories: diff.map(d => d.id),
+          last_sent_featured:   currentFeaturedIds,
+        };
+        // Use the shared persistence orchestrator
+        const result = await commitMenuState(sendMeta);
+        if (!result.ok) throw new Error('persist failed');
+        // Post-commit send-specific work
         const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
           ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
           : [];
         _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await Promise.all([
-          sbPatchMenuMeta({
-            last_updated_ts:      ts,
-            last_sent_ts:         ts,
-            last_sent_state:      lastSentState,
-            last_sent_categories: diff.map(d => d.id),
-            last_sent_featured:   currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
+        await Promise.all(
+          restaurantMenuIds
             .filter(menuId => menuId && menuId !== MENU_ID)
             .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
-        ]);
-        applySentState(diff, ts);
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
+        );
+        applySentState(diff, result.ts);
         renderManagerWorkspace({ includeRecentChanges: false });
         updateDraftIndicator();
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        if (!cacheSynced) {
+        if (!result.cacheSynced) {
           showToast('⚠️ Update sent, but this device could not refresh its local cache.', 'warning');
         }
         const logged = await logUpdate(diff, patchMessage);
@@ -5533,6 +5540,73 @@ function _updatePreviewToolbar() {
     btn.classList.toggle('active', btn.dataset.role === active);
   });
 }
+
+// ─── PUBLIC ROUTE ADAPTER ────────────────────────────────────────────────────
+// Explicit adapter surface for route files (leroyslounge/app.js, elroyscantina/app.js).
+// Route files should consume this adapter instead of reaching into shared globals directly.
+// This keeps the contract explicit and prevents drift when shared internals change.
+window.MenuRouteAdapter = {
+  // State accessors — route files read current menu state through these
+  getMenuState:        () => menuState,
+  getCategoryDefs:     () => getManagedCategoryDefs(),
+  getTimestamp:        () => getLastUpdatedTs(),
+  getActiveMenuName:   () => _activeMenuName,
+  getMenuId:           () => MENU_ID,
+  getMenuType:         () => MENU_TYPE,
+  getRestaurantId:     () => RESTAURANT_ID,
+  getSiteRestaurant:   () => _siteRestaurant,
+  getAppVersion:       () => APP_VERSION,
+  getIsPreview:        () => IS_PREVIEW,
+  getCurrentUser:      () => currentUser,
+  getKnownMenus:       () => knownMenuList(),
+  getFeaturedGroups:   () => _featuredGroups,
+  getRestaurantSpecials: () => {
+    const restaurantSpecials = _featuredGroups.length > 1
+      ? {
+          id: '__restaurant_specials__',
+          name: getRestaurantSpecialLabel(RESTAURANT_ID),
+          slots: _featuredGroups.flatMap(group => group.slots || []),
+        }
+      : (_featuredGroups[0] || null);
+    return restaurantSpecials;
+  },
+
+  // Auth state snapshot for route initialization
+  getAuthState: () => ({
+    activeMenuName: _activeMenuName,
+    appVersion: APP_VERSION,
+    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+    categoryDefs: getManagedCategoryDefs(),
+    currentUser,
+    featuredGroups: _featuredGroups,
+    isPreview: IS_PREVIEW,
+    knownMenus: knownMenuList(),
+    lastUpdatedTs: getLastUpdatedTs(),
+    menuId: MENU_ID,
+    menuType: MENU_TYPE,
+    restaurantSpecials: window.MenuRouteAdapter.getRestaurantSpecials(),
+    restaurantId: RESTAURANT_ID,
+    siteRestaurant: _siteRestaurant,
+  }),
+
+  // Actions — route files call these to trigger shared behaviors
+  onMenuSwitch:        (menuId, slug, name, type, restaurantId) => selectMenu(menuId, slug, name, type, restaurantId),
+  loadActiveMenuState: () => loadActiveMenuState(),
+  renderPublicViews:   () => renderPublicViews(),
+  navigateToPage:      (path) => navigateToPage(path),
+  openAuth:            () => openAuthOverlay(),
+  openManager:         () => onActionBtnClick(),
+  openAdmin:           () => onAdminBtnClick(),
+  closeDropdowns:      (exceptId) => closeRouteDropdowns(exceptId),
+
+  // Utilities — shared helpers route files need
+  formatTimestamp:     (ts, prefix) => formatUpdatedAt(ts, prefix),
+  escapeHtml:         (s) => escHtml(s),
+  getMenuTypeLabel:   (type) => getMenuTypeLabel(type),
+  getPublicHref:      () => getPublicHrefForCurrentMenu(),
+  canManageMenu:      (menuId, user) => currentUserCanManageMenu(menuId, user),
+  applyDesign:        (design) => applyDesign(design),
+};
 
 init();
 if (IS_PREVIEW) _initPreviewToolbar();
