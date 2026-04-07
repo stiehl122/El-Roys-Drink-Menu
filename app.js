@@ -2457,7 +2457,7 @@ function renderFeaturedPublicSection() {
           <div class="featured-slot-main">
             <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
             ${priceHtml}
-            ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+            ${is86 ? '<span class="eighty-sixed-tag">SOLD OUT</span>' : ''}
           </div>
           ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
           ${sellNoteHtml}
@@ -2495,7 +2495,7 @@ function buildPublicItemHtml(item) {
     <div class="item-main-row">
       <div class="dot" aria-hidden="true"></div>
       <span class="item-name-text">${escHtml(item.name)}${isFood ? '' : priceHtml}</span>
-      ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
+      ${is86 ? `<span class="eighty-sixed-tag">SOLD OUT</span>` : ''}
       ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
     </div>
     ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}

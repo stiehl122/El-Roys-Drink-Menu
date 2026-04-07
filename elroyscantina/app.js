@@ -22,7 +22,7 @@
     const desc = String(item?.desc || '').trim();
     const badge = options.badgeText
       ? `<span class="erc-badge erc-badge--special">${esc(options.badgeText)}</span>`
-      : (is86 ? `<span class="erc-badge erc-badge--86d">86'D</span>` : '');
+      : (is86 ? `<span class="erc-badge erc-badge--86d">SOLD OUT</span>` : '');
 
     return `<article class="erc-item${is86 ? ' is-86d' : ''}">
       <div class="erc-item-row">
