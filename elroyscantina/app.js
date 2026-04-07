@@ -22,7 +22,7 @@
     const desc = String(item?.desc || '').trim();
     const badge = options.badgeText
       ? `<span class="erc-badge erc-badge--special">${esc(options.badgeText)}</span>`
-      : (is86 ? `<span class="erc-badge erc-badge--86d">86'D</span>` : '');
+      : (is86 ? `<span class="erc-badge erc-badge--86d">SOLD OUT</span>` : '');
 
     return `<article class="erc-item${is86 ? ' is-86d' : ''}">
       <div class="erc-item-row">
@@ -273,7 +273,8 @@
       ...authState,
     };
 
-    if (sharedState.siteRestaurant?.id !== '00000000-0000-0000-0000-000000000001') return false;
+    // Verify this route matches the active restaurant (use slug for resilience)
+    if (sharedState.siteRestaurant?.slug !== 'el-roys-cantina' && sharedState.siteRestaurant?.id !== '00000000-0000-0000-0000-000000000001') return false;
 
     container.innerHTML = '';
     container.appendChild(template.content.cloneNode(true));

@@ -2,6 +2,7 @@
 
 const RESTAURANT_SPECIALS = {
   '00000000-0000-0000-0000-000000000010': {
+    canonicalId: 'leroyslounge-specials',
     name: "Leroy's Specials",
     menuIds: [
       '00000000-0000-0000-0000-000000000020',
@@ -9,6 +10,7 @@ const RESTAURANT_SPECIALS = {
     ],
   },
   '00000000-0000-0000-0000-000000000001': {
+    canonicalId: 'elroyscantina-specials',
     name: "El Roy's Specials",
     menuIds: [
       '00000000-0000-0000-0000-000000000002',

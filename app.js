@@ -30,7 +30,7 @@ const LS_KEYS = {
 
 let BOT_ID        = '';
 let NOTIFICATIONS = null; // per-menu notification channel config from menu_meta.notifications
-let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
+let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || ''; // legacy — kept for admin override; prefer getCanonicalMenuUrl()
 let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
 let SUPABASE_URL      = '';
@@ -55,10 +55,13 @@ let _appPageMode       = 'public';  // 'picker' | 'public' | 'manager' | 'admin'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _restaurantCustomDesignEnabled = true; // cached restaurants.use_custom_design for the active restaurant
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
+let _pollInFlight      = false;     // true while a poll cycle is running
+let _pollGeneration    = 0;         // incremented each poll start; stale results are discarded
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 let _pickerOnClose     = null;
+let _suppressPublicRender = false; // true while selectMenu() is running to prevent duplicate renders
 let _settingsRedirectTimer = null;
 let _settingsRedirectCleanup = null;
 
@@ -107,8 +110,8 @@ const KNOWN_MENU_ORDER = [
   MENUS.ELROYS_FOOD.id,
 ];
 const RESTAURANT_SPECIALS = {
-  [RESTAURANTS.LEROYS.id]: { name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
-  [RESTAURANTS.ELROYS.id]: { name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
+  [RESTAURANTS.LEROYS.id]: { canonicalId: 'leroyslounge-specials', name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
+  [RESTAURANTS.ELROYS.id]: { canonicalId: 'elroyscantina-specials', name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
 };
 const LEGACY_MENU_SLUG_ALIASES = {
   'el-roys': MENUS.ELROYS_DRINKS.slug,
@@ -149,6 +152,19 @@ let currentDesign = { ...DESIGN_DEFAULTS };
 let menuState = {};
 
 function defaultState() {
+  // Apply menu-type-appropriate category defaults if CATEGORY_DEFS haven't been
+  // hydrated from the database (still matching the initial default set).
+  const currentIds = CATEGORY_DEFS.map(c => c.id).sort().join(',');
+  const drinkIds = DEFAULT_CATEGORY_DEFS.map(c => c.id).sort().join(',');
+  const foodIds = DEFAULT_FOOD_CATEGORY_DEFS.map(c => c.key).sort().join(',');
+  if (MENU_TYPE === 'food' && currentIds === drinkIds) {
+    CATEGORY_DEFS = DEFAULT_FOOD_CATEGORY_DEFS.map(c => ({
+      id: c.key, icon: c.icon, color: c.color, title: c.label,
+      sub: c.sub || '', placeholder: c.placeholder || '',
+    }));
+  } else if (MENU_TYPE === 'drinks' && currentIds === foodIds) {
+    CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
+  }
   const s = {};
   CATEGORY_DEFS.forEach(c => { s[c.id] = s[c.id] || { items:[], lastSent:[] }; });
   return s;
@@ -172,6 +188,9 @@ function lsSet(key, val, options = {}) {
     return false;
   }
 }
+function ssSet(key, val) {
+  try { sessionStorage.setItem(key, val); return true; } catch(e) { return false; }
+}
 function findItem(catId, itemId) {
   return menuState[catId]?.items.find(i => i.id === itemId) ?? null;
 }
@@ -183,7 +202,21 @@ let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistStat
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
 let _managerDraggedItemId = '';
 let _managerDraggedCatId = '';
+let _featuredBannerDeferredFromEdit = false; // true when banner hidden via "Update Featured" but not yet confirmed
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+
+// ─── SHARED MUTATION CONTRACT ────────────────────────────────────────────────
+// Every manager edit that changes menu state should go through applyMenuEdit().
+// It applies the edit, marks the draft dirty, and refreshes the manager view.
+// It does NOT call persistState() — that is Save's job (via commitMenuState).
+function applyMenuEdit(editFn, options = {}) {
+  editFn();
+  invalidateDiff();
+  if (options.renderCategory) renderManagerItems(options.renderCategory);
+  if (options.renderOffMenu) renderOffMenuSection();
+  updateDraftIndicator();
+}
+
 function updateSaveBtn() {
   const btn = document.getElementById('save-btn');
   if (btn) btn.disabled = !_dirty;
@@ -418,6 +451,17 @@ function getPublicHrefForCurrentMenu() {
   return getPublicHrefForMenuId(MENU_ID);
 }
 
+function getCanonicalMenuUrl() {
+  // Derive the full public URL for the active menu from canonical route config.
+  // This replaces the device-local MENU_URL global for notification links.
+  const path = getPublicHrefForCurrentMenu();
+  try {
+    return new URL(path, window.location.origin).href;
+  } catch (_) {
+    return window.location.origin;
+  }
+}
+
 function getManagerHrefForMenuId(menuId) {
   const menu = getMenuById(menuId);
   if (!menu?.slug) return SHARED_PAGE_PATHS.manager;
@@ -430,17 +474,22 @@ function navigateToPage(path) {
   window.location.assign(path);
 }
 
-function readCachedMenuState(expectedRestaurantId = '') {
+function readCachedMenuState(expectedRestaurantId = '', expectedMenuType = '') {
   const cached = localStorage.getItem(LS_KEYS.menuCache);
   if (!cached) return null;
   try {
     const parsed = JSON.parse(cached);
     const cachedRestaurantId = parsed?.restaurant?.id || '';
+    const cachedMenuType = parsed?._menuType || 'drinks';
     if (!isValidRestaurant(cachedRestaurantId)) {
       _clearActiveMenuContext({ clearCache: true });
       return null;
     }
     if (expectedRestaurantId && cachedRestaurantId !== expectedRestaurantId) {
+      localStorage.removeItem(LS_KEYS.menuCache);
+      return null;
+    }
+    if (expectedMenuType && cachedMenuType !== expectedMenuType) {
       localStorage.removeItem(LS_KEYS.menuCache);
       return null;
     }
@@ -823,7 +872,7 @@ async function ensureRestaurantSpecialsGroup(restaurantId = RESTAURANT_ID) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentUser.accessToken}`,
       },
-      body: JSON.stringify({ action: 'ensure', restaurantId }),
+      body: JSON.stringify({ action: 'migrate', restaurantId }),
     });
   } catch (_) {
     /* allow reads to continue with legacy fallback */
@@ -1022,7 +1071,7 @@ function buildMenuCacheSnapshot() {
         use_custom_design: _restaurantCustomDesignEnabled,
       }
     : null;
-  return { cats, meta, restaurant };
+  return { cats, meta, restaurant, _menuType: MENU_TYPE };
 }
 
 function syncLocalMenuCache(options = {}) {
@@ -1070,18 +1119,25 @@ async function sbPatchRestaurantDesign(design) {
 async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
-  if (!SUPABASE_URL || !config?.name) return null;
+  if (!SUPABASE_URL || !config?.canonicalId) return null;
   try {
-    const groups = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+    // Primary lookup by canonical_id; fall back to name for pre-migration data
+    let groups = await sbReadJsonOrThrow(
+      `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
       { headers: sbHeaders() }
     );
+    if (!groups?.[0] && config.name) {
+      groups = await sbReadJsonOrThrow(
+        `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
+        { headers: sbHeaders() }
+      );
+    }
     if (groups?.[0]) return groups[0];
     if (!createIfMissing || !currentUser?.accessToken) return null;
     const created = await sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
       method: 'POST',
       headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ name: config.name }),
+      body: JSON.stringify({ name: config.name, canonical_id: config.canonicalId }),
     });
     return created?.[0] || null;
   } catch (e) {
@@ -1357,7 +1413,7 @@ function renderManagerOverviewStats() {
     total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
   ), 0);
   const draftCount = getCachedDiff().reduce((count, section) => (
-    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
+    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length + (section.modified || []).length
   ), 0);
   const statusValue = document.getElementById('manager-overview-status-value');
   const statusMeta = document.getElementById('manager-overview-status-meta');
@@ -1665,7 +1721,7 @@ function toggleCategoryEdit(catId) {
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
-async function saveCategoryEdit(catId) {
+function saveCategoryEdit(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
@@ -1674,28 +1730,25 @@ async function saveCategoryEdit(catId) {
   if (!title) { showToast('Title is required.', 'error'); return; }
   const sub   = document.getElementById('ce-sub-'   + catId)?.value.trim() || '';
   const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
-  cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
+  applyMenuEdit(() => { cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph; });
   toggleCategoryEdit(catId);
-  await persistState();
   refreshAllViews();
   showToast('✅ Category updated!', 'success');
 }
 
-async function moveCategoryUp(catId) {
+function moveCategoryUp(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
-  [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
-  await persistState();
+  applyMenuEdit(() => { [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]]; });
   refreshAllViews();
 }
 
-async function moveCategoryDown(catId) {
+function moveCategoryDown(catId) {
   if (isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
-  [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
-  await persistState();
+  applyMenuEdit(() => { [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]]; });
   refreshAllViews();
 }
 
@@ -1740,10 +1793,10 @@ async function deleteCategory(catId) {
   }
   // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
   if (cat._uuid) await sbDeleteCategory(cat._uuid);
-  CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
-  delete menuState[catId];
-  invalidateDiff();
-  await persistState();
+  applyMenuEdit(() => {
+    CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
+    delete menuState[catId];
+  });
   refreshAllViews();
   showToast('✅ Category deleted.', 'success');
 }
@@ -1758,7 +1811,7 @@ function toggleAddCategoryForm() {
   if (opening) document.getElementById('new-cat-title')?.focus();
 }
 
-async function confirmAddCategory() {
+function confirmAddCategory() {
   const icon  = document.getElementById('new-cat-icon')?.value.trim() || '🍸';
   const title = document.getElementById('new-cat-title')?.value.trim();
   if (!title) { showToast('Category title is required.', 'error'); return; }
@@ -1767,8 +1820,10 @@ async function confirmAddCategory() {
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
   // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
-  CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
-  menuState[id] = { items: [], lastSent: [] };
+  applyMenuEdit(() => {
+    CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
+    menuState[id] = { items: [], lastSent: [] };
+  });
   // Reset form
   ['new-cat-icon','new-cat-title','new-cat-sub','new-cat-placeholder'].forEach(fid => {
     const el = document.getElementById(fid); if (el) el.value = '';
@@ -1778,7 +1833,6 @@ async function confirmAddCategory() {
   document.getElementById('catmgr-add-form').style.display = 'none';
   const btn = document.getElementById('show-add-cat-btn');
   if (btn) btn.textContent = '+ Add Category';
-  await persistState();
   refreshAllViews();
   showToast(`✅ Category "${title}" added!`, 'success');
 }
@@ -1835,6 +1889,18 @@ function migrateLocalStorage() {
   }
 }
 
+// One-time migration: clear auth tokens from localStorage (now stored in sessionStorage only).
+function migrateTokensToSessionStorage() {
+  [LS_KEYS.accessToken, LS_KEYS.refreshToken, LS_KEYS.expiresAt, LS_KEYS.uid, LS_KEYS.email].forEach(k => {
+    const val = localStorage.getItem(k);
+    if (val) {
+      // Carry existing token into sessionStorage so the current tab doesn't lose its session
+      if (!sessionStorage.getItem(k)) sessionStorage.setItem(k, val);
+      localStorage.removeItem(k);
+    }
+  });
+}
+
 async function init() {
   _appPageMode = getAppPageModeFromPath();
   const detectedSiteRestaurant = getSiteRestaurantFromPath();
@@ -1847,6 +1913,7 @@ async function init() {
   }
   showAppShell();
   migrateLocalStorage();
+  migrateTokensToSessionStorage();
   if (MENU_ID && !KNOWN_MENU_ORDER.includes(MENU_ID)) _clearActiveMenuContext({ clearCache: true });
   document.getElementById('loading-view').style.display = (isDedicatedRoute || isSettingsRoute) ? 'none' : 'block';
   document.getElementById('public-view').style.display = isDedicatedRoute ? 'block' : 'none';
@@ -1875,7 +1942,7 @@ async function init() {
 
   if (!SUPABASE_URL || !MENU_ID) {
     // Offline or unconfigured — serve from localStorage cache if available
-    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
+    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '', MENU_TYPE);
     if (cached) {
       try { hydrateState(cached); } catch(e) { menuState = defaultState(); }
     } else {
@@ -1890,7 +1957,7 @@ async function init() {
       await showPublicView();
     } catch(e) {
       // Fallback to localStorage cache
-      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
+      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '', MENU_TYPE);
       if (cached) {
         try { hydrateState(cached); } catch(e2) { menuState = defaultState(); }
       } else {
@@ -1928,11 +1995,11 @@ async function _tryHandleRecoveryCallback() {
 
 async function _tryRestoreSession() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const storedAccess    = localStorage.getItem(LS_KEYS.accessToken);
-  const storedRefresh   = localStorage.getItem(LS_KEYS.refreshToken);
-  const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-  const storedUid       = localStorage.getItem(LS_KEYS.uid)   || '';
-  const storedEmail     = localStorage.getItem(LS_KEYS.email) || '';
+  const storedAccess    = sessionStorage.getItem(LS_KEYS.accessToken);
+  const storedRefresh   = sessionStorage.getItem(LS_KEYS.refreshToken);
+  const storedExpiresAt = Number(sessionStorage.getItem(LS_KEYS.expiresAt) || 0);
+  const storedUid       = sessionStorage.getItem(LS_KEYS.uid)   || '';
+  const storedEmail     = sessionStorage.getItem(LS_KEYS.email) || '';
   if (!storedRefresh) return;
 
   // If access token is still valid (2-min buffer), use it directly — skip refresh call.
@@ -1955,7 +2022,7 @@ async function _tryRestoreSession() {
 
   // Access token expired or unusable — exchange refresh token for a new one.
   const _doRefresh = async () => {
-    const refresh = localStorage.getItem(LS_KEYS.refreshToken);
+    const refresh = sessionStorage.getItem(LS_KEYS.refreshToken);
     if (!refresh) throw new Error('no refresh token');
     const data = await sbRefreshToken(refresh);
     let role = 'none', name = '', accessibleMenuIds = [];
@@ -1977,11 +2044,11 @@ async function _tryRestoreSession() {
       try {
         await _doRefresh();
       } catch(e2) {
-        localStorage.removeItem(LS_KEYS.accessToken);
-        localStorage.removeItem(LS_KEYS.refreshToken);
-        localStorage.removeItem(LS_KEYS.expiresAt);
-        localStorage.removeItem(LS_KEYS.uid);
-        localStorage.removeItem(LS_KEYS.email);
+        sessionStorage.removeItem(LS_KEYS.accessToken);
+        sessionStorage.removeItem(LS_KEYS.refreshToken);
+        sessionStorage.removeItem(LS_KEYS.expiresAt);
+        sessionStorage.removeItem(LS_KEYS.uid);
+        sessionStorage.removeItem(LS_KEYS.email);
       }
     }, 2000);
   }
@@ -2233,17 +2300,25 @@ function startPolling() {
 
   const pollCycle = async () => {
     if (isManagerMode) return;
+    // Guard: skip if a previous poll is still in-flight
+    if (_pollInFlight) return;
+    _pollInFlight = true;
+    const gen = ++_pollGeneration;
     try {
       const oldTs = menuState._meta?.lastUpdatedTs;
       const oldCats = getCategoryStateSnapshot();
       const oldDesign = getDesignSnapshot();
       const oldFeatured = getFeaturedSnapshot();
       const data = await sbRead();
+      // Discard result if a newer poll was started while we were awaiting
+      if (gen !== _pollGeneration) return;
       if (!data) return;
       hydrateState(data);
       lsSet(LS_KEYS.menuCache, JSON.stringify(data));
       const newTs = menuState._meta?.lastUpdatedTs;
       if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
+      // Discard again after the second await in case a newer poll won
+      if (gen !== _pollGeneration) return;
 
       const afterCats = getCategoryStateSnapshot();
       const newDesign = getDesignSnapshot();
@@ -2258,11 +2333,15 @@ function startPolling() {
       const syncEl = document.getElementById('sync-status');
       if (syncEl?.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
     } catch(e) {
+      if (gen !== _pollGeneration) return;
       _pollFailCount++;
       if (_pollFailCount >= 3) {
         const syncEl = document.getElementById('sync-status');
         if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
       }
+    } finally {
+      // Only clear the in-flight flag if this is still the current generation
+      if (gen === _pollGeneration) _pollInFlight = false;
     }
   };
 
@@ -2273,7 +2352,7 @@ function startPolling() {
 
   _visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      // Tab became visible — poll immediately and restart the interval
+      // Tab became visible — poll immediately (respects in-flight guard) and restart interval
       pollCycle();
       if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
       startInterval();
@@ -2291,6 +2370,9 @@ function stopPolling() {
     document.removeEventListener('visibilitychange', _visibilityHandler);
     _visibilityHandler = null;
   }
+  // Invalidate any in-flight poll so its results are discarded
+  _pollGeneration++;
+  _pollInFlight = false;
 }
 
 function getLastUpdatedTs() {
@@ -2367,14 +2449,15 @@ function renderFeaturedPublicSection() {
         const is86 = slot.item?.eightySixed;
         const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
         const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
-        const sellNoteHtml = (currentUser && slot.sellNote)
+        const isStaffRole = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+        const sellNoteHtml = (isStaffRole && slot.sellNote)
           ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
           : '';
         return `<div class="${classes}">
           <div class="featured-slot-main">
             <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
             ${priceHtml}
-            ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+            ${is86 ? '<span class="eighty-sixed-tag">SOLD OUT</span>' : ''}
           </div>
           ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
           ${sellNoteHtml}
@@ -2412,7 +2495,7 @@ function buildPublicItemHtml(item) {
     <div class="item-main-row">
       <div class="dot" aria-hidden="true"></div>
       <span class="item-name-text">${escHtml(item.name)}${isFood ? '' : priceHtml}</span>
-      ${is86 ? `<span class="eighty-sixed-tag">86'D</span>` : ''}
+      ${is86 ? `<span class="eighty-sixed-tag">SOLD OUT</span>` : ''}
       ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
     </div>
     ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}
@@ -2655,11 +2738,11 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
   };
-  lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
-  lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
-  lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
-  lsSet(LS_KEYS.uid,          userId);
-  lsSet(LS_KEYS.email,        email);
+  ssSet(LS_KEYS.accessToken,  currentUser.accessToken);
+  ssSet(LS_KEYS.refreshToken, currentUser.refreshToken);
+  ssSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
+  ssSet(LS_KEYS.uid,          userId);
+  ssSet(LS_KEYS.email,        email);
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
@@ -2744,9 +2827,13 @@ function renderUserHeader() {
     if (cantinaRole) cantinaRole.textContent = roleLabel;
   }
 
-  const publicView = document.getElementById('public-view');
-  if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
-    renderPublicView();
+  // Only trigger a public rerender when the public view is actually visible and
+  // no caller has already scheduled its own render (e.g. selectMenu flow).
+  if (!_suppressPublicRender) {
+    const publicView = document.getElementById('public-view');
+    if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
+      renderPublicView();
+    }
   }
 }
 
@@ -3125,7 +3212,12 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   history.replaceState({}, '', url.toString());
   closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
+  // Suppress the public render inside renderUserHeader — the caller
+  // (onPublicSwitchMenuClick, route toggles, etc.) will render after
+  // loading the new menu data, avoiding a redundant stale render here.
+  _suppressPublicRender = true;
   renderUserHeader();
+  _suppressPublicRender = false;
   if (cb) cb();
 }
 
@@ -3336,11 +3428,11 @@ function signOut() {
   currentUser = null;
   _managerMenuPicked = false;
   if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
-  localStorage.removeItem(LS_KEYS.accessToken);
-  localStorage.removeItem(LS_KEYS.refreshToken);
-  localStorage.removeItem(LS_KEYS.expiresAt);
-  localStorage.removeItem(LS_KEYS.uid);
-  localStorage.removeItem(LS_KEYS.email);
+  sessionStorage.removeItem(LS_KEYS.accessToken);
+  sessionStorage.removeItem(LS_KEYS.refreshToken);
+  sessionStorage.removeItem(LS_KEYS.expiresAt);
+  sessionStorage.removeItem(LS_KEYS.uid);
+  sessionStorage.removeItem(LS_KEYS.email);
   if (isManagerMode || isAdminMode) exitView();
   renderUserHeader();
   _syncRequestedPageMode();
@@ -3516,8 +3608,17 @@ async function saveNotifCredKeys() {
 async function saveMenuUrl() {
   const val = document.getElementById('menu-url-input').value.trim();
   if (!val) { showToast('Enter a URL first.', 'info'); return; }
-  MENU_URL = val; lsSet(LS_KEYS.menuUrl, MENU_URL);
-  showToast('✅ Menu URL saved!', 'success');
+  // Save per-menu: use the currently selected menu in the admin notif switcher
+  const targetMenuId = _adminSwitcherState?.notif?.menuId || MENU_ID;
+  if (targetMenuId) {
+    lsSet(`menu_url:${targetMenuId}`, val);
+  }
+  // Also update the global MENU_URL for backward compat if this is the active menu
+  if (targetMenuId === MENU_ID || !targetMenuId) {
+    MENU_URL = val;
+    lsSet(LS_KEYS.menuUrl, MENU_URL);
+  }
+  showToast(`✅ Notification link saved for this menu.`, 'success');
 }
 
 // ─── ADMIN SWITCHER ───────────────────────────────────────────────────────────
@@ -3592,7 +3693,7 @@ async function _loadAdminTabData(context) {
       return;
     }
     const urlInput = document.getElementById('menu-url-input');
-    if (urlInput) urlInput.value = MENU_URL || '';
+    if (urlInput) urlInput.value = MENU_URL || getCanonicalMenuUrl() || '';
     if (!menuId) { _populateAdminNotificationsPanel({}); }
     else {
       try {
@@ -3644,13 +3745,13 @@ function renderManagerCategories() {
         <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
         <div class="add-item-wrap">
           <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(isReadOnlyCategory ? 'Legacy category is read-only' : (cat.placeholder || 'Add item…'))}" aria-label="${escHtml(isReadOnlyCategory ? `${cat.title} is read-only` : `Add item to ${cat.title}`)}" autocomplete="off" ${isReadOnlyCategory ? 'disabled' : `
+            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(isReadOnlyCategory ? 'Legacy category is read-only' : (cat.placeholder || 'Add item…'))}" aria-label="${escHtml(isReadOnlyCategory ? `${cat.title} is read-only` : `Add item to ${cat.title}`)}" autocomplete="off" role="combobox" aria-expanded="false" aria-owns="ac-${escHtml(cat.id)}" aria-autocomplete="list" ${isReadOnlyCategory ? 'disabled' : `
               oninput="showAutocomplete('${escHtml(cat.id)}')"
               onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
               onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"`}/>
             <button class="add-item-btn" ${isReadOnlyCategory ? 'disabled aria-disabled="true"' : `onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}"`}>+</button>
           </div>
-          <div class="autocomplete-list" id="ac-${escHtml(cat.id)}"></div>
+          <div class="autocomplete-list" id="ac-${escHtml(cat.id)}" role="listbox" aria-label="Suggestions for ${escHtml(cat.title)}"></div>
         </div>
       </div>`;
     container.appendChild(card);
@@ -3716,7 +3817,7 @@ async function addUncategorizedItem() {
   pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false });
   input.value = '';
   renderUncategorizedItems();
-  await persistState();
+  invalidateDiff();
 }
 
 function toggleManagerCategory(catId) {
@@ -3760,7 +3861,8 @@ function buildUncategorizedItemHtml(item) {
   return `<div class="current-item">
       <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
       <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
+      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
+        style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
     </div>
     ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
@@ -3779,6 +3881,12 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
         ondragend="endManagerItemDrag(event)"
         title="Drag to reorder"
         aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
+      <button class="item-move-btn item-move-up" type="button" title="Move up"
+        aria-label="Move ${escHtml(item.name)} up"
+        onclick="moveItemInCategory('${catId}','${item.id}',-1)">&#9650;</button>
+      <button class="item-move-btn item-move-down" type="button" title="Move down"
+        aria-label="Move ${escHtml(item.name)} down"
+        onclick="moveItemInCategory('${catId}','${item.id}',1)">&#9660;</button>
       <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
       <div class="item-name"><input type="text" value="${escHtml(item.name)}"
         aria-label="Item name"
@@ -3876,6 +3984,32 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   updateDraftIndicator();
   renderManagerOverviewStats();
   showToast('Item order updated.', 'success');
+}
+
+function moveItemInCategory(catId, itemId, direction) {
+  const items = menuState[catId]?.items || [];
+  const visibleItems = items.filter(item => item.onMenu !== false);
+  const idx = visibleItems.findIndex(item => item.id === itemId);
+  if (idx < 0) return;
+  const targetIdx = idx + direction;
+  if (targetIdx < 0 || targetIdx >= visibleItems.length) return;
+  const reordered = [...visibleItems];
+  const [moved] = reordered.splice(idx, 1);
+  reordered.splice(targetIdx, 0, moved);
+  menuState[catId].items = [
+    ...reordered,
+    ...items.filter(item => item.onMenu === false),
+  ];
+  invalidateDiff();
+  renderManagerItems(catId);
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  // Re-focus the same move button after re-render for keyboard continuity
+  requestAnimationFrame(() => {
+    const btnClass = direction < 0 ? '.item-move-up' : '.item-move-down';
+    const btn = document.querySelector(`#wrapper-${itemId} ${btnClass}`);
+    if (btn) btn.focus();
+  });
 }
 
 function buildCategoryUpsertRows() {
@@ -4002,10 +4136,7 @@ async function persistState() {
 
     await flushDeletedItems();
 
-    await Promise.all([
-      sbPatchMenuMeta({ bot_id: BOT_ID }),
-      sbPatchRestaurantDesign(currentDesign),
-    ]);
+    await sbPatchMenuMeta({ bot_id: BOT_ID });
 
     finalizePersistStatus(true);
     return true;
@@ -4016,21 +4147,34 @@ async function persistState() {
   }
 }
 
-async function saveMenu() {
+// ─── SHARED SAVE/SEND ORCHESTRATOR ───────────────────────────────────────────
+// commitMenuState() is the single persistence seam shared by Save and Send Update.
+// It persists menu data, patches metadata, updates timestamps, syncs the local cache,
+// and returns { ok, ts } so callers can build on a known-good state.
+async function commitMenuState(metaOverrides = {}) {
   const ts = Date.now();
   try {
     const persisted = await persistState();
-    if (!persisted) return;
-    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
+    if (!persisted) return { ok: false, ts };
+    await patchMenuMetaWithCompatibility({ last_updated_ts: ts, ...metaOverrides });
     menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
     lsSet(LS_KEYS.lastUpdated, ts.toString());
     _dirty = false;
     updateSaveBtn();
     updateLastUpdatedLabel();
-    syncLocalMenuCache({ silent: true });
-    showToast('✅ Menu saved!', 'success');
+    const cacheSynced = syncLocalMenuCache({ silent: true });
+    return { ok: true, ts, cacheSynced };
   } catch(e) {
     finalizePersistStatus(false);
+    return { ok: false, ts };
+  }
+}
+
+async function saveMenu() {
+  const result = await commitMenuState();
+  if (result.ok) {
+    showToast('✅ Menu saved!', 'success');
+  } else {
     showToast('⚠️ Cloud save failed.', 'error');
   }
 }
@@ -4101,16 +4245,20 @@ function showAutocomplete(catId) {
   );
   const matches = [...catMatches, ...uncatMatches];
   if (!matches.length) { hideAutocomplete(catId); return; }
-  list.innerHTML = matches.map(r =>
-    `<div class="autocomplete-item" onmousedown="selectAutocomplete(event,'${catId}',${escAttrJs(r.name)})">${escHtml(r.name)}</div>`
+  list.innerHTML = matches.map((r, idx) =>
+    `<div class="autocomplete-item" id="ac-opt-${catId}-${idx}" role="option" onmousedown="selectAutocomplete(event,'${catId}',${escAttrJs(r.name)})">${escHtml(r.name)}</div>`
   ).join('');
   list.classList.add('open');
+  const input = document.getElementById('new-input-' + catId);
+  if (input) input.setAttribute('aria-expanded', 'true');
 }
 
 function hideAutocomplete(catId) {
   const list = document.getElementById('ac-' + catId);
   if (list) { list.classList.remove('open'); list.innerHTML = ''; }
   _acIdx = -1;
+  const input = document.getElementById('new-input-' + catId);
+  if (input) { input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); }
 }
 
 function selectAutocomplete(event, catId, name) {
@@ -4123,14 +4271,19 @@ function selectAutocomplete(event, catId, name) {
 function handleAddItemKeydown(event, catId) {
   const list = document.getElementById('ac-' + catId);
   const items = list ? list.querySelectorAll('.autocomplete-item') : [];
+  const input = event.target;
   if (event.key === 'ArrowDown') {
     event.preventDefault();
     _acIdx = Math.min(_acIdx + 1, items.length - 1);
-    items.forEach((el, i) => el.classList.toggle('ac-selected', i === _acIdx));
+    items.forEach((el, i) => { el.classList.toggle('ac-selected', i === _acIdx); if (i === _acIdx) el.setAttribute('aria-selected', 'true'); else el.removeAttribute('aria-selected'); });
+    if (_acIdx >= 0 && items[_acIdx]) input.setAttribute('aria-activedescendant', items[_acIdx].id);
+    else input.removeAttribute('aria-activedescendant');
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
     _acIdx = Math.max(_acIdx - 1, -1);
-    items.forEach((el, i) => el.classList.toggle('ac-selected', i === _acIdx));
+    items.forEach((el, i) => { el.classList.toggle('ac-selected', i === _acIdx); if (i === _acIdx) el.setAttribute('aria-selected', 'true'); else el.removeAttribute('aria-selected'); });
+    if (_acIdx >= 0 && items[_acIdx]) input.setAttribute('aria-activedescendant', items[_acIdx].id);
+    else input.removeAttribute('aria-activedescendant');
   } else if (event.key === 'Enter') {
     if (_acIdx >= 0 && items[_acIdx]) {
       event.preventDefault();
@@ -4140,6 +4293,7 @@ function handleAddItemKeydown(event, catId) {
     }
   } else if (event.key === 'Escape') {
     hideAutocomplete(catId);
+    input.removeAttribute('aria-activedescendant');
   }
 }
 
@@ -4147,10 +4301,7 @@ function handleAddItemKeydown(event, catId) {
 function toggle86(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return;
-  item.eightySixed = !item.eightySixed;
-  invalidateDiff();
-  renderManagerItems(catId);
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.eightySixed = !item.eightySixed; }, { renderCategory: catId });
   // Trigger animation on the newly-rendered wrapper
   const wrapper = document.getElementById('wrapper-' + itemId);
   if (wrapper) {
@@ -4164,11 +4315,7 @@ function toggle86(catId, itemId) {
 function toggleVisibility(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return;
-  item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu';
-  invalidateDiff();
-  renderManagerItems(catId);
-  renderOffMenuSection();
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu'; }, { renderCategory: catId, renderOffMenu: true });
   showToast(item.visibility === 'off_menu' ? `"${item.name}" moved off menu` : `"${item.name}" made public`, 'info');
 }
 
@@ -4205,68 +4352,61 @@ function renderRecipeIngredients(catId, itemId) {
   list.innerHTML = buildRecipeListHtml(catId, itemId, ingredients);
 }
 
-async function addIngredient(catId, itemId) {
+function addIngredient(catId, itemId) {
   const input = document.getElementById('ingredient-input-' + itemId);
   const val = input.value.trim();
   if (!val) return;
   const item = findItem(catId, itemId);
   if (!item) return;
-  if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
-  item.recipe.push(val);
+  applyMenuEdit(() => {
+    if (!Array.isArray(item.recipe)) item.recipe = recipeArray(item.recipe);
+    item.recipe.push(val);
+  });
   input.value = '';
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
   input.focus();
-  await persistState();
 }
 
-async function removeIngredient(catId, itemId, idx) {
+function removeIngredient(catId, itemId, idx) {
   const item = findItem(catId, itemId);
   if (!item || !Array.isArray(item.recipe)) return;
-  item.recipe.splice(idx, 1);
+  applyMenuEdit(() => { item.recipe.splice(idx, 1); });
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
-  await persistState();
 }
 
 function handleIngredientKeydown(event, catId, itemId) {
   if (event.key === 'Enter') { event.preventDefault(); addIngredient(catId, itemId); }
 }
 
-async function saveDesc(catId, itemId, val) {
+function saveDesc(catId, itemId, val) {
   const item = findItem(catId, itemId);
   if (!item) return;
   const desc = val.trim();
   if (item.desc !== desc) {
-    item.desc = desc;
+    applyMenuEdit(() => { item.desc = desc; });
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
-    await persistState();
   }
 }
 
-async function savePrice(catId, itemId, val) {
+function savePrice(catId, itemId, val) {
   const item = findItem(catId, itemId);
   if (!item) return;
   const price = val.trim();
-  if (item.price !== price) { item.price = price; await persistState(); }
+  if (item.price !== price) { applyMenuEdit(() => { item.price = price; }); }
 }
 
 function removeItem(catId, itemId) {
   const item = findItem(catId, itemId);
   if (!item) return false;
-  item.onMenu = false;
-  invalidateDiff();
-  renderManagerItems(catId);
-  updateDraftIndicator();
+  applyMenuEdit(() => { item.onMenu = false; }, { renderCategory: catId });
   const removedName = item.name;
   showToast(`"${removedName}" removed`, 'info', () => {
-    item.onMenu = true;
-    invalidateDiff();
-    renderManagerItems(catId);
-    updateDraftIndicator();
+    applyMenuEdit(() => { item.onMenu = true; }, { renderCategory: catId });
     showToast(`"${removedName}" restored`, 'success');
   });
   return true;
@@ -4364,7 +4504,7 @@ function renameItem(catId, itemId, newName) {
     return;
   }
   const item = findItem(catId, itemId);
-  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); updateDraftIndicator(); }
+  if (item && item.name !== name) { applyMenuEdit(() => { item.name = name; }, { renderCategory: catId }); }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
@@ -4372,7 +4512,7 @@ function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
   const diff = getCachedDiff();
-  const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
+  const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length + (s.modified || []).length, 0);
   if (total > 0) {
     btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
     btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
@@ -4402,6 +4542,8 @@ function computeCategoryDiff(cat) {
   const restored = [];
   const eightySixedNames = new Set();
   const restoredNames = new Set();
+  const modified = [];
+  const modifiedNames = new Set();
 
   state.lastSent.forEach(item => {
     const trimmed = item.name.trim();
@@ -4421,6 +4563,18 @@ function computeCategoryDiff(cat) {
     if (isVisible && prev && prev.onMenu !== false) {
       if (!prev.eightySixed && item.eightySixed) { eightySixed.push(trimmed); eightySixedNames.add(key); }
       if (prev.eightySixed && !item.eightySixed) { restored.push(trimmed); restoredNames.add(key); }
+      // Detect metadata changes: price, description, recipe
+      if (!item.eightySixed && !prev.eightySixed) {
+        const priceChanged = (item.price || '') !== (prev.price || '');
+        const descChanged = (item.desc || '') !== (prev.desc || '');
+        const recipeStr = JSON.stringify(item.recipe || []);
+        const prevRecipeStr = JSON.stringify(prev.recipe || []);
+        const recipeChanged = recipeStr !== prevRecipeStr;
+        if (priceChanged || descChanged || recipeChanged) {
+          modified.push(trimmed);
+          modifiedNames.add(key);
+        }
+      }
     }
     if (isVisible && !item.eightySixed && trimmed) {
       currentNames.push(trimmed);
@@ -4430,8 +4584,8 @@ function computeCategoryDiff(cat) {
 
   const added = currentNames.filter(n => !lastSet.has(n.toLowerCase()) && !restoredNames.has(n.toLowerCase()));
   const removed = lastNames.filter(n => !currentSet.has(n.toLowerCase()) && !eightySixedNames.has(n.toLowerCase()));
-  if (!added.length && !removed.length && !eightySixed.length && !restored.length) return null;
-  return { id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored };
+  if (!added.length && !removed.length && !eightySixed.length && !restored.length && !modified.length) return null;
+  return { id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored, modified };
 }
 
 function computeFeaturedDiff() {
@@ -4488,6 +4642,7 @@ function buildPreviewBlockHtml(section) {
   section.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
   section.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
   section.restored.forEach(n    => { html += `<div class="preview-line add"><span>↩</span> ${restoreLabel(section.id)}: ${escHtml(n)}</div>`; });
+  (section.modified || []).forEach(n => { html += `<div class="preview-line modify"><span>✏️</span> Updated: ${escHtml(n)}</div>`; });
   return html;
 }
 
@@ -4511,8 +4666,36 @@ function openPreview() {
     });
   }
   modal.classList.add('open');
+  _previewFocusBefore = document.activeElement;
+  document.addEventListener('keydown', _previewFocusTrap);
+  // Focus the first actionable button (Cancel or Send)
+  const firstBtn = modal.querySelector('.modal .btn-cancel, .modal .btn-confirm');
+  if (firstBtn) firstBtn.focus();
 }
-function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
+
+let _previewFocusBefore = null;
+function _previewFocusTrap(e) {
+  if (e.key === 'Escape') { closeModal(); return; }
+  if (e.key !== 'Tab') return;
+  const modal = document.querySelector('#modal-bg .modal');
+  if (!modal) return;
+  const focusable = modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+}
+
+function closeModal() {
+  document.getElementById('modal-bg')?.classList.remove('open');
+  document.removeEventListener('keydown', _previewFocusTrap);
+  if (_previewFocusBefore?.focus) _previewFocusBefore.focus();
+  _previewFocusBefore = null;
+}
 
 // ─── SEND UPDATE ──────────────────────────────────────────────────────────────
 function buildPatchMessage(diff) {
@@ -4528,9 +4711,11 @@ function buildPatchMessage(diff) {
     section.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
     section.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
     section.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
+    (section.modified || []).forEach(n => lines.push(`  ✏️ Updated: ${cleanName(n)}`));
     lines.push('');
   });
-  if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
+  const canonicalUrl = getCanonicalMenuUrl();
+  if (canonicalUrl) lines.push(`📋 Full menu: ${canonicalUrl}`);
   return lines.join('\n').trim();
 }
 
@@ -4594,6 +4779,44 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING…';
 
   try {
+    // ── Step 1: Persist state + metadata BEFORE sending notifications ──
+    const ts = Date.now();
+    const persisted = await persistState();
+    if (!persisted) {
+      showToast('⚠️ Save failed. Update not sent — fix save errors first.', 'error');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'SEND UPDATE';
+      return;
+    }
+
+    const lastSentState = snapshotCurrentItemsAsLastSent();
+    const currentFeaturedIds = getCurrentFeaturedIds();
+    const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
+      ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
+      : [];
+    _lastSentFeaturedIds = new Set(currentFeaturedIds);
+
+    await Promise.all([
+      patchMenuMetaWithCompatibility({
+        last_updated_ts:      ts,
+        last_sent_ts:         ts,
+        last_sent_state:      lastSentState,
+        last_sent_categories: diff.map(d => d.id),
+        last_sent_featured:   currentFeaturedIds,
+      }),
+      ...restaurantMenuIds
+        .filter(menuId => menuId && menuId !== MENU_ID)
+        .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
+    ]);
+
+    // Metadata is now durable — apply local sent-state bookkeeping
+    applySentState(diff, ts);
+    _dirty = false;
+    updateSaveBtn();
+    updateLastUpdatedLabel();
+    syncLocalMenuCache({ silent: true });
+
+    // ── Step 2: Send notifications (state is already safe) ──
     const authHeaders = currentUser?.accessToken
       ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
       : {};
@@ -4603,57 +4826,30 @@ async function sendUpdate() {
       body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
     });
 
-    if (r1.status >= 200 && r1.status < 300) {
+    closeModal();
+
+    // ── Step 3: Status handling and post-send bookkeeping ──
+    if (r1.status === 207) {
+      showToast(`⚠️ ${_activeMenuName || 'Menu'} update saved, but some notification channels failed. Check Admin settings.`, 'warning');
+    } else if (r1.status >= 200 && r1.status < 300) {
       showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
-      const ts = Date.now();
-      closeModal();
-      try {
-        const persisted = await persistState();
-        if (!persisted) throw new Error('persist failed');
-        const lastSentState = snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = getCurrentFeaturedIds();
-        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
-          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
-          : [];
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await Promise.all([
-          sbPatchMenuMeta({
-            last_updated_ts:      ts,
-            last_sent_ts:         ts,
-            last_sent_state:      lastSentState,
-            last_sent_categories: diff.map(d => d.id),
-            last_sent_featured:   currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== MENU_ID)
-            .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
-        ]);
-        applySentState(diff, ts);
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
-        renderManagerWorkspace({ includeRecentChanges: false });
-        updateDraftIndicator();
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        if (!cacheSynced) {
-          showToast('⚠️ Update sent, but this device could not refresh its local cache.', 'warning');
-        }
-        const logged = await logUpdate(diff, patchMessage);
-        if (!logged) console.warn('sendUpdate audit log insert failed');
-        renderRecentChanges();
-      } catch (syncError) {
-        console.warn('sendUpdate post-send sync failed:', syncError);
-        showToast('⚠️ Update sent, but database sync needs attention. Refresh before sending again.', 'warning');
-      }
     } else if (r1.status === 401) {
-      showToast('❌ Not authorized. Please sign in.', 'error');
+      showToast('⚠️ Menu saved, but notification failed: not authorized.', 'warning');
     } else if (r1.status === 403) {
-      showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
+      showToast('⚠️ Menu saved, but notification failed: access denied.', 'warning');
     } else {
-      showToast('❌ Notification error. Check channel config in Admin settings.', 'error');
+      showToast('⚠️ Menu saved, but notification delivery failed. Check channel config in Admin settings.', 'warning');
     }
+
+    renderManagerWorkspace({ includeRecentChanges: false });
+    updateDraftIndicator();
+    const logged = await logUpdate(diff, patchMessage);
+    if (!logged) console.warn('sendUpdate audit log insert failed');
+    renderRecentChanges();
   } catch(e) {
-    showToast('❌ Network error. Check connection.', 'error');
+    // Persistence or network failure — do NOT clear draft state
+    console.error('sendUpdate failed:', e);
+    showToast('❌ Send failed. Your changes are still pending — please try again.', 'error');
   }
 
   confirmBtn.disabled = false;
@@ -4734,10 +4930,12 @@ function summarizeHistoryDiff(diff) {
   const totalRemoved = diff.reduce((n, s) => n + (s.removed?.length || 0), 0);
   const total86 = diff.reduce((n, s) => n + (s.eightySixed?.length || 0), 0);
   const totalRestored = diff.reduce((n, s) => n + (s.restored?.length || 0), 0);
+  const totalModified = diff.reduce((n, s) => n + (s.modified?.length || 0), 0);
   if (totalAdded) summaryParts.push(`+${totalAdded} added`);
   if (totalRemoved) summaryParts.push(`-${totalRemoved} removed`);
   if (total86) summaryParts.push(`${total86} 86'd`);
   if (totalRestored) summaryParts.push(`${totalRestored} restored`);
+  if (totalModified) summaryParts.push(`${totalModified} updated`);
   return summaryParts.join(', ') || 'No item changes';
 }
 
@@ -4747,7 +4945,8 @@ function buildHistoryDetailHtml(diff) {
     (s.added || []).map(n => `<div class="history-line history-add">+ ${escHtml(n)}</div>`).join('') +
     (s.removed || []).map(n => `<div class="history-line history-remove">- ${escHtml(n)}</div>`).join('') +
     (s.eightySixed || []).map(n => `<div class="history-line history-remove">86'd: ${escHtml(n)}</div>`).join('') +
-    (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('')
+    (s.restored || []).map(n => `<div class="history-line history-add">Back: ${escHtml(n)}</div>`).join('') +
+    (s.modified || []).map(n => `<div class="history-line history-modify">Updated: ${escHtml(n)}</div>`).join('')
   ).join('');
 }
 
@@ -4967,7 +5166,7 @@ async function saveUserName(userId) {
 }
 
 function openInviteModal() {
-  const url = MENU_URL || window.location.origin;
+  const url = getCanonicalMenuUrl() || window.location.origin;
   const brand = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'the menu';
   const output = document.getElementById('invite-text-output');
   const modal = document.getElementById('invite-modal-bg');
@@ -5218,9 +5417,13 @@ function checkFeaturedConfirmation() {
   const banner = document.getElementById('featured-confirm-banner');
   if (banner && !currentUserCanEditRestaurantSpecials()) {
     banner.style.display = 'none';
+    _featuredBannerDeferredFromEdit = false;
     return;
   }
-  if (sessionStorage.getItem(getFeaturedConfirmationKey())) return;
+  if (sessionStorage.getItem(getFeaturedConfirmationKey())) {
+    _featuredBannerDeferredFromEdit = false;
+    return;
+  }
   const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
     if (!s.confirmedAt) return true;
     const confirmed = new Date(s.confirmedAt);
@@ -5228,8 +5431,18 @@ function checkFeaturedConfirmation() {
     today.setHours(0, 0, 0, 0);
     return confirmed < today;
   }));
-  if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
-  if (banner) banner.style.display = '';
+  if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) {
+    _featuredBannerDeferredFromEdit = false;
+    return;
+  }
+  // If the banner was temporarily hidden by editFeaturedFromBanner and user
+  // navigated back without confirming, re-show it.
+  if (_featuredBannerDeferredFromEdit) {
+    _featuredBannerDeferredFromEdit = false;
+    if (banner) banner.style.display = '';
+  } else {
+    if (banner) banner.style.display = '';
+  }
   updateManagerActionBar();
 }
 
@@ -5250,15 +5463,22 @@ async function confirmFeaturedToday() {
 
 function editFeaturedFromBanner() {
   if (!currentUserCanEditRestaurantSpecials()) return;
+  // Hide banner temporarily while editing, but do NOT dismiss the confirmation
+  // reminder via sessionStorage. The reminder should only clear when a real
+  // confirmation occurs (confirmFeaturedToday) or featured items are actually saved.
   const banner = document.getElementById('featured-confirm-banner');
   if (banner) banner.style.display = 'none';
-  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
+  _featuredBannerDeferredFromEdit = true;
   updateManagerActionBar();
   switchManagerTab('edit-menu');
 }
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
+  // If navigating away from edit-menu while banner was deferred, re-check it
+  if (name !== 'edit-menu' && _featuredBannerDeferredFromEdit) {
+    checkFeaturedConfirmation();
+  }
   if (name === 'edit-menu') {
     renderFeaturedTab();
     renderOffMenuSection();
@@ -5533,6 +5753,73 @@ function _updatePreviewToolbar() {
     btn.classList.toggle('active', btn.dataset.role === active);
   });
 }
+
+// ─── PUBLIC ROUTE ADAPTER ────────────────────────────────────────────────────
+// Explicit adapter surface for route files (leroyslounge/app.js, elroyscantina/app.js).
+// Route files should consume this adapter instead of reaching into shared globals directly.
+// This keeps the contract explicit and prevents drift when shared internals change.
+window.MenuRouteAdapter = {
+  // State accessors — route files read current menu state through these
+  getMenuState:        () => menuState,
+  getCategoryDefs:     () => getManagedCategoryDefs(),
+  getTimestamp:        () => getLastUpdatedTs(),
+  getActiveMenuName:   () => _activeMenuName,
+  getMenuId:           () => MENU_ID,
+  getMenuType:         () => MENU_TYPE,
+  getRestaurantId:     () => RESTAURANT_ID,
+  getSiteRestaurant:   () => _siteRestaurant,
+  getAppVersion:       () => APP_VERSION,
+  getIsPreview:        () => IS_PREVIEW,
+  getCurrentUser:      () => currentUser,
+  getKnownMenus:       () => knownMenuList(),
+  getFeaturedGroups:   () => _featuredGroups,
+  getRestaurantSpecials: () => {
+    const restaurantSpecials = _featuredGroups.length > 1
+      ? {
+          id: '__restaurant_specials__',
+          name: getRestaurantSpecialLabel(RESTAURANT_ID),
+          slots: _featuredGroups.flatMap(group => group.slots || []),
+        }
+      : (_featuredGroups[0] || null);
+    return restaurantSpecials;
+  },
+
+  // Auth state snapshot for route initialization
+  getAuthState: () => ({
+    activeMenuName: _activeMenuName,
+    appVersion: APP_VERSION,
+    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+    categoryDefs: getManagedCategoryDefs(),
+    currentUser,
+    featuredGroups: _featuredGroups,
+    isPreview: IS_PREVIEW,
+    knownMenus: knownMenuList(),
+    lastUpdatedTs: getLastUpdatedTs(),
+    menuId: MENU_ID,
+    menuType: MENU_TYPE,
+    restaurantSpecials: window.MenuRouteAdapter.getRestaurantSpecials(),
+    restaurantId: RESTAURANT_ID,
+    siteRestaurant: _siteRestaurant,
+  }),
+
+  // Actions — route files call these to trigger shared behaviors
+  onMenuSwitch:        (menuId, slug, name, type, restaurantId) => selectMenu(menuId, slug, name, type, restaurantId),
+  loadActiveMenuState: () => loadActiveMenuState(),
+  renderPublicViews:   () => renderPublicViews(),
+  navigateToPage:      (path) => navigateToPage(path),
+  openAuth:            () => openAuthOverlay(),
+  openManager:         () => onActionBtnClick(),
+  openAdmin:           () => onAdminBtnClick(),
+  closeDropdowns:      (exceptId) => closeRouteDropdowns(exceptId),
+
+  // Utilities — shared helpers route files need
+  formatTimestamp:     (ts, prefix) => formatUpdatedAt(ts, prefix),
+  escapeHtml:         (s) => escHtml(s),
+  getMenuTypeLabel:   (type) => getMenuTypeLabel(type),
+  getPublicHref:      () => getPublicHrefForCurrentMenu(),
+  canManageMenu:      (menuId, user) => currentUserCanManageMenu(menuId, user),
+  applyDesign:        (design) => applyDesign(design),
+};
 
 init();
 if (IS_PREVIEW) _initPreviewToolbar();
