@@ -55,10 +55,13 @@ let _appPageMode       = 'public';  // 'picker' | 'public' | 'manager' | 'admin'
 let _hasMultipleMenus  = false;     // true once we know multiple menus exist
 let _restaurantCustomDesignEnabled = true; // cached restaurants.use_custom_design for the active restaurant
 let _visibilityHandler = null;      // Page Visibility API handler for smart polling
+let _pollInFlight      = false;     // true while a poll cycle is running
+let _pollGeneration    = 0;         // incremented each poll start; stale results are discarded
 let _managerMenuPicked = false;     // true after manager explicitly picks a menu this session
 let _pickerFocusBefore = null;
 let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 let _pickerOnClose     = null;
+let _suppressPublicRender = false; // true while selectMenu() is running to prevent duplicate renders
 let _settingsRedirectTimer = null;
 let _settingsRedirectCleanup = null;
 
@@ -2289,17 +2292,25 @@ function startPolling() {
 
   const pollCycle = async () => {
     if (isManagerMode) return;
+    // Guard: skip if a previous poll is still in-flight
+    if (_pollInFlight) return;
+    _pollInFlight = true;
+    const gen = ++_pollGeneration;
     try {
       const oldTs = menuState._meta?.lastUpdatedTs;
       const oldCats = getCategoryStateSnapshot();
       const oldDesign = getDesignSnapshot();
       const oldFeatured = getFeaturedSnapshot();
       const data = await sbRead();
+      // Discard result if a newer poll was started while we were awaiting
+      if (gen !== _pollGeneration) return;
       if (!data) return;
       hydrateState(data);
       lsSet(LS_KEYS.menuCache, JSON.stringify(data));
       const newTs = menuState._meta?.lastUpdatedTs;
       if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
+      // Discard again after the second await in case a newer poll won
+      if (gen !== _pollGeneration) return;
 
       const afterCats = getCategoryStateSnapshot();
       const newDesign = getDesignSnapshot();
@@ -2314,11 +2325,15 @@ function startPolling() {
       const syncEl = document.getElementById('sync-status');
       if (syncEl?.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
     } catch(e) {
+      if (gen !== _pollGeneration) return;
       _pollFailCount++;
       if (_pollFailCount >= 3) {
         const syncEl = document.getElementById('sync-status');
         if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
       }
+    } finally {
+      // Only clear the in-flight flag if this is still the current generation
+      if (gen === _pollGeneration) _pollInFlight = false;
     }
   };
 
@@ -2329,7 +2344,7 @@ function startPolling() {
 
   _visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      // Tab became visible — poll immediately and restart the interval
+      // Tab became visible — poll immediately (respects in-flight guard) and restart interval
       pollCycle();
       if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
       startInterval();
@@ -2347,6 +2362,9 @@ function stopPolling() {
     document.removeEventListener('visibilitychange', _visibilityHandler);
     _visibilityHandler = null;
   }
+  // Invalidate any in-flight poll so its results are discarded
+  _pollGeneration++;
+  _pollInFlight = false;
 }
 
 function getLastUpdatedTs() {
@@ -2801,9 +2819,13 @@ function renderUserHeader() {
     if (cantinaRole) cantinaRole.textContent = roleLabel;
   }
 
-  const publicView = document.getElementById('public-view');
-  if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
-    renderPublicView();
+  // Only trigger a public rerender when the public view is actually visible and
+  // no caller has already scheduled its own render (e.g. selectMenu flow).
+  if (!_suppressPublicRender) {
+    const publicView = document.getElementById('public-view');
+    if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
+      renderPublicView();
+    }
   }
 }
 
@@ -3182,7 +3204,12 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   history.replaceState({}, '', url.toString());
   closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
+  // Suppress the public render inside renderUserHeader — the caller
+  // (onPublicSwitchMenuClick, route toggles, etc.) will render after
+  // loading the new menu data, avoiding a redundant stale render here.
+  _suppressPublicRender = true;
   renderUserHeader();
+  _suppressPublicRender = false;
   if (cb) cb();
 }
 
