@@ -110,8 +110,8 @@ const KNOWN_MENU_ORDER = [
   MENUS.ELROYS_FOOD.id,
 ];
 const RESTAURANT_SPECIALS = {
-  [RESTAURANTS.LEROYS.id]: { name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
-  [RESTAURANTS.ELROYS.id]: { name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
+  [RESTAURANTS.LEROYS.id]: { canonicalId: 'leroyslounge-specials', name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
+  [RESTAURANTS.ELROYS.id]: { canonicalId: 'elroyscantina-specials', name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
 };
 const LEGACY_MENU_SLUG_ALIASES = {
   'el-roys': MENUS.ELROYS_DRINKS.slug,
@@ -872,7 +872,7 @@ async function ensureRestaurantSpecialsGroup(restaurantId = RESTAURANT_ID) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${currentUser.accessToken}`,
       },
-      body: JSON.stringify({ action: 'ensure', restaurantId }),
+      body: JSON.stringify({ action: 'migrate', restaurantId }),
     });
   } catch (_) {
     /* allow reads to continue with legacy fallback */
@@ -1119,18 +1119,25 @@ async function sbPatchRestaurantDesign(design) {
 async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
-  if (!SUPABASE_URL || !config?.name) return null;
+  if (!SUPABASE_URL || !config?.canonicalId) return null;
   try {
-    const groups = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+    // Primary lookup by canonical_id; fall back to name for pre-migration data
+    let groups = await sbReadJsonOrThrow(
+      `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
       { headers: sbHeaders() }
     );
+    if (!groups?.[0] && config.name) {
+      groups = await sbReadJsonOrThrow(
+        `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
+        { headers: sbHeaders() }
+      );
+    }
     if (groups?.[0]) return groups[0];
     if (!createIfMissing || !currentUser?.accessToken) return null;
     const created = await sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
       method: 'POST',
       headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ name: config.name }),
+      body: JSON.stringify({ name: config.name, canonical_id: config.canonicalId }),
     });
     return created?.[0] || null;
   } catch (e) {

@@ -273,7 +273,8 @@
       ...authState,
     };
 
-    if (sharedState.siteRestaurant?.id !== '00000000-0000-0000-0000-000000000001') return false;
+    // Verify this route matches the active restaurant (use slug for resilience)
+    if (sharedState.siteRestaurant?.slug !== 'el-roys-cantina' && sharedState.siteRestaurant?.id !== '00000000-0000-0000-0000-000000000001') return false;
 
     container.innerHTML = '';
     container.appendChild(template.content.cloneNode(true));
