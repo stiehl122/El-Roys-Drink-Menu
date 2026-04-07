@@ -172,6 +172,9 @@ function lsSet(key, val, options = {}) {
     return false;
   }
 }
+function ssSet(key, val) {
+  try { sessionStorage.setItem(key, val); return true; } catch(e) { return false; }
+}
 function findItem(catId, itemId) {
   return menuState[catId]?.items.find(i => i.id === itemId) ?? null;
 }
@@ -1835,6 +1838,18 @@ function migrateLocalStorage() {
   }
 }
 
+// One-time migration: clear auth tokens from localStorage (now stored in sessionStorage only).
+function migrateTokensToSessionStorage() {
+  [LS_KEYS.accessToken, LS_KEYS.refreshToken, LS_KEYS.expiresAt, LS_KEYS.uid, LS_KEYS.email].forEach(k => {
+    const val = localStorage.getItem(k);
+    if (val) {
+      // Carry existing token into sessionStorage so the current tab doesn't lose its session
+      if (!sessionStorage.getItem(k)) sessionStorage.setItem(k, val);
+      localStorage.removeItem(k);
+    }
+  });
+}
+
 async function init() {
   _appPageMode = getAppPageModeFromPath();
   const detectedSiteRestaurant = getSiteRestaurantFromPath();
@@ -1847,6 +1862,7 @@ async function init() {
   }
   showAppShell();
   migrateLocalStorage();
+  migrateTokensToSessionStorage();
   if (MENU_ID && !KNOWN_MENU_ORDER.includes(MENU_ID)) _clearActiveMenuContext({ clearCache: true });
   document.getElementById('loading-view').style.display = (isDedicatedRoute || isSettingsRoute) ? 'none' : 'block';
   document.getElementById('public-view').style.display = isDedicatedRoute ? 'block' : 'none';
@@ -1928,11 +1944,11 @@ async function _tryHandleRecoveryCallback() {
 
 async function _tryRestoreSession() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const storedAccess    = localStorage.getItem(LS_KEYS.accessToken);
-  const storedRefresh   = localStorage.getItem(LS_KEYS.refreshToken);
-  const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-  const storedUid       = localStorage.getItem(LS_KEYS.uid)   || '';
-  const storedEmail     = localStorage.getItem(LS_KEYS.email) || '';
+  const storedAccess    = sessionStorage.getItem(LS_KEYS.accessToken);
+  const storedRefresh   = sessionStorage.getItem(LS_KEYS.refreshToken);
+  const storedExpiresAt = Number(sessionStorage.getItem(LS_KEYS.expiresAt) || 0);
+  const storedUid       = sessionStorage.getItem(LS_KEYS.uid)   || '';
+  const storedEmail     = sessionStorage.getItem(LS_KEYS.email) || '';
   if (!storedRefresh) return;
 
   // If access token is still valid (2-min buffer), use it directly — skip refresh call.
@@ -1955,7 +1971,7 @@ async function _tryRestoreSession() {
 
   // Access token expired or unusable — exchange refresh token for a new one.
   const _doRefresh = async () => {
-    const refresh = localStorage.getItem(LS_KEYS.refreshToken);
+    const refresh = sessionStorage.getItem(LS_KEYS.refreshToken);
     if (!refresh) throw new Error('no refresh token');
     const data = await sbRefreshToken(refresh);
     let role = 'none', name = '', accessibleMenuIds = [];
@@ -1977,11 +1993,11 @@ async function _tryRestoreSession() {
       try {
         await _doRefresh();
       } catch(e2) {
-        localStorage.removeItem(LS_KEYS.accessToken);
-        localStorage.removeItem(LS_KEYS.refreshToken);
-        localStorage.removeItem(LS_KEYS.expiresAt);
-        localStorage.removeItem(LS_KEYS.uid);
-        localStorage.removeItem(LS_KEYS.email);
+        sessionStorage.removeItem(LS_KEYS.accessToken);
+        sessionStorage.removeItem(LS_KEYS.refreshToken);
+        sessionStorage.removeItem(LS_KEYS.expiresAt);
+        sessionStorage.removeItem(LS_KEYS.uid);
+        sessionStorage.removeItem(LS_KEYS.email);
       }
     }, 2000);
   }
@@ -2367,7 +2383,8 @@ function renderFeaturedPublicSection() {
         const is86 = slot.item?.eightySixed;
         const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
         const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
-        const sellNoteHtml = (currentUser && slot.sellNote)
+        const isStaffRole = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+        const sellNoteHtml = (isStaffRole && slot.sellNote)
           ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
           : '';
         return `<div class="${classes}">
@@ -2655,11 +2672,11 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
     refreshToken: data.refresh_token,
     expiresAt:    Date.now() + expiresIn,
   };
-  lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
-  lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
-  lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
-  lsSet(LS_KEYS.uid,          userId);
-  lsSet(LS_KEYS.email,        email);
+  ssSet(LS_KEYS.accessToken,  currentUser.accessToken);
+  ssSet(LS_KEYS.refreshToken, currentUser.refreshToken);
+  ssSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
+  ssSet(LS_KEYS.uid,          userId);
+  ssSet(LS_KEYS.email,        email);
   _scheduleTokenRefresh(currentUser.expiresAt);
 }
 
@@ -3336,11 +3353,11 @@ function signOut() {
   currentUser = null;
   _managerMenuPicked = false;
   if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
-  localStorage.removeItem(LS_KEYS.accessToken);
-  localStorage.removeItem(LS_KEYS.refreshToken);
-  localStorage.removeItem(LS_KEYS.expiresAt);
-  localStorage.removeItem(LS_KEYS.uid);
-  localStorage.removeItem(LS_KEYS.email);
+  sessionStorage.removeItem(LS_KEYS.accessToken);
+  sessionStorage.removeItem(LS_KEYS.refreshToken);
+  sessionStorage.removeItem(LS_KEYS.expiresAt);
+  sessionStorage.removeItem(LS_KEYS.uid);
+  sessionStorage.removeItem(LS_KEYS.email);
   if (isManagerMode || isAdminMode) exitView();
   renderUserHeader();
   _syncRequestedPageMode();
@@ -4002,10 +4019,7 @@ async function persistState() {
 
     await flushDeletedItems();
 
-    await Promise.all([
-      sbPatchMenuMeta({ bot_id: BOT_ID }),
-      sbPatchRestaurantDesign(currentDesign),
-    ]);
+    await sbPatchMenuMeta({ bot_id: BOT_ID });
 
     finalizePersistStatus(true);
     return true;
