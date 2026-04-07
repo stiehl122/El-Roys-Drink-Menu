@@ -241,11 +241,14 @@
 
               <details class="config-card admin-console-fold">
                 <summary class="admin-console-fold-summary">
-                  <span>Menu Page URL</span>
-                  <span class="admin-console-fold-note">Used in notifications</span>
+                  <span>Notification Link URL</span>
+                  <span class="admin-console-fold-note">Per-menu link included in update notifications</span>
                 </summary>
+                <p class="admin-console-fold-desc" style="margin:0 0 8px;font-size:12px;color:#888;">
+                  This URL is appended to notification messages for the currently selected menu. Each menu can have its own link. If left blank, the site root is used.
+                </p>
                 <div class="input-row admin-console-url-row">
-                  <input type="text" id="menu-url-input" placeholder="https://el-roys-drink-menu.vercel.app">
+                  <input type="text" id="menu-url-input" placeholder="https://el-roys-drink-menu.vercel.app/leroyslounge" aria-label="Notification link URL for this menu">
                   <button class="btn-small" onclick="saveMenuUrl()">Save</button>
                 </div>
               </details>
