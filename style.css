@@ -4888,6 +4888,7 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   body.manager-stitch-shell .manager-shell-layout {
     width: calc(100% - 24px);
+    grid-template-columns: 1fr;
     gap: 0;
     padding-top: 8px;
   }
