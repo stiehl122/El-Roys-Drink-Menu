@@ -1,0 +1,9 @@
+.agents/
+.claude/
+docs/
+supabase/migrations/
+ux-investigation/
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+Mobile Design.md
