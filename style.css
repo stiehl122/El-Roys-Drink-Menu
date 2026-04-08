@@ -3526,6 +3526,7 @@ body.manager-stitch-shell.settings-drawer-open {
   body.manager-stitch-shell .visibility-btn,
   body.manager-stitch-shell .del-item {
     order: 3;
+    width: auto;
     min-width: 40px;
     min-height: 40px;
     border: 1px solid var(--manager-shell-border);
@@ -4542,6 +4543,7 @@ body.manager-stitch-shell .featured-sell-note-input {
   width: 100%;
   min-height: 44px;
   border-radius: 14px;
+  flex: none;
 }
 
 body.manager-stitch-shell .featured-picker-list {
@@ -5008,22 +5010,38 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     gap: 8px;
   }
 
-  /* Preview toolbar compact on mobile */
+  /* Preview toolbar: horizontal strip at top on mobile */
   #preview-toolbar {
-    padding: 5px 4px;
-    gap: 3px;
-    min-width: 56px;
+    top: 4px;
+    right: 4px;
+    left: auto;
+    bottom: auto;
+    transform: none;
+    flex-direction: row;
+    align-items: center;
+    padding: 4px 8px;
+    gap: 4px;
+    min-width: 0;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    opacity: 0.85;
   }
 
   #preview-toolbar .preview-toolbar-label {
     font-size: 7px;
     letter-spacing: 1px;
-    padding: 1px 0 2px;
+    padding: 0 2px 0 0;
   }
 
   #preview-toolbar .preview-toolbar-btn {
-    padding: 4px 6px;
+    padding: 3px 6px;
     font-size: 9px;
+  }
+
+  #preview-toolbar .preview-toolbar-divider {
+    width: 1px;
+    height: 14px;
+    margin: 0 2px;
   }
 
   body.manager-stitch-shell .manager-shell-user-tools {
