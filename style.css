@@ -4953,12 +4953,77 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   body.manager-stitch-shell .featured-special-row-head {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 
   body.manager-stitch-shell .featured-special-actions {
-    width: 100%;
+    width: auto;
+    gap: 4px;
+  }
+
+  body.manager-stitch-shell .featured-special-actions .btn-small {
+    padding: 6px 10px;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 14px;
+  }
+
+  body.manager-stitch-shell .featured-special-row {
+    padding: 14px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+
+  body.manager-stitch-shell .featured-special-name .item-name-static {
+    font-size: 18px;
+  }
+
+  body.manager-stitch-shell .featured-specials-head h4 {
+    font-size: 24px;
+  }
+
+  body.manager-stitch-shell .featured-specials-copy {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  body.manager-stitch-shell .featured-specials-composer {
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  body.manager-stitch-shell .featured-sell-note-input {
+    min-height: 38px;
+    border-radius: 8px;
+    font-size: 13px;
+  }
+
+  body.manager-stitch-shell .featured-sell-note-field {
+    gap: 4px;
+  }
+
+  body.manager-stitch-shell .featured-specials-list {
+    gap: 8px;
+  }
+
+  /* Preview toolbar compact on mobile */
+  #preview-toolbar {
+    padding: 5px 4px;
+    gap: 3px;
+    min-width: 56px;
+  }
+
+  #preview-toolbar .preview-toolbar-label {
+    font-size: 7px;
+    letter-spacing: 1px;
+    padding: 1px 0 2px;
+  }
+
+  #preview-toolbar .preview-toolbar-btn {
+    padding: 4px 6px;
+    font-size: 9px;
   }
 
   body.manager-stitch-shell .manager-shell-user-tools {
@@ -5054,6 +5119,49 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     width: min(92vw, 308px);
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  body.manager-stitch-shell .featured-specials-copy {
+    display: none;
+  }
+
+  body.manager-stitch-shell .featured-specials-head h4 {
+    font-size: 20px;
+  }
+
+  body.manager-stitch-shell .featured-special-row {
+    padding: 12px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  body.manager-stitch-shell .featured-special-name .item-name-static {
+    font-size: 16px;
+  }
+
+  body.manager-stitch-shell .featured-special-actions .btn-small {
+    padding: 5px 8px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  body.manager-stitch-shell .featured-specials-composer {
+    padding: 10px;
+    border-radius: 12px;
+  }
+
+  body.manager-stitch-shell .featured-sell-note-input {
+    min-height: 34px;
+    border-radius: 6px;
+  }
+
+  body.manager-stitch-shell .featured-special-order {
+    font-size: 9px;
+  }
+
+  body.manager-stitch-shell .settings-section,
+  body.manager-stitch-shell .manager-shell-overview-card {
+    padding: 18px 14px;
   }
 }
 
