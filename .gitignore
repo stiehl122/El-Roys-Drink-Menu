@@ -3,5 +3,4 @@
 .vercel
 .claude/agent-memory/security-auditor/MEMORY.md
 supabase/config.toml
-supabase/migrations/
 .claude/agent-memory/security-auditor/audit_2026-03-19.md

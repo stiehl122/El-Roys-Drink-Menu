@@ -17,12 +17,35 @@
     return (state.items || []).filter(item => item.onMenu !== false && item.visibility !== 'off_menu');
   }
 
+  function itemUpcharges(upcharges) {
+    if (!Array.isArray(upcharges)) return [];
+    return upcharges
+      .filter(entry => entry && (entry.label || entry.price))
+      .map(entry => ({
+        label: String(entry.label || '').trim(),
+        price: String(entry.price || '').trim(),
+      }))
+      .filter(entry => entry.label || entry.price);
+  }
+
+  function recipeParts(recipe) {
+    if (Array.isArray(recipe)) return recipe.filter(Boolean).map(part => String(part).trim()).filter(Boolean);
+    if (typeof recipe === 'string' && recipe.trim()) return [recipe.trim()];
+    return [];
+  }
+
   function buildItemHtml(item, options = {}) {
     const is86 = !!item?.eightySixed;
-    const desc = String(item?.desc || '').trim();
+    const desc = item?.showDescription === false ? '' : String(item?.desc || '').trim();
+    const recipe = item?.showRecipe ? recipeParts(item?.recipe) : [];
+    const upcharges = itemUpcharges(item?.upcharges);
     const badge = options.badgeText
       ? `<span class="erc-badge erc-badge--special">${esc(options.badgeText)}</span>`
       : (is86 ? `<span class="erc-badge erc-badge--86d">86'D</span>` : '');
+    const recipeHtml = recipe.length ? `<p class="erc-item-desc erc-item-desc--recipe">Recipe: ${esc(recipe.join(', '))}</p>` : '';
+    const upchargesHtml = upcharges.length
+      ? `<div class="erc-item-upcharges">${upcharges.map(upcharge => `<span class="erc-upcharge-chip">${esc(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${esc(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+      : '';
 
     return `<article class="erc-item${is86 ? ' is-86d' : ''}">
       <div class="erc-item-row">
@@ -30,6 +53,8 @@
         ${item?.price ? `<span class="erc-item-price">${esc(item.price)}</span>` : ''}
       </div>
       ${desc ? `<p class="erc-item-desc">${esc(desc)}</p>` : ''}
+      ${recipeHtml}
+      ${upchargesHtml}
     </article>`;
   }
 

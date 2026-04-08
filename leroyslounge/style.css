@@ -555,7 +555,7 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-board-row-spacer {
-  height: 20px;
+  height: 14px;
 }
 
 #restaurant-site-wrapper .ll-board-row--desc {
@@ -683,6 +683,55 @@ body.route-restaurant.route-restaurant--leroy {
   letter-spacing: 0.08em;
   line-height: 1.35;
   text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-board-detail-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+#restaurant-site-wrapper .ll-board-detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+#restaurant-site-wrapper .ll-board-detail-label {
+  color: rgb(17 24 39 / 0.58);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-board-upcharges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+#restaurant-site-wrapper .ll-board-upcharge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgb(65 0 0 / 0.18);
+  background: rgb(255 255 255 / 0.32);
+  color: var(--ll-board-ink);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#restaurant-site-wrapper .ll-board-upcharge strong {
+  color: var(--ll-board-red-deep);
+  font-weight: 800;
 }
 
 #restaurant-site-wrapper .ll-board-detail.item-detail-panel {
@@ -861,6 +910,15 @@ body.route-restaurant.route-restaurant--leroy {
     gap: 0.35rem;
   }
 
+  #restaurant-site-wrapper .ll-board-upcharges {
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-upcharge {
+    font-size: 0.58rem;
+  }
+
   #restaurant-site-wrapper .ll-board-footer {
     padding-left: calc(0.75rem + var(--ll-safe-left));
     padding-right: calc(0.75rem + var(--ll-safe-right));
@@ -968,6 +1026,10 @@ body.route-restaurant.route-restaurant--leroy {
     flex-wrap: wrap;
     justify-content: flex-end;
     max-width: 42%;
+  }
+
+  #restaurant-site-wrapper .ll-board-upcharges {
+    margin-right: 0.25rem;
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar {

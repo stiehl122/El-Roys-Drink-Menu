@@ -695,6 +695,48 @@ async function sbRead() {
   return { cats, meta: meta || null, restaurant };
 }
 
+function itemUpchargeArray(upcharges) {
+  if (!Array.isArray(upcharges)) return [];
+  return upcharges
+    .map(entry => ({
+      label: String(entry?.label || '').trim(),
+      price: String(entry?.price || '').trim(),
+    }))
+    .filter(entry => entry.label || entry.price);
+}
+
+function hydrateMenuItem(record, overrides = {}) {
+  return {
+    id:          record.id,
+    name:        record.name || '',
+    desc:        record.desc || '',
+    recipe:      recipeArray(record.recipe),
+    price:       record.price || '',
+    eightySixed: record.eightySixed ?? record.is_eighty_sixed ?? false,
+    onMenu:      overrides.onMenu ?? record.onMenu ?? record.on_menu ?? true,
+    visibility:  record.visibility || 'public',
+    upcharges:   itemUpchargeArray(record.upcharges),
+    showDescription: record.showDescription ?? record.show_description ?? true,
+    showRecipe:  record.showRecipe ?? record.show_recipe ?? false,
+  };
+}
+
+function cloneMenuItemState(item) {
+  return {
+    ...item,
+    recipe: recipeArray(item.recipe),
+    upcharges: itemUpchargeArray(item.upcharges).map(entry => ({ ...entry })),
+  };
+}
+
+function isItemDescriptionPublic(item) {
+  return item?.showDescription !== false;
+}
+
+function isItemRecipePublic(item) {
+  return !!item?.showRecipe;
+}
+
 function hydrateState({ cats, meta, restaurant }) {
   const realCats = (cats || []).filter(c => c.key !== UNCATEGORIZED_ID);
   const uncatCat = (cats || []).find(c => c.key === UNCATEGORIZED_ID);
@@ -713,33 +755,27 @@ function hydrateState({ cats, meta, restaurant }) {
     }));
   }
 
-  const lastSentState = meta?.last_sent_state || {};
+  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+    ? meta.last_sent_state
+    : {};
+  const hasLastSentTs = !!meta?.last_sent_ts;
   menuState = {};
   realCats.forEach(c => {
+    const items = (c.items || [])
+      .sort((a, b) => a.display_order - b.display_order)
+      .map(i => hydrateMenuItem(i));
+    const hasStoredLastSent = Object.prototype.hasOwnProperty.call(lastSentState, c.key);
     menuState[c.key] = {
-      items: (c.items || [])
-        .sort((a, b) => a.display_order - b.display_order)
-        .map(i => ({
-          id:          i.id,
-          name:        i.name,
-          desc:        i.desc   || '',
-          recipe:      i.recipe || [],
-          price:       i.price  || '',
-          eightySixed: i.is_eighty_sixed,
-          onMenu:      i.on_menu,
-          visibility:  i.visibility || 'public',
-          upcharges:   i.upcharges  || [],
-        })),
-      lastSent: lastSentState[c.key] || [],
+      items,
+      lastSent: hasStoredLastSent
+        ? (Array.isArray(lastSentState[c.key]) ? lastSentState[c.key].map(i => hydrateMenuItem(i)) : [])
+        : (hasLastSentTs ? items.map(cloneMenuItemState) : []),
     };
   });
 
   if (uncatCat) {
     menuState[UNCATEGORIZED_ID] = {
-      items: (uncatCat.items || []).map(i => ({
-        id: i.id, name: i.name, desc: i.desc || '',
-        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false, visibility: i.visibility || 'public', upcharges: i.upcharges || [],
-      })),
+      items: (uncatCat.items || []).map(i => hydrateMenuItem(i, { onMenu: false })),
       lastSent: [],
     };
   }
@@ -977,6 +1013,9 @@ function buildMenuCacheSnapshot() {
       is_eighty_sixed: !!item.eightySixed,
       on_menu: item.onMenu !== false,
       visibility: item.visibility || 'public',
+      upcharges: itemUpchargeArray(item.upcharges),
+      show_description: isItemDescriptionPublic(item),
+      show_recipe: isItemRecipePublic(item),
       display_order: itemIndex,
     })),
   }));
@@ -1000,6 +1039,9 @@ function buildMenuCacheSnapshot() {
         is_eighty_sixed: !!item.eightySixed,
         on_menu: false,
         visibility: item.visibility || 'public',
+        upcharges: itemUpchargeArray(item.upcharges),
+        show_description: isItemDescriptionPublic(item),
+        show_recipe: isItemRecipePublic(item),
         display_order: itemIndex,
       })),
     });
@@ -1109,7 +1151,7 @@ async function sbReadLegacyFeatured(menuId = MENU_ID) {
     if (!menuGroups.length) return [];
     const groupIds = menuGroups.map(menuGroup => menuGroup.featured_groups.id);
     const allSlots = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
+      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc,recipe,upcharges,show_description,show_recipe)&order=display_order.asc`,
       { headers: sbHeaders() }
     );
     return menuGroups.map(menuGroup => ({
@@ -1132,6 +1174,10 @@ async function sbReadLegacyFeatured(menuId = MENU_ID) {
             visibility: slot.items.visibility || 'public',
             eightySixed: slot.items.is_eighty_sixed,
             desc: slot.items.desc || '',
+            recipe: recipeArray(slot.items.recipe),
+            upcharges: itemUpchargeArray(slot.items.upcharges),
+            showDescription: slot.items.show_description !== false,
+            showRecipe: !!slot.items.show_recipe,
           } : null,
         }))
         .filter(slot => slot.item !== null),
@@ -1147,7 +1193,7 @@ async function sbReadRestaurantSpecials(restaurantId = RESTAURANT_ID) {
     const group = await sbGetRestaurantSpecialGroup(restaurantId);
     if (!group?.id) return sbReadLegacyFeatured(MENU_ID);
     const slotsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=eq.${group.id}&select=*,items(id,name,price,visibility,is_eighty_sixed,desc)&order=display_order.asc`,
+      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=eq.${group.id}&select=*,items(id,name,price,visibility,is_eighty_sixed,desc,recipe,upcharges,show_description,show_recipe)&order=display_order.asc`,
       { headers: sbHeaders() }
     );
     if (!slotsRes.ok) return [];
@@ -1171,6 +1217,10 @@ async function sbReadRestaurantSpecials(restaurantId = RESTAURANT_ID) {
             visibility: s.items.visibility || 'public',
             eightySixed: s.items.is_eighty_sixed,
             desc: s.items.desc || '',
+            recipe: recipeArray(s.items.recipe),
+            upcharges: itemUpchargeArray(s.items.upcharges),
+            showDescription: s.items.show_description !== false,
+            showRecipe: !!s.items.show_recipe,
           } : null,
         }))
         .filter(s => s.item !== null),
@@ -1416,6 +1466,7 @@ function renderManagerWorkspace(options = {}) {
   renderManagerOverviewStats();
   if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
+  renderFooter();
   initCollapsingHeader();
   initDrawerSwipe();
 }
@@ -2338,19 +2389,31 @@ function updateLastUpdatedLabel() {
 }
 
 function renderFooter() {
-  const vEl = document.getElementById('footer-version');
-  const tsEl = document.getElementById('footer-last-updated');
-  if (!vEl || !tsEl) return;
-  vEl.innerHTML = APP_VERSION +
-    (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
   const ts = getLastUpdatedTs();
-  if (ts) {
-    tsEl.textContent = `Updated ${formatRelativeTime(ts)}`;
-    tsEl.title = formatUpdatedAt(ts, 'Updated ');
-  } else {
-    tsEl.textContent = '';
-    tsEl.title = '';
-  }
+  const versionHtml = APP_VERSION +
+    (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
+  const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
+  const publicVersionEl = document.getElementById('footer-version');
+  const publicUpdatedEl = document.getElementById('footer-last-updated');
+  const managerVersionEl = document.getElementById('manager-footer-version');
+  const managerUpdatedEl = document.getElementById('manager-footer-last-updated');
+  const managerMenuEl = document.getElementById('manager-footer-menu-name');
+
+  [publicVersionEl, managerVersionEl].forEach(el => {
+    if (el) el.innerHTML = versionHtml;
+  });
+  if (managerMenuEl) managerMenuEl.textContent = displayName || 'No menu selected';
+
+  [publicUpdatedEl, managerUpdatedEl].forEach(el => {
+    if (!el) return;
+    if (ts) {
+      el.textContent = `Updated ${formatRelativeTime(ts)}`;
+      el.title = formatUpdatedAt(ts, 'Updated ');
+    } else {
+      el.textContent = el === managerUpdatedEl ? 'Updated —' : '';
+      el.title = '';
+    }
+  });
 }
 
 function renderFeaturedPublicSection() {
@@ -2368,8 +2431,18 @@ function renderFeaturedPublicSection() {
     .map(group => {
       const slotsHtml = group.slots.map(slot => {
         const is86 = slot.item?.eightySixed;
+        const showDescription = isItemDescriptionPublic(slot.item);
+        const showRecipe = isItemRecipePublic(slot.item);
+        const description = showDescription ? String(slot.item?.desc || '').trim() : '';
+        const recipeText = showRecipe ? recipeArray(slot.item?.recipe).join(', ') : '';
+        const upcharges = itemUpchargeArray(slot.item?.upcharges);
         const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
         const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
+        const descriptionHtml = description ? `<div class="featured-slot-desc">${escHtml(description)}</div>` : '';
+        const recipeHtml = recipeText ? `<div class="featured-slot-desc featured-slot-desc--secondary">Recipe: ${escHtml(recipeText)}</div>` : '';
+        const upchargesHtml = upcharges.length
+          ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+          : '';
         const sellNoteHtml = (currentUser && slot.sellNote)
           ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
           : '';
@@ -2379,7 +2452,9 @@ function renderFeaturedPublicSection() {
             ${priceHtml}
             ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
           </div>
-          ${slot.item?.desc ? `<div class="featured-slot-desc">${escHtml(slot.item.desc)}</div>` : ''}
+          ${descriptionHtml}
+          ${recipeHtml}
+          ${upchargesHtml}
           ${sellNoteHtml}
         </div>`;
       }).join('');
@@ -2392,11 +2467,16 @@ function renderFeaturedPublicSection() {
 
 function buildPublicItemHtml(item) {
   const is86 = !!item.eightySixed;
-  const hasDesc = !!(item.desc && item.desc.trim());
+  const showDescription = isItemDescriptionPublic(item);
+  const showRecipe = isItemRecipePublic(item);
+  const hasDesc = showDescription && !!(item.desc && item.desc.trim());
   const recipeIngredients = recipeArray(item.recipe);
-  const hasRecipe = recipeIngredients.length > 0;
-  const isFood = MENU_TYPE === 'food';
-  const hasDetail = isFood ? false : (hasDesc || hasRecipe);
+  const hasRecipe = showRecipe && recipeIngredients.length > 0;
+  const upcharges = itemUpchargeArray(item.upcharges);
+  const hasDetail = hasDesc || hasRecipe;
+  const upchargesHtml = upcharges.length
+    ? `<div class="item-upcharges-row">${upcharges.map(upcharge => `<span class="item-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+    : '';
   const classes = ['menu-item', is86 ? 'is-eighty-sixed' : '', hasDetail ? 'has-detail' : ''].filter(Boolean).join(' ');
   const onClick = hasDetail ? `onclick="togglePublicDesc(this)"` : '';
   const detailHtml = hasDetail ? `<div class="item-detail-panel">
@@ -2419,6 +2499,7 @@ function buildPublicItemHtml(item) {
       ${hasDetail ? `<span class="item-expand-icon" role="button" tabindex="0" aria-label="Show description" aria-expanded="false" onclick="event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();togglePublicDesc(this.closest('.menu-item'))}">›</span>` : ''}
     </div>
     ${isFood && priceHtml ? `<div class="item-price-row">${priceHtml}</div>` : ''}
+    ${upchargesHtml}
     ${detailHtml}
   </div>`;
 }
@@ -2794,10 +2875,16 @@ function _getSettingsSectionHashId() {
 }
 
 function _syncSettingsSectionFromLocation(defaultSectionId) {
-  const targetSectionId = _getSettingsSectionHashId() || defaultSectionId;
+  const targetSectionId = defaultSectionId;
   if (!targetSectionId) return;
+  const hash = _getSettingsSectionHashId();
+  if (hash && isSettingsPage()) {
+    const url = new URL(window.location.href);
+    url.hash = '';
+    history.replaceState({}, '', url.toString());
+  }
   requestAnimationFrame(() => {
-    focusSettingsSection(targetSectionId, null, { behavior: 'auto', updateUrl: false });
+    focusSettingsSection(targetSectionId, null, { behavior: 'auto', scroll: false, updateUrl: false });
   });
 }
 
@@ -2805,7 +2892,7 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
   const section = document.getElementById(sectionId);
   if (!section) return;
   const behavior = options.behavior || 'smooth';
-  const shouldUpdateUrl = options.updateUrl !== false;
+  const shouldScroll = options.scroll !== false;
   // Track active manager section and re-render if stale
   if (MANAGER_EDIT_SECTION_IDS.includes(sectionId)) {
     _activeManagerSection = sectionId;
@@ -2820,12 +2907,7 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
   closeSettingsDrawer();
-  if (shouldUpdateUrl && isSettingsPage()) {
-    const url = new URL(window.location.href);
-    url.hash = sectionId;
-    history.replaceState({}, '', url.toString());
-  }
-  section.scrollIntoView({ behavior, block: 'start' });
+  if (shouldScroll) section.scrollIntoView({ behavior, block: 'start' });
 }
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
@@ -2982,7 +3064,9 @@ window.addEventListener('hashchange', () => {
   if (!isSettingsPage()) return;
   const sectionId = _getSettingsSectionHashId();
   if (!sectionId) return;
-  focusSettingsSection(sectionId, null, { behavior: 'auto', updateUrl: false });
+  const url = new URL(window.location.href);
+  url.hash = '';
+  history.replaceState({}, '', url.toString());
 });
 
 // ─── KEYBOARD SHORTCUTS ──────────────────────────────────────────────────────
@@ -3147,9 +3231,13 @@ function updateActiveMenuBar() {
   const bar       = document.getElementById('active-menu-bar');
   const nameEl    = document.getElementById('active-menu-name');
   const switchBtn = document.getElementById('switch-menu-btn');
+  const headerBadge = document.getElementById('manager-header-menu-badge');
+  const footerMenu = document.getElementById('manager-footer-menu-name');
   if (!bar) return;
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
   if (displayName) nameEl.textContent = displayName;
+  if (headerBadge) headerBadge.textContent = displayName || 'No menu selected';
+  if (footerMenu) footerMenu.textContent = displayName || 'No menu selected';
   bar.style.display = displayName ? '' : 'none';
   // Show "Switch" only when the user has access to more than one menu
   const role          = currentUser?.role;
@@ -3753,7 +3841,18 @@ async function addUncategorizedItem() {
   if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
     showToast('Already in pool.', 'info'); return;
   }
-  pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false, upcharges: [] });
+  pool.push({
+    id: uid(),
+    name,
+    desc: '',
+    recipe: [],
+    price: '',
+    eightySixed: false,
+    onMenu: false,
+    upcharges: [],
+    showDescription: true,
+    showRecipe: false,
+  });
   input.value = '';
   renderUncategorizedItems();
   await persistState();
@@ -3876,33 +3975,59 @@ function buildDescriptionRowHtml(item, catId) {
   const is86 = !!item.eightySixed;
   const hasDesc = !!(item.desc && item.desc.trim());
   const hasRecipe = ingredients.length > 0;
+  const showDescription = isItemDescriptionPublic(item);
+  const showRecipe = isItemRecipePublic(item);
   const stateClass = is86 ? 'is-eighty-sixed' : '';
   const badgeClass = is86 ? 'item-state-badge--86' : '';
   const badgeText = is86 ? '86' : '';
-  return `<div class="current-item desc-row-header ${stateClass}">
-      <div class="item-name">
-        <span class="item-name-static">${escHtml(item.name)}</span>
-        ${badgeText ? `<span class="item-state-badge ${badgeClass}" style="margin-left:8px">${badgeText}</span>` : ''}
-      </div>
-      <div class="desc-status-indicators">
-        <span class="desc-indicator ${hasDesc ? 'has-content' : ''}" title="${hasDesc ? 'Has description' : 'No description'}">Description</span>
-        <span class="desc-indicator ${hasRecipe ? 'has-content' : ''}" title="${hasRecipe ? 'Has recipe' : 'No recipe'}" style="${MENU_TYPE === 'food' ? 'display:none' : ''}">Recipe</span>
-      </div>
-    </div>
-    <div class="desc-edit-body">
-      <div class="desc-field-block">
-        <label class="desc-field-label" for="desc-input-${item.id}">Public Description</label>
-        <textarea class="desc-input" id="desc-input-${item.id}" placeholder="Describe this item for customers…" aria-label="Description for ${escHtml(item.name)}" onblur="saveDesc('${catId}','${item.id}',this.value)" rows="2">${escHtml(item.desc || '')}</textarea>
-      </div>
-      <div class="recipe-field-block" style="${MENU_TYPE === 'food' ? 'display:none' : ''}">
-        <label class="desc-field-label" for="recipe-wrap-${item.id}">Staff Recipe</label>
-        <div class="recipe-ingredient-list" id="recipe-list-${item.id}">${buildRecipeListHtml(catId, item.id, ingredients)}</div>
-        <div class="add-ingredient-area">
-          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text" placeholder="Add ingredient…" onkeydown="handleIngredientKeydown(event,'${catId}','${item.id}')"/>
-          <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${item.id}')">+ Add Ingredient</button>
+  const summaryParts = [
+    hasDesc ? 'Description added' : 'No description',
+    hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe',
+  ];
+  return `<article class="description-editor-card ${stateClass}" id="description-editor-${item.id}">
+      <button class="desc-row-header" type="button" aria-expanded="false" aria-controls="desc-edit-body-${item.id}" onclick="toggleDescriptionEditor(${escAttrJs(item.id)})">
+        <div class="desc-row-main">
+          <div class="desc-row-title">
+            <span class="item-name-static">${escHtml(item.name)}</span>
+            ${badgeText ? `<span class="item-state-badge ${badgeClass}">${badgeText}</span>` : ''}
+          </div>
+          <p class="desc-row-meta">${escHtml(summaryParts.join(' · '))}</p>
+        </div>
+        <div class="desc-status-indicators">
+          <span class="desc-indicator ${hasDesc ? 'has-content' : ''}${showDescription ? '' : ' is-hidden'}" id="desc-indicator-copy-${item.id}" data-label="Description">Description</span>
+          <span class="desc-indicator ${hasRecipe ? 'has-content' : ''}${showRecipe ? '' : ' is-hidden'}" id="recipe-indicator-copy-${item.id}" data-label="Recipe">Recipe</span>
+        </div>
+        <span class="desc-chevron" aria-hidden="true">›</span>
+      </button>
+      <div class="desc-edit-body" id="desc-edit-body-${item.id}" hidden>
+        <div class="desc-edit-grid">
+          <div class="desc-field-block">
+            <div class="desc-field-heading">
+              <label class="desc-field-label" for="desc-input-${item.id}">Description</label>
+              <label class="desc-visibility-toggle">
+                <input id="desc-toggle-${item.id}" type="checkbox" ${showDescription ? 'checked' : ''} onchange="saveItemVisibilityFlag(${escAttrJs(catId)},${escAttrJs(item.id)},'showDescription',this.checked,this)"/>
+                <span>Show on menu</span>
+              </label>
+            </div>
+            <textarea class="desc-input" id="desc-input-${item.id}" placeholder="Describe this item for customers…" aria-label="Description for ${escHtml(item.name)}" onblur="saveDesc(${escAttrJs(catId)},${escAttrJs(item.id)},this.value)" rows="3">${escHtml(item.desc || '')}</textarea>
+          </div>
+          <div class="recipe-field-block">
+            <div class="desc-field-heading">
+              <label class="desc-field-label" for="ingredient-input-${item.id}">Recipe</label>
+              <label class="desc-visibility-toggle">
+                <input id="recipe-toggle-${item.id}" type="checkbox" ${showRecipe ? 'checked' : ''} onchange="saveItemVisibilityFlag(${escAttrJs(catId)},${escAttrJs(item.id)},'showRecipe',this.checked,this)"/>
+                <span>Show on menu</span>
+              </label>
+            </div>
+            <div class="recipe-ingredient-list" id="recipe-list-${item.id}">${buildRecipeListHtml(catId, item.id, ingredients)}</div>
+            <div class="add-ingredient-area">
+              <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text" placeholder="Add ingredient…" onkeydown="handleIngredientKeydown(event,${escAttrJs(catId)},${escAttrJs(item.id)})"/>
+              <button class="add-ingredient-btn" onclick="addIngredient(${escAttrJs(catId)},${escAttrJs(item.id)})">+ Add Ingredient</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>`;
+    </article>`;
 }
 
 function renderManagerItems(catId) {
@@ -4118,6 +4243,8 @@ function buildItemUpsertRows() {
         on_menu:         item.onMenu         !== false,
         visibility:      item.visibility     || 'public',
         upcharges:       item.upcharges      || [],
+        show_description:isItemDescriptionPublic(item),
+        show_recipe:     isItemRecipePublic(item),
         display_order:   idx,
       });
     });
@@ -4135,6 +4262,8 @@ function buildItemUpsertRows() {
         on_menu:         false,
         visibility:      item.visibility || 'public',
         upcharges:       item.upcharges || [],
+        show_description:isItemDescriptionPublic(item),
+        show_recipe:     isItemRecipePublic(item),
         display_order:   idx,
       });
     });
@@ -4248,7 +4377,18 @@ function addItem(catId) {
         menuState[catId].items.push({ ...uncatItem, onMenu: true });
         movedFromUncategorized = true;
       } else {
-        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: true, upcharges: [] });
+        menuState[catId].items.push({
+          id: uid(),
+          name,
+          desc: '',
+          recipe: [],
+          price: '',
+          eightySixed: false,
+          onMenu: true,
+          upcharges: [],
+          showDescription: true,
+          showRecipe: false,
+        });
       }
     }
   }
@@ -4479,32 +4619,45 @@ function initSwipeGestures(containerEl) {
 
 // ─── COLLAPSING HEADER ───────────────────────────────────────────────────────
 let _lastScrollY = 0;
+let _collapsingHeaderBound = false;
 
 function initCollapsingHeader() {
-  if (window.innerWidth > 920) return;
+  if (_collapsingHeaderBound) return;
+  _collapsingHeaderBound = true;
   let ticking = false;
-  window.addEventListener('scroll', () => {
-    if (!ticking) {
-      requestAnimationFrame(() => {
-        const y = window.scrollY;
-        const scrollDirection = y > _lastScrollY ? 'down' : 'up';
-        const body = document.body;
-        if (y > 60) body.classList.add('header-compact');
-        else body.classList.remove('header-compact');
-        if (y > 120 && scrollDirection === 'down') body.classList.add('header-hidden');
-        else if (scrollDirection === 'up') body.classList.remove('header-hidden');
-        _lastScrollY = y;
-        ticking = false;
-      });
-      ticking = true;
+  const evaluate = () => {
+    const body = document.body;
+    const y = window.scrollY;
+    if (window.innerWidth > 920) {
+      body.classList.remove('header-compact', 'header-hidden');
+      _lastScrollY = y;
+      return;
     }
-  }, { passive: true });
+    const scrollDirection = y > _lastScrollY ? 'down' : 'up';
+    if (y > 60) body.classList.add('header-compact');
+    else body.classList.remove('header-compact');
+    if (y > 120 && scrollDirection === 'down') body.classList.add('header-hidden');
+    else if (scrollDirection === 'up' || y <= 120) body.classList.remove('header-hidden');
+    _lastScrollY = y;
+  };
+  const requestEvaluate = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      evaluate();
+    });
+  };
+  window.addEventListener('scroll', requestEvaluate, { passive: true });
+  window.addEventListener('resize', requestEvaluate);
+  requestEvaluate();
 }
 
 // ─── DRAWER SWIPE TO CLOSE ───────────────────────────────────────────────────
 function initDrawerSwipe() {
   const rail = document.getElementById('manager-settings-rail');
-  if (!rail) return;
+  if (!rail || rail.dataset.swipeBound === 'true') return;
+  rail.dataset.swipeBound = 'true';
   let startX = 0;
   rail.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
   rail.addEventListener('touchend', e => {
@@ -4520,6 +4673,46 @@ function toggleItemDesc(itemId) {
   const opening = !row.classList.contains('open');
   row.classList.toggle('open', opening);
   if (opening) row.querySelector('textarea').focus();
+}
+
+function toggleDescriptionEditor(itemId) {
+  const card = document.getElementById('description-editor-' + itemId);
+  const body = document.getElementById('desc-edit-body-' + itemId);
+  const trigger = card?.querySelector('.desc-row-header');
+  if (!card || !body || !trigger) return;
+  const opening = !card.classList.contains('is-open');
+  card.classList.toggle('is-open', opening);
+  body.hidden = !opening;
+  trigger.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  if (opening) body.querySelector('textarea, input, button')?.focus();
+}
+
+function syncDescriptionIndicator(indicator, hasContent, isVisible) {
+  if (!indicator) return;
+  const label = indicator.dataset.label || indicator.textContent || '';
+  indicator.classList.toggle('has-content', !!hasContent);
+  indicator.classList.toggle('is-hidden', !isVisible);
+  indicator.title = `${label}: ${hasContent ? 'added' : 'empty'}${isVisible ? ', visible on menu' : ', hidden on menu'}`;
+}
+
+function syncDescriptionSummary(itemId, item) {
+  if (!item) return;
+  const descIndicator = document.getElementById('desc-indicator-copy-' + itemId);
+  const recipeIndicator = document.getElementById('recipe-indicator-copy-' + itemId);
+  const summary = document.querySelector(`#description-editor-${itemId} .desc-row-meta`);
+  const hasDesc = !!String(item.desc || '').trim();
+  const ingredients = recipeArray(item.recipe);
+  const hasRecipe = ingredients.length > 0;
+
+  syncDescriptionIndicator(descIndicator, hasDesc, isItemDescriptionPublic(item));
+  syncDescriptionIndicator(recipeIndicator, hasRecipe, isItemRecipePublic(item));
+
+  if (summary) {
+    summary.textContent = [
+      hasDesc ? 'Description added' : 'No description',
+      hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe',
+    ].join(' · ');
+  }
 }
 
 // ─── RECIPE ───────────────────────────────────────────────────────────────────
@@ -4544,6 +4737,7 @@ function renderRecipeIngredients(catId, itemId) {
   if (!list) return;
   const ingredients = recipeArray(item.recipe);
   list.innerHTML = buildRecipeListHtml(catId, itemId, ingredients);
+  syncDescriptionSummary(itemId, item);
 }
 
 async function addIngredient(catId, itemId) {
@@ -4582,12 +4776,25 @@ async function saveDesc(catId, itemId, val) {
   const desc = val.trim();
   if (item.desc !== desc) {
     item.desc = desc;
+    syncDescriptionSummary(itemId, item);
     markSectionsStale(_activeManagerSection);
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
     await persistState();
     _flashSaved(document.querySelector(`#desc-input-${itemId}`));
   }
+}
+
+async function saveItemVisibilityFlag(catId, itemId, field, checked, sourceEl = null) {
+  const item = findItem(catId, itemId);
+  if (!item) return;
+  const normalizedField = field === 'showRecipe' ? 'showRecipe' : 'showDescription';
+  const nextValue = !!checked;
+  if (!!item[normalizedField] === nextValue) return;
+  item[normalizedField] = nextValue;
+  syncDescriptionSummary(itemId, item);
+  await persistState();
+  if (sourceEl?.closest) _flashSaved(sourceEl.closest('.desc-visibility-toggle'));
 }
 
 async function savePrice(catId, itemId, val) {
@@ -5091,7 +5298,7 @@ function buildChangeFeedHtml(logs) {
   const locale = navigator.languages?.[0] || navigator.language || undefined;
   const dateFormatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
   const timeFormatter = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
-  return logs.map(log => {
+  const buildEntryHtml = log => {
     const d = new Date(log.created_at);
     const dateStr = dateFormatter.format(d);
     const timeStr = timeFormatter.format(d);
@@ -5108,7 +5315,19 @@ function buildChangeFeedHtml(logs) {
       </button>
       <div class="history-detail">${detailHtml}</div>
     </div>`;
-  }).join('');
+  };
+  const primaryLogs = logs.slice(0, 2).map(buildEntryHtml).join('');
+  if (logs.length <= 2) return primaryLogs;
+  const olderCount = logs.length - 2;
+  const olderLogs = logs.slice(2).map(buildEntryHtml).join('');
+  return `${primaryLogs}
+    <details class="history-archive">
+      <summary class="history-archive-summary">
+        <span class="history-archive-copy">Older changes</span>
+        <span class="history-archive-count">${olderCount} more update${olderCount === 1 ? '' : 's'}</span>
+      </summary>
+      <div class="history-archive-body">${olderLogs}</div>
+    </details>`;
 }
 
 async function renderRecentChanges() {
@@ -5370,57 +5589,73 @@ function renderFeaturedTab() {
   const restaurantName = getRestaurantById(RESTAURANT_ID)?.name || 'this restaurant';
   const slotsHtml = slotCount
     ? group.slots.map((slot, idx) => {
+        const description = isItemDescriptionPublic(slot.item) ? String(slot.item?.desc || '').trim() : '';
+        const recipeText = isItemRecipePublic(slot.item) ? recipeArray(slot.item?.recipe).join(', ') : '';
+        const upcharges = itemUpchargeArray(slot.item?.upcharges);
         const badges = [
           slot.item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
           slot.item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
         ].filter(Boolean).join('');
         const priceHtml = slot.item?.price ? `<span class="featured-special-price">${escHtml(slot.item.price)}</span>` : '';
-        return `<div class="current-item featured-special-item" data-slot-id="${escHtml(slot.id)}">
-          <div class="item-status-dot"></div>
-          <div class="item-name featured-special-name">
+        const copyHtml = [
+          description ? `<p class="featured-special-copy">${escHtml(description)}</p>` : '',
+          recipeText ? `<p class="featured-special-copy featured-special-copy--muted">Recipe: ${escHtml(recipeText)}</p>` : '',
+        ].join('');
+        const upchargesHtml = upcharges.length
+          ? `<div class="featured-special-upcharges">${upcharges.map(upcharge => `<span class="featured-special-upcharge">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+          : '';
+        return `<article class="featured-special-row" data-slot-id="${escHtml(slot.id)}">
+          <div class="featured-special-row-head">
+            <div class="featured-special-order">Slot ${idx + 1}</div>
+            <div class="featured-special-actions">
+              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} up">&#8593;</button>
+              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} down">&#8595;</button>
+              <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(groupId)})" aria-label="Remove ${escHtml(slot.item?.name || 'special')} from specials">&#215;</button>
+            </div>
+          </div>
+          <div class="featured-special-name">
             <span class="item-name-static">${escHtml(slot.item?.name || '(deleted)')}</span>
             ${priceHtml}
             ${badges}
           </div>
-          <input class="featured-sell-note-input" type="text" placeholder="Sell note (staff only)…"
-            aria-label="Sell note for ${escHtml(slot.item?.name || 'special')}"
-            value="${escHtml(slot.sellNote)}"
-            onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-          <div class="featured-special-actions">
-            <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} up">&#8593;</button>
-            <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} down">&#8595;</button>
-            <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(groupId)})" aria-label="Remove ${escHtml(slot.item?.name || 'special')} from specials">&#215;</button>
-          </div>
-        </div>`;
+          ${copyHtml}
+          ${upchargesHtml}
+          <label class="featured-sell-note-field">
+            <span class="desc-field-label">Sell note</span>
+            <input class="featured-sell-note-input" type="text" placeholder="Sell note for staff…"
+              aria-label="Sell note for ${escHtml(slot.item?.name || 'special')}"
+              value="${escHtml(slot.sellNote)}"
+              onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
+          </label>
+        </article>`;
       }).join('')
     : `<div class="empty-state"><span class="empty-state-icon">+</span><span>No specials yet. Add up to five items for ${escHtml(restaurantName)}.</span></div>`;
 
   const inputKey = groupId || 'pending';
-  wrap.innerHTML = `<div class="cat-card featured-specials-card">
-    <div class="cat-header">
-      <div class="cat-icon featured-specials-icon">⭐</div>
+  wrap.innerHTML = `<div class="featured-specials-editor">
+    <div class="featured-specials-head">
       <div>
-        <div class="cat-title">${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</div>
-        <div class="cat-sub">Shared across both menus for ${escHtml(restaurantName)}</div>
+        <p class="settings-section-kicker">Shared across both menus</p>
+        <h4>${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</h4>
+        <p class="featured-specials-copy">Build a clean featured lineup for ${escHtml(restaurantName)} and keep the order guests should see first.</p>
       </div>
-      <span class="featured-count">${slotCount} / 5</span>
+      <span class="featured-count">${slotCount} / 5 live</span>
     </div>
-    <div class="current-section">
-      <div class="current-label">On Menu Now</div>
-      <div class="current-items">${slotsHtml}</div>
-      ${slotCount < 5 ? `
+    ${slotCount < 5 ? `
+      <div class="featured-specials-composer">
         <div class="add-item-wrap featured-special-add">
           <div class="add-item-area">
             <input type="text" class="add-item-input featured-add-input" id="featured-add-${escHtml(inputKey)}"
-              placeholder="Search items to add to specials…"
+              placeholder="Search items to add to featured…"
               oninput="filterFeaturedPicker(${escAttrJs(groupId)},this.value)"
               onblur="setTimeout(()=>filterFeaturedPicker(${escAttrJs(groupId)},''),150)"
               onkeydown="handleFeaturedAddKeydown(event,${escAttrJs(groupId)})"/>
             <button class="add-item-btn" onclick="addFeaturedSlotFromInput(${escAttrJs(groupId)})" aria-label="Add item to ${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}">+</button>
           </div>
           <div class="featured-picker-list" id="featured-picker-${escHtml(inputKey)}"></div>
-        </div>` : ''}
-    </div>
+        </div>
+      </div>` : ''}
+    <div class="featured-specials-list">${slotsHtml}</div>
   </div>`;
 }
 
@@ -5584,7 +5819,16 @@ function editFeaturedFromBanner() {
   if (!currentUserCanEditRestaurantSpecials()) return;
   sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
   updateManagerActionBar();
-  switchManagerTab('edit-menu');
+  const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
+  focusSettingsSection('manager-overview-section', overviewTrigger || null);
+  requestAnimationFrame(() => {
+    const featuredCard = document.getElementById('manager-featured-overview-card');
+    if (!featuredCard) return;
+    featuredCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      document.querySelector('#featured-mgr-wrap .featured-add-input')?.focus();
+    }, 180);
+  });
 }
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────

@@ -480,6 +480,37 @@ body.route-restaurant.route-restaurant--elroy {
   line-height: 1.6;
 }
 
+#restaurant-site-wrapper .erc-item-desc--recipe {
+  color: var(--erc-text);
+  font-size: 0.92rem;
+}
+
+#restaurant-site-wrapper .erc-item-upcharges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+#restaurant-site-wrapper .erc-upcharge-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--erc-outline);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.5);
+  color: var(--erc-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+#restaurant-site-wrapper .erc-upcharge-chip strong {
+  color: var(--erc-primary);
+  font-weight: 800;
+}
+
 #restaurant-site-wrapper .erc-badge {
   display: inline-flex;
   align-items: center;
