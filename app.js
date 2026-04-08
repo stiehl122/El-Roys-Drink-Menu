@@ -1382,8 +1382,7 @@ function updateManagerActionBar() {
   const primaryGroup = document.getElementById('manager-primary-action-group');
   const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
-  const featuredBanner = document.getElementById('featured-confirm-banner');
-  const hasFeaturedPrompt = !!featuredBanner && featuredBanner.style.display !== 'none';
+  const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
 
   if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
@@ -1392,11 +1391,11 @@ function updateManagerActionBar() {
 
   if (summary) {
     if (hasDraftChanges && hasFeaturedPrompt) {
-      summary.textContent = 'Draft changes are ready to review, and featured items still need confirmation.';
+      summary.textContent = 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
     } else if (hasDraftChanges) {
-      summary.textContent = 'Draft changes are ready to save quietly or review before sending.';
+      summary.textContent = 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
     } else if (hasFeaturedPrompt) {
-      summary.textContent = "Today's featured lineup still needs confirmation.";
+      summary.textContent = "Today's featured lineup needs confirmation.";
     } else {
       summary.textContent = '';
     }
@@ -3787,12 +3786,14 @@ function buildManagerItemHtml(item, catId, lastSentNames) {
       <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
         onblur="savePrice('${catId}','${item.id}',this.value)"
         value="${escHtml(item.price||'')}"/>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Add description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
-        style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
-      <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore to menu' : "86 this item"}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-      <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Move off menu'}" aria-label="${item.visibility === 'off_menu' ? `Make ${escHtml(item.name)} public` : `Move ${escHtml(item.name)} off menu`}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
-      <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
+      <span class="item-actions">
+        <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
+        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
+          style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
+        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : "86"}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+        <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Off menu'}" aria-label="${item.visibility === 'off_menu' ? `Make ${escHtml(item.name)} public` : `Move ${escHtml(item.name)} off menu`}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
+        <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
+      </span>
     </div>
     ${buildManagerItemEditorHtml(item, catId, item.id, ingredients)}`;
 }
@@ -4244,6 +4245,7 @@ async function saveDesc(catId, itemId, val) {
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
     await persistState();
+    _flashSaved(document.querySelector(`#desc-row-${itemId} .desc-input`));
   }
 }
 
@@ -4251,7 +4253,11 @@ async function savePrice(catId, itemId, val) {
   const item = findItem(catId, itemId);
   if (!item) return;
   const price = val.trim();
-  if (item.price !== price) { item.price = price; await persistState(); }
+  if (item.price !== price) {
+    item.price = price;
+    await persistState();
+    _flashSaved(document.querySelector(`#wrapper-${itemId} .price-input`));
+  }
 }
 
 function removeItem(catId, itemId) {
@@ -4662,6 +4668,12 @@ async function sendUpdate() {
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 let _toastUndoTimer = null;
+function _flashSaved(el) {
+  if (!el) return;
+  el.classList.add('field-saved');
+  setTimeout(() => el.classList.remove('field-saved'), 1200);
+}
+
 function showToast(msg, type='info', undoCallback=null) {
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
   const t = document.getElementById('toast');
@@ -4814,13 +4826,7 @@ function renderUsersTab(users) {
   }
   const roleLabel = { none: 'No Access', manager: 'Manager', admin: 'Admin' };
   wrap.innerHTML = `
-    <div class="admin-users-table">
-      <div class="admin-users-head">
-        <span>Identity</span>
-        <span>Role</span>
-        <span>Menu Access</span>
-        <span>Status</span>
-      </div>
+    <div class="admin-users-list">
       ${users.map(u => {
     const isSelf = u.id === currentUser?.uid;
     const parts = (u.name || u.email || '?').trim().split(/\s+/).filter(Boolean);
@@ -4832,14 +4838,14 @@ function renderUsersTab(users) {
 
     // Role controls
     const roleControls = isSelf
-      ? `<span class="user-mgmt-self-note">(your account — role locked)</span>`
-      : `<div class="admin-user-role-editor"><select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select"
+      ? `<span class="user-mgmt-self-note">Your account — role locked</span>`
+      : `<div class="admin-user-role-editor"><select id="user-role-${escHtml(u.id)}" class="user-mgmt-role-select" aria-label="Role for ${escHtml(u.name || u.email)}"
                  onchange="renderMenuAccessForUser('${escHtml(u.id)}')">
            <option value="none"    ${u.role === 'none'    ? 'selected' : ''}>No Access</option>
            <option value="manager" ${u.role === 'manager' ? 'selected' : ''}>Manager</option>
            <option value="admin"   ${u.role === 'admin'   ? 'selected' : ''}>Admin</option>
          </select>
-         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save</button></div>`;
+         <button class="btn-small" onclick="saveUserRole('${escHtml(u.id)}')">Save Role</button></div>`;
 
     // Menu access section (only for non-self users)
     const menuAccessSection = isSelf ? '' : `
@@ -4848,28 +4854,34 @@ function renderUsersTab(users) {
       </div>`;
 
     return `
-      <article class="admin-user-row">
-        <div class="admin-user-cell admin-user-cell--identity">
+      <details class="admin-user-card" ${u.role === 'none' && !isSelf ? 'open' : ''}>
+        <summary class="admin-user-summary">
           <div class="admin-user-avatar">${escHtml(initials)}</div>
-          <div class="user-mgmt-identity">
+          <div class="admin-user-summary-info">
+            <span class="admin-user-summary-name">${escHtml(u.name || u.email)}</span>
+            <span class="admin-user-summary-meta">${escHtml(u.name ? u.email : '')}</span>
+          </div>
+          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
+          <span class="admin-user-status-pill ${statusClass}">${escHtml(statusLabel)}</span>
+        </summary>
+        <div class="admin-user-details">
+          <div class="admin-user-detail-group">
+            <label class="admin-user-detail-label" for="user-name-${escHtml(u.id)}">Display name</label>
             <div class="input-row admin-user-name-row">
-              <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" />
-              <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save</button>
+              <input type="text" id="user-name-${escHtml(u.id)}" value="${escHtml(u.name)}" placeholder="Display name" aria-label="Display name for ${escHtml(u.email)}" />
+              <button class="btn-small" onclick="saveUserName('${escHtml(u.id)}')">Save Name</button>
             </div>
-            <div class="user-mgmt-email">${escHtml(u.email)}</div>
+          </div>
+          <div class="admin-user-detail-group">
+            <span class="admin-user-detail-label">Role</span>
+            ${roleControls}
+          </div>
+          <div class="admin-user-detail-group">
+            <span class="admin-user-detail-label">Menu access</span>
+            ${menuAccessSection || '<p class="admin-user-access-note">This account always has access to the current session.</p>'}
           </div>
         </div>
-        <div class="admin-user-cell admin-user-cell--role">
-          <span class="user-role-badge user-role-badge--${escHtml(u.role)}">${escHtml(roleLabel[u.role] || u.role)}</span>
-          <div class="input-row user-mgmt-role-row">${roleControls}</div>
-        </div>
-        <div class="admin-user-cell admin-user-cell--access">
-          ${menuAccessSection || '<p class="admin-user-access-note">This account always has access to the current session.</p>'}
-        </div>
-        <div class="admin-user-cell admin-user-cell--status">
-          <span class="admin-user-status-pill ${statusClass}">${escHtml(statusLabel)}</span>
-        </div>
-      </article>`;
+      </details>`;
   }).join('')}
     </div>`;
 }
@@ -5214,22 +5226,20 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
 
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
 
-function checkFeaturedConfirmation() {
-  const banner = document.getElementById('featured-confirm-banner');
-  if (banner && !currentUserCanEditRestaurantSpecials()) {
-    banner.style.display = 'none';
-    return;
-  }
-  if (sessionStorage.getItem(getFeaturedConfirmationKey())) return;
-  const hasStaleSlots = _featuredGroups.some(g => g.slots.some(s => {
+function _needsFeaturedConfirmation() {
+  if (!currentUserCanEditRestaurantSpecials()) return false;
+  if (sessionStorage.getItem(getFeaturedConfirmationKey())) return false;
+  if (!_featuredGroups.some(g => g.slots.length)) return false;
+  return _featuredGroups.some(g => g.slots.some(s => {
     if (!s.confirmedAt) return true;
     const confirmed = new Date(s.confirmedAt);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     return confirmed < today;
   }));
-  if (!hasStaleSlots || !_featuredGroups.some(g => g.slots.length)) return;
-  if (banner) banner.style.display = '';
+}
+
+function checkFeaturedConfirmation() {
   updateManagerActionBar();
 }
 
@@ -5241,8 +5251,6 @@ async function confirmFeaturedToday() {
   try {
     await callRestaurantSpecialsApi('confirm');
     sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-    const banner = document.getElementById('featured-confirm-banner');
-    if (banner) banner.style.display = 'none';
     updateManagerActionBar();
     showToast('Specials confirmed for today!', 'success');
   } catch(e) { showToast('Failed to confirm.', 'error'); }
@@ -5250,8 +5258,6 @@ async function confirmFeaturedToday() {
 
 function editFeaturedFromBanner() {
   if (!currentUserCanEditRestaurantSpecials()) return;
-  const banner = document.getElementById('featured-confirm-banner');
-  if (banner) banner.style.display = 'none';
   sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
   updateManagerActionBar();
   switchManagerTab('edit-menu');
@@ -5451,12 +5457,12 @@ function buildRestaurantRowHtml(restaurant, menus) {
   return `
     <div class="restaurant-header">
       <div>
-        <p class="restaurant-kicker">Fixed Instance</p>
+        <p class="restaurant-kicker">Restaurant</p>
         <span class="restaurant-name" id="restaurant-name-${escHtml(restaurant.id)}">${escHtml(restaurant.name)}</span>
       </div>
       <span class="restaurant-summary-pill">${escHtml(String(menus.length).padStart(2, '0'))} Menu${menus.length === 1 ? '' : 's'}</span>
     </div>
-    <p class="restaurant-copy">These menu links are read directly from the known restaurant and menu IDs the admin console expects.</p>
+    <p class="restaurant-copy">Drinks and Food menus for this location.</p>
     <div class="restaurant-menus" id="restaurant-menus-${escHtml(restaurant.id)}">
       ${chipsHtml || '<span style="font-size:12px;color:var(--muted)">Expected menus are missing from the database.</span>'}
     </div>`;
