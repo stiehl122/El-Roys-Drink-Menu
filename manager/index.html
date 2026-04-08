@@ -112,10 +112,12 @@
           <p class="settings-rail-kicker">Manager</p>
           <p class="manager-shell-rail-note">Sections</p>
         </div>
-        <a class="settings-rail-btn active" href="#manager-overview-section" data-target="manager-overview-section" onclick="event.preventDefault();focusSettingsSection('manager-overview-section', this)">Overview</a>
-        <a class="settings-rail-btn" href="#manager-edit-section" data-target="manager-edit-section" onclick="event.preventDefault();focusSettingsSection('manager-edit-section', this)">Edit Menu</a>
-        <a class="settings-rail-btn" href="#manager-categories-section" data-target="manager-categories-section" onclick="event.preventDefault();focusSettingsSection('manager-categories-section', this)">Categories</a>
-        <a class="settings-rail-btn" href="#manager-database-section" data-target="manager-database-section" onclick="event.preventDefault();focusSettingsSection('manager-database-section', this)">Database</a>
+        <a class="settings-rail-btn active" href="#manager-overview-section" data-target="manager-overview-section" onclick="event.preventDefault();focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</a>
+        <a class="settings-rail-btn" href="#manager-items-section" data-target="manager-items-section" onclick="event.preventDefault();focusSettingsSection('manager-items-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9634;</span>Edit Items</a>
+        <a class="settings-rail-btn" href="#manager-pricing-section" data-target="manager-pricing-section" onclick="event.preventDefault();focusSettingsSection('manager-pricing-section', this)"><span class="rail-btn-icon" aria-hidden="true">$</span>Edit Pricing</a>
+        <a class="settings-rail-btn" href="#manager-description-section" data-target="manager-description-section" onclick="event.preventDefault();focusSettingsSection('manager-description-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9998;</span>Edit Description</a>
+        <a class="settings-rail-btn" href="#manager-categories-section" data-target="manager-categories-section" onclick="event.preventDefault();focusSettingsSection('manager-categories-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9776;</span>Categories</a>
+        <a class="settings-rail-btn" href="#manager-database-section" data-target="manager-database-section" onclick="event.preventDefault();focusSettingsSection('manager-database-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#8942;</span>Database</a>
       </aside>
 
       <main class="settings-stage manager-shell-stage" id="manager-main-content">
@@ -172,15 +174,37 @@
             </div>
           </section>
 
-          <section class="settings-section manager-shell-edit" id="manager-edit-section">
+          <section class="settings-section manager-shell-items" id="manager-items-section" style="display:none">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Edit Menu</p>
-                <h2>Edit items, prices, and availability.</h2>
+                <p class="settings-section-kicker">Edit Items</p>
+                <h2>Add, remove, and 86 items.</h2>
               </div>
-              <p class="manager-shell-section-copy">Changes here are drafts until you Save or Send Update.</p>
+              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes are drafts until you Save or Send Update.</p>
             </div>
-            <div id="manager-categories"></div>
+            <div id="manager-items-categories"></div>
+          </section>
+
+          <section class="settings-section manager-shell-pricing" id="manager-pricing-section" style="display:none">
+            <div class="manager-shell-section-header">
+              <div>
+                <p class="settings-section-kicker">Edit Pricing</p>
+                <h2>Prices and upcharges.</h2>
+              </div>
+              <p class="manager-shell-section-copy">Set base prices and add upcharge modifiers (e.g. "Add bacon +$2").</p>
+            </div>
+            <div id="manager-pricing-categories"></div>
+          </section>
+
+          <section class="settings-section manager-shell-descriptions" id="manager-description-section" style="display:none">
+            <div class="manager-shell-section-header">
+              <div>
+                <p class="settings-section-kicker">Edit Description</p>
+                <h2>Descriptions and recipes.</h2>
+              </div>
+              <p class="manager-shell-section-copy">Descriptions appear on the public menu. Recipes are staff-only.</p>
+            </div>
+            <div id="manager-description-categories"></div>
           </section>
 
           <section class="settings-section manager-shell-categories" id="manager-categories-section">
@@ -253,16 +277,6 @@
             </div>
 
             <div id="db-table-wrap"></div>
-
-            <details class="manager-shell-disclosure" id="off-menu-section">
-              <summary>
-                <span>Off Menu Items</span>
-                <span class="manager-shell-disclosure-copy">Staff-only items hidden from the public menu.</span>
-              </summary>
-              <div class="manager-shell-disclosure-body">
-                <div id="off-menu-items-wrap"></div>
-              </div>
-            </details>
 
             <details class="manager-shell-disclosure manager-shell-disclosure--danger" id="prune-disclosure">
               <summary>

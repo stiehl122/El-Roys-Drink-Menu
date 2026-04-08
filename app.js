@@ -728,6 +728,7 @@ function hydrateState({ cats, meta, restaurant }) {
           eightySixed: i.is_eighty_sixed,
           onMenu:      i.on_menu,
           visibility:  i.visibility || 'public',
+          upcharges:   i.upcharges  || [],
         })),
       lastSent: lastSentState[c.key] || [],
     };
@@ -737,7 +738,7 @@ function hydrateState({ cats, meta, restaurant }) {
     menuState[UNCATEGORIZED_ID] = {
       items: (uncatCat.items || []).map(i => ({
         id: i.id, name: i.name, desc: i.desc || '',
-        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false, visibility: i.visibility || 'public',
+        recipe: i.recipe || [], price: i.price || '', eightySixed: i.is_eighty_sixed, onMenu: false, visibility: i.visibility || 'public', upcharges: i.upcharges || [],
       })),
       lastSent: [],
     };
@@ -1404,8 +1405,9 @@ function updateManagerActionBar() {
 
 function renderManagerWorkspace(options = {}) {
   renderManagerCategories();
+  renderPricingSection();
+  renderDescriptionSection();
   renderFeaturedTab();
-  renderOffMenuSection();
   renderCategoriesTab();
   updateManagerToolsContext();
   renderDatabaseTab();
@@ -1414,6 +1416,8 @@ function renderManagerWorkspace(options = {}) {
   renderManagerOverviewStats();
   if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
+  initCollapsingHeader();
+  initDrawerSwipe();
 }
 
 function renderAdminWorkspace() {
@@ -2802,6 +2806,17 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
   if (!section) return;
   const behavior = options.behavior || 'smooth';
   const shouldUpdateUrl = options.updateUrl !== false;
+  // Track active manager section and re-render if stale
+  if (MANAGER_EDIT_SECTION_IDS.includes(sectionId)) {
+    _activeManagerSection = sectionId;
+    setManagerEditSectionVisibility(sectionId);
+    if (_staleSections.has(sectionId)) {
+      if (sectionId === 'manager-items-section') renderManagerCategories();
+      else if (sectionId === 'manager-pricing-section') renderPricingSection();
+      else if (sectionId === 'manager-description-section') renderDescriptionSection();
+      _staleSections.delete(sectionId);
+    }
+  }
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
   closeSettingsDrawer();
@@ -3617,9 +3632,35 @@ async function _loadAdminTabData(context) {
   }
 }
 
-// ─── MANAGER CATEGORY EDIT ───────────────────────────────────────────────────
+// ─── MANAGER SECTION TRACKING ────────────────────────────────────────────────
+let _activeManagerSection = 'manager-overview-section';
+let _staleSections = new Set();
+const MANAGER_EDIT_SECTION_IDS = ['manager-items-section', 'manager-pricing-section', 'manager-description-section'];
+
+function markSectionsStale(except) {
+  MANAGER_EDIT_SECTION_IDS
+    .filter(s => s !== except)
+    .forEach(s => _staleSections.add(s));
+}
+
+function setManagerEditSectionVisibility(activeSectionId) {
+  if (!MANAGER_EDIT_SECTION_IDS.includes(activeSectionId)) return;
+  MANAGER_EDIT_SECTION_IDS.forEach(sectionId => {
+    const section = document.getElementById(sectionId);
+    if (section) section.style.display = sectionId === activeSectionId ? '' : 'none';
+  });
+}
+
+function renderActiveManagerSection() {
+  if (_activeManagerSection === 'manager-items-section') renderManagerCategories();
+  else if (_activeManagerSection === 'manager-pricing-section') renderPricingSection();
+  else if (_activeManagerSection === 'manager-description-section') renderDescriptionSection();
+}
+
+// ─── MANAGER CATEGORY EDIT (EDIT ITEMS) ─────────────────────────────────────
 function renderManagerCategories() {
-  const container = document.getElementById('manager-categories');
+  const container = document.getElementById('manager-items-categories') || document.getElementById('manager-categories');
+  if (!container) return;
   container.innerHTML = '';
   // Preserve uncategorized expansion state across re-renders
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
@@ -3712,7 +3753,7 @@ async function addUncategorizedItem() {
   if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
     showToast('Already in pool.', 'info'); return;
   }
-  pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false });
+  pool.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: false, upcharges: [] });
   input.value = '';
   renderUncategorizedItems();
   await persistState();
@@ -3764,38 +3805,104 @@ function buildUncategorizedItemHtml(item) {
     ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
 
-function buildManagerItemHtml(item, catId, lastSentNames) {
-  const ingredients = recipeArray(item.recipe);
+function buildItemsRowHtml(item, catId, lastSentNames) {
   const isNew = !lastSentNames.has(item.name.trim().toLowerCase());
   const is86 = !!item.eightySixed;
-  const hasDesc = !!(item.desc && item.desc.trim());
-  const hasRecipe = ingredients.length > 0;
-  const statusTitle = is86 ? "86'd" : isNew ? 'New — not yet announced' : 'On menu';
-  const rowClass = ['current-item', isNew ? 'is-new' : '', is86 ? 'is-eighty-sixed' : '', item.visibility === 'off_menu' ? 'is-off-menu' : ''].filter(Boolean).join(' ');
-  return `<div class="${rowClass}">
+  const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
+  const badgeClass = is86 ? 'item-state-badge--86' : isNew ? 'item-state-badge--new' : 'item-state-badge--active';
+  const badgeText = is86 ? '86' : isNew ? 'NEW' : '';
+  const stateLabel = is86 ? "86'd" : isNew ? 'New' : 'Active';
+  return `<div class="current-item items-row ${stateClass}">
       <button class="item-drag-handle" type="button" draggable="true"
         ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
         ondragend="endManagerItemDrag(event)"
         title="Drag to reorder"
         aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
-      <div class="item-status-dot" role="img" aria-label="${statusTitle}" title="${statusTitle}"></div>
+      ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
       <div class="item-name"><input type="text" value="${escHtml(item.name)}"
-        aria-label="Item name"
+        aria-label="Item name for ${escHtml(item.name)}"
         onblur="renameItem('${catId}','${item.id}',this.value)"
         onkeydown="if(event.key==='Enter')this.blur()"/></div>
-      <input class="price-input" type="text" placeholder="Price…" aria-label="Price"
-        onblur="savePrice('${catId}','${item.id}',this.value)"
-        value="${escHtml(item.price||'')}"/>
-      <span class="item-actions">
-        <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-        <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')"
-          style="${MENU_TYPE === 'food' ? 'display:none' : ''}">🧪</button>
-        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : "86"}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-        <button class="visibility-btn${item.visibility === 'off_menu' ? ' is-off-menu' : ''}" title="${item.visibility === 'off_menu' ? 'Make public' : 'Off menu'}" aria-label="${item.visibility === 'off_menu' ? `Make ${escHtml(item.name)} public` : `Move ${escHtml(item.name)} off menu`}" onclick="toggleVisibility('${catId}','${item.id}')">${item.visibility === 'off_menu' ? '👁‍🗨' : '👁'}</button>
+      <span class="item-actions-compact">
+        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
       </span>
+    </div>`;
+}
+
+function buildPricingRowHtml(item, catId) {
+  const is86 = !!item.eightySixed;
+  const stateClass = is86 ? 'is-eighty-sixed' : '';
+  const badgeClass = is86 ? 'item-state-badge--86' : '';
+  const badgeText = is86 ? '86' : '';
+  const upcharges = item.upcharges || [];
+  const upchargeCount = upcharges.length;
+  let summaryHtml = '';
+  if (upchargeCount > 0) {
+    summaryHtml = `<div class="upcharges-summary" id="upcharges-summary-${item.id}">${upcharges.map(u => `<span class="upcharge-chip">${escHtml(u.label)} <strong>${escHtml(u.price)}</strong></span>`).join('')}</div>`;
+  }
+  let panelHtml = `<div class="upcharges-panel" id="upcharges-${item.id}" style="display:none">
+    <div class="upcharges-list" id="upcharges-list-${item.id}">${upcharges.map((u, idx) => `<div class="upcharge-row" data-upcharge-index="${idx}">
+        <input class="upcharge-label-input" type="text" value="${escHtml(u.label)}" aria-label="Upcharge label" onblur="updateUpcharge('${catId}','${item.id}',${idx},'label',this.value)"/>
+        <input class="upcharge-price-input" type="text" value="${escHtml(u.price)}" aria-label="Upcharge price" onblur="updateUpcharge('${catId}','${item.id}',${idx},'price',this.value)"/>
+        <button class="upcharge-del-btn" onclick="removeUpcharge('${catId}','${item.id}',${idx})" aria-label="Remove upcharge">×</button>
+      </div>`).join('')}</div>
+    <div class="upcharge-add-row">
+      <input class="upcharge-label-input" type="text" placeholder="e.g. Add bacon" aria-label="Upcharge label" id="upcharge-label-${item.id}"/>
+      <input class="upcharge-price-input" type="text" placeholder="+$0.00" aria-label="Upcharge price" id="upcharge-price-${item.id}" onkeydown="if(event.key==='Enter')addUpcharge('${catId}','${item.id}')"/>
+      <button class="upcharge-add-btn" onclick="addUpcharge('${catId}','${item.id}')" aria-label="Add upcharge">+</button>
     </div>
-    ${buildManagerItemEditorHtml(item, catId, item.id, ingredients)}`;
+  </div>`;
+  return `<div class="current-item pricing-row ${stateClass}">
+      <div class="item-name">
+        <span class="item-name-static">${escHtml(item.name)}</span>
+        ${badgeText ? `<span class="item-state-badge ${badgeClass}" style="margin-left:8px">${badgeText}</span>` : ''}
+      </div>
+      <input class="price-input" type="text" placeholder="Price…" aria-label="Price for ${escHtml(item.name)}"
+        onblur="savePrice('${catId}','${item.id}',this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()"
+        value="${escHtml(item.price||'')}"/>
+      <button class="upcharge-toggle-btn" title="Manage upcharges" aria-label="Manage upcharges for ${escHtml(item.name)}" aria-expanded="false" onclick="toggleUpcharges('${catId}','${item.id}')">
+        <span class="upcharge-toggle-icon">+$</span>
+        ${upchargeCount > 0 ? `<span class="upcharge-count">${upchargeCount}</span>` : ''}
+      </button>
+    </div>
+    ${summaryHtml}
+    ${panelHtml}`;
+}
+
+function buildDescriptionRowHtml(item, catId) {
+  const ingredients = recipeArray(item.recipe);
+  const is86 = !!item.eightySixed;
+  const hasDesc = !!(item.desc && item.desc.trim());
+  const hasRecipe = ingredients.length > 0;
+  const stateClass = is86 ? 'is-eighty-sixed' : '';
+  const badgeClass = is86 ? 'item-state-badge--86' : '';
+  const badgeText = is86 ? '86' : '';
+  return `<div class="current-item desc-row-header ${stateClass}">
+      <div class="item-name">
+        <span class="item-name-static">${escHtml(item.name)}</span>
+        ${badgeText ? `<span class="item-state-badge ${badgeClass}" style="margin-left:8px">${badgeText}</span>` : ''}
+      </div>
+      <div class="desc-status-indicators">
+        <span class="desc-indicator ${hasDesc ? 'has-content' : ''}" title="${hasDesc ? 'Has description' : 'No description'}">Description</span>
+        <span class="desc-indicator ${hasRecipe ? 'has-content' : ''}" title="${hasRecipe ? 'Has recipe' : 'No recipe'}" style="${MENU_TYPE === 'food' ? 'display:none' : ''}">Recipe</span>
+      </div>
+    </div>
+    <div class="desc-edit-body">
+      <div class="desc-field-block">
+        <label class="desc-field-label" for="desc-input-${item.id}">Public Description</label>
+        <textarea class="desc-input" id="desc-input-${item.id}" placeholder="Describe this item for customers…" aria-label="Description for ${escHtml(item.name)}" onblur="saveDesc('${catId}','${item.id}',this.value)" rows="2">${escHtml(item.desc || '')}</textarea>
+      </div>
+      <div class="recipe-field-block" style="${MENU_TYPE === 'food' ? 'display:none' : ''}">
+        <label class="desc-field-label" for="recipe-wrap-${item.id}">Staff Recipe</label>
+        <div class="recipe-ingredient-list" id="recipe-list-${item.id}">${buildRecipeListHtml(catId, item.id, ingredients)}</div>
+        <div class="add-ingredient-area">
+          <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text" placeholder="Add ingredient…" onkeydown="handleIngredientKeydown(event,'${catId}','${item.id}')"/>
+          <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${item.id}')">+ Add Ingredient</button>
+        </div>
+      </div>
+    </div>`;
 }
 
 function renderManagerItems(catId) {
@@ -3813,17 +3920,94 @@ function renderManagerItems(catId) {
   }
   visibleItems.forEach(item => {
     const wrapper  = document.createElement('div');
-    wrapper.className = 'item-wrapper';
+    wrapper.className = 'item-wrapper item-swipeable';
     wrapper.id = 'wrapper-' + item.id;
     wrapper.dataset.catId = catId;
     wrapper.dataset.itemId = item.id;
-    wrapper.innerHTML = buildManagerItemHtml(item, catId, lastSentNames);
+    wrapper.innerHTML = `<div class="swipe-action swipe-action--86" aria-hidden="true"><span class="swipe-action-label">86</span></div>
+      <div class="swipe-action swipe-action--restore" aria-hidden="true"><span class="swipe-action-label">Restore</span></div>
+      ${buildItemsRowHtml(item, catId, lastSentNames)}`;
     const row = wrapper.querySelector('.current-item');
     if (row) {
       row.addEventListener('dragover', event => allowManagerItemDrop(event, catId, item.id));
       row.addEventListener('drop', event => handleManagerItemDrop(event, catId, item.id));
     }
     listEl.appendChild(wrapper);
+  });
+  // Init swipe gestures for this category
+  const catCard = listEl.closest('.cat-card');
+  if (catCard) initSwipeGestures(catCard);
+}
+
+// ─── PRICING SECTION RENDERER ────────────────────────────────────────────────
+function renderPricingSection() {
+  const container = document.getElementById('manager-pricing-categories');
+  if (!container) return;
+  container.innerHTML = '';
+  getManagedCategoryDefs().forEach(cat => {
+    const state = menuState[cat.id] || { items: [] };
+    const visibleItems = state.items.filter(i => i.onMenu !== false);
+    if (!visibleItems.length) return;
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    card.innerHTML = `
+      <div class="cat-header collapsible-header" role="button" tabindex="0" aria-expanded="true"
+           onclick="toggleManagerCategory('pricing-${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('pricing-${escHtml(cat.id)}')}">
+        <div class="cat-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
+        <div><div class="cat-title">${escHtml(cat.title)}</div></div>
+        <span class="category-chevron">›</span>
+      </div>
+      <div class="current-section" id="pricing-body-${escHtml(cat.id)}">
+        <div class="current-items" id="pricing-items-${escHtml(cat.id)}"></div>
+      </div>`;
+    card.id = 'mgr-card-pricing-' + cat.id;
+    container.appendChild(card);
+    const listEl = document.getElementById('pricing-items-' + cat.id);
+    if (!listEl) return;
+    visibleItems.forEach(item => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'item-wrapper';
+      wrapper.id = 'pricing-wrapper-' + item.id;
+      wrapper.innerHTML = buildPricingRowHtml(item, cat.id);
+      listEl.appendChild(wrapper);
+    });
+  });
+}
+
+// ─── DESCRIPTION SECTION RENDERER ────────────────────────────────────────────
+function renderDescriptionSection() {
+  const container = document.getElementById('manager-description-categories');
+  if (!container) return;
+  container.innerHTML = '';
+  getManagedCategoryDefs().forEach(cat => {
+    const state = menuState[cat.id] || { items: [] };
+    const visibleItems = state.items.filter(i => i.onMenu !== false);
+    if (!visibleItems.length) return;
+    const card = document.createElement('div');
+    card.className = 'cat-card';
+    card.innerHTML = `
+      <div class="cat-header collapsible-header" role="button" tabindex="0" aria-expanded="true"
+           onclick="toggleManagerCategory('desc-${escHtml(cat.id)}')"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('desc-${escHtml(cat.id)}')}">
+        <div class="cat-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
+        <div><div class="cat-title">${escHtml(cat.title)}</div></div>
+        <span class="category-chevron">›</span>
+      </div>
+      <div class="current-section" id="desc-body-${escHtml(cat.id)}">
+        <div class="current-items" id="desc-items-${escHtml(cat.id)}"></div>
+      </div>`;
+    card.id = 'mgr-card-desc-' + cat.id;
+    container.appendChild(card);
+    const listEl = document.getElementById('desc-items-' + cat.id);
+    if (!listEl) return;
+    visibleItems.forEach(item => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'item-wrapper';
+      wrapper.id = 'desc-wrapper-' + item.id;
+      wrapper.innerHTML = buildDescriptionRowHtml(item, cat.id);
+      listEl.appendChild(wrapper);
+    });
   });
 }
 
@@ -3874,6 +4058,7 @@ function handleManagerItemDrop(event, catId, targetItemId) {
 
   invalidateDiff();
   renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   renderManagerOverviewStats();
   showToast('Item order updated.', 'success');
@@ -3932,6 +4117,7 @@ function buildItemUpsertRows() {
         is_eighty_sixed: item.eightySixed    || false,
         on_menu:         item.onMenu         !== false,
         visibility:      item.visibility     || 'public',
+        upcharges:       item.upcharges      || [],
         display_order:   idx,
       });
     });
@@ -3948,6 +4134,7 @@ function buildItemUpsertRows() {
         is_eighty_sixed: false,
         on_menu:         false,
         visibility:      item.visibility || 'public',
+        upcharges:       item.upcharges || [],
         display_order:   idx,
       });
     });
@@ -4061,7 +4248,7 @@ function addItem(catId) {
         menuState[catId].items.push({ ...uncatItem, onMenu: true });
         movedFromUncategorized = true;
       } else {
-        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: true });
+        menuState[catId].items.push({ id: uid(), name, desc: '', recipe: [], price: '', eightySixed: false, onMenu: true, upcharges: [] });
       }
     }
   }
@@ -4069,6 +4256,7 @@ function addItem(catId) {
   hideAutocomplete(catId);
   invalidateDiff();
   renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
   if (movedFromUncategorized) renderUncategorizedItems();
   input.focus();
   updateDraftIndicator();
@@ -4151,6 +4339,7 @@ function toggle86(catId, itemId) {
   item.eightySixed = !item.eightySixed;
   invalidateDiff();
   renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   // Trigger animation on the newly-rendered wrapper
   const wrapper = document.getElementById('wrapper-' + itemId);
@@ -4162,15 +4351,166 @@ function toggle86(catId, itemId) {
   showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
 }
 
-function toggleVisibility(catId, itemId) {
+// ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
+function toggleUpcharges(catId, itemId) {
+  const panel = document.getElementById('upcharges-' + itemId);
+  const btn = document.querySelector(`#pricing-wrapper-${itemId} .upcharge-toggle-btn`);
+  const summary = document.getElementById('upcharges-summary-' + itemId);
+  if (!panel) return;
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : '';
+  if (summary) summary.style.display = isOpen ? '' : 'none';
+  if (btn) btn.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function addUpcharge(catId, itemId) {
+  const labelInput = document.getElementById('upcharge-label-' + itemId);
+  const priceInput = document.getElementById('upcharge-price-' + itemId);
+  if (!labelInput || !priceInput) return;
+  const label = labelInput.value.trim();
+  const price = priceInput.value.trim();
+  if (!label) return;
   const item = findItem(catId, itemId);
   if (!item) return;
-  item.visibility = item.visibility === 'off_menu' ? 'public' : 'off_menu';
+  if (!item.upcharges) item.upcharges = [];
+  item.upcharges.push({ label, price: price || '+$0' });
+  labelInput.value = '';
+  priceInput.value = '';
   invalidateDiff();
-  renderManagerItems(catId);
-  renderOffMenuSection();
   updateDraftIndicator();
-  showToast(item.visibility === 'off_menu' ? `"${item.name}" moved off menu` : `"${item.name}" made public`, 'info');
+  renderPricingSection();
+  markSectionsStale('manager-pricing-section');
+}
+
+function updateUpcharge(catId, itemId, index, field, value) {
+  const item = findItem(catId, itemId);
+  if (!item || !item.upcharges || !item.upcharges[index]) return;
+  item.upcharges[index][field] = value.trim();
+  invalidateDiff();
+  updateDraftIndicator();
+  markSectionsStale('manager-pricing-section');
+}
+
+function removeUpcharge(catId, itemId, index) {
+  const item = findItem(catId, itemId);
+  if (!item || !item.upcharges) return;
+  item.upcharges.splice(index, 1);
+  invalidateDiff();
+  updateDraftIndicator();
+  renderPricingSection();
+  markSectionsStale('manager-pricing-section');
+}
+
+// ─── SWIPE GESTURES ──────────────────────────────────────────────────────────
+const SWIPE_THRESHOLD = 80;
+const SWIPE_MAX = 200;
+const SWIPE_VERTICAL_LOCK_ANGLE = 30;
+
+function initSwipeGestures(containerEl) {
+  containerEl.querySelectorAll('.item-swipeable').forEach(wrapper => {
+    const row = wrapper.querySelector('.items-row');
+    if (!row || wrapper._swipeInit) return;
+    wrapper._swipeInit = true;
+    let startX = 0, startY = 0, currentX = 0;
+    let isSwiping = false, isLocked = false;
+
+    row.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      currentX = 0;
+      isSwiping = false;
+      isLocked = false;
+      row.classList.remove('swipe-animating');
+      wrapper.classList.remove('swipe-triggered');
+    }, { passive: true });
+
+    row.addEventListener('touchmove', e => {
+      if (isLocked || e.touches.length > 1) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!isSwiping && Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (!isSwiping) {
+        const angle = Math.abs(Math.atan2(dy, dx) * (180 / Math.PI));
+        if (angle > (90 - SWIPE_VERTICAL_LOCK_ANGLE) && angle < (90 + SWIPE_VERTICAL_LOCK_ANGLE)) {
+          isLocked = true;
+          return;
+        }
+        isSwiping = true;
+        wrapper.classList.add('swiping');
+      }
+      e.preventDefault();
+      currentX = Math.max(-SWIPE_MAX, Math.min(SWIPE_MAX, dx));
+      const catId = wrapper.dataset.catId;
+      const itemId = wrapper.dataset.itemId;
+      const item = findItem(catId, itemId);
+      const is86 = item?.eightySixed;
+      if (currentX < 0 && is86) currentX = 0;
+      if (currentX > 0 && !is86) currentX = 0;
+      row.style.transform = `translateX(${currentX}px)`;
+      if (Math.abs(currentX) >= SWIPE_THRESHOLD) wrapper.classList.add('swipe-triggered');
+      else wrapper.classList.remove('swipe-triggered');
+    }, { passive: false });
+
+    row.addEventListener('touchend', () => {
+      if (!isSwiping) return;
+      wrapper.classList.remove('swiping');
+      const catId = wrapper.dataset.catId;
+      const itemId = wrapper.dataset.itemId;
+      if (Math.abs(currentX) >= SWIPE_THRESHOLD) {
+        const direction = currentX < 0 ? 'left' : 'right';
+        row.style.transform = `translateX(${direction === 'left' ? -SWIPE_MAX : SWIPE_MAX}px)`;
+        setTimeout(() => {
+          toggle86(catId, itemId);
+          row.classList.add('swipe-animating');
+          row.style.transform = 'translateX(0)';
+          wrapper.classList.remove('swipe-triggered');
+          setTimeout(() => { row.classList.remove('swipe-animating'); row.style.transform = ''; }, 300);
+        }, 180);
+      } else {
+        row.classList.add('swipe-animating');
+        row.style.transform = 'translateX(0)';
+        wrapper.classList.remove('swipe-triggered');
+        setTimeout(() => { row.classList.remove('swipe-animating'); row.style.transform = ''; }, 300);
+      }
+    });
+  });
+}
+
+// ─── COLLAPSING HEADER ───────────────────────────────────────────────────────
+let _lastScrollY = 0;
+
+function initCollapsingHeader() {
+  if (window.innerWidth > 920) return;
+  let ticking = false;
+  window.addEventListener('scroll', () => {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const y = window.scrollY;
+        const scrollDirection = y > _lastScrollY ? 'down' : 'up';
+        const body = document.body;
+        if (y > 60) body.classList.add('header-compact');
+        else body.classList.remove('header-compact');
+        if (y > 120 && scrollDirection === 'down') body.classList.add('header-hidden');
+        else if (scrollDirection === 'up') body.classList.remove('header-hidden');
+        _lastScrollY = y;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }, { passive: true });
+}
+
+// ─── DRAWER SWIPE TO CLOSE ───────────────────────────────────────────────────
+function initDrawerSwipe() {
+  const rail = document.getElementById('manager-settings-rail');
+  if (!rail) return;
+  let startX = 0;
+  rail.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+  rail.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - startX;
+    if (dx < -60) closeSettingsDrawer();
+  }, { passive: true });
 }
 
 // ─── DESCRIPTION ──────────────────────────────────────────────────────────────
@@ -4242,10 +4582,11 @@ async function saveDesc(catId, itemId, val) {
   const desc = val.trim();
   if (item.desc !== desc) {
     item.desc = desc;
+    markSectionsStale(_activeManagerSection);
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
     await persistState();
-    _flashSaved(document.querySelector(`#desc-row-${itemId} .desc-input`));
+    _flashSaved(document.querySelector(`#desc-input-${itemId}`));
   }
 }
 
@@ -4255,8 +4596,9 @@ async function savePrice(catId, itemId, val) {
   const price = val.trim();
   if (item.price !== price) {
     item.price = price;
+    markSectionsStale(_activeManagerSection);
     await persistState();
-    _flashSaved(document.querySelector(`#wrapper-${itemId} .price-input`));
+    _flashSaved(document.querySelector(`#pricing-wrapper-${itemId} .price-input`) || document.querySelector(`#wrapper-${itemId} .price-input`));
   }
 }
 
@@ -4266,12 +4608,14 @@ function removeItem(catId, itemId) {
   item.onMenu = false;
   invalidateDiff();
   renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   const removedName = item.name;
   showToast(`"${removedName}" removed`, 'info', () => {
     item.onMenu = true;
     invalidateDiff();
     renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
     updateDraftIndicator();
     showToast(`"${removedName}" restored`, 'success');
   });
@@ -4306,27 +4650,7 @@ function renderPruneSection() {
 }
 
 function renderOffMenuSection() {
-  const section = document.getElementById('off-menu-section');
-  if (!section) return;
-  section.style.display = isManagerMode ? '' : 'none';
-  const wrap = document.getElementById('off-menu-items-wrap');
-  if (!wrap) return;
-  const allOffMenu = [];
-  CATEGORY_DEFS.forEach(cat => {
-    (menuState[cat.id]?.items || []).filter(i => i.onMenu !== false && i.visibility === 'off_menu').forEach(item => {
-      allOffMenu.push({ catId: cat.id, catTitle: cat.title, name: item.name, id: item.id });
-    });
-  });
-  if (!allOffMenu.length) {
-    wrap.innerHTML = '<p class="prune-empty">No off-menu items.</p>';
-    return;
-  }
-  wrap.innerHTML = allOffMenu.map(({ catId, catTitle, name, id }) => `
-    <div class="prune-item">
-      <span class="prune-item-name">${escHtml(name)}</span>
-      <span class="prune-item-cat">${escHtml(catTitle)}</span>
-      <button class="btn-small" onclick="toggleVisibility('${escHtml(catId)}','${escHtml(id)}')">Make Public</button>
-    </div>`).join('');
+  // Off-menu UI removed — kept as no-op for backward compatibility
 }
 
 async function pruneSingleItem(catId, itemName) {
@@ -4370,7 +4694,7 @@ function renameItem(catId, itemId, newName) {
     return;
   }
   const item = findItem(catId, itemId);
-  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); updateDraftIndicator(); }
+  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); markSectionsStale(_activeManagerSection); updateDraftIndicator(); }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
@@ -5265,10 +5589,20 @@ function editFeaturedFromBanner() {
 
 // ─── TAB SWITCHING ────────────────────────────────────────────────────────────
 function switchManagerTab(name) {
-  if (name === 'edit-menu') {
-    renderFeaturedTab();
-    renderOffMenuSection();
-    focusSettingsSection('manager-edit-section');
+  if (name === 'edit-menu' || name === 'edit-items') {
+    renderManagerCategories();
+    _activeManagerSection = 'manager-items-section';
+    focusSettingsSection('manager-items-section');
+  }
+  if (name === 'edit-pricing') {
+    renderPricingSection();
+    _activeManagerSection = 'manager-pricing-section';
+    focusSettingsSection('manager-pricing-section');
+  }
+  if (name === 'edit-description') {
+    renderDescriptionSection();
+    _activeManagerSection = 'manager-description-section';
+    focusSettingsSection('manager-description-section');
   }
   if (name === 'categories') {
     renderCategoriesTab();
