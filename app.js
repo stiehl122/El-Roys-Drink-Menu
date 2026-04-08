@@ -2787,6 +2787,7 @@ function renderUserHeader() {
 
   const actionBtn = document.getElementById('action-btn');
   const adminBtn  = document.getElementById('admin-btn');
+  const adminDrawerBtn = document.getElementById('admin-btn-drawer');
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
@@ -2796,6 +2797,10 @@ function renderUserHeader() {
   if (adminBtn) {
     adminBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminBtn.classList.toggle('active', isAdminMode);
+  }
+  if (adminDrawerBtn) {
+    adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
+    adminDrawerBtn.classList.toggle('active', isAdminMode);
   }
 
   _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
@@ -2851,11 +2856,20 @@ function setSettingsDrawerOpen(isOpen) {
   const drawer = document.getElementById('manager-settings-rail');
   const backdrop = document.getElementById('settings-drawer-backdrop');
   const toggle = document.getElementById('settings-drawer-toggle');
+  const isMobileDrawer = window.innerWidth <= 920;
   if (!drawer || !backdrop) return;
-  drawer.classList.toggle('is-open', !!isOpen);
-  backdrop.hidden = !isOpen;
-  document.body.classList.toggle('settings-drawer-open', !!isOpen);
+  drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
+  drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
+  backdrop.hidden = !(isOpen && isMobileDrawer);
+  document.body.classList.toggle('settings-drawer-open', !!isOpen && isMobileDrawer);
   if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (isOpen && isMobileDrawer) {
+    requestAnimationFrame(() => {
+      drawer.querySelector('.manager-shell-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
+    });
+  } else if (!isOpen && isMobileDrawer && toggle) {
+    toggle.focus();
+  }
 }
 
 function toggleSettingsDrawer() {
@@ -3041,6 +3055,10 @@ document.addEventListener('click', function(e) {
 // Close dropdown on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
+  const drawer = document.getElementById('manager-settings-rail');
+  if (drawer?.classList.contains('is-open') || document.body.classList.contains('settings-drawer-open')) {
+    closeSettingsDrawer();
+  }
   document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
     if (chip.classList.contains('open')) {
       chip.classList.remove('open');
@@ -3231,12 +3249,15 @@ function updateActiveMenuBar() {
   const bar       = document.getElementById('active-menu-bar');
   const nameEl    = document.getElementById('active-menu-name');
   const switchBtn = document.getElementById('switch-menu-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
   const headerBadge = document.getElementById('manager-header-menu-badge');
+  const drawerBadge = document.getElementById('manager-drawer-menu-badge');
   const footerMenu = document.getElementById('manager-footer-menu-name');
   if (!bar) return;
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
   if (displayName) nameEl.textContent = displayName;
   if (headerBadge) headerBadge.textContent = displayName || 'No menu selected';
+  if (drawerBadge) drawerBadge.textContent = displayName || 'No menu selected';
   if (footerMenu) footerMenu.textContent = displayName || 'No menu selected';
   bar.style.display = displayName ? '' : 'none';
   // Show "Switch" only when the user has access to more than one menu
@@ -3244,6 +3265,7 @@ function updateActiveMenuBar() {
   const accessibleIds = currentUser?.accessibleMenuIds || [];
   const canSwitch     = role === 'admin' || accessibleIds.length > 1;
   if (switchBtn) switchBtn.style.display = canSwitch ? '' : 'none';
+  if (drawerSwitchBtn) drawerSwitchBtn.style.display = canSwitch ? '' : 'none';
 }
 
 async function onSwitchMenuClick() {
@@ -3728,21 +3750,28 @@ const MANAGER_EDIT_SECTION_IDS = ['manager-items-section', 'manager-pricing-sect
 function markSectionsStale(except) {
   MANAGER_EDIT_SECTION_IDS
     .filter(s => s !== except)
-    .forEach(s => _staleSections.add(s));
+    .forEach(sectionId => {
+      _staleSections.add(sectionId);
+      const section = document.getElementById(sectionId);
+      if (!section || section.style.display === 'none') return;
+      if (sectionId === 'manager-items-section') renderManagerCategories();
+      else if (sectionId === 'manager-pricing-section') renderPricingSection();
+      else if (sectionId === 'manager-description-section') renderDescriptionSection();
+      _staleSections.delete(sectionId);
+    });
 }
 
 function setManagerEditSectionVisibility(activeSectionId) {
-  if (!MANAGER_EDIT_SECTION_IDS.includes(activeSectionId)) return;
   MANAGER_EDIT_SECTION_IDS.forEach(sectionId => {
     const section = document.getElementById(sectionId);
-    if (section) section.style.display = sectionId === activeSectionId ? '' : 'none';
+    if (section) section.style.display = '';
   });
 }
 
 function renderActiveManagerSection() {
-  if (_activeManagerSection === 'manager-items-section') renderManagerCategories();
-  else if (_activeManagerSection === 'manager-pricing-section') renderPricingSection();
-  else if (_activeManagerSection === 'manager-description-section') renderDescriptionSection();
+  renderManagerCategories();
+  renderPricingSection();
+  renderDescriptionSection();
 }
 
 // ─── MANAGER CATEGORY EDIT (EDIT ITEMS) ─────────────────────────────────────
@@ -4629,15 +4658,22 @@ function initCollapsingHeader() {
     const body = document.body;
     const y = window.scrollY;
     if (window.innerWidth > 920) {
+      if (body.classList.contains('settings-drawer-open')) closeSettingsDrawer();
       body.classList.remove('header-compact', 'header-hidden');
       _lastScrollY = y;
       return;
     }
-    const scrollDirection = y > _lastScrollY ? 'down' : 'up';
-    if (y > 60) body.classList.add('header-compact');
-    else body.classList.remove('header-compact');
-    if (y > 120 && scrollDirection === 'down') body.classList.add('header-hidden');
-    else if (scrollDirection === 'up' || y <= 120) body.classList.remove('header-hidden');
+    const delta = y - _lastScrollY;
+    const scrollingDown = delta > 8;
+    const scrollingUp = delta < -8;
+    body.classList.toggle('header-compact', y > 32);
+    if (y <= 16) {
+      body.classList.remove('header-hidden');
+    } else if (y > 132 && scrollingDown) {
+      body.classList.add('header-hidden');
+    } else if (scrollingUp || y < 88) {
+      body.classList.remove('header-hidden');
+    }
     _lastScrollY = y;
   };
   const requestEvaluate = () => {

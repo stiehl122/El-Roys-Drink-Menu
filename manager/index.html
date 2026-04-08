@@ -123,8 +123,23 @@
     <div class="settings-workspace manager-shell-layout">
       <aside class="settings-rail manager-shell-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
         <div class="manager-shell-rail-head">
-          <p class="settings-rail-kicker">Manager</p>
-          <p class="manager-shell-rail-note">Sections</p>
+          <div class="manager-shell-rail-head-row">
+            <div>
+              <p class="settings-rail-kicker">Manager</p>
+              <p class="manager-shell-rail-note">Sections</p>
+            </div>
+            <button
+              class="manager-shell-rail-close"
+              type="button"
+              aria-label="Close section navigation"
+              onclick="closeSettingsDrawer()"
+            >×</button>
+          </div>
+          <div class="manager-shell-drawer-meta">
+            <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
+            <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
+          </div>
         </div>
         <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>
         <button type="button" class="settings-rail-btn" data-target="manager-items-section" onclick="focusSettingsSection('manager-items-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9634;</span>Edit Items</button>
@@ -188,7 +203,7 @@
             </div>
           </section>
 
-          <section class="settings-section manager-shell-items" id="manager-items-section" style="display:none">
+          <section class="settings-section manager-shell-items" id="manager-items-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Items</p>
@@ -199,7 +214,7 @@
             <div id="manager-items-categories"></div>
           </section>
 
-          <section class="settings-section manager-shell-pricing" id="manager-pricing-section" style="display:none">
+          <section class="settings-section manager-shell-pricing" id="manager-pricing-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Pricing</p>
@@ -210,7 +225,7 @@
             <div id="manager-pricing-categories"></div>
           </section>
 
-          <section class="settings-section manager-shell-descriptions" id="manager-description-section" style="display:none">
+          <section class="settings-section manager-shell-descriptions" id="manager-description-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Description</p>
