@@ -5883,6 +5883,10 @@ async function addFeaturedSlot(groupId, itemId) {
       showToast('That item is already in specials.', 'info');
       return;
     }
+    if (_dirty || _deletedItemIds.size) {
+      const persisted = await persistState();
+      if (persisted === false) return;
+    }
     await callRestaurantSpecialsApi('add', { itemId });
     await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
@@ -5893,7 +5897,7 @@ async function addFeaturedSlot(groupId, itemId) {
     if (input) input.value = '';
     filterFeaturedPicker(groupId, '');
     showToast('Special added!', 'success');
-  } catch(e) { showToast('Failed to add special.', 'error'); }
+  } catch(e) { showToast(e?.message || 'Failed to add special.', 'error'); }
 }
 
 async function removeFeaturedSlot(slotId, groupId) {
@@ -5909,7 +5913,7 @@ async function removeFeaturedSlot(slotId, groupId) {
     invalidateDiff();
     updateDraftIndicator();
     showToast('Special removed.', 'success');
-  } catch(e) { showToast('Failed to remove.', 'error'); }
+  } catch(e) { showToast(e?.message || 'Failed to remove.', 'error'); }
 }
 
 async function saveFeaturedSellNote(slotId, note) {
@@ -5935,7 +5939,7 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
     await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
-  } catch(e) { showToast('Failed to reorder.', 'error'); }
+  } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
@@ -5967,7 +5971,7 @@ async function confirmFeaturedToday() {
     sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
     updateManagerActionBar();
     showToast('Specials confirmed for today!', 'success');
-  } catch(e) { showToast('Failed to confirm.', 'error'); }
+  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
 }
 
 function editFeaturedFromBanner() {
