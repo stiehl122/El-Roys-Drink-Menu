@@ -1073,3 +1073,75 @@ body.route-restaurant.route-restaurant--leroy {
     transition: none;
   }
 }
+
+@media (prefers-color-scheme: dark) {
+  html {
+    background: rgb(60 62 58 / 1);
+  }
+
+  body.route-restaurant.route-restaurant--leroy {
+    background: rgb(60 62 58 / 1);
+  }
+
+  #restaurant-site-wrapper {
+    --ll-board-surface: rgb(60 62 58 / 1);
+    --ll-board-slat: rgb(60 62 58 / 1);
+    --ll-board-slat-shadow: rgb(0 0 0 / 0.3);
+    --ll-board-ink: rgb(243 234 218 / 1);
+    --ll-board-ink-soft: rgb(243 234 218 / 0.92);
+    --ll-board-red: rgb(237 47 35 / 1);
+    --ll-board-red-deep: rgb(86 10 10 / 1);
+    --ll-board-accent: rgb(255 208 86 / 1);
+    --ll-board-shell: rgb(20 20 19 / 1);
+    --ll-board-shell-soft: rgb(20 20 19 / 0.42);
+    --ll-board-dropdown: rgb(35 35 34 / 1);
+    --ll-board-dropdown-line: rgb(48 48 47 / 1);
+    --ll-board-frame: rgb(28 16 16 / 0.95);
+    --ll-board-stamp-border: rgb(255 240 214 / 0.34);
+    --ll-board-action-border: rgb(255 240 214 / 0.24);
+    --ll-board-action-text: rgb(255 244 224 / 0.98);
+    --ll-board-action-text-soft: rgb(255 237 194 / 0.84);
+    --ll-board-action-hover: rgb(255 221 132 / 1);
+    --ll-board-action-hover-border: rgb(255 221 132 / 0.6);
+    --ll-board-action-shadow: rgb(255 242 214 / 0.32);
+    --ll-board-action-shadow-strong: rgb(255 214 95 / 0.62);
+    --ll-board-glow: rgb(255 59 48 / 0.5);
+    --ll-board-panel-shadow: 0 10px 24px rgb(0 0 0 / 0.42);
+    --ll-board-shadow-inset: inset 0 0 12px rgb(0 0 0 / 0.82);
+    --ll-board-text-shadow: 0 1px 0 rgb(0 0 0 / 0.34), 0 2px 10px rgb(0 0 0 / 0.24);
+    --ll-board-description: rgb(243 234 218 / 0.88);
+  }
+
+  #restaurant-site-wrapper .ll-board-page {
+    color-scheme: dark;
+  }
+
+  #restaurant-site-wrapper .ll-skip-link {
+    background: rgb(29 29 28 / 0.96);
+    color: var(--ll-board-ink);
+  }
+
+  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown {
+    border-color: rgb(255 240 214 / 0.1);
+    background: rgb(28 28 27 / 0.96);
+    box-shadow: 0 18px 36px rgb(0 0 0 / 0.45);
+  }
+
+  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-name,
+  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-role {
+    color: var(--ll-board-ink);
+  }
+
+  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-divider {
+    background: rgb(255 240 214 / 0.12);
+  }
+
+  #restaurant-site-wrapper .ll-board-route-option {
+    color: rgb(255 244 224 / 0.96);
+    text-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.26);
+  }
+
+  #restaurant-site-wrapper .ll-route-boot-line {
+    background: linear-gradient(90deg, rgb(255 244 224 / 0.08), rgb(255 244 224 / 0.3), rgb(255 244 224 / 0.08));
+  }
+}

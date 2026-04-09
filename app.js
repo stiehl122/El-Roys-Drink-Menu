@@ -3398,6 +3398,18 @@ function initAuthForms() {
     form.querySelectorAll('button').forEach(button => {
       button.type = 'button';
     });
+    if (screenName === 'signin') {
+      const usernameField = form.querySelector('#signin-email');
+      const passwordField = form.querySelector('#signin-password');
+      if (usernameField) {
+        usernameField.autocomplete = 'username';
+        if (!usernameField.name) usernameField.name = 'username';
+        usernameField.inputMode = 'email';
+      }
+      if (passwordField && !passwordField.name) {
+        passwordField.name = 'current-password';
+      }
+    }
   });
 }
 
