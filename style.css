@@ -87,6 +87,35 @@
   .site-picker-actions { display: flex; flex-direction: column; gap: 12px; }
   .site-picker-link { display: block; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; color: var(--text); text-decoration: none; font-size: 18px; font-weight: 700; transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s; }
   .site-picker-link:hover, .site-picker-link:focus { border-color: var(--ember); box-shadow: 0 10px 24px rgba(26,32,44,0.12); outline: none; transform: translateY(-1px); }
+  @media (prefers-color-scheme: dark) {
+    body.is-site-picker {
+      background:
+        radial-gradient(circle at top, rgba(96, 165, 250, 0.12), rgba(96, 165, 250, 0) 38%),
+        linear-gradient(180deg, #0f1723 0%, #09111b 100%);
+      color: #e8edf5;
+    }
+    body.is-site-picker .site-picker-card {
+      background: rgba(16, 23, 35, 0.9);
+      border-color: rgba(148, 163, 184, 0.2);
+      box-shadow: 0 24px 56px rgba(2, 6, 23, 0.48);
+    }
+    body.is-site-picker .site-picker-kicker {
+      color: #7cc4ff;
+    }
+    body.is-site-picker .site-picker-title {
+      color: #f8fbff;
+    }
+    body.is-site-picker .site-picker-link {
+      background: rgba(248, 250, 252, 0.04);
+      border-color: rgba(148, 163, 184, 0.16);
+      color: #e8edf5;
+    }
+    body.is-site-picker .site-picker-link:hover,
+    body.is-site-picker .site-picker-link:focus {
+      border-color: rgba(124, 196, 255, 0.72);
+      box-shadow: 0 14px 28px rgba(8, 15, 28, 0.42);
+    }
+  }
   #restaurant-site-wrapper[hidden] { display: none !important; }
   body.route-restaurant #app-shell { max-width: none; }
   body.route-restaurant .wrapper { max-width: none; }
@@ -1908,6 +1937,53 @@ body.admin-console-page .picker-box {
   border-radius: 12px;
   background: var(--admin-panel);
   border-color: var(--admin-outline);
+}
+
+@media (prefers-color-scheme: dark) {
+  body.admin-console-page {
+    --admin-canvas: #0e1419;
+    --admin-canvas-glass: rgba(14, 20, 25, 0.9);
+    --admin-panel: #162028;
+    --admin-panel-soft: #1d2933;
+    --admin-panel-strong: #263543;
+    --admin-ink: #edf3f7;
+    --admin-muted: #a8b4be;
+    --admin-sidebar: #0b1916;
+    --admin-sidebar-text: #bff2dc;
+    --admin-sidebar-dim: rgba(191, 242, 220, 0.7);
+    --admin-sidebar-active: rgba(191, 242, 220, 0.14);
+    --admin-sidebar-hover: rgba(255, 255, 255, 0.06);
+    --admin-outline: rgba(226, 232, 240, 0.12);
+    --admin-outline-strong: rgba(226, 232, 240, 0.18);
+    --admin-accent: #56c39c;
+    --admin-pill: #bff2dc;
+    --admin-alert: #ffb4ab;
+    --admin-alert-bg: rgba(255, 180, 171, 0.12);
+    --admin-status-glow: rgba(191, 242, 220, 0.18);
+    --admin-shadow: rgba(0, 0, 0, 0.34);
+    color-scheme: dark;
+  }
+
+  body.admin-console-page .auth-box p,
+  body.admin-console-page .auth-toggle,
+  body.admin-console-page .auth-approval-notice,
+  body.admin-console-page .auth-back-btn {
+    color: var(--admin-muted);
+  }
+
+  body.admin-console-page .auth-link-btn,
+  body.admin-console-page .auth-toggle-btn {
+    color: var(--admin-accent);
+  }
+
+  body.admin-console-page .auth-link-btn:hover,
+  body.admin-console-page .auth-link-btn:focus-visible,
+  body.admin-console-page .auth-toggle-btn:hover,
+  body.admin-console-page .auth-toggle-btn:focus-visible,
+  body.admin-console-page .auth-back-btn:hover,
+  body.admin-console-page .auth-back-btn:focus-visible {
+    color: var(--admin-sidebar-text);
+  }
 }
 
 @media (max-width: 1180px) {
