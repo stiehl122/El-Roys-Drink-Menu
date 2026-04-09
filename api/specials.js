@@ -13,6 +13,30 @@ function serviceHeaders(extra = {}) {
   };
 }
 
+async function readJsonSafe(response) {
+  try {
+    return await response.json();
+  } catch (_) {
+    return null;
+  }
+}
+
+function getApiErrorMessage(payload, fallback) {
+  return payload?.error || payload?.message || payload?.hint || payload?.details || fallback;
+}
+
+function isMissingColumnIssue(payload, columnName) {
+  const message = `${payload?.error || payload?.message || payload?.hint || payload?.details || ''}`.toLowerCase();
+  return message.includes(columnName.toLowerCase()) &&
+    (message.includes('column') || message.includes('schema cache'));
+}
+
+function isOnConflictConstraintIssue(payload) {
+  const message = `${payload?.error || payload?.message || payload?.hint || payload?.details || ''}`.toLowerCase();
+  return message.includes('on conflict') ||
+    message.includes('unique or exclusion constraint');
+}
+
 async function itemBelongsToRestaurantMenus(sbUrl, menuIds, itemId) {
   const categoriesRes = await fetch(
     `${sbUrl}/rest/v1/categories?menu_id=in.(${menuIds.join(',')})&select=items(id)`,
@@ -116,33 +140,55 @@ async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
   if (!config?.canonicalId) return null;
+  let supportsCanonicalId = true;
 
   const selectGroup = async () => {
-    // Primary lookup by canonical_id
-    let groupRes = await fetch(
-      `${sbUrl}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
-      { headers: serviceHeaders() }
-    );
-    if (!groupRes.ok) throw new Error('Failed to load specials group');
-    let groups = await groupRes.json();
-    if (groups?.[0]) return groups[0];
+    if (supportsCanonicalId && config.canonicalId) {
+      const groupRes = await fetch(
+        `${sbUrl}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
+        { headers: serviceHeaders() }
+      );
+      if (groupRes.ok) {
+        const groups = await groupRes.json();
+        if (groups?.[0]) return groups[0];
+      } else {
+        const payload = await readJsonSafe(groupRes);
+        if (isMissingColumnIssue(payload, 'canonical_id')) {
+          supportsCanonicalId = false;
+        } else {
+          throw new Error(getApiErrorMessage(payload, 'Failed to load specials group'));
+        }
+      }
+    }
 
     // Fallback to name for pre-migration data
     if (config.name) {
-      groupRes = await fetch(
-        `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
+      const selectFields = supportsCanonicalId ? 'id,name,canonical_id' : 'id,name';
+      const groupRes = await fetch(
+        `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=${selectFields}&limit=1`,
         { headers: serviceHeaders() }
       );
-      if (!groupRes.ok) throw new Error('Failed to load specials group');
-      groups = await groupRes.json();
+      if (!groupRes.ok) {
+        const payload = await readJsonSafe(groupRes);
+        throw new Error(getApiErrorMessage(payload, 'Failed to load specials group'));
+      }
+      const groups = await groupRes.json();
       if (groups?.[0]) {
         // Stamp canonical_id on legacy row
-        if (!groups[0].canonical_id) {
-          await fetch(`${sbUrl}/rest/v1/featured_groups?id=eq.${groups[0].id}`, {
+        if (supportsCanonicalId && config.canonicalId && !groups[0].canonical_id) {
+          const patchRes = await fetch(`${sbUrl}/rest/v1/featured_groups?id=eq.${groups[0].id}`, {
             method: 'PATCH',
             headers: serviceHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
             body: JSON.stringify({ canonical_id: config.canonicalId }),
           });
+          if (!patchRes.ok) {
+            const payload = await readJsonSafe(patchRes);
+            if (isMissingColumnIssue(payload, 'canonical_id')) {
+              supportsCanonicalId = false;
+            } else {
+              throw new Error(getApiErrorMessage(payload, 'Failed to update specials group'));
+            }
+          }
         }
         return groups[0];
       }
@@ -152,21 +198,56 @@ async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
 
   if (!createIfMissing) return selectGroup();
 
-  const createRes = await fetch(`${sbUrl}/rest/v1/featured_groups?on_conflict=name&select=id,name,canonical_id`, {
-    method: 'POST',
-    headers: serviceHeaders({
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=ignore-duplicates,return=representation',
-    }),
-    body: JSON.stringify({ name: config.name, canonical_id: config.canonicalId }),
-  });
-  if (!createRes.ok) throw new Error('Failed to upsert specials group');
-  const created = await createRes.json();
-  let group = created?.[0] || null;
+  let group = await selectGroup();
   if (group?.id) return group;
 
+  let useCanonicalId = supportsCanonicalId && !!config.canonicalId;
+  let useOnConflict = true;
+  let lastCreateError = 'Failed to upsert specials group';
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const selectFields = useCanonicalId ? 'id,name,canonical_id' : 'id,name';
+    const createUrl = `${sbUrl}/rest/v1/featured_groups${useOnConflict ? '?on_conflict=name&' : '?'}select=${selectFields}`;
+    const createRes = await fetch(createUrl, {
+      method: 'POST',
+      headers: serviceHeaders({
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=ignore-duplicates,return=representation',
+      }),
+      body: JSON.stringify(useCanonicalId
+        ? { name: config.name, canonical_id: config.canonicalId }
+        : { name: config.name }),
+    });
+    if (createRes.ok) {
+      const created = await createRes.json();
+      group = created?.[0] || null;
+      if (group?.id) return group;
+      group = await selectGroup();
+      if (group?.id) return group;
+      lastCreateError = 'Failed to resolve specials group';
+      break;
+    }
+
+    const payload = await readJsonSafe(createRes);
+    lastCreateError = getApiErrorMessage(payload, lastCreateError);
+
+    group = await selectGroup();
+    if (group?.id) return group;
+
+    if (useCanonicalId && isMissingColumnIssue(payload, 'canonical_id')) {
+      useCanonicalId = false;
+      supportsCanonicalId = false;
+      continue;
+    }
+    if (useOnConflict && isOnConflictConstraintIssue(payload)) {
+      useOnConflict = false;
+      continue;
+    }
+    break;
+  }
+
   group = await selectGroup();
-  if (!group?.id) throw new Error('Failed to resolve specials group');
+  if (!group?.id) throw new Error(lastCreateError || 'Failed to resolve specials group');
   return group;
 }
 
