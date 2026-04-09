@@ -3283,12 +3283,12 @@ body.manager-stitch-shell .manager-shell-actionbar {
     "copy groups"
     "status groups";
   align-items: center;
-  gap: 8px 18px;
-  padding: 12px 16px;
+  gap: 6px 14px;
+  padding: 10px 14px;
   background: var(--manager-shell-actionbar-bg);
   border: 1px solid var(--manager-shell-border);
-  border-radius: 24px;
-  box-shadow: 0 18px 38px var(--manager-shell-shadow-strong);
+  border-radius: 22px;
+  box-shadow: 0 16px 32px var(--manager-shell-shadow-strong);
   backdrop-filter: blur(18px);
   overscroll-behavior: contain;
 }
@@ -3296,10 +3296,10 @@ body.manager-stitch-shell .manager-shell-actionbar {
 body.manager-stitch-shell .manager-shell-actionbar-copy {
   grid-area: copy;
   min-width: 0;
-  max-width: 19rem;
+  max-width: 16.5rem;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-groups {
@@ -3307,7 +3307,7 @@ body.manager-stitch-shell .manager-shell-actionbar-groups {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: nowrap;
   align-self: center;
 }
@@ -3325,12 +3325,12 @@ body.manager-stitch-shell .manager-shell-actionbar-primary {
 
 body.manager-stitch-shell .save-btn,
 body.manager-stitch-shell .send-btn {
-  min-height: 46px;
-  padding: 0 18px;
+  min-height: 44px;
+  padding: 0 16px;
   border-radius: 2px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
@@ -3343,8 +3343,8 @@ body.manager-stitch-shell .manager-shell-actionbar .workspace-actions-title {
 
 body.manager-stitch-shell .manager-shell-actionbar .workspace-actions-sub {
   margin-top: 0;
-  font-size: 13px;
-  line-height: 1.35;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 body.manager-stitch-shell #sync-status {
@@ -5474,7 +5474,7 @@ body.manager-stitch-shell .del-item {
 
 @media (max-width: 920px) {
   body.manager-stitch-shell {
-    padding-bottom: calc(214px + env(safe-area-inset-bottom));
+    padding-bottom: calc(182px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar {
@@ -5484,15 +5484,19 @@ body.manager-stitch-shell .del-item {
     left: 10px;
     right: 10px;
     bottom: calc(10px + env(safe-area-inset-bottom));
-    gap: 10px;
-    padding: 9px 11px calc(9px + env(safe-area-inset-bottom));
-    border-radius: 22px;
+    gap: 8px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-radius: 20px;
     border: 1px solid var(--manager-shell-border);
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-copy {
     max-width: none;
-    gap: 1px;
+    gap: 0;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
+    display: none;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
@@ -5504,8 +5508,8 @@ body.manager-stitch-shell .del-item {
     max-width: none;
     display: block;
     overflow: hidden;
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: 10.5px;
+    line-height: 1.25;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
@@ -5514,7 +5518,7 @@ body.manager-stitch-shell .del-item {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 6px;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-featured,
@@ -5522,7 +5526,7 @@ body.manager-stitch-shell .del-item {
     width: 100%;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
@@ -5530,10 +5534,10 @@ body.manager-stitch-shell .del-item {
   body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
     width: 100%;
     min-width: 0;
-    min-height: 44px;
-    padding: 0 14px;
-    font-size: 10px;
-    letter-spacing: 0.08em;
+    min-height: 42px;
+    padding: 0 12px;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
     line-height: 1.25;
     white-space: normal;
     text-align: center;
@@ -5544,7 +5548,7 @@ body.manager-stitch-shell .del-item {
   }
 
   body.manager-stitch-shell .toast {
-    bottom: calc(196px + env(safe-area-inset-bottom));
+    bottom: calc(166px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-stats-grid {
@@ -5716,26 +5720,26 @@ body.manager-stitch-shell .del-item {
 
 @media (max-width: 520px) {
   body.manager-stitch-shell {
-    padding-bottom: calc(198px + env(safe-area-inset-bottom));
+    padding-bottom: calc(168px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar {
     left: 8px;
     right: 8px;
     bottom: calc(8px + env(safe-area-inset-bottom));
-    padding: 8px 9px calc(8px + env(safe-area-inset-bottom));
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-featured,
   body.manager-stitch-shell .manager-shell-actionbar-primary {
-    gap: 6px;
+    gap: 5px;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
   body.manager-stitch-shell .manager-shell-actionbar-primary .save-btn,
   body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
-    min-height: 44px;
-    font-size: 10px;
+    min-height: 40px;
+    font-size: 9px;
   }
 
   body.manager-stitch-shell .item-name input,
