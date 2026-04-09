@@ -1,0 +1,4 @@
+interface:
+  display_name: "Recursive Design Loop"
+  short_description: "Recursive preview-based UX and performance polish for a specific screen"
+  default_prompt: "Use $recursive-design-loop to inspect a specific screen on the current Vercel preview, ship the highest-leverage design and performance pass, and repeat until diminishing returns. Specify the target screen (e.g. /leroyslounge, /manager)."
