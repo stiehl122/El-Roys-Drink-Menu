@@ -2159,26 +2159,26 @@ body.manager-mode.manager-stitch-shell {
   --font-heading: 'Noto Serif', serif;
   --font-body: 'Inter', sans-serif;
   --font-accent: 'Inter', sans-serif;
-  --manager-shell-bg: #faf9f6;
-  --manager-shell-surface: #ffffff;
-  --manager-shell-surface-muted: #f4f3f0;
-  --manager-shell-surface-strong: #e9e8e5;
-  --manager-shell-border: rgba(25, 37, 25, 0.12);
-  --manager-shell-border-strong: rgba(25, 37, 25, 0.2);
+  --manager-shell-bg: #f6f1e9;
+  --manager-shell-surface: #fffdf8;
+  --manager-shell-surface-muted: #f4efe6;
+  --manager-shell-surface-strong: #ece4d8;
+  --manager-shell-border: rgba(25, 37, 25, 0.11);
+  --manager-shell-border-strong: rgba(25, 37, 25, 0.18);
   --manager-shell-text: #1a1c1a;
-  --manager-shell-muted: #5f5e5e;
+  --manager-shell-muted: #5a5d57;
   --manager-shell-primary: #192519;
   --manager-shell-primary-soft: #2e3b2e;
   --manager-shell-primary-faint: rgba(46, 59, 46, 0.12);
   --manager-shell-accent: #301f08;
-  --manager-shell-accent-soft: #fdddb9;
+  --manager-shell-accent-soft: rgba(253, 221, 185, 0.42);
   --manager-shell-error: #ba1a1a;
   --manager-shell-success: #315f31;
   --manager-shell-overlay: rgba(26, 28, 26, 0.28);
   --manager-shell-shadow: rgba(25, 37, 25, 0.08);
   --manager-shell-shadow-strong: rgba(25, 37, 25, 0.16);
-  --manager-shell-glass-bg: rgba(250, 249, 246, 0.82);
-  --manager-shell-actionbar-bg: rgba(255, 255, 255, 0.96);
+  --manager-shell-glass-bg: rgba(246, 241, 233, 0.88);
+  --manager-shell-actionbar-bg: rgba(255, 250, 243, 0.88);
   --bg: var(--manager-shell-bg);
   --surface: var(--manager-shell-surface);
   --card: var(--manager-shell-surface-muted);
@@ -2206,26 +2206,26 @@ body.manager-mode.manager-stitch-shell {
 @media (prefers-color-scheme: dark) {
   body.manager-stitch-shell,
   body.manager-mode.manager-stitch-shell {
-    --manager-shell-bg: #171a17;
-    --manager-shell-surface: #202420;
-    --manager-shell-surface-muted: #262b26;
-    --manager-shell-surface-strong: #303630;
-    --manager-shell-border: rgba(242, 241, 238, 0.12);
-    --manager-shell-border-strong: rgba(242, 241, 238, 0.2);
-    --manager-shell-text: #f2f1ee;
-    --manager-shell-muted: #bcc1b8;
-    --manager-shell-primary: #d8e7d4;
-    --manager-shell-primary-soft: #bccbb9;
-    --manager-shell-primary-faint: rgba(216, 231, 212, 0.1);
+    --manager-shell-bg: #111612;
+    --manager-shell-surface: #1a211c;
+    --manager-shell-surface-muted: #202822;
+    --manager-shell-surface-strong: #2b342d;
+    --manager-shell-border: rgba(242, 241, 238, 0.1);
+    --manager-shell-border-strong: rgba(242, 241, 238, 0.17);
+    --manager-shell-text: #f5f3ee;
+    --manager-shell-muted: #b7bdaf;
+    --manager-shell-primary: #e8f0e2;
+    --manager-shell-primary-soft: #cfdac9;
+    --manager-shell-primary-faint: rgba(232, 240, 226, 0.08);
     --manager-shell-accent: #fdddb9;
-    --manager-shell-accent-soft: rgba(253, 221, 185, 0.16);
+    --manager-shell-accent-soft: rgba(253, 221, 185, 0.12);
     --manager-shell-error: #ffb4ab;
     --manager-shell-success: #a9d6a7;
-    --manager-shell-overlay: rgba(0, 0, 0, 0.46);
-    --manager-shell-shadow: rgba(0, 0, 0, 0.26);
-    --manager-shell-shadow-strong: rgba(0, 0, 0, 0.38);
-    --manager-shell-glass-bg: rgba(23, 26, 23, 0.82);
-    --manager-shell-actionbar-bg: rgba(32, 36, 32, 0.96);
+    --manager-shell-overlay: rgba(6, 8, 6, 0.58);
+    --manager-shell-shadow: rgba(0, 0, 0, 0.34);
+    --manager-shell-shadow-strong: rgba(0, 0, 0, 0.46);
+    --manager-shell-glass-bg: rgba(17, 22, 18, 0.88);
+    --manager-shell-actionbar-bg: rgba(20, 24, 20, 0.88);
     color-scheme: dark;
   }
 }
@@ -3166,37 +3166,48 @@ body.manager-stitch-shell .manager-shell-actionbar {
   position: fixed;
   left: 288px;
   right: 24px;
-  bottom: calc(20px + env(safe-area-inset-bottom));
+  bottom: calc(18px + env(safe-area-inset-bottom));
   z-index: 56;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "copy groups"
+    "status groups";
   align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px;
+  gap: 8px 18px;
+  padding: 12px 16px;
   background: var(--manager-shell-actionbar-bg);
   border: 1px solid var(--manager-shell-border);
-  box-shadow: 0 -12px 40px var(--manager-shell-shadow);
+  border-radius: 24px;
+  box-shadow: 0 18px 38px var(--manager-shell-shadow-strong);
+  backdrop-filter: blur(18px);
   overscroll-behavior: contain;
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-copy {
+  grid-area: copy;
   min-width: 0;
-  max-width: 32rem;
+  max-width: 19rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-groups {
+  grid-area: groups;
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 12px;
+  flex-wrap: nowrap;
+  align-self: center;
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-featured,
 body.manager-stitch-shell .manager-shell-actionbar-primary {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-primary {
@@ -3205,13 +3216,33 @@ body.manager-stitch-shell .manager-shell-actionbar-primary {
 
 body.manager-stitch-shell .save-btn,
 body.manager-stitch-shell .send-btn {
-  min-height: 50px;
-  padding: 0 22px;
+  min-height: 46px;
+  padding: 0 18px;
   border-radius: 2px;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar .workspace-actions-title {
+  margin: 0;
+  color: var(--manager-shell-primary);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar .workspace-actions-sub {
+  margin-top: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+body.manager-stitch-shell #sync-status {
+  color: var(--manager-shell-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 body.manager-stitch-shell .save-btn {
@@ -3228,7 +3259,7 @@ body.manager-stitch-shell .save-btn:hover {
 }
 
 body.manager-stitch-shell .send-btn {
-  min-width: 220px;
+  min-width: 188px;
   background: linear-gradient(135deg, var(--manager-shell-primary), var(--manager-shell-primary-soft));
   box-shadow: 0 18px 30px var(--manager-shell-shadow);
 }
@@ -3239,6 +3270,12 @@ body.manager-stitch-shell .send-btn:hover {
 
 body.manager-stitch-shell #sync-status {
   min-width: max-content;
+}
+
+body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small {
+  min-height: 42px;
+  padding: 0 12px;
+  font-size: 10px;
 }
 
 body.manager-stitch-shell .toast {
@@ -4134,10 +4171,11 @@ body.manager-stitch-shell #app-shell > header.manager-shell-topbar {
   z-index: 55;
   margin: 0 0 8px;
   background:
-    linear-gradient(135deg, rgba(250, 249, 246, 0.94), rgba(244, 246, 241, 0.88)),
-    radial-gradient(circle at top left, rgba(253, 221, 185, 0.16), transparent 40%);
-  border-bottom: 1px solid rgba(27, 38, 31, 0.08);
-  box-shadow: 0 10px 28px rgba(25, 28, 30, 0.08);
+    radial-gradient(circle at top left, var(--manager-shell-accent-soft), transparent 28%),
+    linear-gradient(135deg, var(--manager-shell-glass-bg), var(--manager-shell-surface-muted));
+  border-bottom: 1px solid var(--manager-shell-border);
+  box-shadow: 0 12px 28px var(--manager-shell-shadow);
+  backdrop-filter: blur(20px);
 }
 
 body.manager-stitch-shell .manager-shell-topbar-inner {
@@ -4193,9 +4231,9 @@ body.manager-stitch-shell .manager-shell-header-badge {
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--manager-shell-surface);
   color: var(--manager-shell-primary);
   font-size: 9px;
   font-weight: 700;
@@ -4223,7 +4261,7 @@ body.manager-stitch-shell .manager-shell-title-copy {
 body.manager-stitch-shell #app-shell > header h1 {
   font-size: clamp(1.3rem, 2.2vw, 1.75rem);
   line-height: 0.98;
-  color: #1c3023;
+  color: var(--manager-shell-primary);
 }
 
 body.manager-stitch-shell .manager-shell-header-summary {
@@ -4248,13 +4286,14 @@ body.manager-stitch-shell .user-chip {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  border-color: rgba(27, 38, 31, 0.08);
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
 }
 
 body.manager-stitch-shell .manager-shell-header-meta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(240px, 320px) minmax(300px, auto);
+  justify-content: space-between;
   gap: 8px;
   align-items: stretch;
 }
@@ -4264,14 +4303,17 @@ body.manager-stitch-shell .manager-shell-menu-bar {
   min-height: 0;
   padding: 8px 10px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.74);
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  background: var(--manager-shell-surface);
+  border: 1px solid var(--manager-shell-border);
+  box-shadow: 0 10px 24px var(--manager-shell-shadow);
 }
 
 body.manager-stitch-shell .manager-shell-meta-card {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  justify-self: start;
+  width: min(100%, 320px);
 }
 
 body.manager-stitch-shell .manager-shell-meta-label {
@@ -4285,6 +4327,8 @@ body.manager-stitch-shell .manager-shell-meta-label {
 body.manager-stitch-shell .manager-shell-menu-bar {
   justify-content: space-between;
   gap: 12px;
+  justify-self: end;
+  min-width: 296px;
 }
 
 body.manager-stitch-shell .manager-shell-layout {
@@ -4306,9 +4350,10 @@ body.manager-stitch-shell .manager-shell-rail {
   top: 14px;
   padding: 14px 12px;
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 248, 244, 0.94));
-  border: 1px solid rgba(27, 38, 31, 0.08);
-  box-shadow: 0 18px 32px rgba(25, 28, 30, 0.06);
+  background: linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+  border: 1px solid var(--manager-shell-border);
+  box-shadow: 0 18px 32px var(--manager-shell-shadow);
+  backdrop-filter: blur(12px);
 }
 
 body.manager-stitch-shell .manager-shell-rail-head-row {
@@ -4324,9 +4369,9 @@ body.manager-stitch-shell .manager-shell-rail-close {
   justify-content: center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.84);
+  background: var(--manager-shell-surface);
   color: var(--manager-shell-primary);
   font-size: 20px;
   cursor: pointer;
@@ -4360,15 +4405,21 @@ body.manager-stitch-shell .settings-rail-btn {
   padding: 12px 14px 12px 16px;
 }
 
+body.manager-stitch-shell .settings-rail-btn:hover,
+body.manager-stitch-shell .settings-rail-btn.active {
+  background: var(--manager-shell-primary-faint);
+  box-shadow: inset 0 0 0 1px var(--manager-shell-border);
+}
+
 body.manager-stitch-shell .settings-section,
 body.manager-stitch-shell .manager-shell-overview-card {
   padding: 24px;
   border-radius: 28px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 248, 244, 0.94)),
-    radial-gradient(circle at top right, rgba(253, 221, 185, 0.18), transparent 38%);
-  border-color: rgba(27, 38, 31, 0.08);
-  box-shadow: 0 20px 44px rgba(25, 28, 30, 0.06);
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 32%),
+    linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+  border-color: var(--manager-shell-border);
+  box-shadow: 0 20px 44px var(--manager-shell-shadow);
 }
 
 body.manager-stitch-shell .manager-shell-stats-grid {
@@ -4386,8 +4437,8 @@ body.manager-stitch-shell .manager-shell-stat-card {
   min-height: 0;
   padding: 10px 12px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.82);
-  border-color: rgba(27, 38, 31, 0.08);
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border-strong);
 }
 
 body.manager-stitch-shell .manager-shell-stat-label {
@@ -4455,9 +4506,9 @@ body.manager-stitch-shell .featured-specials-copy {
 body.manager-stitch-shell .featured-specials-composer {
   position: relative;
   padding: 18px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--manager-shell-surface);
 }
 
 body.manager-stitch-shell .featured-specials-list {
@@ -4468,9 +4519,9 @@ body.manager-stitch-shell .featured-specials-list {
 
 body.manager-stitch-shell .featured-special-row {
   padding: 18px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--manager-shell-surface);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -4527,7 +4578,7 @@ body.manager-stitch-shell .featured-special-upcharge {
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 999px;
   background: var(--manager-shell-surface-muted);
   color: var(--manager-shell-muted);
@@ -4555,8 +4606,41 @@ body.manager-stitch-shell .featured-sell-note-input {
 body.manager-stitch-shell .featured-picker-list {
   top: calc(100% - 6px);
   border-radius: 18px;
-  border-color: rgba(27, 38, 31, 0.08);
-  box-shadow: 0 20px 32px rgba(25, 28, 30, 0.14);
+  border-color: var(--manager-shell-border);
+  box-shadow: 0 20px 32px var(--manager-shell-shadow-strong);
+  background: var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell .featured-picker-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--manager-shell-border);
+  color: var(--manager-shell-text);
+  font-size: 12px;
+}
+
+body.manager-stitch-shell .featured-picker-item:last-child {
+  border-bottom: 0;
+}
+
+body.manager-stitch-shell .featured-picker-item:hover {
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell .featured-picker-cat {
+  display: block;
+  margin-top: 4px;
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+}
+
+body.manager-stitch-shell .featured-picker-offmenu {
+  margin-left: 6px;
+  color: var(--manager-shell-error);
+}
+
+body.manager-stitch-shell .featured-picker-empty {
+  padding: 12px;
+  color: var(--manager-shell-muted);
 }
 
 body.manager-stitch-shell .history-entry {
@@ -4571,9 +4655,9 @@ body.manager-stitch-shell .history-header {
 
 body.manager-stitch-shell .history-archive {
   margin-top: 12px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--manager-shell-surface);
   overflow: hidden;
 }
 
@@ -4607,15 +4691,15 @@ body.manager-stitch-shell .history-archive-body {
 }
 
 body.manager-stitch-shell .description-editor-card {
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--manager-shell-surface);
   overflow: hidden;
 }
 
 body.manager-stitch-shell .description-editor-card.is-open {
-  border-color: rgba(27, 38, 31, 0.16);
-  box-shadow: 0 18px 30px rgba(25, 28, 30, 0.06);
+  border-color: var(--manager-shell-border-strong);
+  box-shadow: 0 18px 30px var(--manager-shell-shadow);
 }
 
 body.manager-stitch-shell .desc-row-header {
@@ -4632,7 +4716,7 @@ body.manager-stitch-shell .desc-row-header {
 }
 
 body.manager-stitch-shell .description-editor-card.is-open .desc-row-header {
-  border-bottom-color: rgba(27, 38, 31, 0.08);
+  border-bottom-color: var(--manager-shell-border);
 }
 
 body.manager-stitch-shell .desc-row-main {
@@ -4665,8 +4749,8 @@ body.manager-stitch-shell .desc-status-indicators {
 body.manager-stitch-shell .desc-indicator {
   border-radius: 999px;
   padding: 6px 10px;
-  background: rgba(27, 38, 31, 0.06);
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  background: var(--manager-shell-surface-muted);
+  border: 1px solid var(--manager-shell-border);
   color: var(--manager-shell-muted);
   font-size: 10px;
   font-weight: 700;
@@ -4674,8 +4758,8 @@ body.manager-stitch-shell .desc-indicator {
 }
 
 body.manager-stitch-shell .desc-indicator.has-content {
-  background: rgba(27, 107, 81, 0.12);
-  border-color: rgba(27, 107, 81, 0.2);
+  background: var(--manager-shell-primary-faint);
+  border-color: var(--manager-shell-border-strong);
   color: var(--manager-shell-primary);
 }
 
@@ -4696,7 +4780,7 @@ body.manager-stitch-shell .description-editor-card.is-open .desc-chevron {
 
 body.manager-stitch-shell .desc-edit-body {
   padding: 18px 20px 20px;
-  background: rgba(244, 245, 241, 0.76);
+  background: var(--manager-shell-surface-muted);
   border: 0;
 }
 
@@ -4710,9 +4794,9 @@ body.manager-stitch-shell .desc-field-block,
 body.manager-stitch-shell .recipe-field-block {
   margin-bottom: 0;
   padding: 16px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--manager-shell-surface);
 }
 
 body.manager-stitch-shell .desc-field-heading {
@@ -4729,9 +4813,9 @@ body.manager-stitch-shell .desc-visibility-toggle {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 999px;
-  background: rgba(27, 38, 31, 0.03);
+  background: var(--manager-shell-surface-muted);
   color: var(--manager-shell-muted);
   font-size: 11px;
   font-weight: 700;
@@ -4761,7 +4845,7 @@ body.manager-stitch-shell .recipe-field-block .add-ingredient-area {
 body.manager-stitch-shell .recipe-field-block .add-ingredient-input {
   min-height: 42px;
   padding: 0 10px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 14px;
 }
 
@@ -4778,12 +4862,12 @@ body.manager-stitch-shell .manager-shell-footer {
   gap: 18px;
   margin-top: 30px;
   padding: 26px 28px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 28px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 248, 244, 0.88)),
-    radial-gradient(circle at top right, rgba(253, 221, 185, 0.14), transparent 38%);
-  box-shadow: 0 20px 40px rgba(25, 28, 30, 0.06);
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 30%),
+    linear-gradient(135deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+  box-shadow: 0 20px 40px var(--manager-shell-shadow);
 }
 
 body.manager-stitch-shell .manager-shell-footer-copy {
@@ -4836,9 +4920,9 @@ body.manager-stitch-shell .manager-shell-footer-pill {
   align-items: center;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--manager-shell-surface);
   color: var(--manager-shell-muted);
   font-size: 11px;
   font-weight: 700;
@@ -4849,17 +4933,18 @@ body.manager-stitch-shell .manager-shell-footer-pill {
 body.manager-stitch-shell .manager-shell-exit {
   min-height: 44px;
   padding: 0 18px 0 18px;
-  border: 1px solid rgba(27, 38, 31, 0.08);
+  border: 1px solid var(--manager-shell-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
+  background: var(--manager-shell-surface);
   color: var(--manager-shell-primary);
 }
 
 body.manager-stitch-shell .manager-shell-actionbar-status {
+  grid-area: status;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  min-width: max-content;
+  justify-content: flex-start;
+  min-width: 0;
 }
 
 @media (max-width: 1100px) {
@@ -5206,12 +5291,12 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   /* Sticky section kickers for scroll context */
   body.manager-stitch-shell .settings-section-kicker {
-    position: sticky;
-    top: calc(58px + env(safe-area-inset-top));
-    z-index: 10;
-    background: var(--manager-shell-bg);
-    padding: 8px 0 4px;
-    margin: -8px 0 8px;
+    position: static;
+    top: auto;
+    z-index: auto;
+    background: transparent;
+    padding: 0;
+    margin: 0 0 10px;
   }
 
 }
@@ -5257,16 +5342,25 @@ body.manager-stitch-shell .del-item {
 
 @media (max-width: 920px) {
   body.manager-stitch-shell {
-    padding-bottom: calc(216px + env(safe-area-inset-bottom));
+    padding-bottom: calc(214px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar {
+    display: flex;
+    grid-template-columns: none;
+    grid-template-areas: none;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
     gap: 10px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    padding: 9px 11px calc(9px + env(safe-area-inset-bottom));
+    border-radius: 22px;
+    border: 1px solid var(--manager-shell-border);
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-copy {
     max-width: none;
+    gap: 1px;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
@@ -5276,12 +5370,12 @@ body.manager-stitch-shell .del-item {
 
   body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-sub {
     max-width: none;
-    display: -webkit-box;
+    display: block;
     overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
     font-size: 11px;
     line-height: 1.35;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-groups {
@@ -5304,9 +5398,9 @@ body.manager-stitch-shell .del-item {
   body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
     width: 100%;
     min-width: 0;
-    min-height: 48px;
+    min-height: 44px;
     padding: 0 14px;
-    font-size: 11px;
+    font-size: 10px;
     letter-spacing: 0.08em;
     line-height: 1.25;
     white-space: normal;
@@ -5490,11 +5584,14 @@ body.manager-stitch-shell .del-item {
 
 @media (max-width: 520px) {
   body.manager-stitch-shell {
-    padding-bottom: calc(228px + env(safe-area-inset-bottom));
+    padding-bottom: calc(198px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar {
-    padding: 9px 10px calc(10px + env(safe-area-inset-bottom));
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 8px 9px calc(8px + env(safe-area-inset-bottom));
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-featured,
@@ -5505,7 +5602,7 @@ body.manager-stitch-shell .del-item {
   body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
   body.manager-stitch-shell .manager-shell-actionbar-primary .save-btn,
   body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
-    min-height: 46px;
+    min-height: 44px;
     font-size: 10px;
   }
 
