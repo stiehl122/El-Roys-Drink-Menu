@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Current Menu</title>
+<title>El Roy's & Leroy's</title>
 <link rel="icon" type="image/png" href="HFLOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -196,10 +196,11 @@
     display: none;
     text-align: center;
     font-family: 'Epilogue', sans-serif;
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-style: italic;
     color: var(--lp-tagline);
-    margin-top: 0.75rem;
+    margin-top: 0.5rem;
+    letter-spacing: 0.01em;
   }
 
   /* ── Footer ── */
@@ -215,6 +216,61 @@
     text-transform: uppercase;
     letter-spacing: 0.2em;
     color: var(--lp-footer);
+  }
+
+  /* ── Entrance animation ── */
+  @keyframes lp-fade-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .lp-headline {
+    animation: lp-fade-up 0.8s ease-out both;
+  }
+  .lp-row--elroys {
+    animation: lp-fade-up 0.8s ease-out 0.25s both;
+  }
+  .lp-row--leroys {
+    animation: lp-fade-up 0.8s ease-out 0.45s both;
+  }
+  .lp-footer {
+    animation: lp-fade-up 0.6s ease-out 0.65s both;
+  }
+
+  /* ── Row hover lift ── */
+  .lp-row {
+    border-radius: 16px;
+    padding: 1.25rem;
+    transition: background 0.4s, box-shadow 0.4s;
+  }
+  .lp-row--elroys:hover,
+  .lp-row--elroys:focus {
+    background: rgba(0, 84, 48, 0.04);
+    box-shadow: 0 8px 32px rgba(0, 84, 48, 0.06);
+  }
+  .lp-row--leroys:hover,
+  .lp-row--leroys:focus {
+    background: rgba(168, 57, 0, 0.04);
+    box-shadow: 0 8px 32px rgba(168, 57, 0, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    .lp-row--elroys:hover,
+    .lp-row--elroys:focus {
+      background: rgba(0, 84, 48, 0.12);
+      box-shadow: 0 8px 32px rgba(0, 84, 48, 0.15);
+    }
+    .lp-row--leroys:hover,
+    .lp-row--leroys:focus {
+      background: rgba(168, 57, 0, 0.12);
+      box-shadow: 0 8px 32px rgba(168, 57, 0, 0.15);
+    }
+  }
+
+  /* ── Reduced motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    .lp-headline, .lp-row--elroys, .lp-row--leroys, .lp-footer {
+      animation: none;
+    }
+    .lp-sign-img { transition: none; }
   }
 
   /* ── Mobile ── */
