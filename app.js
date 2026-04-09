@@ -1263,7 +1263,15 @@ async function sbSeedCategories(menuId, defs) {
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
+function shouldLoadLocalConfig() {
+  const hostname = window.location.hostname;
+  return window.location.protocol === 'file:' ||
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1';
+}
+
 async function loadLocalConfig() {
+  if (!shouldLoadLocalConfig()) return;
   try {
     const res = await fetch('lib/config/notifications.json');
     if (!res.ok) return;
@@ -3375,6 +3383,22 @@ function renderAuthScreen(screen) {
   if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
   const firstInput = document.querySelector(`#auth-screen-${screen} input`);
   if (firstInput) setTimeout(() => firstInput.focus(), 0);
+}
+
+function initAuthForms() {
+  ['signin', 'signup', 'forgot', 'reset'].forEach(screenName => {
+    const screen = document.getElementById(`auth-screen-${screenName}`);
+    if (!screen || screen.querySelector('.auth-screen-form')) return;
+    const form = document.createElement('form');
+    form.className = 'auth-screen-form';
+    form.noValidate = true;
+    while (screen.firstChild) form.appendChild(screen.firstChild);
+    form.addEventListener('submit', event => event.preventDefault());
+    screen.appendChild(form);
+    form.querySelectorAll('button').forEach(button => {
+      button.type = 'button';
+    });
+  });
 }
 
 async function handleSignIn() {
@@ -6035,6 +6059,7 @@ setInterval(() => {
 
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
+  initAuthForms();
   // Sign In: email Enter → focus password; password Enter → submit
   document.getElementById('signin-email').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') document.getElementById('signin-password').focus();

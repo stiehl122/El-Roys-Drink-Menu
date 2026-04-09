@@ -971,14 +971,15 @@
   .db-status--error { color:var(--red); }
 
   /* ── PREVIEW TOOLBAR ── */
-  #preview-toolbar { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:110; display:flex; flex-direction:column; align-items:stretch; background:var(--card); border:1px solid var(--border); border-right:none; border-radius:10px 0 0 10px; padding:8px 6px; gap:4px; min-width:72px; box-shadow:-2px 0 14px rgba(0,0,0,0.18); }
-  .preview-toolbar-label { font-size:9px; font-weight:700; letter-spacing:1.5px; text-align:center; color:var(--muted); text-transform:uppercase; padding:2px 0 4px; }
-  .preview-toolbar-btn { background:var(--surface); border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:11px; font-family:var(--font-body); padding:7px 8px; cursor:pointer; text-align:center; transition:all 0.14s; white-space:nowrap; }
+  #preview-toolbar { position:fixed; right:max(12px, calc(env(safe-area-inset-right) + 6px)); bottom:max(12px, calc(env(safe-area-inset-bottom) + 6px)); z-index:110; display:flex; flex-direction:column; align-items:stretch; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:9px 8px; gap:5px; min-width:84px; box-shadow:0 14px 34px rgba(0,0,0,0.18); }
+  .preview-toolbar-label { font-size:9px; font-weight:700; letter-spacing:1.5px; text-align:center; color:var(--muted); text-transform:uppercase; padding:0 2px 4px; }
+  .preview-toolbar-btn { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--muted); font-size:11px; font-family:var(--font-body); padding:7px 10px; cursor:pointer; text-align:center; transition:all 0.14s; white-space:nowrap; }
   .preview-toolbar-btn:hover { border-color:var(--ember); color:var(--ember); }
-  .preview-toolbar-btn.active { background:var(--ember); border-color:var(--ember); color:#fff; font-weight:600; }
+  .preview-toolbar-btn.active { background:var(--ember); border-color:var(--ember); color:#fff; font-weight:600; box-shadow:0 6px 16px rgba(0,0,0,0.12); }
   .preview-toolbar-login { color:var(--fire); border-color:var(--fire); }
   .preview-toolbar-login:hover { background:var(--fire); color:#fff; border-color:var(--fire); }
   .preview-toolbar-divider { height:1px; background:var(--border); margin:2px 0; }
+  .auth-screen-form { display:block; margin:0; }
 
   /* ── DATABASE TAB ── */
   .db-search-row { padding: 12px 0 8px; }
@@ -5102,38 +5103,40 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     gap: 8px;
   }
 
-  /* Preview toolbar: horizontal strip at top on mobile */
+  /* Preview toolbar: keep it off primary content on mobile */
   #preview-toolbar {
-    top: 4px;
-    right: 4px;
+    right: max(8px, calc(env(safe-area-inset-right) + 4px));
+    bottom: max(8px, calc(env(safe-area-inset-bottom) + 4px));
     left: auto;
-    bottom: auto;
-    transform: none;
+    top: auto;
     flex-direction: row;
     align-items: center;
-    padding: 4px 8px;
-    gap: 4px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    max-width: min(calc(100vw - 16px), 312px);
+    padding: 6px;
+    gap: 4px 6px;
     min-width: 0;
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid var(--border);
-    opacity: 1;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.18);
   }
 
   #preview-toolbar .preview-toolbar-label {
+    flex: 1 0 100%;
     font-size: 8px;
-    letter-spacing: 1px;
-    padding: 0 2px 0 0;
+    letter-spacing: 1.2px;
+    padding: 0 2px;
+    text-align: left;
   }
 
   #preview-toolbar .preview-toolbar-btn {
-    padding: 4px 8px;
+    padding: 5px 9px;
     font-size: 10px;
   }
 
   #preview-toolbar .preview-toolbar-divider {
-    width: 1px;
-    height: 14px;
-    margin: 0 2px;
+    display: none;
   }
 
   body.manager-stitch-shell .manager-shell-user-tools {
