@@ -8,3 +8,4 @@ supabase/config.toml
 /.playwright-mcp
 /output
 /screenshots
+/.playwright-cli
