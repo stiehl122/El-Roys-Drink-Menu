@@ -207,8 +207,16 @@
   .lp-footer {
     width: 100%;
     text-align: center;
-    padding: 2rem;
+    padding: 2rem 2rem 2.5rem;
     z-index: 40;
+  }
+  .lp-footer::before {
+    content: '';
+    display: block;
+    width: 48px;
+    height: 1px;
+    background: var(--lp-footer);
+    margin: 0 auto 1.25rem;
   }
   .lp-footer-text {
     font-family: 'Space Grotesk', monospace;
@@ -241,6 +249,20 @@
     border-radius: 16px;
     padding: 1.25rem;
     transition: background 0.4s, box-shadow 0.4s;
+    outline: none;
+  }
+
+  /* ── Focus-visible ring ── */
+  .lp-row:focus-visible {
+    outline: 2px solid var(--lp-tagline);
+    outline-offset: 4px;
+    border-radius: 16px;
+  }
+  .lp-row--elroys:focus-visible {
+    outline-color: var(--lp-tagline-hover-green);
+  }
+  .lp-row--leroys:focus-visible {
+    outline-color: var(--lp-tagline-hover-orange);
   }
   .lp-row--elroys:hover,
   .lp-row--elroys:focus {
@@ -275,13 +297,14 @@
 
   /* ── Mobile ── */
   @media (max-width: 640px) {
-    .lp-headline { margin-bottom: 2rem; }
-    .lp-destinations { gap: 2.5rem; }
+    .lp-headline { margin-bottom: 1.5rem; }
+    .lp-destinations { gap: 1rem; }
 
     .lp-row {
       grid-template-columns: 1fr;
       justify-items: center;
       text-align: center;
+      padding: 1rem 0.75rem;
     }
 
     /* Hide desktop taglines, show mobile ones */
