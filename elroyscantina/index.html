@@ -1,345 +1,632 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#fcf6e8">
-<title>El Roy's Cantina | Current Menu</title>
-<link rel="icon" type="image/png" href="/HFLOGO.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400..800;1,400..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css">
-<link rel="stylesheet" href="/elroyscantina/style.css">
-</head>
-<body class="route-restaurant route-restaurant--elroy route-shell-pending">
-<main id="site-picker-view" class="site-picker-view" hidden>
-  <div class="site-picker-card">
-    <p class="site-picker-kicker">Current Menu</p>
-    <h1 class="site-picker-title">Choose a restaurant</h1>
-    <div class="site-picker-actions">
-      <a class="site-picker-link" href="/leroyslounge">Leroy's Lounge</a>
-      <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
-    </div>
-  </div>
-</main>
-
-<template id="elroy-route-template">
-  <div class="erc-page">
-    <a class="erc-skip-link" href="#erc-route-main">Skip to menu content</a>
-    <header class="erc-topbar">
-      <div class="erc-topbar-inner">
-        <div class="erc-brand-group">
-          <h1 class="erc-brand">El Roy's Cantina</h1>
-          <a class="erc-sister-link" href="/leroyslounge" aria-label="Open Leroy's Lounge menu">
-            <img class="erc-sister-badge" src="/assets/el-roys-cantina/cantina-badge.png" alt="Leroy's Lounge" width="495" height="335">
-          </a>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#fcf6e8" />
+    <title>El Roy's Cantina | Current Menu</title>
+    <link rel="icon" type="image/png" href="/HFLOGO.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400..800;1,400..800&family=Plus+Jakarta+Sans:wght@200..800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/elroyscantina/style.css" />
+  </head>
+  <body class="route-restaurant route-restaurant--elroy route-shell-pending">
+    <main id="site-picker-view" class="site-picker-view" hidden>
+      <div class="site-picker-card">
+        <p class="site-picker-kicker">Current Menu</p>
+        <h1 class="site-picker-title">Choose a restaurant</h1>
+        <div class="site-picker-actions">
+          <a class="site-picker-link" href="/leroyslounge">Leroy's Lounge</a>
+          <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
         </div>
+      </div>
+    </main>
 
-        <nav class="erc-menu-toggle" aria-label="Swap menu">
-          <button id="erc-nav-food"
-                  class="erc-menu-toggle-btn"
-                  type="button"
-                  data-route-menu-toggle="food">
-            Food
-          </button>
-          <button id="erc-nav-drinks"
-                  class="erc-menu-toggle-btn"
-                  type="button"
-                  data-route-menu-toggle="drinks">
-            Drinks
-          </button>
-        </nav>
+    <template id="elroy-route-template">
+      <div class="erc-page">
+        <a class="erc-skip-link" href="#erc-route-main">Skip to menu content</a>
+        <header class="erc-topbar">
+          <div class="erc-topbar-inner">
+            <div class="erc-brand-group">
+              <h1 class="erc-brand">El Roy's Cantina</h1>
+              <a
+                class="erc-sister-link"
+                href="/leroyslounge"
+                aria-label="Open Leroy's Lounge menu"
+              >
+                <img
+                  class="erc-sister-badge"
+                  src="/assets/el-roys-cantina/cantina-badge.png"
+                  alt="Leroy's Lounge"
+                  width="495"
+                  height="335"
+                />
+              </a>
+            </div>
 
-        <div class="erc-actions">
-          <button class="erc-login-btn" data-route-signin type="button" onclick="openAuthOverlay()">Login</button>
-          <button class="erc-login-btn erc-route-exit-btn"
-                  type="button"
-                  data-route-manager
-                  onclick="exitView()"
-                  aria-label="Exit manager view">
-            Exit
-          </button>
-          <button class="erc-login-btn erc-route-exit-btn"
-                  type="button"
-                  data-route-admin
-                  onclick="exitView()"
-                  aria-label="Exit admin view">
-            Exit
-          </button>
+            <nav class="erc-menu-toggle" aria-label="Swap menu">
+              <button
+                id="erc-nav-food"
+                class="erc-menu-toggle-btn"
+                type="button"
+                data-route-menu-toggle="food"
+              >
+                Food
+              </button>
+              <button
+                id="erc-nav-drinks"
+                class="erc-menu-toggle-btn"
+                type="button"
+                data-route-menu-toggle="drinks"
+              >
+                Drinks
+              </button>
+            </nav>
 
-          <div class="erc-userchip" data-route-user-chip style="display:none"
-               onclick="toggleUserDropdown('erc-user-chip')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('erc-user-chip')}"
-               tabindex="0"
-               role="button"
-               aria-haspopup="true"
-               aria-expanded="false"
-               id="erc-user-chip"
-               aria-label="User menu">
-            <span class="material-symbols-outlined erc-icon" aria-hidden="true">account_circle</span>
-            <div class="erc-userdropdown" id="erc-user-dropdown">
-              <div class="user-dropdown-name" id="erc-user-dropdown-name"></div>
-              <div class="user-dropdown-role" id="erc-user-dropdown-role"></div>
-              <div class="user-dropdown-divider"></div>
-              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+            <div class="erc-actions">
+              <button
+                class="erc-login-btn"
+                data-route-signin
+                type="button"
+                onclick="openAuthOverlay()"
+              >
+                Login
+              </button>
+              <button
+                class="erc-login-btn erc-route-exit-btn"
+                type="button"
+                data-route-manager
+                onclick="exitView()"
+                aria-label="Exit manager view"
+              >
+                Exit
+              </button>
+              <button
+                class="erc-login-btn erc-route-exit-btn"
+                type="button"
+                data-route-admin
+                onclick="exitView()"
+                aria-label="Exit admin view"
+              >
+                Exit
+              </button>
+
+              <div
+                class="erc-userchip"
+                data-route-user-chip
+                style="display: none"
+                onclick="toggleUserDropdown('erc-user-chip')"
+                onkeydown="
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleUserDropdown('erc-user-chip');
+                  }
+                "
+                tabindex="0"
+                role="button"
+                aria-haspopup="true"
+                aria-expanded="false"
+                id="erc-user-chip"
+                aria-label="User menu"
+              >
+                <span
+                  class="material-symbols-outlined erc-icon"
+                  aria-hidden="true"
+                  >account_circle</span
+                >
+                <div class="erc-userdropdown" id="erc-user-dropdown">
+                  <div
+                    class="user-dropdown-name"
+                    id="erc-user-dropdown-name"
+                  ></div>
+                  <div
+                    class="user-dropdown-role"
+                    id="erc-user-dropdown-role"
+                  ></div>
+                  <div class="user-dropdown-divider"></div>
+                  <button class="user-dropdown-signout" onclick="signOut()">
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+
+              <div
+                class="erc-action-dropdown"
+                data-route-dropdown
+                data-route-settings
+                style="display: none"
+              >
+                <button
+                  id="erc-settings-trigger"
+                  class="erc-icon-btn"
+                  type="button"
+                  data-route-dropdown-trigger
+                  aria-label="Manager and admin actions"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-controls="erc-settings-dropdown"
+                  onclick="
+                    toggleRouteDropdown(
+                      'erc-settings-trigger',
+                      'erc-settings-dropdown',
+                    )
+                  "
+                >
+                  <span
+                    class="material-symbols-outlined erc-icon"
+                    aria-hidden="true"
+                    >settings</span
+                  >
+                </button>
+                <div
+                  id="erc-settings-dropdown"
+                  class="erc-dropdown"
+                  data-route-dropdown-panel
+                  hidden
+                ></div>
+              </div>
+            </div>
+          </div>
+          <div class="erc-topbar-divider"></div>
+        </header>
+
+        <main class="erc-main" id="erc-route-main" tabindex="-1">
+          <div class="erc-hero">
+            <div class="erc-hero-copy">
+              <span class="erc-kicker">Our Daily Offering</span>
+              <h2 class="erc-title">THE MENU</h2>
+            </div>
+            <div class="erc-timestamp">
+              <p class="erc-timestamp-label">Last Updated</p>
+              <p class="erc-timestamp-value" id="erc-route-status-timestamp">
+                Awaiting first update
+              </p>
             </div>
           </div>
 
-          <div class="erc-action-dropdown" data-route-dropdown data-route-settings style="display:none">
-            <button id="erc-settings-trigger"
-                    class="erc-icon-btn"
-                    type="button"
-                    data-route-dropdown-trigger
-                    aria-label="Manager and admin actions"
-                    aria-haspopup="true"
-                    aria-expanded="false"
-                    aria-controls="erc-settings-dropdown"
-                    onclick="toggleRouteDropdown('erc-settings-trigger', 'erc-settings-dropdown')">
-              <span class="material-symbols-outlined erc-icon" aria-hidden="true">settings</span>
+          <section class="erc-section menu-category" data-category="special">
+            <div class="erc-section-head">
+              <h3 class="erc-section-title">Specials</h3>
+              <div class="erc-section-line" aria-hidden="true"></div>
+            </div>
+            <div id="erc-route-specials" class="erc-items"></div>
+          </section>
+
+          <div id="erc-route-sections"></div>
+        </main>
+
+        <footer class="erc-footer">
+          <div class="erc-footer-main">
+            <div class="erc-footer-copy">
+              <h2 class="erc-footer-title">El Roy's Cantina</h2>
+              <p class="erc-footer-quote">
+                “The sun never sets on the perfect taco.”
+              </p>
+            </div>
+            <div class="erc-footer-meta">
+              <p class="erc-footer-updated">
+                Updated:
+                <span id="erc-route-footer-timestamp"
+                  >Awaiting first update</span
+                >
+              </p>
+              <p id="erc-route-footer-version" class="erc-footer-version"></p>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </template>
+
+    <div class="wrapper" id="app-shell">
+      <header>
+        <img class="hf-logo" src="" alt="Logo" style="display: none" />
+        <span class="logo-mark" style="display: none"></span>
+        <h1>CURRENT MENU</h1>
+        <div class="header-sub" id="last-updated-label">Last Updated: —</div>
+        <div class="header-action-group">
+          <button
+            class="manager-btn"
+            id="action-btn"
+            onclick="onActionBtnClick()"
+            style="display: none"
+          >
+            ⚙ Manager
+          </button>
+          <button
+            class="manager-btn admin-btn"
+            id="admin-btn"
+            onclick="onAdminBtnClick()"
+            style="display: none"
+          >
+            ⚙ Admin
+          </button>
+        </div>
+        <button
+          class="header-signin-btn"
+          id="signin-btn"
+          onclick="openAuthOverlay()"
+        >
+          Sign In
+        </button>
+        <div
+          class="user-chip"
+          id="user-chip"
+          style="display: none"
+          onclick="toggleUserDropdown()"
+          onkeydown="
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              toggleUserDropdown();
+            }
+          "
+          tabindex="0"
+          role="button"
+          aria-haspopup="true"
+          aria-expanded="false"
+          aria-label="User menu"
+        >
+          <span id="user-initials">?</span>
+          <span>▾</span>
+          <div class="user-dropdown" id="user-dropdown">
+            <div class="user-dropdown-name" id="user-dropdown-name"></div>
+            <div class="user-dropdown-role" id="user-dropdown-role"></div>
+            <div class="user-dropdown-divider"></div>
+            <button class="user-dropdown-signout" onclick="signOut()">
+              Sign Out
             </button>
-            <div id="erc-settings-dropdown"
-                 class="erc-dropdown"
-                 data-route-dropdown-panel
-                 hidden></div>
           </div>
         </div>
-      </div>
-      <div class="erc-topbar-divider"></div>
-    </header>
+      </header>
 
-    <main class="erc-main" id="erc-route-main" tabindex="-1">
-      <div class="erc-hero">
-        <div class="erc-hero-copy">
-          <span class="erc-kicker">Our Daily Offering</span>
-          <h2 class="erc-title">THE MENU</h2>
-        </div>
-        <div class="erc-timestamp">
-          <p class="erc-timestamp-label">Last Updated</p>
-          <p class="erc-timestamp-value" id="erc-route-status-timestamp">Awaiting first update</p>
-        </div>
+      <!-- LOADING -->
+      <div id="loading-view">
+        <div class="spinner"></div>
+        <p>Loading menu...</p>
       </div>
 
-      <section class="erc-section menu-category" data-category="special">
-        <div class="erc-section-head">
-          <h3 class="erc-section-title">Daily Specials</h3>
-          <div class="erc-section-line" aria-hidden="true"></div>
+      <!-- PUBLIC VIEW -->
+      <div id="public-view" style="display: none">
+        <div id="restaurant-site-wrapper" hidden></div>
+        <div id="public-default-shell">
+          <div class="error-banner" id="public-error"></div>
+          <div class="collapse-all-row">
+            <button
+              id="collapse-all-btn"
+              class="collapse-all-btn"
+              onclick="toggleAllCategories()"
+            >
+              Collapse All
+            </button>
+            <button
+              id="public-switch-menu-btn"
+              class="public-switch-btn"
+              onclick="onPublicSwitchMenuClick()"
+              style="display: none"
+              aria-label="Switch to a different menu"
+            >
+              ⇄ Switch Menu
+            </button>
+          </div>
+          <div id="featured-public-section" style="display: none"></div>
+          <div id="public-categories"></div>
+          <footer id="menu-footer">
+            <span id="footer-version"></span>
+            <span id="footer-last-updated"></span>
+          </footer>
         </div>
-        <div id="erc-route-specials" class="erc-items"></div>
-      </section>
-
-      <div id="erc-route-sections"></div>
-    </main>
-
-    <footer class="erc-footer">
-      <div class="erc-footer-main">
-        <div class="erc-footer-copy">
-          <h2 class="erc-footer-title">El Roy's Cantina</h2>
-          <p class="erc-footer-quote">“The sun never sets on the perfect taco.”</p>
-        </div>
-        <div class="erc-footer-meta">
-          <p class="erc-footer-updated">Updated: <span id="erc-route-footer-timestamp">Awaiting first update</span></p>
-          <p id="erc-route-footer-version" class="erc-footer-version"></p>
-        </div>
-      </div>
-    </footer>
-  </div>
-</template>
-
-<div class="wrapper" id="app-shell">
-  <header>
-    <img class="hf-logo" src="" alt="Logo" style="display:none"/>
-    <span class="logo-mark" style="display:none"></span>
-    <h1>CURRENT MENU</h1>
-    <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-    <div class="header-action-group">
-      <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
-      <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
-    </div>
-    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
-    <div class="user-chip" id="user-chip" style="display:none"
-         onclick="toggleUserDropdown()"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-         tabindex="0"
-         role="button"
-         aria-haspopup="true"
-         aria-expanded="false"
-         aria-label="User menu">
-      <span id="user-initials">?</span>
-      <span>▾</span>
-      <div class="user-dropdown" id="user-dropdown">
-        <div class="user-dropdown-name" id="user-dropdown-name"></div>
-        <div class="user-dropdown-role" id="user-dropdown-role"></div>
-        <div class="user-dropdown-divider"></div>
-        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
       </div>
     </div>
-  </header>
 
-  <!-- LOADING -->
-  <div id="loading-view">
-    <div class="spinner"></div>
-    <p>Loading menu...</p>
-  </div>
+    <!-- AUTH OVERLAY -->
+    <div id="auth-overlay">
+      <div
+        class="auth-box"
+        id="auth-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sign In"
+      >
+        <div id="auth-no-config" style="display: none" class="auth-hint-msg">
+          Supabase is not configured. Check server environment variables.
+        </div>
+        <div id="auth-form-wrap">
+          <!-- SIGN IN -->
+          <div id="auth-screen-signin" class="auth-screen">
+            <h2 class="auth-screen-title">SIGN IN</h2>
+            <p class="auth-screen-subtitle">Sign in to your account</p>
+            <div class="auth-field">
+              <input
+                type="email"
+                id="signin-email"
+                placeholder="Email address"
+                autocomplete="email"
+                aria-describedby="signin-error"
+              />
+            </div>
+            <div class="auth-field">
+              <input
+                type="password"
+                id="signin-password"
+                placeholder="Password"
+                autocomplete="current-password"
+                aria-describedby="signin-error"
+              />
+            </div>
+            <div class="auth-error" id="signin-error"></div>
+            <button
+              class="auth-submit-btn"
+              id="signin-submit-btn"
+              onclick="handleSignIn()"
+            >
+              Sign In
+            </button>
+            <button class="auth-link-btn" onclick="renderAuthScreen('forgot')">
+              Forgot password?
+            </button>
+            <div class="auth-toggle">
+              <span>Don't have an account?</span>
+              <button
+                class="auth-toggle-btn"
+                onclick="renderAuthScreen('signup')"
+              >
+                Sign Up
+              </button>
+            </div>
+          </div>
 
-  <!-- PUBLIC VIEW -->
-  <div id="public-view" style="display:none;">
-    <div id="restaurant-site-wrapper" hidden></div>
-    <div id="public-default-shell">
-      <div class="error-banner" id="public-error"></div>
-      <div class="collapse-all-row">
-        <button id="collapse-all-btn" class="collapse-all-btn" onclick="toggleAllCategories()">Collapse All</button>
-        <button id="public-switch-menu-btn" class="public-switch-btn" onclick="onPublicSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">⇄ Switch Menu</button>
+          <!-- SIGN UP -->
+          <div
+            id="auth-screen-signup"
+            class="auth-screen"
+            style="display: none"
+          >
+            <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
+            <p class="auth-screen-subtitle">Sign up with your work email</p>
+            <div class="auth-field">
+              <input
+                type="text"
+                id="signup-firstname"
+                placeholder="First name"
+                autocomplete="given-name"
+                aria-describedby="signup-error"
+                onkeydown="
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    document.getElementById('signup-lastname').focus();
+                  }
+                "
+              />
+            </div>
+            <div class="auth-field">
+              <input
+                type="text"
+                id="signup-lastname"
+                placeholder="Last name"
+                autocomplete="family-name"
+                aria-describedby="signup-error"
+                onkeydown="
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    document.getElementById('signup-email').focus();
+                  }
+                "
+              />
+            </div>
+            <div class="auth-field">
+              <input
+                type="email"
+                id="signup-email"
+                placeholder="Email address"
+                autocomplete="email"
+                aria-describedby="signup-error"
+                onkeydown="
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    document.getElementById('signup-password').focus();
+                  }
+                "
+              />
+            </div>
+            <div class="auth-field">
+              <input
+                type="password"
+                id="signup-password"
+                placeholder="Password"
+                autocomplete="new-password"
+                aria-describedby="signup-error"
+                onkeydown="
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleSignUp();
+                  }
+                "
+              />
+            </div>
+            <div class="auth-error" id="signup-error"></div>
+            <button
+              class="auth-submit-btn"
+              id="signup-submit-btn"
+              onclick="handleSignUp()"
+            >
+              Create Account
+            </button>
+            <p class="auth-approval-notice">
+              New accounts require admin approval before menu access is granted.
+            </p>
+            <button class="auth-back-btn" onclick="renderAuthScreen('signin')">
+              ← Back to Sign In
+            </button>
+          </div>
+
+          <!-- FORGOT PASSWORD -->
+          <div
+            id="auth-screen-forgot"
+            class="auth-screen"
+            style="display: none"
+          >
+            <h2 class="auth-screen-title">RESET PASSWORD</h2>
+            <p class="auth-screen-subtitle">
+              Enter your email and we'll send a reset link
+            </p>
+            <div class="auth-field">
+              <input
+                type="email"
+                id="forgot-email"
+                placeholder="Email address"
+                autocomplete="email"
+                aria-describedby="forgot-error"
+              />
+            </div>
+            <div class="auth-error" id="forgot-error"></div>
+            <button
+              class="auth-submit-btn"
+              id="forgot-submit-btn"
+              onclick="handleForgotPassword()"
+            >
+              Send Reset Link
+            </button>
+            <button class="auth-back-btn" onclick="renderAuthScreen('signin')">
+              ← Back to Sign In
+            </button>
+          </div>
+
+          <!-- RESET PASSWORD -->
+          <div id="auth-screen-reset" class="auth-screen" style="display: none">
+            <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
+            <p class="auth-screen-subtitle">
+              Choose a new password for your account
+            </p>
+            <div class="auth-field">
+              <input
+                type="password"
+                id="reset-password"
+                placeholder="New password"
+                autocomplete="new-password"
+                aria-describedby="reset-error"
+              />
+            </div>
+            <div class="auth-field">
+              <input
+                type="password"
+                id="reset-confirm"
+                placeholder="Confirm new password"
+                autocomplete="new-password"
+                aria-describedby="reset-error"
+              />
+            </div>
+            <div class="auth-error" id="reset-error"></div>
+            <button
+              class="auth-submit-btn"
+              id="reset-submit-btn"
+              onclick="handleResetPassword()"
+            >
+              Set Password
+            </button>
+          </div>
+        </div>
+        <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
       </div>
-      <div id="featured-public-section" style="display:none;"></div>
-      <div id="public-categories"></div>
-      <footer id="menu-footer">
-        <span id="footer-version"></span>
-        <span id="footer-last-updated"></span>
-      </footer>
     </div>
-  </div>
 
-</div>
-
-<!-- AUTH OVERLAY -->
-<div id="auth-overlay">
-  <div class="auth-box" id="auth-box" role="dialog" aria-modal="true" aria-label="Sign In">
-    <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
-    <div id="auth-form-wrap">
-
-      <!-- SIGN IN -->
-      <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title">SIGN IN</h2>
-        <p class="auth-screen-subtitle">Sign in to your account</p>
-        <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
+    <!-- CONFIG JSON MODAL -->
+    <div class="modal-bg" id="config-modal-bg">
+      <div class="modal">
+        <h2>UPDATE CONFIG FILE</h2>
+        <div class="modal-sub">
+          Copy this into <code>lib/config/notifications.json</code> and reload
+          the page.
         </div>
-        <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
-        </div>
-        <div class="auth-error" id="signin-error"></div>
-        <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
-        <button class="auth-link-btn" onclick="renderAuthScreen('forgot')">Forgot password?</button>
-        <div class="auth-toggle">
-          <span>Don't have an account?</span>
-          <button class="auth-toggle-btn" onclick="renderAuthScreen('signup')">Sign Up</button>
+        <textarea
+          id="config-json-output"
+          class="config-json-textarea"
+          readonly
+          spellcheck="false"
+        ></textarea>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
+          <button class="btn-confirm" onclick="copyConfigJson()">
+            COPY JSON
+          </button>
         </div>
       </div>
+    </div>
 
-      <!-- SIGN UP -->
-      <div id="auth-screen-signup" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
-        <p class="auth-screen-subtitle">Sign up with your work email</p>
-        <div class="auth-field">
-          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
+    <!-- PREVIEW MODAL -->
+    <div class="modal-bg" id="modal-bg">
+      <div class="modal">
+        <h2>PATCH NOTES PREVIEW</h2>
+        <div class="modal-sub">
+          Only changes since the last update will be sent.
         </div>
-        <div class="auth-field">
-          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
+        <div id="preview-content"></div>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+          <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">
+            SEND UPDATE
+          </button>
         </div>
-        <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
-        </div>
-        <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
-        </div>
-        <div class="auth-error" id="signup-error"></div>
-        <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>
-        <p class="auth-approval-notice">New accounts require admin approval before menu access is granted.</p>
-        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
       </div>
+    </div>
 
-      <!-- FORGOT PASSWORD -->
-      <div id="auth-screen-forgot" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">RESET PASSWORD</h2>
-        <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
-        <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
+    <!-- INVITE MODAL -->
+    <div class="modal-bg" id="invite-modal-bg">
+      <div class="modal">
+        <h2>INVITE STAFF</h2>
+        <div class="modal-sub">
+          Copy this message and send it to new staff members.
         </div>
-        <div class="auth-error" id="forgot-error"></div>
-        <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
-        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
+        <textarea
+          id="invite-text-output"
+          class="config-json-textarea"
+          readonly
+          spellcheck="false"
+        ></textarea>
+        <div class="modal-actions">
+          <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
+          <button class="btn-confirm" onclick="copyInviteText()">
+            COPY MESSAGE
+          </button>
+        </div>
       </div>
+    </div>
 
-      <!-- RESET PASSWORD -->
-      <div id="auth-screen-reset" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
-        <p class="auth-screen-subtitle">Choose a new password for your account</p>
-        <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
-        </div>
-        <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
-        </div>
-        <div class="auth-error" id="reset-error"></div>
-        <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
+    <!-- MENU PICKER OVERLAY -->
+    <div id="menu-picker-overlay">
+      <div
+        class="picker-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Select a Menu"
+      >
+        <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
+        <p class="picker-subtitle" id="picker-subtitle">
+          Choose which menu to view
+        </p>
+        <div id="picker-menu-list" class="picker-menu-list"></div>
       </div>
-
     </div>
-    <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
-  </div>
-</div>
 
-<!-- CONFIG JSON MODAL -->
-<div class="modal-bg" id="config-modal-bg">
-  <div class="modal">
-    <h2>UPDATE CONFIG FILE</h2>
-    <div class="modal-sub">Copy this into <code>lib/config/notifications.json</code> and reload the page.</div>
-    <textarea id="config-json-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
-      <button class="btn-confirm" onclick="copyConfigJson()">COPY JSON</button>
-    </div>
-  </div>
-</div>
+    <div
+      class="toast"
+      id="toast"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
 
-<!-- PREVIEW MODAL -->
-<div class="modal-bg" id="modal-bg">
-  <div class="modal">
-    <h2>PATCH NOTES PREVIEW</h2>
-    <div class="modal-sub">Only changes since the last update will be sent.</div>
-    <div id="preview-content"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
-    </div>
-  </div>
-</div>
-
-<!-- INVITE MODAL -->
-<div class="modal-bg" id="invite-modal-bg">
-  <div class="modal">
-    <h2>INVITE STAFF</h2>
-    <div class="modal-sub">Copy this message and send it to new staff members.</div>
-    <textarea id="invite-text-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
-      <button class="btn-confirm" onclick="copyInviteText()">COPY MESSAGE</button>
-    </div>
-  </div>
-</div>
-
-<!-- MENU PICKER OVERLAY -->
-<div id="menu-picker-overlay">
-  <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
-    <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
-    <p class="picker-subtitle" id="picker-subtitle">Choose which menu to view</p>
-    <div id="picker-menu-list" class="picker-menu-list"></div>
-  </div>
-</div>
-
-<div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-
-<script src="/elroyscantina/app.js"></script>
-<script src="/app.js"></script>
-</body>
+    <script src="/elroyscantina/app.js"></script>
+    <script src="/app.js"></script>
+  </body>
 </html>
