@@ -261,6 +261,23 @@ function getManagedCategoryDefs() {
   ));
 }
 
+function getUncategorizedCategoryDef() {
+  return {
+    id: UNCATEGORIZED_ID,
+    label: 'Uncategorized',
+    title: 'Uncategorized',
+    icon: '📦',
+    color: 'rgba(120,120,120,0.12)',
+    sub: 'Items for specials & autocomplete — not shown on public menu',
+    placeholder: 'Add to pool…',
+  };
+}
+
+function getRenderableCategoryItems(catId) {
+  const items = menuState[catId]?.items || [];
+  return catId === UNCATEGORIZED_ID ? items : items.filter(item => item.onMenu !== false);
+}
+
 function getMenuBySlug(slug) {
   const normalizedSlug = normalizeKnownMenuSlug(slug || '');
   return knownMenuList().find(menu => menu.slug === normalizedSlug) || null;
@@ -834,7 +851,7 @@ function resetRestaurantSpecialsCatalog() {
 
 function buildCurrentMenuSpecialsCatalog() {
   const currentMenu = getMenuById(MENU_ID);
-  return getManagedCategoryDefs().flatMap(cat =>
+  const fromCategories = getManagedCategoryDefs().flatMap(cat =>
     (menuState[cat.id]?.items || []).map(item => ({
       id: item.id,
       name: item.name,
@@ -845,6 +862,16 @@ function buildCurrentMenuSpecialsCatalog() {
       visibility: item.visibility || 'public',
     }))
   );
+  const uncatItems = (menuState[UNCATEGORIZED_ID]?.items || []).map(item => ({
+    id: item.id,
+    name: item.name,
+    cat: 'Uncategorized',
+    menuId: MENU_ID,
+    menuLabel: currentMenu ? getMenuTypeLabel(currentMenu.type) : 'Current Menu',
+    onMenu: true,
+    visibility: item.visibility || 'off_menu',
+  }));
+  return [...fromCategories, ...uncatItems];
 }
 
 function getRestaurantSpecialsCatalog() {
@@ -899,7 +926,7 @@ async function refreshRestaurantSpecialsCatalog(restaurantId = RESTAURANT_ID) {
         return acc;
       }, {});
       const catalog = categories
-        .filter(category => category.key !== UNCATEGORIZED_ID && !isLegacySpecialCategory(category.key))
+        .filter(category => !isLegacySpecialCategory(category.key))
         .flatMap(category =>
         (category.items || []).map(item => ({
           id: item.id,
@@ -907,8 +934,8 @@ async function refreshRestaurantSpecialsCatalog(restaurantId = RESTAURANT_ID) {
           cat: category.label || '',
           menuId: category.menu_id,
           menuLabel: getMenuTypeLabel(menusById[category.menu_id]?.type || ''),
-          onMenu: item.on_menu,
-          visibility: item.visibility || 'public',
+          onMenu: category.key === UNCATEGORIZED_ID ? true : item.on_menu,
+          visibility: category.key === UNCATEGORIZED_ID ? (item.visibility || 'off_menu') : (item.visibility || 'public'),
         }))
       );
       if (_restaurantSpecialsCatalogKey === requestKey) {
@@ -1804,8 +1831,13 @@ async function deleteCategory(catId) {
         name:            item.name,
         desc:            item.desc            || '',
         recipe:          item.recipe          || [],
-        is_eighty_sixed: false,
+        price:           item.price           || null,
+        is_eighty_sixed: item.eightySixed     || false,
         on_menu:         false,
+        visibility:      item.visibility      || 'public',
+        upcharges:       item.upcharges       || [],
+        show_description:isItemDescriptionPublic(item),
+        show_recipe:     isItemRecipePublic(item),
         display_order:   idx,
       }));
       await fetch(`${SUPABASE_URL}/rest/v1/items`, {
@@ -3892,6 +3924,7 @@ function renderManagerCategories() {
   container.innerHTML = '';
   // Preserve uncategorized expansion state across re-renders
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
+  const uncategorized = getUncategorizedCategoryDef();
 
   getManagedCategoryDefs().forEach(cat => {
     const isReadOnlyCategory = cat.readOnly || cat.deprecated;
@@ -3934,8 +3967,8 @@ function renderManagerCategories() {
          aria-expanded="${_uncatWasExpanded ? 'true' : 'false'}"
          onclick="toggleManagerCategory('${UNCATEGORIZED_ID}')"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${UNCATEGORIZED_ID}')}">
-      <div class="cat-icon" style="background:rgba(120,120,120,0.12)">📦</div>
-      <div><div class="cat-title">Uncategorized</div><div class="cat-sub">Autocomplete pool — not shown on public menu</div></div>
+      <div class="cat-icon" style="background:${escHtml(uncategorized.color)}">${escHtml(uncategorized.icon)}</div>
+      <div><div class="cat-title">${escHtml(uncategorized.title)}</div><div class="cat-sub">${escHtml(uncategorized.sub)}</div></div>
       <span class="category-chevron">›</span>
     </div>
     <div class="current-section">
@@ -3943,59 +3976,17 @@ function renderManagerCategories() {
       <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
       <div class="add-item-wrap">
         <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…" aria-label="Add item to uncategorized pool" autocomplete="off"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addUncategorizedItem()}"/>
-          <button class="add-item-btn" onclick="addUncategorizedItem()" aria-label="Add item to uncategorized pool">+</button>
+          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="${escHtml(uncategorized.placeholder)}" aria-label="Add item to uncategorized pool" autocomplete="off"
+            oninput="showAutocomplete('${UNCATEGORIZED_ID}')"
+            onblur="setTimeout(()=>hideAutocomplete('${UNCATEGORIZED_ID}'),150)"
+            onkeydown="handleAddItemKeydown(event,'${UNCATEGORIZED_ID}')"/>
+          <button class="add-item-btn" onclick="addItem('${UNCATEGORIZED_ID}')" aria-label="Add item to uncategorized pool">+</button>
         </div>
+        <div class="autocomplete-list" id="ac-${UNCATEGORIZED_ID}"></div>
       </div>
     </div>`;
   container.appendChild(uncatCard);
-  renderUncategorizedItems();
-}
-
-function renderUncategorizedItems() {
-  const listEl = document.getElementById('mgr-items-' + UNCATEGORIZED_ID);
-  if (!listEl) return;
-  const items = menuState[UNCATEGORIZED_ID]?.items || [];
-  listEl.innerHTML = '';
-  if (!items.length) {
-    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Pool is empty — add items or delete a category to populate it.</span></div>`;
-    return;
-  }
-  items.forEach(item => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'item-wrapper';
-    wrapper.id = 'wrapper-' + item.id;
-    wrapper.innerHTML = buildUncategorizedItemHtml(item);
-    listEl.appendChild(wrapper);
-  });
-}
-
-async function addUncategorizedItem() {
-  const input = document.getElementById('new-input-' + UNCATEGORIZED_ID);
-  if (!input) return;
-  const name = input.value.trim();
-  if (!name) return;
-  if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [], lastSent: [] };
-  const pool = menuState[UNCATEGORIZED_ID].items;
-  if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
-    showToast('Already in pool.', 'info'); return;
-  }
-  pool.push({
-    id: uid(),
-    name,
-    desc: '',
-    recipe: [],
-    price: '',
-    eightySixed: false,
-    onMenu: false,
-    upcharges: [],
-    showDescription: true,
-    showRecipe: false,
-  });
-  input.value = '';
-  renderUncategorizedItems();
-  await persistState();
+  renderManagerItems(UNCATEGORIZED_ID);
 }
 
 function toggleManagerCategory(catId) {
@@ -4014,34 +4005,6 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
       <button class="del-ingredient" onclick="removeIngredient('${catId}','${itemId}',${idx})" aria-label="Remove ingredient">×</button>
     </div>`
   ).join('');
-}
-
-function buildManagerItemEditorHtml(item, catId, itemId, ingredients) {
-  return `<div class="desc-row" id="desc-row-${itemId}">
-      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
-        onblur="saveDesc('${catId}','${itemId}',this.value)">${escHtml(item.desc || '')}</textarea>
-    </div>
-    <div class="recipe-row" id="recipe-row-${itemId}">
-      <div class="recipe-ingredient-list" id="recipe-list-${itemId}">${buildRecipeListHtml(catId, itemId, ingredients)}</div>
-      <div class="add-ingredient-area">
-        <input class="add-ingredient-input" id="ingredient-input-${itemId}" type="text"
-          placeholder="Add ingredient…"
-          onkeydown="handleIngredientKeydown(event,'${catId}','${itemId}')"/>
-        <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${itemId}')">+</button>
-      </div>
-    </div>`;
-}
-
-function buildUncategorizedItemHtml(item) {
-  const ingredients = recipeArray(item.recipe);
-  const hasDesc = !!(item.desc && item.desc.trim());
-  const hasRecipe = ingredients.length > 0;
-  return `<div class="current-item">
-      <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
-    </div>
-    ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
 }
 
 function buildItemsRowHtml(item, catId, lastSentNames) {
@@ -4174,14 +4137,17 @@ function buildDescriptionRowHtml(item, catId) {
 function renderManagerItems(catId) {
   const state = menuState[catId] || { items: [], lastSent: [] };
   const lastSentNames = new Set(state.lastSent.filter(i => i.onMenu !== false).map(i => i.name.trim().toLowerCase()));
-  const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const visibleItems = getRenderableCategoryItems(catId);
   const listEl = document.getElementById('mgr-items-' + catId);
   if (!listEl) return;
   listEl.innerHTML = '';
   if (!visibleItems.length) {
-    const cat = CATEGORY_DEFS.find(c => c.id === catId);
+    const cat = catId === UNCATEGORIZED_ID ? getUncategorizedCategoryDef() : CATEGORY_DEFS.find(c => c.id === catId);
     const ph = cat?.placeholder ? ` Try: "${escHtml(cat.placeholder)}"` : '';
-    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Nothing here yet.${ph}</span></div>`;
+    const emptyCopy = catId === UNCATEGORIZED_ID
+      ? 'Pool is empty — add items or delete a category to populate it.'
+      : `Nothing here yet.${ph}`;
+    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>${emptyCopy}</span></div>`;
     return;
   }
   visibleItems.forEach(item => {
@@ -4210,9 +4176,8 @@ function renderPricingSection() {
   const container = document.getElementById('manager-pricing-categories');
   if (!container) return;
   container.innerHTML = '';
-  getManagedCategoryDefs().forEach(cat => {
-    const state = menuState[cat.id] || { items: [] };
-    const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const renderCategoryPricing = cat => {
+    const visibleItems = getRenderableCategoryItems(cat.id);
     if (!visibleItems.length) return;
     const card = document.createElement('div');
     card.className = 'cat-card';
@@ -4238,7 +4203,9 @@ function renderPricingSection() {
       wrapper.innerHTML = buildPricingRowHtml(item, cat.id);
       listEl.appendChild(wrapper);
     });
-  });
+  };
+  getManagedCategoryDefs().forEach(renderCategoryPricing);
+  renderCategoryPricing(getUncategorizedCategoryDef());
 }
 
 // ─── DESCRIPTION SECTION RENDERER ────────────────────────────────────────────
@@ -4246,9 +4213,8 @@ function renderDescriptionSection() {
   const container = document.getElementById('manager-description-categories');
   if (!container) return;
   container.innerHTML = '';
-  getManagedCategoryDefs().forEach(cat => {
-    const state = menuState[cat.id] || { items: [] };
-    const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const renderCategoryDescriptions = cat => {
+    const visibleItems = getRenderableCategoryItems(cat.id);
     if (!visibleItems.length) return;
     const card = document.createElement('div');
     card.className = 'cat-card';
@@ -4274,7 +4240,9 @@ function renderDescriptionSection() {
       wrapper.innerHTML = buildDescriptionRowHtml(item, cat.id);
       listEl.appendChild(wrapper);
     });
-  });
+  };
+  getManagedCategoryDefs().forEach(renderCategoryDescriptions);
+  renderCategoryDescriptions(getUncategorizedCategoryDef());
 }
 
 function startManagerItemDrag(event, catId, itemId) {
@@ -4309,7 +4277,7 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === targetItemId) return;
   event.preventDefault();
   const items = menuState[catId]?.items || [];
-  const visibleItems = items.filter(item => item.onMenu !== false);
+  const visibleItems = getRenderableCategoryItems(catId);
   const fromIndex = visibleItems.findIndex(item => item.id === _managerDraggedItemId);
   const toIndex = visibleItems.findIndex(item => item.id === targetItemId);
   if (fromIndex < 0 || toIndex < 0) return;
@@ -4317,10 +4285,12 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   const reorderedVisible = [...visibleItems];
   const [movedItem] = reorderedVisible.splice(fromIndex, 1);
   reorderedVisible.splice(toIndex, 0, movedItem);
-  menuState[catId].items = [
-    ...reorderedVisible,
-    ...items.filter(item => item.onMenu === false),
-  ];
+  menuState[catId].items = catId === UNCATEGORIZED_ID
+    ? reorderedVisible
+    : [
+      ...reorderedVisible,
+      ...items.filter(item => item.onMenu === false),
+    ];
 
   invalidateDiff();
   renderManagerItems(catId);
@@ -4399,7 +4369,7 @@ function buildItemUpsertRows() {
         desc:            item.desc   || '',
         recipe:          item.recipe || [],
         price:           item.price  || null,
-        is_eighty_sixed: false,
+        is_eighty_sixed: item.eightySixed || false,
         on_menu:         false,
         visibility:      item.visibility || 'public',
         upcharges:       item.upcharges || [],
@@ -4496,11 +4466,39 @@ async function saveMenu() {
 
 function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
+  if (!input) return;
   const name = input.value.trim();
   if (!name) return;
   const nameLower = name.toLowerCase();
   let movedFromUncategorized = false;
   if (!menuState[catId]) menuState[catId] = { items: [], lastSent: [] };
+  if (catId === UNCATEGORIZED_ID) {
+    const pool = menuState[catId].items;
+    if (pool.some(item => item.name.trim().toLowerCase() === nameLower)) {
+      showToast('Already in pool.', 'info');
+      return;
+    }
+    pool.push({
+      id: uid(),
+      name,
+      desc: '',
+      recipe: [],
+      price: '',
+      eightySixed: false,
+      onMenu: false,
+      upcharges: [],
+      showDescription: true,
+      showRecipe: false,
+    });
+    input.value = '';
+    hideAutocomplete(catId);
+    invalidateDiff();
+    renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
+    input.focus();
+    updateDraftIndicator();
+    return;
+  }
   const alreadyOnMenu = menuState[catId].items.find(
     i => i.onMenu !== false && i.name.toLowerCase() === nameLower
   );
@@ -4539,7 +4537,7 @@ function addItem(catId) {
   invalidateDiff();
   renderManagerItems(catId);
   markSectionsStale(_activeManagerSection);
-  if (movedFromUncategorized) renderUncategorizedItems();
+  if (movedFromUncategorized) renderManagerItems(UNCATEGORIZED_ID);
   input.focus();
   updateDraftIndicator();
 }
@@ -4558,6 +4556,7 @@ function getAutocompleteIndex(catId) {
 }
 
 function showAutocomplete(catId) {
+  if (catId === UNCATEGORIZED_ID) { hideAutocomplete(catId); return; }
   const val = document.getElementById('new-input-' + catId).value.trim();
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
@@ -4816,14 +4815,6 @@ function initDrawerSwipe() {
 }
 
 // ─── DESCRIPTION ──────────────────────────────────────────────────────────────
-function toggleItemDesc(itemId) {
-  const row = document.getElementById('desc-row-' + itemId);
-  if (!row) return;
-  const opening = !row.classList.contains('open');
-  row.classList.toggle('open', opening);
-  if (opening) row.querySelector('textarea').focus();
-}
-
 function toggleDescriptionEditor(itemId) {
   const card = document.getElementById('description-editor-' + itemId);
   const body = document.getElementById('desc-edit-body-' + itemId);
@@ -4871,14 +4862,6 @@ function recipeArray(recipe) {
   if (Array.isArray(recipe)) return recipe.filter(Boolean);
   if (typeof recipe === 'string' && recipe.trim()) return [recipe.trim()];
   return [];
-}
-
-function toggleItemRecipe(itemId) {
-  const row = document.getElementById('recipe-row-' + itemId);
-  if (!row) return;
-  const opening = !row.classList.contains('open');
-  row.classList.toggle('open', opening);
-  if (opening) document.getElementById('ingredient-input-' + itemId)?.focus();
 }
 
 function renderRecipeIngredients(catId, itemId) {
@@ -4961,8 +4944,29 @@ async function savePrice(catId, itemId, val) {
 }
 
 function removeItem(catId, itemId) {
-  const item = findItem(catId, itemId);
+  const state = menuState[catId];
+  const itemIndex = state?.items.findIndex(i => i.id === itemId) ?? -1;
+  const item = itemIndex === -1 ? null : state.items[itemIndex];
   if (!item) return false;
+  if (catId === UNCATEGORIZED_ID) {
+    const [removedItem] = state.items.splice(itemIndex, 1);
+    _deletedItemIds.add(removedItem.id);
+    invalidateDiff();
+    renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
+    updateDraftIndicator();
+    const removedName = removedItem.name;
+    showToast(`"${removedName}" removed`, 'info', () => {
+      state.items.splice(Math.min(itemIndex, state.items.length), 0, removedItem);
+      _deletedItemIds.delete(removedItem.id);
+      invalidateDiff();
+      renderManagerItems(catId);
+      markSectionsStale(_activeManagerSection);
+      updateDraftIndicator();
+      showToast(`"${removedName}" restored`, 'success');
+    });
+    return true;
+  }
   item.onMenu = false;
   invalidateDiff();
   renderManagerItems(catId);
@@ -6059,7 +6063,7 @@ function buildDatabaseRows() {
       category: 'Uncategorized',
       recipe: recipeArray(item.recipe),
       onMenu: false,
-      eightySixed: false,
+      eightySixed: !!item.eightySixed,
     });
     totalItems++;
   });
