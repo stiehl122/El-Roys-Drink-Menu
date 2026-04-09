@@ -1113,6 +1113,15 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-board-page {
+    --ll-board-bg: rgb(57 59 55 / 1);
+    --ll-board-frame: rgb(40 22 22 / 1);
+    --ll-board-line: rgb(74 74 73 / 1);
+    --ll-board-ink: rgb(243 234 218 / 1);
+    --ll-board-ink-muted: rgb(214 205 188 / 0.86);
+    --ll-board-red: rgb(237 47 35 / 1);
+    --ll-board-red-dark: rgb(86 10 10 / 1);
+    --ll-board-pill-bg: rgb(255 240 214 / 0.08);
+    --ll-board-pill-border: rgb(255 240 214 / 0.18);
     color-scheme: dark;
   }
 
@@ -1139,6 +1148,15 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-board-route-option {
     color: rgb(255 244 224 / 0.96);
     text-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.26);
+  }
+
+  #restaurant-site-wrapper .ll-board-item-name.menu-item-name,
+  #restaurant-site-wrapper .ll-board-price.menu-item-price,
+  #restaurant-site-wrapper .ll-board-upcharge,
+  #restaurant-site-wrapper .ll-board-detail-copy,
+  #restaurant-site-wrapper .ll-board-detail-label,
+  #restaurant-site-wrapper .ll-board-expand.item-expand-icon {
+    color: var(--ll-board-ink);
   }
 
   #restaurant-site-wrapper .ll-route-boot-line {

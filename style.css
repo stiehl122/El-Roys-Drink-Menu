@@ -720,6 +720,7 @@
   .auth-back-btn:hover { color: var(--charcoal); }
   .auth-link-btn { background: none; border: none; color: var(--teal); font-size: 12px; cursor: pointer; display: block; width: 100%; padding: 4px 0; margin-bottom: 12px; text-align: center; font-family: var(--font-body); text-decoration: underline; }
   .auth-link-btn:hover { color: var(--teal-dk); }
+  .auth-username-assist { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .pin-cancel { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; margin-top: 14px; display: block; width: 100%; padding: 6px; transition: color 0.15s; }
   .pin-cancel:hover { color: var(--charcoal); }
   /* ── MANAGER VIEW (dark) ── */
@@ -3319,6 +3320,12 @@ body.manager-stitch-shell .auth-field input:focus {
   border-color: var(--manager-shell-primary);
 }
 
+body.manager-stitch-shell .auth-box p,
+body.manager-stitch-shell .auth-toggle,
+body.manager-stitch-shell .auth-approval-notice {
+  color: var(--manager-shell-muted);
+}
+
 body.manager-stitch-shell .auth-submit-btn {
   border-radius: 2px;
   background: var(--manager-shell-primary);
@@ -3331,6 +3338,21 @@ body.manager-stitch-shell .auth-submit-btn {
 
 body.manager-stitch-shell .auth-submit-btn:hover {
   background: var(--manager-shell-primary-soft);
+}
+
+body.manager-stitch-shell .auth-link-btn,
+body.manager-stitch-shell .auth-toggle-btn,
+body.manager-stitch-shell .auth-back-btn {
+  color: var(--manager-shell-primary-soft);
+}
+
+body.manager-stitch-shell .auth-link-btn:hover,
+body.manager-stitch-shell .auth-link-btn:focus-visible,
+body.manager-stitch-shell .auth-toggle-btn:hover,
+body.manager-stitch-shell .auth-toggle-btn:focus-visible,
+body.manager-stitch-shell .auth-back-btn:hover,
+body.manager-stitch-shell .auth-back-btn:focus-visible {
+  color: var(--manager-shell-primary);
 }
 
 /* Modal — match manager shell */

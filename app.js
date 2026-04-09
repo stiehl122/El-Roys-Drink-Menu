@@ -3381,8 +3381,55 @@ function renderAuthScreen(screen) {
   const box = document.getElementById('auth-box');
   const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password', reset: 'Set New Password' };
   if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
+  syncAuthUsernameAssistFields();
   const firstInput = document.querySelector(`#auth-screen-${screen} input`);
   if (firstInput) setTimeout(() => firstInput.focus(), 0);
+}
+
+function getAuthUsernameHint(preferredIds = []) {
+  const candidates = Array.isArray(preferredIds) ? preferredIds.slice() : [preferredIds];
+  if (_recoverySessionData?.email) candidates.unshift(_recoverySessionData.email);
+  ['signin-email', 'signup-email', 'forgot-email'].forEach(id => {
+    if (!candidates.includes(id)) candidates.push(id);
+  });
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (candidate.includes && candidate.includes('@')) return candidate.trim();
+    const field = document.getElementById(candidate);
+    const value = field?.value?.trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function ensureAuthUsernameAssistField(form, preferredIds = []) {
+  if (!form || !form.querySelector('input[type="password"]')) return null;
+  const visibleUsernameField = form.querySelector('input[autocomplete="username"]:not(.auth-username-assist), input[name="username"]:not(.auth-username-assist)');
+  if (visibleUsernameField) return visibleUsernameField;
+  let assistField = form.querySelector('.auth-username-assist');
+  if (!assistField) {
+    assistField = document.createElement('input');
+    assistField.type = 'email';
+    assistField.className = 'auth-username-assist';
+    assistField.tabIndex = -1;
+    assistField.autocomplete = 'username';
+    assistField.name = 'username';
+    assistField.setAttribute('aria-hidden', 'true');
+    form.insertBefore(assistField, form.firstChild);
+  }
+  assistField.value = getAuthUsernameHint(preferredIds);
+  return assistField;
+}
+
+function syncAuthUsernameAssistFields() {
+  const configs = [
+    { screenName: 'signup', preferredIds: ['signup-email'] },
+    { screenName: 'reset', preferredIds: ['forgot-email', 'signin-email', 'signup-email'] },
+  ];
+  configs.forEach(({ screenName, preferredIds }) => {
+    const form = document.querySelector(`#auth-screen-${screenName} .auth-screen-form`);
+    ensureAuthUsernameAssistField(form, preferredIds);
+  });
 }
 
 function initAuthForms() {
@@ -3403,14 +3450,17 @@ function initAuthForms() {
       const passwordField = form.querySelector('#signin-password');
       if (usernameField) {
         usernameField.autocomplete = 'username';
-        if (!usernameField.name) usernameField.name = 'username';
+        usernameField.name = 'username';
         usernameField.inputMode = 'email';
       }
-      if (passwordField && !passwordField.name) {
+      if (passwordField) {
         passwordField.name = 'current-password';
       }
     }
+    if (screenName === 'signup') ensureAuthUsernameAssistField(form, ['signup-email']);
+    if (screenName === 'reset') ensureAuthUsernameAssistField(form, ['forgot-email', 'signin-email', 'signup-email']);
   });
+  syncAuthUsernameAssistFields();
 }
 
 async function handleSignIn() {
@@ -6072,6 +6122,10 @@ setInterval(() => {
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
 (function() {
   initAuthForms();
+  ['signin-email', 'signup-email', 'forgot-email'].forEach(id => {
+    const field = document.getElementById(id);
+    if (field) field.addEventListener('input', syncAuthUsernameAssistFields);
+  });
   // Sign In: email Enter → focus password; password Enter → submit
   document.getElementById('signin-email').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') document.getElementById('signin-password').focus();
