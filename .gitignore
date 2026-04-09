@@ -1,7 +1,21 @@
 # macOS
 .DS_Store
-.vercel
-.claude/agent-memory/security-auditor/MEMORY.md
+
+# Local platform config
+.vercel/
 supabase/config.toml
+
+# Local agent memory
+.claude/agent-memory/security-auditor/MEMORY.md
 .claude/agent-memory/security-auditor/audit_2026-03-19.md
 .claude/worktrees/
+
+# Logs
+*.log
+
+# Playwright and design-session artifacts
+/.playwright-cli/
+/.playwright-mcp/
+/output/
+/screenshots/
+/landing*.png

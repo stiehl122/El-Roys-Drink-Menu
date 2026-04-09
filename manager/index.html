@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manager | Current Menu</title>
 <link rel="icon" type="image/png" href="/HFLOGO.png">
-<link rel="stylesheet" href="/lib/fonts/fonts.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Serif:ital,wght@0,400;0,600;0,700;1,600&display=swap" rel="stylesheet">
@@ -27,54 +26,68 @@
 <div class="wrapper manager-shell-wrapper" id="app-shell">
   <header class="manager-shell-topbar">
     <div class="manager-shell-topbar-inner">
-      <div class="manager-shell-brand-wrap">
-        <button
-          class="manager-shell-menu-toggle"
-          id="settings-drawer-toggle"
-          type="button"
-          aria-label="Open section navigation"
-          aria-controls="manager-settings-rail"
-          aria-expanded="false"
-          onclick="toggleSettingsDrawer()"
-        >☰</button>
+      <div class="manager-shell-topbar-primary">
+        <div class="manager-shell-brand-wrap">
+          <button
+            class="manager-shell-menu-toggle"
+            id="settings-drawer-toggle"
+            type="button"
+            aria-label="Open section navigation"
+            aria-controls="manager-settings-rail"
+            aria-expanded="false"
+            onclick="toggleSettingsDrawer()"
+          >☰</button>
 
-        <div class="manager-shell-brand-copy">
-          <p class="manager-shell-brand-mark">The Ledger</p>
-          <div class="manager-shell-title-row">
-            <h1>Manager Workspace</h1>
-            <div class="header-action-group">
-              <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
-              <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
+          <div class="manager-shell-brand-copy">
+            <div class="manager-shell-brand-row">
+              <p class="manager-shell-brand-mark">Current Menu Control Room</p>
+              <div class="manager-shell-header-badges">
+                <span class="manager-shell-header-badge">Manager</span>
+                <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
+              </div>
             </div>
-          </div>
-          <div class="manager-shell-header-meta">
-            <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-            <div id="active-menu-bar" class="manager-shell-menu-bar" style="display:none;" aria-live="polite">
-              <span class="active-menu-label">Menu</span>
-              <span id="active-menu-name" class="active-menu-name-text"></span>
-              <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <div class="manager-shell-title-row">
+              <div class="manager-shell-title-copy">
+                <h1>Manager Workspace</h1>
+                <p class="manager-shell-header-summary">Shape the live board, manage featured items, and publish service updates without leaving the floor.</p>
+              </div>
+              <div class="header-action-group">
+                <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Open Manager</button>
+                <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
+              </div>
+            </div>
+            <div class="manager-shell-header-meta">
+              <div class="manager-shell-meta-card">
+                <span class="manager-shell-meta-label">Last sync</span>
+                <div class="header-sub" id="last-updated-label">Last Updated: —</div>
+              </div>
+              <div id="active-menu-bar" class="manager-shell-menu-bar" style="display:none;" aria-live="polite">
+                <span class="active-menu-label">Menu</span>
+                <span id="active-menu-name" class="active-menu-name-text"></span>
+                <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div class="manager-shell-user-tools">
-        <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
-        <div class="user-chip" id="user-chip" style="display:none"
-             onclick="toggleUserDropdown()"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-             tabindex="0"
-             role="button"
-             aria-haspopup="true"
-             aria-expanded="false"
-             aria-label="User menu">
-          <span id="user-initials">?</span>
-          <span>▾</span>
-          <div class="user-dropdown" id="user-dropdown">
-            <div class="user-dropdown-name" id="user-dropdown-name"></div>
-            <div class="user-dropdown-role" id="user-dropdown-role"></div>
-            <div class="user-dropdown-divider"></div>
-            <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+        <div class="manager-shell-user-tools">
+          <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+          <div class="user-chip" id="user-chip" style="display:none"
+               onclick="toggleUserDropdown()"
+               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
+               tabindex="0"
+               role="button"
+               aria-haspopup="true"
+               aria-expanded="false"
+               aria-label="User menu">
+            <span id="user-initials">?</span>
+            <span>▾</span>
+            <div class="user-dropdown" id="user-dropdown">
+              <div class="user-dropdown-name" id="user-dropdown-name"></div>
+              <div class="user-dropdown-role" id="user-dropdown-role"></div>
+              <div class="user-dropdown-divider"></div>
+              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+            </div>
           </div>
         </div>
       </div>
@@ -109,13 +122,30 @@
     <div class="settings-workspace manager-shell-layout">
       <aside class="settings-rail manager-shell-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
         <div class="manager-shell-rail-head">
-          <p class="settings-rail-kicker">Manager</p>
-          <p class="manager-shell-rail-note">Sections</p>
+          <div class="manager-shell-rail-head-row">
+            <div>
+              <p class="settings-rail-kicker">Manager</p>
+              <p class="manager-shell-rail-note">Sections</p>
+            </div>
+            <button
+              class="manager-shell-rail-close"
+              type="button"
+              aria-label="Close section navigation"
+              onclick="closeSettingsDrawer()"
+            >×</button>
+          </div>
+          <div class="manager-shell-drawer-meta">
+            <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
+            <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
+          </div>
         </div>
-        <a class="settings-rail-btn active" href="#manager-overview-section" data-target="manager-overview-section" onclick="event.preventDefault();focusSettingsSection('manager-overview-section', this)">Overview</a>
-        <a class="settings-rail-btn" href="#manager-categories-section" data-target="manager-categories-section" onclick="event.preventDefault();focusSettingsSection('manager-categories-section', this)">Categories</a>
-        <a class="settings-rail-btn" href="#manager-edit-section" data-target="manager-edit-section" onclick="event.preventDefault();focusSettingsSection('manager-edit-section', this)">Edit Menu</a>
-        <a class="settings-rail-btn" href="#manager-database-section" data-target="manager-database-section" onclick="event.preventDefault();focusSettingsSection('manager-database-section', this)">Database</a>
+        <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>
+        <button type="button" class="settings-rail-btn" data-target="manager-items-section" onclick="focusSettingsSection('manager-items-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9634;</span>Edit Items</button>
+        <button type="button" class="settings-rail-btn" data-target="manager-pricing-section" onclick="focusSettingsSection('manager-pricing-section', this)"><span class="rail-btn-icon" aria-hidden="true">$</span>Edit Pricing</button>
+        <button type="button" class="settings-rail-btn" data-target="manager-description-section" onclick="focusSettingsSection('manager-description-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9998;</span>Edit Description</button>
+        <button type="button" class="settings-rail-btn" data-target="manager-categories-section" onclick="focusSettingsSection('manager-categories-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9776;</span>Categories</button>
+        <button type="button" class="settings-rail-btn" data-target="manager-database-section" onclick="focusSettingsSection('manager-database-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#8942;</span>Database</button>
       </aside>
 
       <main class="settings-stage manager-shell-stage" id="manager-main-content">
@@ -124,15 +154,8 @@
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Service Overview</p>
-                <h2>Run service without losing the thread.</h2>
+                <h2>At a glance</h2>
               </div>
-              <p class="manager-shell-section-copy">Specials and live menu edits stay together here so the change you send matches the board your staff is staring at.</p>
-            </div>
-
-            <div id="featured-confirm-banner" class="featured-confirm-banner" style="display:none;">
-              <span>Today's featured items haven't been confirmed yet.</span>
-              <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
-              <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
             </div>
 
             <div class="manager-shell-stats-grid">
@@ -154,48 +177,70 @@
             </div>
 
             <div class="manager-shell-overview-grid">
-              <section class="manager-shell-overview-card">
+              <section class="manager-shell-overview-card manager-shell-overview-card--featured" id="manager-featured-overview-card">
                 <div class="manager-shell-card-head">
                   <div>
                     <p class="settings-section-kicker">Featured</p>
-                    <h3>Tonight's callouts</h3>
+                    <h3>Featured Items</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Set the featured lineup here. If it still needs confirmation, the action bar will bring it back.</p>
+                  <p class="manager-shell-card-copy">Current featured lineup. Unconfirmed items appear in the action bar below.</p>
                 </div>
                 <div id="featured-mgr-wrap"></div>
+                <button class="btn-small manager-shell-overview-link" onclick="editFeaturedFromBanner()" style="margin-top:14px">Edit Featured</button>
               </section>
 
-              <section class="manager-shell-overview-card" id="manager-recent-section">
+              <section class="manager-shell-overview-card manager-shell-overview-card--recent" id="manager-recent-section">
                 <div class="manager-shell-card-head">
                   <div>
                     <p class="settings-section-kicker">Recent Changes</p>
                     <h3>Last 7 days</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Sent updates only. Draft work still stays in the Send Update preview.</p>
+                  <p class="manager-shell-card-copy">Sent updates from the last 7 days.</p>
                 </div>
                 <div id="recent-changes-wrap"></div>
               </section>
             </div>
           </section>
 
-          <section class="settings-section manager-shell-edit" id="manager-edit-section">
+          <section class="settings-section manager-shell-items" id="manager-items-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Edit Menu</p>
-                <h2>Refine descriptions, prices, availability, and category order.</h2>
+                <p class="settings-section-kicker">Edit Items</p>
+                <h2>Add, remove, and 86 items.</h2>
               </div>
-              <p class="manager-shell-section-copy">Drag within a category to reorder. Expand details only when you need them.</p>
+              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes are drafts until you Save or Send Update.</p>
             </div>
-            <div id="manager-categories"></div>
+            <div id="manager-items-categories"></div>
+          </section>
+
+          <section class="settings-section manager-shell-pricing" id="manager-pricing-section">
+            <div class="manager-shell-section-header">
+              <div>
+                <p class="settings-section-kicker">Edit Pricing</p>
+                <h2>Prices and upcharges.</h2>
+              </div>
+              <p class="manager-shell-section-copy">Set base prices and add upcharge modifiers (e.g. "Add bacon +$2").</p>
+            </div>
+            <div id="manager-pricing-categories"></div>
+          </section>
+
+          <section class="settings-section manager-shell-descriptions" id="manager-description-section">
+            <div class="manager-shell-section-header">
+              <div>
+                <p class="settings-section-kicker">Edit Description</p>
+                <h2>Descriptions and recipes.</h2>
+              </div>
+              <p class="manager-shell-section-copy">Expand an item to edit guest-facing copy, manage recipe details, and decide what appears on the live menu.</p>
+            </div>
+            <div id="manager-description-categories"></div>
           </section>
 
           <section class="settings-section manager-shell-categories" id="manager-categories-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Category Management</p>
-                <h2>Organize your offerings into editorial sections.</h2>
+                <p class="settings-section-kicker">Categories</p>
+                <h2>Add, rename, or reorder categories.</h2>
               </div>
-              <p class="manager-shell-section-copy">Reorder, rename, and add categories without leaving the page.</p>
             </div>
 
             <div class="active-menu-context" id="categories-menu-context"></div>
@@ -215,8 +260,8 @@
                 <input type="text" id="new-cat-sub" name="new-category-subtitle" class="catmgr-input" placeholder="Short description (optional)…" autocomplete="off"/>
               </div>
               <div class="catmgr-field-row">
-                <label for="new-cat-placeholder">Hint text</label>
-                <input type="text" id="new-cat-placeholder" name="new-category-hint" class="catmgr-input" placeholder="Add item input hint (optional)…" autocomplete="off"/>
+                <label for="new-cat-placeholder">Placeholder</label>
+                <input type="text" id="new-cat-placeholder" name="new-category-hint" class="catmgr-input" placeholder="Shown when adding items, e.g. &quot;Margarita…&quot;" autocomplete="off"/>
               </div>
               <div class="catmgr-add-btn-row">
                 <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
@@ -229,10 +274,9 @@
           <section class="settings-section manager-shell-database" id="manager-database-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Item Repository</p>
-                <h2>The master database for all culinary assets.</h2>
+                <p class="settings-section-kicker">Database</p>
+                <h2>All items across this menu.</h2>
               </div>
-              <p class="manager-shell-section-copy">Search the full menu inventory, then open maintenance tools only when you need them.</p>
             </div>
 
             <div class="manager-shell-database-toolbar">
@@ -262,20 +306,10 @@
 
             <div id="db-table-wrap"></div>
 
-            <details class="manager-shell-disclosure" id="off-menu-section">
-              <summary>
-                <span>Off Menu Items</span>
-                <span class="manager-shell-disclosure-copy">Staff-only items hidden from the public menu.</span>
-              </summary>
-              <div class="manager-shell-disclosure-body">
-                <div id="off-menu-items-wrap"></div>
-              </div>
-            </details>
-
             <details class="manager-shell-disclosure manager-shell-disclosure--danger" id="prune-disclosure">
               <summary>
                 <span>Prune Database</span>
-                <span class="manager-shell-disclosure-copy">Permanently remove archived items from Supabase.</span>
+                <span class="manager-shell-disclosure-copy">Remove items no longer on any menu. Live and 86'd items are never affected.</span>
               </summary>
               <div class="manager-shell-disclosure-body">
                 <div id="prune-section" class="prune-section" style="display:none;">
@@ -291,13 +325,27 @@
           </section>
         </div>
 
-        <button class="logout-link manager-shell-exit" onclick="exitView()">← Back to menu view</button>
+        <footer class="manager-shell-footer">
+          <div class="manager-shell-footer-copy">
+            <p class="manager-shell-footer-kicker">Current Menu</p>
+            <h3>Manager Workspace</h3>
+            <p class="manager-shell-footer-note">Keep drafts private, confirm featured items, and publish updates when service is ready.</p>
+          </div>
+          <div class="manager-shell-footer-meta">
+            <div class="manager-shell-footer-pills">
+              <span class="manager-shell-footer-pill" id="manager-footer-menu-name">No menu selected</span>
+              <span class="manager-shell-footer-pill" id="manager-footer-last-updated">Updated —</span>
+              <span class="manager-shell-footer-pill" id="manager-footer-version">Version —</span>
+            </div>
+            <button class="logout-link manager-shell-exit" onclick="exitView()">Back to menu view</button>
+          </div>
+        </footer>
       </main>
     </div>
 
     <div class="manager-shell-actionbar" id="manager-action-bar" hidden>
       <div class="manager-shell-actionbar-copy">
-        <p class="workspace-actions-title">Service Actions</p>
+        <p class="workspace-actions-title">Publishing Dock</p>
         <p class="workspace-actions-sub" id="manager-action-bar-summary"></p>
       </div>
       <div class="manager-shell-actionbar-groups">
@@ -306,11 +354,13 @@
           <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
         </div>
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group" hidden>
-          <button class="save-btn" id="save-btn" onclick="saveMenu()">Save</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()">Send Update</button>
+          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Draft</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review and publish changes to the live menu">Send Update</button>
         </div>
       </div>
-      <div id="sync-status"></div>
+      <div class="manager-shell-actionbar-status">
+        <div id="sync-status"></div>
+      </div>
     </div>
   </div>
 </div>

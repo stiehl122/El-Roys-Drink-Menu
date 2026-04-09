@@ -1,11 +1,12 @@
-.agents
-.claude
-refactor-issues
-investigators
-docs
+.agents/
+.claude/
+docs/
+investigators/
+refactor-issues/
+supabase/migrations/
+ux-investigation/
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+Mobile Design.md
 readme.md
-claude.md
-claude.local.md
-agents.md
-mobile design.md
-supabase/migrations

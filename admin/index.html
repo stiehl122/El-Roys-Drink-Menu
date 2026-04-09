@@ -60,7 +60,7 @@
       </nav>
 
       <div class="admin-console-rail-footer">
-        <p class="admin-console-rail-note">Fixed to Leroy's Lounge and El Roy's Cantina with four live menus.</p>
+        <p class="admin-console-rail-note">Leroy's Lounge and El Roy's Cantina.</p>
         <button class="logout-link admin-console-back-link" onclick="exitView()">Return to menu view</button>
       </div>
     </aside>
@@ -102,10 +102,10 @@
         <section class="settings-section admin-console-section" id="admin-restaurants-section">
           <div class="settings-section-head admin-console-section-head">
             <div>
-              <p class="settings-section-kicker">Instance Management</p>
+              <p class="settings-section-kicker">Overview</p>
               <h3>Restaurants &amp; Menus</h3>
             </div>
-            <p class="settings-section-copy">A Stitch-inspired overview of the fixed restaurant model, without the generated placeholder imagery.</p>
+            <p class="settings-section-copy">Fixed configuration — two restaurants, four menus. This section is read-only.</p>
           </div>
           <div id="menus-mgmt-list" class="admin-console-instance-grid"></div>
         </section>
@@ -113,14 +113,15 @@
         <section class="settings-section admin-console-section" id="admin-notifications-section">
           <div class="settings-section-head admin-console-section-head">
             <div>
-              <p class="settings-section-kicker">Integration Protocols</p>
+              <p class="settings-section-kicker">Delivery</p>
               <h3>Notifications</h3>
             </div>
-            <p class="settings-section-copy">Preserve the Stitch composition up front, then tuck the runtime-specific credential and menu-url controls into secondary folds.</p>
+            <p class="settings-section-copy">Control which channels fire when a menu update is sent.</p>
           </div>
 
           <div class="admin-console-split">
             <div class="config-card admin-console-protocol-card">
+              <p class="admin-console-scope-label">Menu-level delivery toggles</p>
               <div class="admin-context-switcher admin-context-switcher--admin">
                 <label class="switcher-label" for="notif-restaurant-select">Restaurant</label>
                 <select id="notif-restaurant-select" class="switcher-select" onchange="onAdminSwitcherRestaurantChange('notif')"></select>
@@ -201,6 +202,7 @@
                   <span>Credential Keys</span>
                   <span class="admin-console-fold-note">Per restaurant</span>
                 </summary>
+                <p class="admin-console-scope-label admin-console-scope-label--side">Restaurant-level credential mapping</p>
                 <p class="config-hint">Map each channel to a Vercel env var name. Leave blank to use the global defaults. Actual secrets stay in Vercel.</p>
                 <div class="notif-cred-row">
                   <label class="notif-cred-label" for="notif-cred-groupme">GroupMe Bot ID</label>
@@ -241,15 +243,14 @@
 
               <details class="config-card admin-console-fold">
                 <summary class="admin-console-fold-summary">
-                  <span>Notification Link URL</span>
-                  <span class="admin-console-fold-note">Per-menu link included in update notifications</span>
+                  <span>Menu Page URL</span>
+                  <span class="admin-console-fold-note">Browser only</span>
                 </summary>
-                <p class="admin-console-fold-desc" style="margin:0 0 8px;font-size:12px;color:#888;">
-                  This URL is appended to notification messages for the currently selected menu. Each menu can have its own link. If left blank, the site root is used.
-                </p>
+                <p class="admin-console-scope-label admin-console-scope-label--side">Local browser utility</p>
                 <div class="input-row admin-console-url-row">
-                  <input type="text" id="menu-url-input" placeholder="https://el-roys-drink-menu.vercel.app/leroyslounge" aria-label="Notification link URL for this menu">
-                  <button class="btn-small" onclick="saveMenuUrl()">Save</button>
+                  <label class="sr-only" for="menu-url-input">Menu page URL</label>
+                  <input type="text" id="menu-url-input" placeholder="https://el-roys-drink-menu.vercel.app" aria-label="Menu page URL">
+                  <button class="btn-small" onclick="saveMenuUrl()">Save URL</button>
                 </div>
               </details>
             </div>
@@ -259,10 +260,10 @@
         <section class="settings-section admin-console-section" id="admin-users-section">
           <div class="settings-section-head admin-console-section-head">
             <div>
-              <p class="settings-section-kicker">Staff Directory</p>
+              <p class="settings-section-kicker">Team</p>
               <h3>Users &amp; Access</h3>
             </div>
-            <p class="settings-section-copy">Keep the denser live management table, but restyle it so it still feels like the imported Stitch console.</p>
+            <p class="settings-section-copy">Manage roles and menu access for staff accounts.</p>
           </div>
 
           <div class="users-invite-row admin-console-users-toolbar">
@@ -280,13 +281,13 @@
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
       <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title">SIGN IN</h2>
+        <h2 class="auth-screen-title">Sign In</h2>
         <p class="auth-screen-subtitle">Sign in to your account</p>
         <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error">
+          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="signin-error">
         </div>
         <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error">
+          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-label="Password" aria-describedby="signin-error">
         </div>
         <div class="auth-error" id="signin-error"></div>
         <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
@@ -298,25 +299,25 @@
       </div>
 
       <div id="auth-screen-signup" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
+        <h2 class="auth-screen-title">Create Account</h2>
         <p class="auth-screen-subtitle">Sign up with your work email</p>
         <div class="auth-field">
-          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
+          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name" aria-label="First name"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}">
         </div>
         <div class="auth-field">
-          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
+          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name" aria-label="Last name"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}">
         </div>
         <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
+          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email" aria-label="Email address"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}">
         </div>
         <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
+          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password" aria-label="Password"
                  aria-describedby="signup-error"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}">
         </div>
@@ -327,10 +328,10 @@
       </div>
 
       <div id="auth-screen-forgot" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">RESET PASSWORD</h2>
+        <h2 class="auth-screen-title">Reset Password</h2>
         <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
         <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error">
+          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="forgot-error">
         </div>
         <div class="auth-error" id="forgot-error"></div>
         <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
@@ -338,13 +339,13 @@
       </div>
 
       <div id="auth-screen-reset" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
+        <h2 class="auth-screen-title">Set New Password</h2>
         <p class="auth-screen-subtitle">Choose a new password for your account</p>
         <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error">
+          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-label="New password" aria-describedby="reset-error">
         </div>
         <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error">
+          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-label="Confirm new password" aria-describedby="reset-error">
         </div>
         <div class="auth-error" id="reset-error"></div>
         <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
@@ -356,19 +357,19 @@
 
 <div class="modal-bg" id="invite-modal-bg">
   <div class="modal">
-    <h2>INVITE STAFF</h2>
+    <h2>Invite Staff</h2>
     <div class="modal-sub">Copy this message and send it to new staff members.</div>
     <textarea id="invite-text-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeInviteModal()">Done</button>
-      <button class="btn-confirm" onclick="copyInviteText()">COPY MESSAGE</button>
+      <button class="btn-confirm" onclick="copyInviteText()">Copy Message</button>
     </div>
   </div>
 </div>
 
 <div id="menu-picker-overlay">
   <div class="picker-box" role="dialog" aria-modal="true" aria-label="Select a Menu">
-    <h2 class="picker-title" id="picker-title">SELECT A MENU</h2>
+    <h2 class="picker-title" id="picker-title">Select a Menu</h2>
     <p class="picker-subtitle" id="picker-subtitle">Choose which menu to view</p>
     <div id="picker-menu-list" class="picker-menu-list"></div>
     <div class="picker-actions">
