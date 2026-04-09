@@ -2178,7 +2178,7 @@ body.manager-mode.manager-stitch-shell {
   --manager-shell-shadow: rgba(25, 37, 25, 0.08);
   --manager-shell-shadow-strong: rgba(25, 37, 25, 0.16);
   --manager-shell-glass-bg: rgba(250, 249, 246, 0.82);
-  --manager-shell-actionbar-bg: rgba(255, 255, 255, 0.88);
+  --manager-shell-actionbar-bg: rgba(255, 255, 255, 0.96);
   --bg: var(--manager-shell-bg);
   --surface: var(--manager-shell-surface);
   --card: var(--manager-shell-surface-muted);
@@ -2225,7 +2225,7 @@ body.manager-mode.manager-stitch-shell {
     --manager-shell-shadow: rgba(0, 0, 0, 0.26);
     --manager-shell-shadow-strong: rgba(0, 0, 0, 0.38);
     --manager-shell-glass-bg: rgba(23, 26, 23, 0.82);
-    --manager-shell-actionbar-bg: rgba(32, 36, 32, 0.9);
+    --manager-shell-actionbar-bg: rgba(32, 36, 32, 0.96);
     color-scheme: dark;
   }
 }
@@ -3176,7 +3176,6 @@ body.manager-stitch-shell .manager-shell-actionbar {
   background: var(--manager-shell-actionbar-bg);
   border: 1px solid var(--manager-shell-border);
   box-shadow: 0 -12px 40px var(--manager-shell-shadow);
-  backdrop-filter: blur(18px);
   overscroll-behavior: contain;
 }
 
@@ -3537,6 +3536,12 @@ body.manager-stitch-shell.settings-drawer-open {
   body.manager-stitch-shell .del-item {
     order: 4;
     margin-left: auto;
+    color: var(--manager-shell-error);
+    border-color: rgba(186, 26, 26, 0.2);
+  }
+
+  body.manager-stitch-shell .eighty-six-btn {
+    border-color: var(--manager-shell-border-strong);
   }
 
   body.manager-stitch-shell .db-table,
@@ -4388,7 +4393,8 @@ body.manager-stitch-shell .manager-shell-stat-card {
 body.manager-stitch-shell .manager-shell-stat-label {
   grid-column: 1;
   grid-row: 1;
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.3;
 }
 
 body.manager-stitch-shell .manager-shell-stat-value {
@@ -4403,8 +4409,8 @@ body.manager-stitch-shell .manager-shell-stat-meta {
   grid-column: 1;
   grid-row: 2;
   margin-top: 0;
-  font-size: 9px;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
 }
 
 body.manager-stitch-shell .manager-shell-overview-grid {
@@ -4938,11 +4944,11 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .manager-shell-stat-value {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   body.manager-stitch-shell .manager-shell-stat-meta {
-    font-size: 8px;
+    font-size: 10px;
   }
 
   body.manager-stitch-shell .desc-edit-grid {
@@ -4968,8 +4974,8 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   body.manager-stitch-shell .featured-special-actions .btn-small {
     padding: 6px 10px;
-    min-width: 36px;
-    min-height: 36px;
+    min-width: 40px;
+    min-height: 40px;
     font-size: 14px;
   }
 
@@ -5025,18 +5031,18 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     min-width: 0;
     border-radius: 8px;
     border: 1px solid var(--border);
-    opacity: 0.85;
+    opacity: 1;
   }
 
   #preview-toolbar .preview-toolbar-label {
-    font-size: 7px;
+    font-size: 8px;
     letter-spacing: 1px;
     padding: 0 2px 0 0;
   }
 
   #preview-toolbar .preview-toolbar-btn {
-    padding: 3px 6px;
-    font-size: 9px;
+    padding: 4px 8px;
+    font-size: 10px;
   }
 
   #preview-toolbar .preview-toolbar-divider {
@@ -5159,9 +5165,9 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .featured-special-actions .btn-small {
-    padding: 5px 8px;
-    min-width: 32px;
-    min-height: 32px;
+    padding: 4px 6px;
+    min-width: 40px;
+    min-height: 40px;
   }
 
   body.manager-stitch-shell .featured-specials-composer {
@@ -5180,7 +5186,332 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   body.manager-stitch-shell .settings-section,
   body.manager-stitch-shell .manager-shell-overview-card {
+    padding: 16px 12px;
+  }
+
+  /* Tighter pricing rows on mobile */
+  body.manager-stitch-shell #manager-pricing-section .items-row {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+
+  /* Tighter database rows on mobile */
+  body.manager-stitch-shell .db-table tr {
+    padding: 10px 14px;
+  }
+
+  body.manager-stitch-shell .db-table td {
+    padding: 4px 0;
+  }
+
+  /* Sticky section kickers for scroll context */
+  body.manager-stitch-shell .settings-section-kicker {
+    position: sticky;
+    top: calc(58px + env(safe-area-inset-top));
+    z-index: 10;
+    background: var(--manager-shell-bg);
+    padding: 8px 0 4px;
+    margin: -8px 0 8px;
+  }
+
+}
+
+/* 9. Manager UX polish */
+body.manager-stitch-shell .item-actions-compact {
+  gap: 8px;
+}
+
+body.manager-stitch-shell .eighty-six-btn,
+body.manager-stitch-shell .del-item {
+  min-width: 42px;
+  min-height: 42px;
+  border: 1px solid rgba(27, 38, 31, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 18px rgba(25, 28, 30, 0.05);
+}
+
+body.manager-stitch-shell .eighty-six-btn {
+  color: var(--manager-shell-accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+body.manager-stitch-shell .eighty-six-btn.restore {
+  color: var(--manager-shell-success);
+}
+
+body.manager-stitch-shell .del-item {
+  color: var(--manager-shell-error);
+}
+
+@media (prefers-color-scheme: dark) {
+  body.manager-stitch-shell .eighty-six-btn,
+  body.manager-stitch-shell .del-item {
+    border-color: rgba(242, 241, 238, 0.12);
+    background: rgba(38, 43, 38, 0.94);
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 920px) {
+  body.manager-stitch-shell {
+    padding-bottom: calc(216px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar {
+    gap: 10px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-copy {
+    max-width: none;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-sub {
+    max-width: none;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-groups {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured,
+  body.manager-stitch-shell .manager-shell-actionbar-primary {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .save-btn,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 14px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    line-height: 1.25;
+    white-space: normal;
+    text-align: center;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-status {
+    display: none;
+  }
+
+  body.manager-stitch-shell .toast {
+    bottom: calc(196px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  body.manager-stitch-shell .manager-shell-stat-card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  body.manager-stitch-shell .manager-shell-stat-card {
+    align-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  body.manager-stitch-shell #app-shell > header.manager-shell-topbar {
+    margin-bottom: 2px;
+  }
+
+  body.manager-stitch-shell .manager-shell-topbar-inner {
+    width: calc(100% - 18px);
+    min-height: calc(48px + env(safe-area-inset-top));
+    padding: calc(5px + env(safe-area-inset-top)) 0 5px;
+  }
+
+  body.manager-stitch-shell .manager-shell-topbar-primary {
+    gap: 6px;
+  }
+
+  body.manager-stitch-shell .manager-shell-brand-wrap {
+    gap: 8px;
+    align-items: center;
+  }
+
+  body.manager-stitch-shell .manager-shell-menu-toggle {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+  }
+
+  body.manager-stitch-shell .manager-shell-brand-copy {
+    gap: 1px;
+  }
+
+  body.manager-stitch-shell .manager-shell-header-badges {
+    gap: 4px;
+  }
+
+  body.manager-stitch-shell .manager-shell-header-badge {
+    min-height: 18px;
+    padding: 0 6px;
+    font-size: 8px;
+  }
+
+  body.manager-stitch-shell #app-shell > header h1 {
+    font-size: 0.98rem;
+  }
+
+  body.manager-stitch-shell .manager-shell-layout {
+    width: calc(100% - 18px);
+    padding-top: 4px;
+  }
+
+  body.manager-stitch-shell .settings-section {
+    scroll-margin-top: 58px;
+  }
+
+  body.manager-stitch-shell .settings-section,
+  body.manager-stitch-shell .manager-shell-overview-card {
     padding: 18px 14px;
+    border-radius: 24px;
+  }
+
+  body.manager-stitch-shell .manager-shell-section-header,
+  body.manager-stitch-shell .manager-shell-card-head {
+    margin-bottom: 18px;
+    gap: 12px;
+  }
+
+  body.manager-stitch-shell .manager-shell-section-header h2,
+  body.manager-stitch-shell .manager-shell-card-head h3 {
+    font-size: 20px;
+  }
+
+  body.manager-stitch-shell .manager-shell-stat-card {
+    padding: 12px;
+    gap: 4px 8px;
+  }
+
+  body.manager-stitch-shell .manager-shell-stat-value {
+    font-size: 24px;
+  }
+
+  body.manager-stitch-shell .catmgr-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px 12px;
+    align-items: center;
+  }
+
+  body.manager-stitch-shell .catmgr-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  body.manager-stitch-shell .catmgr-title {
+    font-size: 18px;
+    line-height: 1.1;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  body.manager-stitch-shell .catmgr-sub {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    line-height: 1.35;
+  }
+
+  body.manager-stitch-shell .catmgr-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  body.manager-stitch-shell .catmgr-actions .btn-small {
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  body.manager-stitch-shell .history-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    align-items: start;
+  }
+
+  body.manager-stitch-shell .history-date {
+    grid-column: 1;
+    grid-row: 1;
+    white-space: normal;
+  }
+
+  body.manager-stitch-shell .history-user {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  body.manager-stitch-shell .history-summary {
+    grid-column: 1;
+    grid-row: 3;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  body.manager-stitch-shell .history-chevron {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
+  }
+}
+
+@media (max-width: 520px) {
+  body.manager-stitch-shell {
+    padding-bottom: calc(228px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar {
+    padding: 9px 10px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured,
+  body.manager-stitch-shell .manager-shell-actionbar-primary {
+    gap: 6px;
+  }
+
+  body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .save-btn,
+  body.manager-stitch-shell .manager-shell-actionbar-primary .send-btn {
+    min-height: 46px;
+    font-size: 10px;
+  }
+
+  body.manager-stitch-shell .item-name input,
+  body.manager-stitch-shell .item-name-static {
+    font-size: 16px;
   }
 }
 

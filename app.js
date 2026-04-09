@@ -1433,24 +1433,39 @@ function updateManagerActionBar() {
   const primaryGroup = document.getElementById('manager-primary-action-group');
   const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
+  const syncEl = document.getElementById('sync-status');
   const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
+  const isCompactViewport = window.innerWidth <= 480;
 
   if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
   if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
   bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+  syncManagerActionBarStatus(syncEl);
 
   if (summary) {
     if (hasDraftChanges && hasFeaturedPrompt) {
-      summary.textContent = 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
+      summary.textContent = isCompactViewport
+        ? 'Drafts are ready. Save keeps them private, Send Update publishes, and featured still needs confirmation.'
+        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
     } else if (hasDraftChanges) {
-      summary.textContent = 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
+      summary.textContent = isCompactViewport
+        ? 'Drafts are ready. Save keeps them private and Send Update publishes live.'
+        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
     } else if (hasFeaturedPrompt) {
-      summary.textContent = "Today's featured lineup needs confirmation.";
+      summary.textContent = isCompactViewport
+        ? 'Featured still needs confirmation.'
+        : "Today's featured lineup needs confirmation.";
     } else {
       summary.textContent = '';
     }
   }
+}
+
+function syncManagerActionBarStatus(syncEl = document.getElementById('sync-status')) {
+  const statusWrap = syncEl?.closest('.manager-shell-actionbar-status');
+  if (!statusWrap) return;
+  statusWrap.hidden = !((syncEl.textContent || '').trim());
 }
 
 function renderManagerWorkspace(options = {}) {
@@ -2310,12 +2325,20 @@ function startPolling() {
 
       _pollFailCount = 0;
       const syncEl = document.getElementById('sync-status');
-      if (syncEl?.classList.contains('sync-poll-error')) { syncEl.textContent = ''; syncEl.className = ''; }
+      if (syncEl?.classList.contains('sync-poll-error')) {
+        syncEl.textContent = '';
+        syncEl.className = '';
+      }
+      syncManagerActionBarStatus(syncEl);
     } catch(e) {
       _pollFailCount++;
       if (_pollFailCount >= 3) {
         const syncEl = document.getElementById('sync-status');
-        if (syncEl) { syncEl.textContent = '⚠️ Sync paused — reconnecting…'; syncEl.className = 'sync-poll-error'; }
+        if (syncEl) {
+          syncEl.textContent = '⚠️ Sync paused — reconnecting…';
+          syncEl.className = 'sync-poll-error';
+        }
+        syncManagerActionBarStatus(syncEl);
       }
     }
   };
@@ -4319,6 +4342,7 @@ function finalizePersistStatus(ok) {
     syncEl.textContent = '⚠️ Cloud sync failed';
     syncEl.className = 'sync-error';
   }
+  syncManagerActionBarStatus(syncEl);
 }
 
 async function persistState() {
