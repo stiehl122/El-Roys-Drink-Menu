@@ -685,7 +685,7 @@ body.route-restaurant.route-restaurant--elroy {
 
   #restaurant-site-wrapper .erc-brand-group {
     flex-wrap: wrap;
-    gap: 0.75rem;
+    gap: 0.4rem 0.75rem;
   }
 
   #restaurant-site-wrapper .erc-brand {
@@ -698,13 +698,12 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-item-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
+    flex-wrap: wrap;
+    gap: 0.15rem 1rem;
   }
 
   #restaurant-site-wrapper .erc-topbar-inner {
-    gap: 0.75rem;
+    gap: 0.5rem;
   }
 
   #restaurant-site-wrapper .erc-menu-toggle,
@@ -723,12 +722,20 @@ body.route-restaurant.route-restaurant--elroy {
     padding: 0.55rem 0.85rem;
   }
 
+  #restaurant-site-wrapper .erc-main {
+    padding-top: 2rem;
+  }
+
   #restaurant-site-wrapper .erc-title {
-    font-size: clamp(3rem, 18vw, 4.75rem);
+    font-size: clamp(2.8rem, 15vw, 4.25rem);
+  }
+
+  #restaurant-site-wrapper .erc-hero {
+    margin-bottom: 2.5rem;
   }
 
   #restaurant-site-wrapper .erc-section {
-    margin-bottom: 3rem;
+    margin-bottom: 2.5rem;
   }
 
   #restaurant-site-wrapper .erc-footer-main {
@@ -778,7 +785,7 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-hero {
-    margin-bottom: 3rem;
+    margin-bottom: 2rem;
   }
 }
 
