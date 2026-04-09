@@ -79,6 +79,8 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: var(--font-body); min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 0 16px 80px; transition: background 0.3s, color 0.3s; }
   .wrapper { width: 100%; max-width: 560px; position: relative; z-index: 1; }
+
+  /* Fallback site-picker used in manager/admin/route shells */
   body.is-site-picker { justify-content: center; padding: 24px 16px; }
   .site-picker-view { width: 100%; max-width: 560px; }
   .site-picker-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 32px 24px; text-align: center; box-shadow: 0 18px 48px rgba(26,32,44,0.12); }
@@ -99,12 +101,8 @@
       border-color: rgba(148, 163, 184, 0.2);
       box-shadow: 0 24px 56px rgba(2, 6, 23, 0.48);
     }
-    body.is-site-picker .site-picker-kicker {
-      color: #7cc4ff;
-    }
-    body.is-site-picker .site-picker-title {
-      color: #f8fbff;
-    }
+    body.is-site-picker .site-picker-kicker { color: #7cc4ff; }
+    body.is-site-picker .site-picker-title { color: #f8fbff; }
     body.is-site-picker .site-picker-link {
       background: rgba(248, 250, 252, 0.04);
       border-color: rgba(148, 163, 184, 0.16);
@@ -116,6 +114,7 @@
       box-shadow: 0 14px 28px rgba(8, 15, 28, 0.42);
     }
   }
+
   #restaurant-site-wrapper[hidden] { display: none !important; }
   body.route-restaurant #app-shell { max-width: none; }
   body.route-restaurant .wrapper { max-width: none; }

@@ -7,26 +7,293 @@
 <link rel="icon" type="image/png" href="HFLOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Lilita+One&family=Permanent+Marker&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-</head>
-<body class="is-site-picker">
-<main id="site-picker-view" class="site-picker-view" hidden>
-  <div class="site-picker-card">
-    <p class="site-picker-kicker">Current Menu</p>
-    <h1 class="site-picker-title">Choose a restaurant</h1>
-    <div class="site-picker-actions">
-      <a class="site-picker-link" href="/leroyslounge">Leroy's Lounge</a>
-      <a class="site-picker-link" href="/elroyscantina">El Roy's Cantina</a>
-    </div>
-  </div>
-</main>
-<script>
-function showPicker() {
-  document.getElementById('site-picker-view')?.removeAttribute('hidden');
-}
+<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;700;900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-showPicker();
-</script>
+  /* ── Custom properties ── */
+  :root {
+    --lp-bg: #faf8f0;
+    --lp-text: #1c1c15;
+    --lp-text-muted: rgba(28, 28, 21, 0.35);
+    --lp-tagline: #6f7a70;
+    --lp-tagline-hover-green: #006f41;
+    --lp-tagline-hover-orange: #a83900;
+    --lp-footer: rgba(28, 28, 21, 0.25);
+    --lp-vignette-inner: rgba(250, 248, 240, 0);
+    --lp-vignette-outer: rgba(0, 0, 0, 0.08);
+    --lp-gradient-bottom: rgba(0, 0, 0, 0.03);
+    --lp-grain-opacity: 0.06;
+    --lp-glow-green: rgba(0, 84, 48, 0.15);
+    --lp-glow-orange: rgba(168, 57, 0, 0.18);
+    --lp-shadow: rgba(0, 0, 0, 0.12);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --lp-bg: #1c1c15;
+      --lp-text: #f4f1e6;
+      --lp-text-muted: rgba(244, 241, 230, 0.3);
+      --lp-tagline: #a0a89f;
+      --lp-tagline-hover-green: #9bf6bb;
+      --lp-tagline-hover-orange: #ffb59a;
+      --lp-footer: rgba(244, 241, 230, 0.2);
+      --lp-vignette-inner: rgba(28, 28, 21, 0);
+      --lp-vignette-outer: rgba(0, 0, 0, 0.6);
+      --lp-gradient-bottom: rgba(0, 0, 0, 0.5);
+      --lp-grain-opacity: 0.12;
+      --lp-glow-green: rgba(0, 84, 48, 0.4);
+      --lp-glow-orange: rgba(168, 57, 0, 0.5);
+      --lp-shadow: rgba(0, 0, 0, 0.8);
+    }
+  }
+
+  /* ── Body ── */
+  body {
+    background: var(--lp-bg);
+    color: var(--lp-text);
+    font-family: 'Newsreader', Georgia, serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Grain overlay ── */
+  .lp-grain {
+    position: fixed;
+    inset: 0;
+    background-image: url('assets/grain-texture.png');
+    opacity: var(--lp-grain-opacity);
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  /* ── Background effects ── */
+  .lp-vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, var(--lp-vignette-inner) 0%, var(--lp-vignette-outer) 100%);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .lp-gradient-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 50%;
+    background: linear-gradient(to top, var(--lp-gradient-bottom), transparent);
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  /* ── Main layout ── */
+  .lp-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 24px 48px;
+    max-width: 960px;
+    margin: 0 auto;
+    width: 100%;
+    position: relative;
+  }
+
+  /* ── Headline ── */
+  .lp-headline {
+    font-family: 'Epilogue', sans-serif;
+    font-size: clamp(2.5rem, 7vw, 4.5rem);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    line-height: 0.95;
+    text-align: center;
+    margin-bottom: 3rem;
+    text-shadow: 0 4px 24px var(--lp-shadow);
+  }
+
+  /* ── Destination rows ── */
+  .lp-destinations {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4rem;
+  }
+
+  .lp-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+  }
+  .lp-row:hover .lp-sign-img,
+  .lp-row:focus .lp-sign-img {
+    transform: scale(1.05);
+  }
+
+  /* ── El Roy's row ── */
+  .lp-row--elroys:hover .lp-sign-img,
+  .lp-row--elroys:focus .lp-sign-img {
+    transform: scale(1.05) rotate(15deg);
+  }
+  .lp-row--elroys:hover .lp-tagline,
+  .lp-row--elroys:focus .lp-tagline {
+    color: var(--lp-tagline-hover-green);
+  }
+
+  /* ── Leroy's row ── */
+  .lp-row--leroys:hover .lp-sign-img,
+  .lp-row--leroys:focus .lp-sign-img {
+    transform: scale(1.05) rotate(-5deg);
+  }
+  .lp-row--leroys:hover .lp-tagline,
+  .lp-row--leroys:focus .lp-tagline {
+    color: var(--lp-tagline-hover-orange);
+  }
+
+  /* ── Tagline text ── */
+  .lp-tagline {
+    font-family: 'Epilogue', sans-serif;
+    font-size: clamp(1.25rem, 3vw, 2.25rem);
+    font-style: italic;
+    color: var(--lp-tagline);
+    line-height: 1.2;
+    transition: color 0.4s;
+  }
+  .lp-tagline--right { text-align: right; }
+  .lp-tagline--left { text-align: left; }
+
+  /* ── Sign images ── */
+  .lp-sign {
+    display: flex;
+  }
+  .lp-sign--left { justify-content: flex-end; }
+  .lp-sign--right { justify-content: flex-start; }
+
+  .lp-sign-img {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    transition: transform 0.5s;
+  }
+  .lp-sign-img--green {
+    filter: drop-shadow(0 0 15px var(--lp-glow-green)) drop-shadow(0 20px 40px var(--lp-shadow));
+  }
+  .lp-sign-img--orange {
+    filter: drop-shadow(0 0 15px var(--lp-glow-orange)) drop-shadow(0 20px 40px var(--lp-shadow));
+  }
+
+  /* ── Mobile taglines (hidden on desktop) ── */
+  .lp-tagline-mobile {
+    display: none;
+    text-align: center;
+    font-family: 'Epilogue', sans-serif;
+    font-size: 1.15rem;
+    font-style: italic;
+    color: var(--lp-tagline);
+    margin-top: 0.75rem;
+  }
+
+  /* ── Footer ── */
+  .lp-footer {
+    width: 100%;
+    text-align: center;
+    padding: 2rem;
+    z-index: 40;
+  }
+  .lp-footer-text {
+    font-family: 'Space Grotesk', monospace;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--lp-footer);
+  }
+
+  /* ── Mobile ── */
+  @media (max-width: 640px) {
+    .lp-headline { margin-bottom: 2rem; }
+    .lp-destinations { gap: 2.5rem; }
+
+    .lp-row {
+      grid-template-columns: 1fr;
+      justify-items: center;
+      text-align: center;
+    }
+
+    /* Hide desktop taglines, show mobile ones */
+    .lp-tagline--desktop { display: none; }
+    .lp-tagline-mobile { display: block; }
+
+    .lp-sign { justify-content: center !important; }
+    .lp-sign-img { max-width: 260px; }
+
+    /* Reorder: El Roy's = sign first, then mobile tagline */
+    .lp-row--elroys .lp-tagline--desktop { order: 2; }
+    .lp-row--elroys .lp-sign { order: 1; }
+
+    /* Reorder: Leroy's = sign first, then mobile tagline */
+    .lp-row--leroys .lp-sign { order: 1; }
+    .lp-row--leroys .lp-tagline--desktop { order: 2; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Grain texture -->
+<div class="lp-grain"></div>
+
+<!-- Background effects -->
+<div class="lp-vignette"></div>
+<div class="lp-gradient-bottom"></div>
+
+<main class="lp-main">
+
+  <!-- Headline -->
+  <h1 class="lp-headline">Where are you<br>headed tonight?</h1>
+
+  <div class="lp-destinations">
+
+    <!-- Row 1: El Roy's Cantina — tagline left, sign right -->
+    <a class="lp-row lp-row--elroys" href="/elroyscantina">
+      <p class="lp-tagline lp-tagline--right lp-tagline--desktop">
+        One way up.<br>All the way south.
+      </p>
+      <div class="lp-sign lp-sign--right">
+        <img class="lp-sign-img lp-sign-img--green"
+             src="assets/elroys-sign.png"
+             alt="El Roy's Cantina">
+      </div>
+      <p class="lp-tagline-mobile">One way up. All the way south.</p>
+    </a>
+
+    <!-- Row 2: Leroy's Lounge — sign left, tagline right -->
+    <a class="lp-row lp-row--leroys" href="/leroyslounge">
+      <div class="lp-sign lp-sign--left">
+        <img class="lp-sign-img lp-sign-img--orange"
+             src="assets/leroys-sign.png"
+             alt="Leroy's Lounge">
+      </div>
+      <p class="lp-tagline lp-tagline--left lp-tagline--desktop">
+        Worth every<br>wrong turn.
+      </p>
+      <p class="lp-tagline-mobile">Worth every wrong turn.</p>
+    </a>
+
+  </div>
+
+</main>
+
+<footer class="lp-footer">
+  <p class="lp-footer-text">Drinks &amp; Food menus. Updated live.</p>
+</footer>
+
 </body>
 </html>
