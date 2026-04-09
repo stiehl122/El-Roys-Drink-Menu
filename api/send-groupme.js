@@ -1,4 +1,4 @@
-import { requireRole } from './_auth.js';
+import { requireMenuAccess, requireRole } from './_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -6,15 +6,22 @@ export default async function handler(req, res) {
   const botId = process.env.GROUPME_BOT_ID;
   if (!botId) return res.status(500).json({ error: 'GROUPME_BOT_ID not configured' });
 
+  let caller;
   try {
-    await requireRole(req, 'manager', 'admin');
+    caller = await requireRole(req, 'manager', 'admin');
   } catch (e) {
     return res.status(e.status).json({ error: e.message });
   }
 
-  // Forward to GroupMe
-  const { text } = req.body;
+  const { text, menu_id } = req.body;
   if (!text) return res.status(400).json({ error: 'Missing text' });
+  if (!menu_id) return res.status(400).json({ error: 'Missing menu_id' });
+
+  try {
+    await requireMenuAccess(caller.uid, caller.role, menu_id);
+  } catch (e) {
+    return res.status(e.status).json({ error: e.message });
+  }
 
   const MAX_LEN = 1000;
   const safeText = text.length > MAX_LEN

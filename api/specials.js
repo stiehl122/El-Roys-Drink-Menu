@@ -115,27 +115,50 @@ async function migrateRestaurantSpecialGroup(sbUrl, restaurantId) {
 async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
-  if (!config?.name) return null;
+  if (!config?.canonicalId) return null;
 
   const selectGroup = async () => {
-    const groupRes = await fetch(
-      `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+    // Primary lookup by canonical_id
+    let groupRes = await fetch(
+      `${sbUrl}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
       { headers: serviceHeaders() }
     );
     if (!groupRes.ok) throw new Error('Failed to load specials group');
-    const groups = await groupRes.json();
-    return groups?.[0] || null;
+    let groups = await groupRes.json();
+    if (groups?.[0]) return groups[0];
+
+    // Fallback to name for pre-migration data
+    if (config.name) {
+      groupRes = await fetch(
+        `${sbUrl}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
+        { headers: serviceHeaders() }
+      );
+      if (!groupRes.ok) throw new Error('Failed to load specials group');
+      groups = await groupRes.json();
+      if (groups?.[0]) {
+        // Stamp canonical_id on legacy row
+        if (!groups[0].canonical_id) {
+          await fetch(`${sbUrl}/rest/v1/featured_groups?id=eq.${groups[0].id}`, {
+            method: 'PATCH',
+            headers: serviceHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+            body: JSON.stringify({ canonical_id: config.canonicalId }),
+          });
+        }
+        return groups[0];
+      }
+    }
+    return null;
   };
 
   if (!createIfMissing) return selectGroup();
 
-  const createRes = await fetch(`${sbUrl}/rest/v1/featured_groups?on_conflict=name&select=id,name`, {
+  const createRes = await fetch(`${sbUrl}/rest/v1/featured_groups?on_conflict=name&select=id,name,canonical_id`, {
     method: 'POST',
     headers: serviceHeaders({
       'Content-Type': 'application/json',
       Prefer: 'resolution=ignore-duplicates,return=representation',
     }),
-    body: JSON.stringify({ name: config.name }),
+    body: JSON.stringify({ name: config.name, canonical_id: config.canonicalId }),
   });
   if (!createRes.ok) throw new Error('Failed to upsert specials group');
   const created = await createRes.json();
@@ -195,11 +218,13 @@ export default async function handler(req, res) {
 
   try {
     if (action === 'ensure') {
-      await fetchRestaurantSpecialGroup(sbUrl, restaurantId);
-      return res.status(204).end();
+      // Read-only check: returns 204 if group exists, 404 if not. Does NOT create.
+      const group = await fetchRestaurantSpecialGroup(sbUrl, restaurantId);
+      return res.status(group ? 204 : 404).end();
     }
 
     if (action === 'migrate') {
+      // Idempotent create-if-missing + seed from legacy data. Safe to call repeatedly.
       await migrateRestaurantSpecialGroup(sbUrl, restaurantId);
       return res.status(204).end();
     }

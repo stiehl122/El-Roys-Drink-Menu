@@ -871,6 +871,7 @@
   .preview-line { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 3px 0; }
   .preview-line.add { color: var(--green); }
   .preview-line.remove { color: var(--red); }
+  .preview-line.modify { color: var(--ember, #d4a053); }
   .no-changes { text-align: center; padding: 22px 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
   .modal-actions { display: flex; gap: 9px; margin-top: 20px; }
   .btn-cancel { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-family: var(--font-body); font-size: 13px; padding: 12px; cursor: pointer; transition: all 0.14s; }
@@ -1234,6 +1235,7 @@
 .history-line { padding-left: 12px; }
 .history-add { color: var(--green, #4caf50); }
 .history-remove { color: var(--red, #f44336); }
+.history-modify { color: var(--ember, #d4a053); }
 
 /* ─── CUSTOM DESIGN ADMIN CONTROLS ───────────────────────────────────────── */
 .custom-design-toggle-row { display: flex; align-items: center; gap: 10px; padding: 6px 0 10px; }
@@ -2968,6 +2970,36 @@ body.manager-stitch-shell .item-drag-handle {
   color: var(--manager-shell-muted);
   cursor: grab;
   user-select: none;
+}
+
+/* Keyboard-accessible move buttons (a11y alternative to drag) */
+body.manager-stitch-shell .item-move-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--manager-shell-border, #333);
+  border-radius: 3px;
+  color: var(--manager-shell-muted);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+body.manager-stitch-shell .current-item:hover .item-move-btn,
+body.manager-stitch-shell .current-item:focus-within .item-move-btn,
+body.manager-stitch-shell .item-move-btn:focus {
+  opacity: 1;
+}
+body.manager-stitch-shell .item-move-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--manager-shell-accent, #ff4d00);
+  outline-offset: 1px;
 }
 
 body.manager-stitch-shell .item-status-dot {

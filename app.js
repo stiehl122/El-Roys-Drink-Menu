@@ -2474,7 +2474,8 @@ function renderFeaturedPublicSection() {
         const upchargesHtml = upcharges.length
           ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
           : '';
-        const sellNoteHtml = (currentUser && slot.sellNote)
+        const isStaffRole = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+        const sellNoteHtml = (isStaffRole && slot.sellNote)
           ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
           : '';
         return `<div class="${classes}">
@@ -2497,6 +2498,7 @@ function renderFeaturedPublicSection() {
 }
 
 function buildPublicItemHtml(item) {
+  const isFood = MENU_TYPE === 'food';
   const is86 = !!item.eightySixed;
   const showDescription = isItemDescriptionPublic(item);
   const showRecipe = isItemRecipePublic(item);
@@ -4109,19 +4111,20 @@ function buildPricingRowHtml(item, catId) {
 }
 
 function buildDescriptionRowHtml(item, catId) {
+  const isFood = MENU_TYPE === 'food';
   const ingredients = recipeArray(item.recipe);
   const is86 = !!item.eightySixed;
   const hasDesc = !!(item.desc && item.desc.trim());
-  const hasRecipe = ingredients.length > 0;
+  const hasRecipe = !isFood && ingredients.length > 0;
   const showDescription = isItemDescriptionPublic(item);
-  const showRecipe = isItemRecipePublic(item);
+  const showRecipe = !isFood && isItemRecipePublic(item);
   const stateClass = is86 ? 'is-eighty-sixed' : '';
   const badgeClass = is86 ? 'item-state-badge--86' : '';
   const badgeText = is86 ? '86' : '';
-  const summaryParts = [
-    hasDesc ? 'Description added' : 'No description',
-    hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe',
-  ];
+  const summaryParts = [hasDesc ? 'Description added' : 'No description'];
+  if (!isFood) {
+    summaryParts.push(hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe');
+  }
   return `<article class="description-editor-card ${stateClass}" id="description-editor-${item.id}">
       <button class="desc-row-header" type="button" aria-expanded="false" aria-controls="desc-edit-body-${item.id}" onclick="toggleDescriptionEditor(${escAttrJs(item.id)})">
         <div class="desc-row-main">
@@ -4133,7 +4136,7 @@ function buildDescriptionRowHtml(item, catId) {
         </div>
         <div class="desc-status-indicators">
           <span class="desc-indicator ${hasDesc ? 'has-content' : ''}${showDescription ? '' : ' is-hidden'}" id="desc-indicator-copy-${item.id}" data-label="Description">Description</span>
-          <span class="desc-indicator ${hasRecipe ? 'has-content' : ''}${showRecipe ? '' : ' is-hidden'}" id="recipe-indicator-copy-${item.id}" data-label="Recipe">Recipe</span>
+          ${isFood ? '' : `<span class="desc-indicator ${hasRecipe ? 'has-content' : ''}${showRecipe ? '' : ' is-hidden'}" id="recipe-indicator-copy-${item.id}" data-label="Recipe">Recipe</span>`}
         </div>
         <span class="desc-chevron" aria-hidden="true">›</span>
       </button>
@@ -4149,7 +4152,7 @@ function buildDescriptionRowHtml(item, catId) {
             </div>
             <textarea class="desc-input" id="desc-input-${item.id}" placeholder="Describe this item for customers…" aria-label="Description for ${escHtml(item.name)}" onblur="saveDesc(${escAttrJs(catId)},${escAttrJs(item.id)},this.value)" rows="3">${escHtml(item.desc || '')}</textarea>
           </div>
-          <div class="recipe-field-block">
+          ${isFood ? '' : `<div class="recipe-field-block">
             <div class="desc-field-heading">
               <label class="desc-field-label" for="ingredient-input-${item.id}">Recipe</label>
               <label class="desc-visibility-toggle">
@@ -4162,7 +4165,7 @@ function buildDescriptionRowHtml(item, catId) {
               <input class="add-ingredient-input" id="ingredient-input-${item.id}" type="text" placeholder="Add ingredient…" onkeydown="handleIngredientKeydown(event,${escAttrJs(catId)},${escAttrJs(item.id)})"/>
               <button class="add-ingredient-btn" onclick="addIngredient(${escAttrJs(catId)},${escAttrJs(item.id)})">+ Add Ingredient</button>
             </div>
-          </div>
+          </div>`}
         </div>
       </div>
     </article>`;
@@ -4843,21 +4846,23 @@ function syncDescriptionIndicator(indicator, hasContent, isVisible) {
 
 function syncDescriptionSummary(itemId, item) {
   if (!item) return;
+  const isFood = MENU_TYPE === 'food';
   const descIndicator = document.getElementById('desc-indicator-copy-' + itemId);
   const recipeIndicator = document.getElementById('recipe-indicator-copy-' + itemId);
   const summary = document.querySelector(`#description-editor-${itemId} .desc-row-meta`);
   const hasDesc = !!String(item.desc || '').trim();
   const ingredients = recipeArray(item.recipe);
-  const hasRecipe = ingredients.length > 0;
+  const hasRecipe = !isFood && ingredients.length > 0;
 
   syncDescriptionIndicator(descIndicator, hasDesc, isItemDescriptionPublic(item));
-  syncDescriptionIndicator(recipeIndicator, hasRecipe, isItemRecipePublic(item));
+  syncDescriptionIndicator(recipeIndicator, hasRecipe, !isFood && isItemRecipePublic(item));
 
   if (summary) {
-    summary.textContent = [
-      hasDesc ? 'Description added' : 'No description',
-      hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe',
-    ].join(' · ');
+    const summaryParts = [hasDesc ? 'Description added' : 'No description'];
+    if (!isFood) {
+      summaryParts.push(hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe');
+    }
+    summary.textContent = summaryParts.join(' · ');
   }
 }
 

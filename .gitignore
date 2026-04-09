@@ -8,6 +8,7 @@ supabase/config.toml
 # Local agent memory
 .claude/agent-memory/security-auditor/MEMORY.md
 .claude/agent-memory/security-auditor/audit_2026-03-19.md
+.claude/worktrees/
 
 # Logs
 *.log
