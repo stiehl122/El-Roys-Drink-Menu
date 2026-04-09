@@ -44,7 +44,7 @@
       : (is86 ? `<span class="erc-badge erc-badge--86d">86'D</span>` : '');
     const recipeHtml = recipe.length ? `<p class="erc-item-desc erc-item-desc--recipe">Recipe: ${esc(recipe.join(', '))}</p>` : '';
     const upchargesHtml = upcharges.length
-      ? `<div class="erc-item-upcharges">${upcharges.map(upcharge => `<span class="erc-upcharge-chip">${esc(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${esc(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+      ? `<div class="erc-item-upcharges">${upcharges.map(upcharge => `<span class="erc-upcharge-chip">${esc(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>+${esc(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
       : '';
 
     return `<article class="erc-item${is86 ? ' is-86d' : ''}">

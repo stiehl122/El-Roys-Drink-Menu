@@ -697,6 +697,10 @@ body.route-restaurant.route-restaurant--elroy {
     padding-left: 0.75rem;
   }
 
+  #restaurant-site-wrapper .erc-sister-badge {
+    height: 2rem;
+  }
+
   #restaurant-site-wrapper .erc-item-row {
     flex-wrap: wrap;
     gap: 0.15rem 1rem;
@@ -720,6 +724,15 @@ body.route-restaurant.route-restaurant--elroy {
 
   #restaurant-site-wrapper .erc-login-btn {
     padding: 0.55rem 0.85rem;
+  }
+
+  #restaurant-site-wrapper .erc-section-title {
+    font-size: 1.3rem;
+    letter-spacing: 0.08em;
+  }
+
+  #restaurant-site-wrapper .erc-section-line {
+    min-width: 2rem;
   }
 
   #restaurant-site-wrapper .erc-main {
