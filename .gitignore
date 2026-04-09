@@ -6,3 +6,5 @@ supabase/config.toml
 .claude/agent-memory/security-auditor/audit_2026-03-19.md
 *.log
 /.playwright-mcp
+/output
+/screenshots
