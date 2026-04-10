@@ -44,7 +44,7 @@
       : (is86 ? `<span class="erc-badge erc-badge--86d">86'D</span>` : '');
     const recipeHtml = recipe.length ? `<p class="erc-item-desc erc-item-desc--recipe">Recipe: ${esc(recipe.join(', '))}</p>` : '';
     const upchargesHtml = upcharges.length
-      ? `<div class="erc-item-upcharges">${upcharges.map(upcharge => `<span class="erc-upcharge-chip">${esc(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${esc(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+      ? `<div class="erc-item-upcharges">${upcharges.map(upcharge => `<span class="erc-upcharge-chip">${esc(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>+${esc(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
       : '';
 
     return `<article class="erc-item${is86 ? ' is-86d' : ''}">
@@ -93,6 +93,53 @@
       });
   }
 
+  function createLegacyRouteActions(sharedState) {
+    return {
+      closeDropdowns: () => window.closeRouteDropdowns?.(),
+      openManager: () => window.onActionBtnClick?.(),
+      openAdmin: () => window.onAdminBtnClick?.(),
+      canManageMenu: (menuId, user = sharedState.currentUser) => (
+        typeof window.currentUserCanManageMenu === 'function'
+          ? window.currentUserCanManageMenu(menuId, user)
+          : ((user?.role || 'none') === 'admin')
+      ),
+      switchMenu: async menu => {
+        if (!menu?.id) return { ok: false, userHandled: true };
+        window.selectMenu?.(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
+        const targetHref = window.getPublicHrefForCurrentMenu?.();
+        const currentHref = `${window.location.pathname}${window.location.search}`;
+        if (targetHref && targetHref !== currentHref) {
+          window.navigateToPage?.(targetHref);
+          return { ok: true, navigated: true, targetHref };
+        }
+        await window.loadActiveMenuState?.();
+        if (typeof window.applyDesign === 'function' && typeof currentDesign !== 'undefined') {
+          window.applyDesign(currentDesign);
+        }
+        await window.renderPublicViews?.();
+        return { ok: true, navigated: false };
+      },
+    };
+  }
+
+  function resolveRouteContract(contractOrMenuState, legacyState) {
+    if (contractOrMenuState?.snapshot && contractOrMenuState?.actions) return contractOrMenuState;
+    const snapshot = {
+      menuState: contractOrMenuState,
+      ...(legacyState || {}),
+    };
+    return {
+      version: 0,
+      snapshot,
+      helpers: {
+        escHtml: typeof window.escHtml === 'function' ? window.escHtml : esc,
+        formatUpdatedAt: typeof window.formatUpdatedAt === 'function' ? window.formatUpdatedAt : (() => ''),
+        getMenuTypeLabel: typeof window.getMenuTypeLabel === 'function' ? window.getMenuTypeLabel : (value => value || ''),
+      },
+      actions: createLegacyRouteActions(snapshot),
+    };
+  }
+
   function updateToggleState(sharedState) {
     document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
       const isActive = button.getAttribute('data-route-menu-toggle') === sharedState.menuType;
@@ -101,22 +148,21 @@
     });
   }
 
-  function renderSettingsDropdown(sharedState) {
+  function renderSettingsDropdown(contract) {
+    const sharedState = contract.snapshot;
     const wrapper = document.querySelector('[data-route-settings]');
     const dropdown = document.getElementById('erc-settings-dropdown');
     if (!wrapper || !dropdown) return;
 
     const role = sharedState.currentUser?.role || 'none';
-    const canManageCurrentMenu = typeof window.currentUserCanManageMenu === 'function'
-      ? window.currentUserCanManageMenu(sharedState.menuId, sharedState.currentUser)
-      : (role === 'admin');
+    const canManageCurrentMenu = contract.actions.canManageMenu(sharedState.menuId, sharedState.currentUser);
     const options = [];
 
     if (canManageCurrentMenu) {
-      options.push({ label: 'Manager', icon: 'tune', onClick: () => window.onActionBtnClick?.() });
+      options.push({ label: 'Manager', icon: 'tune', onClick: () => contract.actions.openManager?.() });
     }
     if (role === 'admin') {
-      options.push({ label: 'Admin', icon: 'shield_person', onClick: () => window.onAdminBtnClick?.() });
+      options.push({ label: 'Admin', icon: 'shield_person', onClick: () => contract.actions.openAdmin?.() });
     }
 
     wrapper.style.display = options.length ? '' : 'none';
@@ -129,31 +175,21 @@
 
     dropdown.querySelectorAll('[data-route-settings-option]').forEach((button, index) => {
       button.onclick = () => {
-        window.closeRouteDropdowns?.();
+        contract.actions.closeDropdowns?.();
         options[index]?.onClick?.();
       };
     });
   }
 
-  function bindMenuToggles(sharedState) {
+  function bindMenuToggles(contract) {
+    const sharedState = contract.snapshot;
     const menus = getMenusForRoute(sharedState);
     document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
       button.onclick = async () => {
         const targetType = button.getAttribute('data-route-menu-toggle');
         const menu = menus.find(entry => entry.type === targetType);
         if (!menu || menu.id === sharedState.menuId) return;
-
-        window.selectMenu?.(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
-        const targetHref = window.getPublicHrefForCurrentMenu?.();
-        const currentHref = `${window.location.pathname}${window.location.search}`;
-        if (targetHref && targetHref !== currentHref) {
-          window.navigateToPage?.(targetHref);
-          return;
-        }
-
-        await window.loadActiveMenuState?.();
-        window.applyDesign?.(typeof currentDesign !== 'undefined' ? currentDesign : null);
-        window.renderPublicViews?.();
+        await contract.actions.switchMenu(menu);
       };
     });
 
@@ -286,17 +322,12 @@
     return true;
   }
 
-  window.renderRouteBootShell = renderBootShell;
-
-  window.initializeRoute = function initializeRoute(menuState, authState) {
+  function renderRoute(contractOrMenuState, legacyState) {
+    const contract = resolveRouteContract(contractOrMenuState, legacyState);
+    const sharedState = contract.snapshot;
     const template = document.getElementById('elroy-route-template');
     const container = document.getElementById('restaurant-site-wrapper');
     if (!template || !container) return false;
-
-    const sharedState = {
-      menuState,
-      ...authState,
-    };
 
     if (sharedState.siteRestaurant?.id !== '00000000-0000-0000-0000-000000000001') return false;
 
@@ -304,7 +335,7 @@
     container.appendChild(template.content.cloneNode(true));
 
     const timestamp = sharedState.lastUpdatedTs
-      ? (window.formatUpdatedAt?.(sharedState.lastUpdatedTs, '') || '')
+      ? (contract.helpers.formatUpdatedAt?.(sharedState.lastUpdatedTs, '') || '')
       : 'Awaiting first update';
 
     const statusTsEl = document.getElementById('erc-route-status-timestamp');
@@ -332,9 +363,24 @@
     }
 
     renderHeaderState(sharedState);
-    renderSettingsDropdown(sharedState);
-    bindMenuToggles(sharedState);
+    renderSettingsDropdown(contract);
+    bindMenuToggles(contract);
     bindMobileHeader(container.querySelector('.erc-page'));
     return true;
+  }
+
+  const renderer = {
+    restaurantId: '00000000-0000-0000-0000-000000000001',
+    boot: renderBootShell,
+    render: renderRoute,
   };
+
+  if (typeof window.registerPublicRouteRenderer === 'function') {
+    window.registerPublicRouteRenderer(renderer);
+  } else {
+    window.__pendingPublicRouteRenderer = renderer;
+  }
+
+  window.renderRouteBootShell = renderBootShell;
+  window.initializeRoute = renderRoute;
 })();

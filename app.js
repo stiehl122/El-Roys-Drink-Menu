@@ -1,5 +1,5 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.5';
+const APP_VERSION = 'v0.8.6';
 const RESTAURANTS = {
   LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
   ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
@@ -61,6 +61,8 @@ let _pickerOnSelect    = null;     // callback invoked after selectMenu()
 let _pickerOnClose     = null;
 let _settingsRedirectTimer = null;
 let _settingsRedirectCleanup = null;
+let _accessSessionService = null;
+let _restaurantSpecialsService = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
@@ -183,6 +185,11 @@ let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistStat
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
 let _managerDraggedItemId = '';
 let _managerDraggedCatId = '';
+let _menuLifecycleService = null;
+let _menuRuntime = null;
+let _currentMenuSession = null;
+let _updatePublisher = null;
+let _menuMetaSupportsLastSentFeatured = true;
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
 function updateSaveBtn() {
   const btn = document.getElementById('save-btn');
@@ -259,6 +266,23 @@ function getManagedCategoryDefs() {
       ? { ...cat, deprecated: true, readOnly: true }
       : cat
   ));
+}
+
+function getUncategorizedCategoryDef() {
+  return {
+    id: UNCATEGORIZED_ID,
+    label: 'Uncategorized',
+    title: 'Uncategorized',
+    icon: '📦',
+    color: 'rgba(120,120,120,0.12)',
+    sub: 'Items for specials & autocomplete — not shown on public menu',
+    placeholder: 'Add to pool…',
+  };
+}
+
+function getRenderableCategoryItems(catId) {
+  const items = menuState[catId]?.items || [];
+  return catId === UNCATEGORIZED_ID ? items : items.filter(item => item.onMenu !== false);
 }
 
 function getMenuBySlug(slug) {
@@ -428,6 +452,463 @@ function getManagerHrefForMenuId(menuId) {
 
 function navigateToPage(path) {
   window.location.assign(path);
+}
+
+function restoreMenuStateFromFallback(expectedRestaurantId = '') {
+  const cached = readCachedMenuState(expectedRestaurantId);
+  if (cached) {
+    try {
+      hydrateState(cached);
+      return { source: 'cache', usedFallback: true };
+    } catch (_) {
+      /* fall through to defaults */
+    }
+  }
+  menuState = defaultState();
+  currentDesign = { ...DESIGN_DEFAULTS };
+  _restaurantCustomDesignEnabled = true;
+  return { source: 'default', usedFallback: true };
+}
+
+function buildCurrentMenuPageRequest(overrides = {}) {
+  const pathname = overrides.pathname ?? window.location.pathname;
+  const search = overrides.search ?? window.location.search;
+  const derivedSiteRestaurant = getSiteRestaurantFromPath(pathname);
+  const siteRestaurantId = overrides.siteRestaurantId ??
+    (_siteRestaurant?.id || (isValidRestaurant(derivedSiteRestaurant?.id) ? derivedSiteRestaurant.id : ''));
+  return {
+    pathname,
+    search,
+    pageMode: overrides.pageMode ?? _appPageMode,
+    actor: overrides.actor ?? currentUser,
+    siteRestaurantId: isValidRestaurant(siteRestaurantId) ? siteRestaurantId : '',
+    requestedMenuId: overrides.requestedMenuId ?? MENU_ID,
+    requestedMenuSlug: overrides.requestedMenuSlug ??
+      normalizeKnownMenuSlug(new URLSearchParams(search).get('menu') || ''),
+  };
+}
+
+function buildMenuSessionSnapshot(source = 'live') {
+  return {
+    request: buildCurrentMenuPageRequest(),
+    source,
+    menuId: MENU_ID,
+    menuType: MENU_TYPE,
+    menuName: _activeMenuName,
+    restaurantId: RESTAURANT_ID,
+    restaurantName: _activeRestaurantName,
+    menuState,
+    currentDesign,
+    featuredGroups: _featuredGroups,
+    dirty: _dirty,
+    hasMultipleMenus: _hasMultipleMenus,
+  };
+}
+
+function createMenuLifecycleService(ports) {
+  return {
+    async openPageState(options = {}) {
+      return ports.openPageState(options);
+    },
+    async refreshPageState(options = {}) {
+      if (options.reason === 'poll') return ports.pollPageState(options);
+      return {
+        ok: true,
+        snapshot: await ports.loadPageState(options),
+      };
+    },
+    async savePageDraft(options = {}) {
+      return ports.savePageDraft(options);
+    },
+    async publishPageUpdate(options = {}) {
+      return ports.publishPageUpdate(options);
+    },
+  };
+}
+
+function createMenuRuntime({ lifecycle }) {
+  return {
+    openPage(pageRequest = {}) {
+      const session = {
+        _request: { ...pageRequest },
+        _syncRequest(nextRequest = {}) {
+          this._request = { ...this._request, ...nextRequest };
+          return this._request;
+        },
+        async open(options = {}) {
+          this._syncRequest(buildCurrentMenuPageRequest(options));
+          return lifecycle.openPageState({ request: this._request, ...options });
+        },
+        getSnapshot(source = 'live') {
+          this._syncRequest(buildCurrentMenuPageRequest());
+          return buildMenuSessionSnapshot(source);
+        },
+        update(mutator) {
+          if (typeof mutator === 'function') {
+            mutator({
+              menuState,
+              currentDesign,
+              featuredGroups: _featuredGroups,
+              menuId: MENU_ID,
+              restaurantId: RESTAURANT_ID,
+            });
+            invalidateDiff();
+          }
+          return this.getSnapshot();
+        },
+        async refresh(options = {}) {
+          this._syncRequest(buildCurrentMenuPageRequest(options));
+          return lifecycle.refreshPageState({ request: this._request, ...options });
+        },
+        async save(options = {}) {
+          this._syncRequest(buildCurrentMenuPageRequest(options));
+          return lifecycle.savePageDraft({ request: this._request, ...options });
+        },
+        async sendUpdate(options = {}) {
+          this._syncRequest(buildCurrentMenuPageRequest(options));
+          return lifecycle.publishPageUpdate({ request: this._request, ...options });
+        },
+        async switchMenu(menuRef) {
+          const requested = typeof menuRef === 'string'
+            ? (getMenuById(menuRef) || getMenuBySlug(menuRef))
+            : (menuRef?.id ? getMenuById(menuRef.id) : getMenuBySlug(menuRef?.slug || ''));
+          if (!requested) return this.getSnapshot();
+          selectMenu(
+            requested.id,
+            requested.slug,
+            requested.name,
+            requested.type,
+            requested.restaurantId
+          );
+          return this.refresh();
+        },
+      };
+      session._syncRequest(buildCurrentMenuPageRequest(pageRequest));
+      return session;
+    },
+  };
+}
+
+function getMenuLifecycleService() {
+  if (_menuLifecycleService) return _menuLifecycleService;
+  _menuLifecycleService = createMenuLifecycleService({
+    openPageState: options => _openCurrentMenuPageInternal(options),
+    loadPageState: options => _loadActiveMenuStateInternal(options),
+    pollPageState: options => _pollActiveMenuStateInternal(options),
+    savePageDraft: options => _saveActiveMenuDraftInternal(options),
+    publishPageUpdate: options => _publishActiveMenuUpdateInternal(options),
+  });
+  return _menuLifecycleService;
+}
+
+function getMenuRuntime() {
+  if (_menuRuntime) return _menuRuntime;
+  _menuRuntime = createMenuRuntime({ lifecycle: getMenuLifecycleService() });
+  return _menuRuntime;
+}
+
+function ensureCurrentMenuSession(overrides = {}) {
+  if (!_currentMenuSession) {
+    _currentMenuSession = getMenuRuntime().openPage(buildCurrentMenuPageRequest(overrides));
+  } else {
+    _currentMenuSession._syncRequest(buildCurrentMenuPageRequest(overrides));
+  }
+  return _currentMenuSession;
+}
+
+function resolveRequestedSettingsRoute(user = currentUser) {
+  if (!user) {
+    return {
+      kind: 'auth-required',
+      pageMode: _appPageMode,
+    };
+  }
+
+  if (_appPageMode === 'admin') {
+    if (user.role !== 'admin') {
+      return {
+        kind: 'admin-denied',
+        pageMode: 'admin',
+        message: 'Admin access required for this page.',
+      };
+    }
+
+    return {
+      kind: 'admin',
+      pageMode: 'admin',
+      targetMenuId: KNOWN_MENU_ORDER.includes(MENU_ID) ? MENU_ID : (KNOWN_MENU_ORDER[0] || ''),
+    };
+  }
+
+  const requestedMenu = getRequestedMenuForSettingsPage();
+  if (!requestedMenu) {
+    return {
+      kind: 'manager-denied',
+      pageMode: 'manager',
+      message: 'No menu context available for this page.',
+    };
+  }
+
+  if (!currentUserCanManageMenu(requestedMenu.id, user)) {
+    const fallbackMenuId = getFirstAccessibleManagerMenuId(user);
+    if (fallbackMenuId) {
+      const targetPath = getManagerHrefForMenuId(fallbackMenuId);
+      if (targetPath) {
+        return {
+          kind: 'manager-redirect',
+          pageMode: 'manager',
+          targetPath,
+          menuId: fallbackMenuId,
+        };
+      }
+    }
+
+    return {
+      kind: 'manager-denied',
+      pageMode: 'manager',
+      message: 'You don\'t have manager access to this menu.',
+      targetPath: getPublicHrefForMenuId(requestedMenu.id),
+      redirectLabel: 'the public menu',
+      actionLabel: 'Return to the public menu',
+    };
+  }
+
+  return {
+    kind: 'manager',
+    pageMode: 'manager',
+    targetMenuId: requestedMenu.id,
+    requestedMenu,
+  };
+}
+
+function createAccessSessionService() {
+  return {
+    async applyAuthenticatedSession(data, options = {}) {
+      const { closeOverlay = false } = options;
+      let role = 'none';
+      let name = '';
+      let accessibleMenuIds = [];
+      if (data?.access_token) {
+        const profile = await sbGetProfile(data.access_token);
+        role = profile.role;
+        name = profile.name;
+        accessibleMenuIds = profile.accessibleMenuIds;
+      }
+      _applySession(data, role, name, accessibleMenuIds);
+      applyRole(role);
+      if (closeOverlay) closeAuthOverlay();
+      return { role, name, accessibleMenuIds };
+    },
+
+    async handleRecoveryCallback() {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return { handled: false };
+      const params = new URLSearchParams(hash);
+      if (params.get('type') !== 'recovery') return { handled: false };
+      const accessToken = params.get('access_token');
+      if (!accessToken) return { handled: false };
+      history.replaceState({}, '', window.location.pathname);
+      _recoverySessionData = {
+        access_token: accessToken,
+        refresh_token: params.get('refresh_token') || '',
+        expires_in: Number(params.get('expires_in') || 3600),
+      };
+      return {
+        handled: true,
+        screen: 'reset',
+      };
+    },
+
+    async restoreStoredSession() {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { restored: false, reason: 'not-configured' };
+      const storedAccess = localStorage.getItem(LS_KEYS.accessToken);
+      const storedRefresh = localStorage.getItem(LS_KEYS.refreshToken);
+      const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
+      const storedUid = localStorage.getItem(LS_KEYS.uid) || '';
+      const storedEmail = localStorage.getItem(LS_KEYS.email) || '';
+      if (!storedRefresh) return { restored: false, reason: 'no-refresh-token' };
+
+      if (storedAccess && storedExpiresAt > Date.now() + 120_000) {
+        try {
+          const profile = await sbGetProfile(storedAccess);
+          currentUser = {
+            uid: storedUid,
+            email: storedEmail,
+            name: profile.name,
+            role: profile.role,
+            accessibleMenuIds: profile.accessibleMenuIds,
+            accessToken: storedAccess,
+            refreshToken: storedRefresh,
+            expiresAt: storedExpiresAt,
+          };
+          _scheduleTokenRefresh(storedExpiresAt);
+          applyRole(profile.role);
+          return { restored: true, source: 'stored-access', profile };
+        } catch (_) {
+          // fall through to refresh flow
+        }
+      }
+
+      const refreshStoredSession = async () => {
+        const refresh = localStorage.getItem(LS_KEYS.refreshToken);
+        if (!refresh) throw new Error('no refresh token');
+        const data = await sbRefreshToken(refresh);
+        const session = await this.applyAuthenticatedSession(data);
+        return { data, session };
+      };
+
+      try {
+        const refreshed = await refreshStoredSession();
+        return { restored: true, source: 'refresh-token', ...refreshed };
+      } catch (_) {
+        setTimeout(async () => {
+          try {
+            await refreshStoredSession();
+            await this.syncRequestedPageMode();
+          } catch (_) {
+            localStorage.removeItem(LS_KEYS.accessToken);
+            localStorage.removeItem(LS_KEYS.refreshToken);
+            localStorage.removeItem(LS_KEYS.expiresAt);
+            localStorage.removeItem(LS_KEYS.uid);
+            localStorage.removeItem(LS_KEYS.email);
+          }
+        }, 2000);
+        return { restored: false, reason: 'retry-scheduled' };
+      }
+    },
+
+    async syncRequestedPageMode() {
+      if (!isSettingsPage()) return { handled: false };
+
+      const publicView = document.getElementById('public-view');
+      const managerView = document.getElementById('manager-view');
+      if (!publicView || !managerView) return { handled: false };
+
+      _clearSettingsRedirectPrompt();
+      renderUserHeader();
+
+      const requireAuth = () => {
+        isManagerMode = false;
+        isAdminMode = false;
+        document.body.classList.remove('manager-mode');
+        publicView.style.display = 'none';
+        managerView.style.display = 'none';
+        _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
+        openAuthOverlay('signin');
+        return {
+          handled: true,
+          status: 'auth-required',
+          pageMode: _appPageMode,
+        };
+      };
+
+      if (!currentUser) return requireAuth();
+      const authOverlay = document.getElementById('auth-overlay');
+      if (authOverlay?.classList.contains('open')) closeAuthOverlay();
+
+      if (_appPageMode === 'manager') {
+        _setLoadingMessage('Checking manager access…');
+        await refreshCurrentUserProfile();
+      }
+
+      const routeDecision = resolveRequestedSettingsRoute();
+
+      if (routeDecision.kind === 'auth-required') {
+        return requireAuth();
+      }
+
+      if (routeDecision.kind === 'admin-denied') {
+        showAdminAccessDenied(routeDecision.message);
+        return {
+          handled: true,
+          status: 'access-denied',
+          pageMode: 'admin',
+        };
+      }
+
+      if (routeDecision.kind === 'admin') {
+        _setLoadingMessage('Loading settings…');
+        if (!routeDecision.targetMenuId) {
+          showAdminAccessDenied('No menu context available for this page.');
+          return {
+            handled: true,
+            status: 'context-missing',
+            pageMode: 'admin',
+          };
+        }
+        const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
+        if (!hasMenuContext) {
+          showAdminAccessDenied('No menu context available for this page.');
+          return {
+            handled: true,
+            status: 'context-missing',
+            pageMode: 'admin',
+          };
+        }
+        enterAdmin();
+        return {
+          handled: true,
+          status: 'entered',
+          pageMode: 'admin',
+          menuId: routeDecision.targetMenuId,
+        };
+      }
+
+      if (routeDecision.kind === 'manager-redirect') {
+        navigateToPage(routeDecision.targetPath);
+        return {
+          handled: true,
+          status: 'redirected',
+          pageMode: 'manager',
+          menuId: routeDecision.menuId,
+          targetPath: routeDecision.targetPath,
+        };
+      }
+
+      if (routeDecision.kind === 'manager-denied') {
+        showManagerAccessDenied(routeDecision.message, {
+          targetPath: routeDecision.targetPath,
+          redirectLabel: routeDecision.redirectLabel,
+          actionLabel: routeDecision.actionLabel,
+        });
+        return {
+          handled: true,
+          status: 'access-denied',
+          pageMode: 'manager',
+        };
+      }
+
+      _managerMenuPicked = true;
+      _setLoadingMessage('Loading settings…');
+      const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
+      if (!hasMenuContext) {
+        showManagerAccessDenied('Selected menu is no longer available for this account.', {
+          targetPath: getPublicHrefForMenuId(routeDecision.targetMenuId),
+          redirectLabel: 'the public menu',
+          actionLabel: 'Return to the public menu',
+        });
+        return {
+          handled: true,
+          status: 'context-missing',
+          pageMode: 'manager',
+          menuId: routeDecision.targetMenuId,
+        };
+      }
+      enterManager();
+      return {
+        handled: true,
+        status: 'entered',
+        pageMode: 'manager',
+        menuId: routeDecision.targetMenuId,
+      };
+    },
+  };
+}
+
+function getAccessSessionService() {
+  if (_accessSessionService) return _accessSessionService;
+  _accessSessionService = createAccessSessionService();
+  return _accessSessionService;
 }
 
 function readCachedMenuState(expectedRestaurantId = '') {
@@ -826,121 +1307,313 @@ function getFeaturedSnapshot() {
   })));
 }
 
-function resetRestaurantSpecialsCatalog() {
-  _restaurantSpecialsSiblingCatalog = [];
-  _restaurantSpecialsCatalogKey = '';
-  _restaurantSpecialsCatalogPromise = null;
-}
+function createRestaurantSpecialsService() {
+  return {
+    resetCatalog() {
+      _restaurantSpecialsSiblingCatalog = [];
+      _restaurantSpecialsCatalogKey = '';
+      _restaurantSpecialsCatalogPromise = null;
+      return [];
+    },
 
-function buildCurrentMenuSpecialsCatalog() {
-  const currentMenu = getMenuById(MENU_ID);
-  return getManagedCategoryDefs().flatMap(cat =>
-    (menuState[cat.id]?.items || []).map(item => ({
-      id: item.id,
-      name: item.name,
-      cat: cat.title,
-      menuId: MENU_ID,
-      menuLabel: currentMenu ? getMenuTypeLabel(currentMenu.type) : 'Current Menu',
-      onMenu: item.onMenu,
-      visibility: item.visibility || 'public',
-    }))
-  );
-}
-
-function getRestaurantSpecialsCatalog() {
-  return [...buildCurrentMenuSpecialsCatalog(), ..._restaurantSpecialsSiblingCatalog];
-}
-
-async function ensureRestaurantSpecialsGroup(restaurantId = RESTAURANT_ID) {
-  if (!restaurantId || !currentUser?.accessToken) return;
-  try {
-    await fetch('/api/specials', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${currentUser.accessToken}`,
-      },
-      body: JSON.stringify({ action: 'ensure', restaurantId }),
-    });
-  } catch (_) {
-    /* allow reads to continue with legacy fallback */
-  }
-}
-
-async function refreshRestaurantSpecialsCatalog(restaurantId = RESTAURANT_ID) {
-  const cacheKey = `${restaurantId || ''}:${MENU_ID || ''}`;
-  if (!restaurantId || !currentUserCanEditRestaurantSpecials(restaurantId)) {
-    resetRestaurantSpecialsCatalog();
-    return [];
-  }
-  if (_restaurantSpecialsCatalogKey === cacheKey && _restaurantSpecialsCatalogPromise) {
-    return _restaurantSpecialsCatalogPromise;
-  }
-
-  const siblingMenuIds = (getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId))
-    .filter(menuId => menuId && menuId !== MENU_ID);
-  if (!siblingMenuIds.length) {
-    _restaurantSpecialsSiblingCatalog = [];
-    _restaurantSpecialsCatalogKey = cacheKey;
-    _restaurantSpecialsCatalogPromise = Promise.resolve([]);
-    return _restaurantSpecialsCatalogPromise;
-  }
-
-  _restaurantSpecialsCatalogKey = cacheKey;
-  _restaurantSpecialsCatalogPromise = (async () => {
-    const requestKey = cacheKey;
-    try {
-      const categories = await sbReadJsonOrThrow(
-        `${SUPABASE_URL}/rest/v1/categories?menu_id=in.(${siblingMenuIds.join(',')})&select=menu_id,key,label,items(id,name,visibility,on_menu)&order=display_order.asc`,
-        { headers: sbHeaders() }
-      );
-      const menusById = knownMenuList().reduce((acc, menu) => {
-        acc[menu.id] = menu;
-        return acc;
-      }, {});
-      const catalog = categories
-        .filter(category => category.key !== UNCATEGORIZED_ID && !isLegacySpecialCategory(category.key))
-        .flatMap(category =>
-        (category.items || []).map(item => ({
+    buildCurrentMenuCatalog() {
+      const currentMenu = getMenuById(MENU_ID);
+      const fromCategories = getManagedCategoryDefs().flatMap(cat =>
+        (menuState[cat.id]?.items || []).map(item => ({
           id: item.id,
           name: item.name,
-          cat: category.label || '',
-          menuId: category.menu_id,
-          menuLabel: getMenuTypeLabel(menusById[category.menu_id]?.type || ''),
-          onMenu: item.on_menu,
+          cat: cat.title,
+          menuId: MENU_ID,
+          menuLabel: currentMenu ? getMenuTypeLabel(currentMenu.type) : 'Current Menu',
+          onMenu: item.onMenu,
           visibility: item.visibility || 'public',
         }))
       );
-      if (_restaurantSpecialsCatalogKey === requestKey) {
-        _restaurantSpecialsSiblingCatalog = catalog;
+      const uncatItems = (menuState[UNCATEGORIZED_ID]?.items || []).map(item => ({
+        id: item.id,
+        name: item.name,
+        cat: 'Uncategorized',
+        menuId: MENU_ID,
+        menuLabel: currentMenu ? getMenuTypeLabel(currentMenu.type) : 'Current Menu',
+        onMenu: true,
+        visibility: item.visibility || 'off_menu',
+      }));
+      return [...fromCategories, ...uncatItems];
+    },
+
+    getCatalog() {
+      return [...this.buildCurrentMenuCatalog(), ..._restaurantSpecialsSiblingCatalog];
+    },
+
+    async ensureGroup(restaurantId = RESTAURANT_ID) {
+      if (!restaurantId || !currentUser?.accessToken) return false;
+      try {
+        await fetch('/api/specials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentUser.accessToken}`,
+          },
+          body: JSON.stringify({ action: 'ensure', restaurantId }),
+        });
+        return true;
+      } catch (_) {
+        return false;
       }
-    } catch (_) {
-      if (_restaurantSpecialsCatalogKey === requestKey) {
+    },
+
+    async refreshCatalog(restaurantId = RESTAURANT_ID) {
+      const cacheKey = `${restaurantId || ''}:${MENU_ID || ''}`;
+      if (!restaurantId || !currentUserCanEditRestaurantSpecials(restaurantId)) {
+        return this.resetCatalog();
+      }
+      if (_restaurantSpecialsCatalogKey === cacheKey && _restaurantSpecialsCatalogPromise) {
+        return _restaurantSpecialsCatalogPromise;
+      }
+
+      const siblingMenuIds = (getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId))
+        .filter(menuId => menuId && menuId !== MENU_ID);
+      if (!siblingMenuIds.length) {
         _restaurantSpecialsSiblingCatalog = [];
+        _restaurantSpecialsCatalogKey = cacheKey;
+        _restaurantSpecialsCatalogPromise = Promise.resolve([]);
+        return _restaurantSpecialsCatalogPromise;
       }
-    }
-    return _restaurantSpecialsSiblingCatalog;
-  })();
-  return _restaurantSpecialsCatalogPromise;
+
+      _restaurantSpecialsCatalogKey = cacheKey;
+      _restaurantSpecialsCatalogPromise = (async () => {
+        const requestKey = cacheKey;
+        try {
+          const categories = await sbReadJsonOrThrow(
+            `${SUPABASE_URL}/rest/v1/categories?menu_id=in.(${siblingMenuIds.join(',')})&select=menu_id,key,label,items(id,name,visibility,on_menu)&order=display_order.asc`,
+            { headers: sbHeaders() }
+          );
+          const menusById = knownMenuList().reduce((acc, menu) => {
+            acc[menu.id] = menu;
+            return acc;
+          }, {});
+          const catalog = categories
+            .filter(category => !isLegacySpecialCategory(category.key))
+            .flatMap(category =>
+              (category.items || []).map(item => ({
+                id: item.id,
+                name: item.name,
+                cat: category.label || '',
+                menuId: category.menu_id,
+                menuLabel: getMenuTypeLabel(menusById[category.menu_id]?.type || ''),
+                onMenu: category.key === UNCATEGORIZED_ID ? true : item.on_menu,
+                visibility: category.key === UNCATEGORIZED_ID ? (item.visibility || 'off_menu') : (item.visibility || 'public'),
+              }))
+            );
+          if (_restaurantSpecialsCatalogKey === requestKey) {
+            _restaurantSpecialsSiblingCatalog = catalog;
+          }
+        } catch (_) {
+          if (_restaurantSpecialsCatalogKey === requestKey) {
+            _restaurantSpecialsSiblingCatalog = [];
+          }
+        }
+        return _restaurantSpecialsSiblingCatalog;
+      })();
+      return _restaurantSpecialsCatalogPromise;
+    },
+
+    async refreshForActiveMenu(restaurantId = RESTAURANT_ID) {
+      if (!restaurantId) {
+        _featuredGroups = [];
+        this.resetCatalog();
+        return _featuredGroups;
+      }
+      if (currentUserCanEditRestaurantSpecials(restaurantId) && currentUser?.accessToken) {
+        await this.ensureGroup(restaurantId);
+        await this.refreshCatalog(restaurantId);
+      } else {
+        this.resetCatalog();
+      }
+      _featuredGroups = await sbReadRestaurantSpecials(restaurantId);
+      return _featuredGroups;
+    },
+
+    getActiveGroup(groupId = '') {
+      if (groupId) return _featuredGroups.find(group => group.id === groupId) || null;
+      return _featuredGroups[0] || null;
+    },
+
+    getMatches(groupId, query) {
+      const q = query.trim().toLowerCase();
+      if (!q) return [];
+      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
+      const existingItemIds = new Set((group?.slots || []).map(slot => slot.itemId));
+      return this.getCatalog()
+        .filter(item =>
+          item.onMenu !== false &&
+          !existingItemIds.has(item.id) &&
+          String(item.name || '').toLowerCase().includes(q)
+        )
+        .slice(0, 8);
+    },
+
+    async request(action, payload = {}) {
+      const response = await fetch('/api/specials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
+        },
+        body: JSON.stringify({
+          action,
+          restaurantId: RESTAURANT_ID,
+          ...payload,
+        }),
+      });
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (_) {
+        data = {};
+      }
+      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
+      return data;
+    },
+
+    async addSlot({ groupId = '', itemId }) {
+      if (!currentUserCanEditRestaurantSpecials()) {
+        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
+      }
+      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
+      const slotCount = group?.slots?.length || 0;
+      if (slotCount >= 5) return { ok: false, userMessage: 'Max 5 specials per restaurant.', userHandled: true };
+      if ((group?.slots || []).some(slot => slot.itemId === itemId)) {
+        return { ok: false, userMessage: 'That item is already in specials.', userHandled: true };
+      }
+      if (_dirty || _deletedItemIds.size) {
+        const persisted = await persistState();
+        if (persisted === false) return { ok: false, userHandled: true };
+      }
+      await this.request('add', { itemId });
+      await this.refreshForActiveMenu();
+      invalidateDiff();
+      updateDraftIndicator();
+      return { ok: true, successMessage: 'Special added!' };
+    },
+
+    async removeSlot({ slotId }) {
+      if (!currentUserCanEditRestaurantSpecials()) {
+        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
+      }
+      await this.request('remove', { slotId });
+      await this.refreshForActiveMenu();
+      invalidateDiff();
+      updateDraftIndicator();
+      return { ok: true, successMessage: 'Special removed.' };
+    },
+
+    async saveNote({ slotId, note }) {
+      if (!currentUserCanEditRestaurantSpecials()) return { ok: false, userHandled: true };
+      await this.request('note', { slotId, note });
+      return { ok: true };
+    },
+
+    async moveSlot({ groupId = '', slotId, direction }) {
+      if (!currentUserCanEditRestaurantSpecials()) {
+        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
+      }
+      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
+      if (!group) return { ok: false, userHandled: true };
+      const idx = group.slots.findIndex(slot => slot.id === slotId);
+      if (idx < 0) return { ok: false, userHandled: true };
+      const newIdx = idx + direction;
+      if (newIdx < 0 || newIdx >= group.slots.length) return { ok: false, userHandled: true };
+      await this.request('move', { slotId, direction });
+      await this.refreshForActiveMenu();
+      return { ok: true };
+    },
+
+    needsConfirmation(restaurantId = RESTAURANT_ID) {
+      if (!currentUserCanEditRestaurantSpecials(restaurantId)) return false;
+      if (sessionStorage.getItem(getFeaturedConfirmationKey(restaurantId))) return false;
+      if (!_featuredGroups.some(group => group.slots.length)) return false;
+      return _featuredGroups.some(group => group.slots.some(slot => {
+        if (!slot.confirmedAt) return true;
+        const confirmed = new Date(slot.confirmedAt);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return confirmed < today;
+      }));
+    },
+
+    async confirmToday() {
+      if (!currentUserCanEditRestaurantSpecials()) {
+        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
+      }
+      await this.request('confirm');
+      sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
+      return { ok: true, successMessage: 'Specials confirmed for today!' };
+    },
+  };
+}
+
+function getRestaurantSpecialsService() {
+  if (_restaurantSpecialsService) return _restaurantSpecialsService;
+  _restaurantSpecialsService = createRestaurantSpecialsService();
+  return _restaurantSpecialsService;
 }
 
 async function refreshFeaturedForActiveMenu() {
-  if (!RESTAURANT_ID) {
-    _featuredGroups = [];
-    resetRestaurantSpecialsCatalog();
-    return _featuredGroups;
-  }
-  if (currentUserCanEditRestaurantSpecials(RESTAURANT_ID) && currentUser?.accessToken) {
-    await ensureRestaurantSpecialsGroup(RESTAURANT_ID);
-    await refreshRestaurantSpecialsCatalog(RESTAURANT_ID);
-  } else {
-    resetRestaurantSpecialsCatalog();
-  }
-  _featuredGroups = await sbReadRestaurantSpecials(RESTAURANT_ID);
-  return _featuredGroups;
+  return getRestaurantSpecialsService().refreshForActiveMenu(RESTAURANT_ID);
 }
 
-async function loadActiveMenuState(options = {}) {
+async function _openCurrentMenuPageInternal(options = {}) {
+  const {
+    request = buildCurrentMenuPageRequest(),
+    resolveMenu = true,
+    fallbackToDefault = true,
+    includeFeatured = true,
+    persistCache = true,
+    expectedRestaurantId = request.siteRestaurantId || '',
+  } = options;
+
+  if (resolveMenu && SUPABASE_URL) await sbResolveMenu();
+
+  if (!SUPABASE_URL || !MENU_ID) {
+    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+    return {
+      ok: true,
+      source: fallback.source,
+      usedFallback: fallback.usedFallback,
+      showLoadError: false,
+      snapshot: buildMenuSessionSnapshot(fallback.source),
+    };
+  }
+
+  try {
+    const snapshot = await _loadActiveMenuStateInternal({
+      fallbackToDefault,
+      includeFeatured,
+      persistCache,
+      source: 'network',
+    });
+    return {
+      ok: true,
+      source: snapshot.source || 'network',
+      usedFallback: false,
+      showLoadError: false,
+      snapshot,
+    };
+  } catch (error) {
+    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+    return {
+      ok: false,
+      error,
+      source: fallback.source,
+      usedFallback: fallback.usedFallback,
+      showLoadError: true,
+      snapshot: buildMenuSessionSnapshot(fallback.source),
+    };
+  }
+}
+
+async function _loadActiveMenuStateInternal(options = {}) {
   const {
     fallbackToDefault = true,
     includeFeatured = true,
@@ -966,6 +1639,41 @@ async function loadActiveMenuState(options = {}) {
     }
   }
   if (includeFeatured) await refreshFeaturedForActiveMenu();
+  return buildMenuSessionSnapshot(options.source || 'network');
+}
+
+async function _pollActiveMenuStateInternal() {
+  const oldTs = menuState._meta?.lastUpdatedTs;
+  const oldCats = getCategoryStateSnapshot();
+  const oldDesign = getDesignSnapshot();
+  const oldFeatured = getFeaturedSnapshot();
+  const data = await sbRead();
+  if (!data) {
+    return {
+      changed: false,
+      designChanged: false,
+      snapshot: buildMenuSessionSnapshot('poll'),
+    };
+  }
+
+  hydrateState(data);
+  lsSet(LS_KEYS.menuCache, JSON.stringify(data));
+  const newTs = menuState._meta?.lastUpdatedTs;
+  if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
+
+  const afterCats = getCategoryStateSnapshot();
+  const newDesign = getDesignSnapshot();
+  const newFeatured = getFeaturedSnapshot();
+  return {
+    changed: afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured,
+    designChanged: newDesign !== oldDesign,
+    snapshot: buildMenuSessionSnapshot('poll'),
+  };
+}
+
+async function loadActiveMenuState(options = {}) {
+  const result = await ensureCurrentMenuSession().refresh(options);
+  return result?.snapshot || result;
 }
 
 async function sbPatchMenuMeta(update) {
@@ -1078,13 +1786,13 @@ function isMissingColumnError(error, columnName) {
     (message.includes('column') || message.includes('schema cache'));
 }
 
-async function patchMenuMetaWithCompatibility(update) {
+async function patchMenuMetaForMenuWithCompatibility(menuId, update) {
   const payload = { ...update };
   if (_menuMetaSupportsLastSentFeatured === false) {
     delete payload.last_sent_featured;
   }
   try {
-    await sbPatchMenuMeta(payload);
+    await sbPatchMenuMetaForMenu(menuId, payload);
     if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured')) {
       _menuMetaSupportsLastSentFeatured = true;
     }
@@ -1092,12 +1800,16 @@ async function patchMenuMetaWithCompatibility(update) {
   } catch (error) {
     if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured') && isMissingColumnError(error, 'last_sent_featured')) {
       const { last_sent_featured, ...fallbackPayload } = payload;
-      await sbPatchMenuMeta(fallbackPayload);
+      await sbPatchMenuMetaForMenu(menuId, fallbackPayload);
       _menuMetaSupportsLastSentFeatured = false;
       return { downgradedFields: ['last_sent_featured'] };
     }
     throw error;
   }
+}
+
+async function patchMenuMetaWithCompatibility(update) {
+  return patchMenuMetaForMenuWithCompatibility(MENU_ID, update);
 }
 
 async function sbPatchRestaurantDesign(design) {
@@ -1804,8 +2516,13 @@ async function deleteCategory(catId) {
         name:            item.name,
         desc:            item.desc            || '',
         recipe:          item.recipe          || [],
-        is_eighty_sixed: false,
+        price:           item.price           || null,
+        is_eighty_sixed: item.eightySixed     || false,
         on_menu:         false,
+        visibility:      item.visibility      || 'public',
+        upcharges:       item.upcharges       || [],
+        show_description:isItemDescriptionPublic(item),
+        show_recipe:     isItemRecipePublic(item),
         display_order:   idx,
       }));
       await fetch(`${SUPABASE_URL}/rest/v1/items`, {
@@ -1948,34 +2665,16 @@ async function init() {
     return;
   }
 
-  if (SUPABASE_URL) await sbResolveMenu();
-
-  if (!SUPABASE_URL || !MENU_ID) {
-    // Offline or unconfigured — serve from localStorage cache if available
-    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
-    if (cached) {
-      try { hydrateState(cached); } catch(e) { menuState = defaultState(); }
-    } else {
-      menuState = defaultState();
-    }
-    applyDesign(currentDesign);
-    await showPublicView();
+  const pageSession = ensureCurrentMenuSession();
+  const openResult = await pageSession.open({
+    resolveMenu: true,
+    expectedRestaurantId: _siteRestaurant?.id || RESTAURANT_ID || '',
+  });
+  applyDesign(currentDesign);
+  if (openResult?.showLoadError) {
+    await showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
   } else {
-    try {
-      await loadActiveMenuState();
-      applyDesign(currentDesign);
-      await showPublicView();
-    } catch(e) {
-      // Fallback to localStorage cache
-      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
-      if (cached) {
-        try { hydrateState(cached); } catch(e2) { menuState = defaultState(); }
-      } else {
-        menuState = defaultState();
-      }
-      applyDesign(currentDesign);
-      await showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
-    }
+    await showPublicView();
   }
 
   // Restore Supabase session — recovery callback takes priority over stored tokens
@@ -1987,81 +2686,13 @@ async function init() {
 }
 
 async function _tryHandleRecoveryCallback() {
-  const hash = window.location.hash.slice(1);
-  if (!hash) return false;
-  const params = new URLSearchParams(hash);
-  if (params.get('type') !== 'recovery') return false;
-  const accessToken = params.get('access_token');
-  if (!accessToken) return false;
-  history.replaceState({}, '', window.location.pathname);
-  _recoverySessionData = {
-    access_token:  accessToken,
-    refresh_token: params.get('refresh_token') || '',
-    expires_in:    Number(params.get('expires_in') || 3600),
-  };
-  openAuthOverlay('reset');
-  return true;
+  const result = await getAccessSessionService().handleRecoveryCallback();
+  if (result?.handled) openAuthOverlay(result.screen || 'reset');
+  return !!result?.handled;
 }
 
 async function _tryRestoreSession() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return;
-  const storedAccess    = localStorage.getItem(LS_KEYS.accessToken);
-  const storedRefresh   = localStorage.getItem(LS_KEYS.refreshToken);
-  const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-  const storedUid       = localStorage.getItem(LS_KEYS.uid)   || '';
-  const storedEmail     = localStorage.getItem(LS_KEYS.email) || '';
-  if (!storedRefresh) return;
-
-  // If access token is still valid (2-min buffer), use it directly — skip refresh call.
-  // This avoids unnecessary network round-trips and is resilient to Supabase cold starts.
-  if (storedAccess && storedExpiresAt > Date.now() + 120_000) {
-    try {
-      const profile = await sbGetProfile(storedAccess);
-      currentUser = {
-        uid: storedUid, email: storedEmail,
-        name: profile.name, role: profile.role,
-        accessibleMenuIds: profile.accessibleMenuIds,
-        accessToken: storedAccess, refreshToken: storedRefresh,
-        expiresAt: storedExpiresAt,
-      };
-      _scheduleTokenRefresh(storedExpiresAt);
-      applyRole(profile.role);
-      return;
-    } catch(e) { /* fall through to refresh */ }
-  }
-
-  // Access token expired or unusable — exchange refresh token for a new one.
-  const _doRefresh = async () => {
-    const refresh = localStorage.getItem(LS_KEYS.refreshToken);
-    if (!refresh) throw new Error('no refresh token');
-    const data = await sbRefreshToken(refresh);
-    let role = 'none', name = '', accessibleMenuIds = [];
-    if (data.access_token) {
-      const profile = await sbGetProfile(data.access_token);
-      role = profile.role; name = profile.name; accessibleMenuIds = profile.accessibleMenuIds;
-    }
-    _applySession(data, role, name, accessibleMenuIds);
-    applyRole(role);
-    await _syncRequestedPageMode();
-  };
-
-  try {
-    await _doRefresh();
-  } catch(e) {
-    // First attempt failed — Supabase may be cold-starting. Retry once after 2s
-    // before giving up and clearing tokens.
-    setTimeout(async () => {
-      try {
-        await _doRefresh();
-      } catch(e2) {
-        localStorage.removeItem(LS_KEYS.accessToken);
-        localStorage.removeItem(LS_KEYS.refreshToken);
-        localStorage.removeItem(LS_KEYS.expiresAt);
-        localStorage.removeItem(LS_KEYS.uid);
-        localStorage.removeItem(LS_KEYS.email);
-      }
-    }, 2000);
-  }
+  return getAccessSessionService().restoreStoredSession();
 }
 
 async function showPublicView() {
@@ -2086,13 +2717,109 @@ async function showPublicViewWithError(msg) {
   await renderPublicView();
 }
 
+function buildPublicRouteRenderSnapshot() {
+  const restaurantSpecials = _featuredGroups.length > 1
+    ? {
+        id: '__restaurant_specials__',
+        name: getRestaurantSpecialLabel(RESTAURANT_ID),
+        slots: _featuredGroups.flatMap(group => group.slots || []),
+      }
+    : (_featuredGroups[0] || null);
+  return {
+    activeMenuName: _activeMenuName,
+    appVersion: APP_VERSION,
+    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+    categoryDefs: getManagedCategoryDefs(),
+    currentUser,
+    featuredGroups: _featuredGroups,
+    isPreview: IS_PREVIEW,
+    knownMenus: knownMenuList(),
+    lastUpdatedTs: getLastUpdatedTs(),
+    menuId: MENU_ID,
+    menuState,
+    menuType: MENU_TYPE,
+    restaurantId: RESTAURANT_ID,
+    restaurantSpecials,
+    siteRestaurant: _siteRestaurant,
+  };
+}
+
+async function switchPublicRouteMenu(menuRef) {
+  const menu = typeof menuRef === 'string'
+    ? (getMenuById(menuRef) || getMenuBySlug(menuRef))
+    : menuRef;
+  if (!menu?.id) return { ok: false, userHandled: true };
+
+  selectMenu(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
+  const targetHref = getPublicHrefForCurrentMenu();
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (targetHref && targetHref !== currentHref) {
+    navigateToPage(targetHref);
+    return { ok: true, navigated: true, targetHref };
+  }
+
+  await loadActiveMenuState();
+  applyDesign(currentDesign);
+  await renderPublicViews();
+  return {
+    ok: true,
+    navigated: false,
+    snapshot: buildPublicRouteRenderSnapshot(),
+  };
+}
+
+function createPublicRouteContract() {
+  return {
+    version: 1,
+    snapshot: buildPublicRouteRenderSnapshot(),
+    helpers: {
+      escHtml,
+      formatUpdatedAt,
+      getMenuTypeLabel,
+    },
+    actions: {
+      closeDropdowns: () => closeRouteDropdowns(),
+      openManager: () => onActionBtnClick(),
+      openAdmin: () => onAdminBtnClick(),
+      canManageMenu: (menuId, user = currentUser) => currentUserCanManageMenu(menuId, user),
+      switchMenu: menu => switchPublicRouteMenu(menu),
+    },
+  };
+}
+
+function getRegisteredPublicRouteRenderer() {
+  const renderer = window.__publicRouteRenderer || window.__pendingPublicRouteRenderer || null;
+  if (!renderer || typeof renderer.render !== 'function') return null;
+  if (window.__pendingPublicRouteRenderer && !window.__publicRouteRenderer) {
+    window.__publicRouteRenderer = window.__pendingPublicRouteRenderer;
+    delete window.__pendingPublicRouteRenderer;
+  }
+  if (renderer.restaurantId && _siteRestaurant?.id && renderer.restaurantId !== _siteRestaurant.id) {
+    return null;
+  }
+  return renderer;
+}
+
+window.registerPublicRouteRenderer = function registerPublicRouteRenderer(renderer) {
+  window.__publicRouteRenderer = renderer || null;
+  if (window.__pendingPublicRouteRenderer) delete window.__pendingPublicRouteRenderer;
+  return window.__publicRouteRenderer;
+};
+
 function showRouteBootView() {
   if (!isDedicatedRestaurantPage()) return;
   const publicView = document.getElementById('public-view');
   const loadingView = document.getElementById('loading-view');
   if (loadingView) loadingView.style.display = 'none';
   if (publicView) publicView.style.display = 'block';
-  if (typeof window.renderRouteBootShell === 'function') {
+  const renderer = getRegisteredPublicRouteRenderer();
+  if (renderer?.boot) {
+    const didRender = renderer.boot(createPublicRouteContract());
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  } else if (typeof window.renderRouteBootShell === 'function') {
     const didRender = window.renderRouteBootShell();
     if (didRender !== false) {
       _togglePublicShellMode('site');
@@ -2148,9 +2875,19 @@ async function _loadSettingsPageMenuContext(menuId) {
     url.searchParams.set('menu', fallbackMenu.slug);
     history.replaceState({}, '', url.toString());
   }
-  await sbResolveMenu();
-  if (!MENU_ID) return false;
-  await loadActiveMenuState();
+  const session = ensureCurrentMenuSession({
+    requestedMenuId: menuId,
+    requestedMenuSlug: fallbackMenu?.slug || '',
+    siteRestaurantId: fallbackMenu?.restaurantId || '',
+  });
+  const openResult = await session.open({
+    resolveMenu: true,
+    expectedRestaurantId: fallbackMenu?.restaurantId || '',
+    requestedMenuId: menuId,
+    requestedMenuSlug: fallbackMenu?.slug || '',
+    siteRestaurantId: fallbackMenu?.restaurantId || '',
+  });
+  if (!MENU_ID || !openResult?.snapshot?.menuId) return false;
   applyDesign(currentDesign);
   return true;
 }
@@ -2225,82 +2962,7 @@ function showManagerAccessDenied(message = 'Manager access required for this pag
 }
 
 async function _syncRequestedPageMode() {
-  if (!isSettingsPage()) return;
-
-  const publicView = document.getElementById('public-view');
-  const managerView = document.getElementById('manager-view');
-  if (!publicView || !managerView) return;
-
-  _clearSettingsRedirectPrompt();
-  renderUserHeader();
-
-  if (!currentUser) {
-    isManagerMode = false;
-    isAdminMode = false;
-    document.body.classList.remove('manager-mode');
-    publicView.style.display = 'none';
-    managerView.style.display = 'none';
-    _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
-    openAuthOverlay('signin');
-    return;
-  }
-
-  const isAdmin = currentUser.role === 'admin';
-  if (_appPageMode === 'admin') {
-    if (!isAdmin) {
-      showAdminAccessDenied();
-      return;
-    }
-
-    _setLoadingMessage('Loading settings…');
-    const targetMenuId = KNOWN_MENU_ORDER.includes(MENU_ID) ? MENU_ID : (KNOWN_MENU_ORDER[0] || '');
-    const hasMenuContext = await _loadSettingsPageMenuContext(targetMenuId);
-    if (!hasMenuContext) {
-      showAdminAccessDenied('No menu context available for this page.');
-      return;
-    }
-    enterAdmin();
-    return;
-  }
-
-  _setLoadingMessage('Checking manager access…');
-  await refreshCurrentUserProfile();
-
-  const requestedMenu = getRequestedMenuForSettingsPage();
-  if (!requestedMenu) {
-    showManagerAccessDenied('No menu context available for this page.');
-    return;
-  }
-
-  if (!currentUserCanManageMenu(requestedMenu.id)) {
-    const fallbackMenuId = getFirstAccessibleManagerMenuId();
-    if (fallbackMenuId) {
-      const targetPath = getManagerHrefForMenuId(fallbackMenuId);
-      if (targetPath) {
-        navigateToPage(targetPath);
-        return;
-      }
-    }
-    showManagerAccessDenied('You don\'t have manager access to this menu.', {
-      targetPath: getPublicHrefForMenuId(requestedMenu.id),
-      redirectLabel: 'the public menu',
-      actionLabel: 'Return to the public menu',
-    });
-    return;
-  }
-
-  _managerMenuPicked = true;
-  _setLoadingMessage('Loading settings…');
-  const hasMenuContext = await _loadSettingsPageMenuContext(requestedMenu.id);
-  if (!hasMenuContext) {
-    showManagerAccessDenied('Selected menu is no longer available for this account.', {
-      targetPath: getPublicHrefForMenuId(requestedMenu.id),
-      redirectLabel: 'the public menu',
-      actionLabel: 'Return to the public menu',
-    });
-    return;
-  }
-  enterManager();
+  return getAccessSessionService().syncRequestedPageMode();
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
@@ -2311,25 +2973,11 @@ function startPolling() {
   const pollCycle = async () => {
     if (isManagerMode) return;
     try {
-      const oldTs = menuState._meta?.lastUpdatedTs;
-      const oldCats = getCategoryStateSnapshot();
-      const oldDesign = getDesignSnapshot();
-      const oldFeatured = getFeaturedSnapshot();
-      const data = await sbRead();
-      if (!data) return;
-      hydrateState(data);
-      lsSet(LS_KEYS.menuCache, JSON.stringify(data));
-      const newTs = menuState._meta?.lastUpdatedTs;
-      if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
-
-      const afterCats = getCategoryStateSnapshot();
-      const newDesign = getDesignSnapshot();
-      const newFeatured = getFeaturedSnapshot();
-
-      if (afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured) {
+      const result = await ensureCurrentMenuSession().refresh({ reason: 'poll' });
+      if (result?.changed) {
         await renderPublicViews();
       }
-      if (newDesign !== oldDesign) applyDesign(currentDesign);
+      if (result?.designChanged) applyDesign(currentDesign);
 
       _pollFailCount = 0;
       const syncEl = document.getElementById('sync-status');
@@ -2583,13 +3231,6 @@ async function _renderCustomDesignView() {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
   const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
-  const restaurantSpecials = _featuredGroups.length > 1
-    ? {
-        id: '__restaurant_specials__',
-        name: getRestaurantSpecialLabel(RESTAURANT_ID),
-        slots: _featuredGroups.flatMap(group => group.slots || []),
-      }
-    : (_featuredGroups[0] || null);
   if (!_restaurantCustomDesignEnabled || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
@@ -2598,23 +3239,16 @@ async function _renderCustomDesignView() {
 
   document.getElementById('custom-design-style')?.remove();
 
-  if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
-    const didRender = window.initializeRoute(menuState, {
-      activeMenuName: _activeMenuName,
-      appVersion: APP_VERSION,
-      canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
-      categoryDefs: getManagedCategoryDefs(),
-      currentUser,
-      featuredGroups: _featuredGroups,
-      isPreview: IS_PREVIEW,
-      knownMenus: knownMenuList(),
-      lastUpdatedTs: getLastUpdatedTs(),
-      menuId: MENU_ID,
-      menuType: MENU_TYPE,
-      restaurantSpecials,
-      restaurantId: RESTAURANT_ID,
-      siteRestaurant: _siteRestaurant,
-    });
+  const routeContract = createPublicRouteContract();
+  const renderer = renderIntoSiteWrapper ? getRegisteredPublicRouteRenderer() : null;
+  if (renderer?.render) {
+    const didRender = renderer.render(routeContract);
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  } else if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
+    const didRender = window.initializeRoute(routeContract.snapshot.menuState, routeContract.snapshot);
     if (didRender !== false) {
       _togglePublicShellMode('site');
       return;
@@ -3272,6 +3906,11 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   const url = new URL(location.href);
   url.searchParams.set('menu', slug);
   history.replaceState({}, '', url.toString());
+  ensureCurrentMenuSession({
+    requestedMenuId: menuId,
+    requestedMenuSlug: slug,
+    siteRestaurantId: restaurantId || '',
+  });
   closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
   renderUserHeader();
@@ -3305,7 +3944,7 @@ async function onSwitchMenuClick() {
   showMenuPicker(async () => {
     // Reload menu data into the manager view for the newly selected menu
     _uncatCategoryUuid = null;
-    await loadActiveMenuState();
+    await ensureCurrentMenuSession().refresh();
     applyDesign(currentDesign);
     await sbEnsureUncategorized();
     renderManagerWorkspace();
@@ -3327,7 +3966,7 @@ async function onPublicSwitchMenuClick() {
     }
 
     // Reload public view in place when the selection stays on the same route.
-    await loadActiveMenuState();
+    await ensureCurrentMenuSession().refresh();
     applyDesign(currentDesign);
     renderPublicViews();
   });
@@ -3476,10 +4115,7 @@ async function handleSignIn() {
   errEl.textContent = '';
   try {
     const data = await sbSignIn(email, password);
-    const { role, name, accessibleMenuIds } = await sbGetProfile(data.access_token);
-    _applySession(data, role, name, accessibleMenuIds);
-    closeAuthOverlay();
-    applyRole(role);
+    const { role } = await getAccessSessionService().applyAuthenticatedSession(data, { closeOverlay: true });
     await _syncRequestedPageMode();
     if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
   } catch(err) {
@@ -3550,12 +4186,9 @@ async function handleResetPassword() {
   btn.textContent = 'Saving\u2026';
   errEl.textContent = '';
   try {
-    await sbUpdatePassword(password, _recoverySessionData.access_token);
-    const { role, name, accessibleMenuIds } = await sbGetProfile(_recoverySessionData.access_token);
-    _applySession(_recoverySessionData, role, name, accessibleMenuIds);
-    _recoverySessionData = null;
-    closeAuthOverlay();
-    applyRole(role);
+    const recoveryData = _recoverySessionData;
+    await sbUpdatePassword(password, recoveryData.access_token);
+    await getAccessSessionService().applyAuthenticatedSession(recoveryData, { closeOverlay: true });
     await _syncRequestedPageMode();
     showToast('Password updated. You are now signed in.', 'info');
   } catch(err) {
@@ -3892,6 +4525,7 @@ function renderManagerCategories() {
   container.innerHTML = '';
   // Preserve uncategorized expansion state across re-renders
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
+  const uncategorized = getUncategorizedCategoryDef();
 
   getManagedCategoryDefs().forEach(cat => {
     const isReadOnlyCategory = cat.readOnly || cat.deprecated;
@@ -3934,8 +4568,8 @@ function renderManagerCategories() {
          aria-expanded="${_uncatWasExpanded ? 'true' : 'false'}"
          onclick="toggleManagerCategory('${UNCATEGORIZED_ID}')"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleManagerCategory('${UNCATEGORIZED_ID}')}">
-      <div class="cat-icon" style="background:rgba(120,120,120,0.12)">📦</div>
-      <div><div class="cat-title">Uncategorized</div><div class="cat-sub">Autocomplete pool — not shown on public menu</div></div>
+      <div class="cat-icon" style="background:${escHtml(uncategorized.color)}">${escHtml(uncategorized.icon)}</div>
+      <div><div class="cat-title">${escHtml(uncategorized.title)}</div><div class="cat-sub">${escHtml(uncategorized.sub)}</div></div>
       <span class="category-chevron">›</span>
     </div>
     <div class="current-section">
@@ -3943,59 +4577,17 @@ function renderManagerCategories() {
       <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
       <div class="add-item-wrap">
         <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="Add to pool…" aria-label="Add item to uncategorized pool" autocomplete="off"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();addUncategorizedItem()}"/>
-          <button class="add-item-btn" onclick="addUncategorizedItem()" aria-label="Add item to uncategorized pool">+</button>
+          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="${escHtml(uncategorized.placeholder)}" aria-label="Add item to uncategorized pool" autocomplete="off"
+            oninput="showAutocomplete('${UNCATEGORIZED_ID}')"
+            onblur="setTimeout(()=>hideAutocomplete('${UNCATEGORIZED_ID}'),150)"
+            onkeydown="handleAddItemKeydown(event,'${UNCATEGORIZED_ID}')"/>
+          <button class="add-item-btn" onclick="addItem('${UNCATEGORIZED_ID}')" aria-label="Add item to uncategorized pool">+</button>
         </div>
+        <div class="autocomplete-list" id="ac-${UNCATEGORIZED_ID}"></div>
       </div>
     </div>`;
   container.appendChild(uncatCard);
-  renderUncategorizedItems();
-}
-
-function renderUncategorizedItems() {
-  const listEl = document.getElementById('mgr-items-' + UNCATEGORIZED_ID);
-  if (!listEl) return;
-  const items = menuState[UNCATEGORIZED_ID]?.items || [];
-  listEl.innerHTML = '';
-  if (!items.length) {
-    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Pool is empty — add items or delete a category to populate it.</span></div>`;
-    return;
-  }
-  items.forEach(item => {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'item-wrapper';
-    wrapper.id = 'wrapper-' + item.id;
-    wrapper.innerHTML = buildUncategorizedItemHtml(item);
-    listEl.appendChild(wrapper);
-  });
-}
-
-async function addUncategorizedItem() {
-  const input = document.getElementById('new-input-' + UNCATEGORIZED_ID);
-  if (!input) return;
-  const name = input.value.trim();
-  if (!name) return;
-  if (!menuState[UNCATEGORIZED_ID]) menuState[UNCATEGORIZED_ID] = { items: [], lastSent: [] };
-  const pool = menuState[UNCATEGORIZED_ID].items;
-  if (pool.some(i => i.name.trim().toLowerCase() === name.toLowerCase())) {
-    showToast('Already in pool.', 'info'); return;
-  }
-  pool.push({
-    id: uid(),
-    name,
-    desc: '',
-    recipe: [],
-    price: '',
-    eightySixed: false,
-    onMenu: false,
-    upcharges: [],
-    showDescription: true,
-    showRecipe: false,
-  });
-  input.value = '';
-  renderUncategorizedItems();
-  await persistState();
+  renderManagerItems(UNCATEGORIZED_ID);
 }
 
 function toggleManagerCategory(catId) {
@@ -4016,34 +4608,6 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
   ).join('');
 }
 
-function buildManagerItemEditorHtml(item, catId, itemId, ingredients) {
-  return `<div class="desc-row" id="desc-row-${itemId}">
-      <textarea class="desc-input" aria-label="Item description" placeholder="Ingredients, description, how to sell it…"
-        onblur="saveDesc('${catId}','${itemId}',this.value)">${escHtml(item.desc || '')}</textarea>
-    </div>
-    <div class="recipe-row" id="recipe-row-${itemId}">
-      <div class="recipe-ingredient-list" id="recipe-list-${itemId}">${buildRecipeListHtml(catId, itemId, ingredients)}</div>
-      <div class="add-ingredient-area">
-        <input class="add-ingredient-input" id="ingredient-input-${itemId}" type="text"
-          placeholder="Add ingredient…"
-          onkeydown="handleIngredientKeydown(event,'${catId}','${itemId}')"/>
-        <button class="add-ingredient-btn" onclick="addIngredient('${catId}','${itemId}')">+</button>
-      </div>
-    </div>`;
-}
-
-function buildUncategorizedItemHtml(item) {
-  const ingredients = recipeArray(item.recipe);
-  const hasDesc = !!(item.desc && item.desc.trim());
-  const hasRecipe = ingredients.length > 0;
-  return `<div class="current-item">
-      <div class="item-name"><span class="item-name-static">${escHtml(item.name)}</span></div>
-      <button class="desc-btn${hasDesc ? ' has-desc' : ''}" title="Edit description" aria-label="Edit description for ${escHtml(item.name)}" onclick="toggleItemDesc('${item.id}')">📝</button>
-      <button class="recipe-btn${hasRecipe ? ' has-recipe' : ''}" title="Add recipe" aria-label="Edit recipe for ${escHtml(item.name)}" onclick="toggleItemRecipe('${item.id}')">🧪</button>
-    </div>
-    ${buildManagerItemEditorHtml(item, UNCATEGORIZED_ID, item.id, ingredients)}`;
-}
-
 function buildItemsRowHtml(item, catId, lastSentNames) {
   const isNew = !lastSentNames.has(item.name.trim().toLowerCase());
   const is86 = !!item.eightySixed;
@@ -4052,16 +4616,18 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
   const badgeText = is86 ? '86' : isNew ? 'NEW' : '';
   const stateLabel = is86 ? "86'd" : isNew ? 'New' : 'Active';
   return `<div class="current-item items-row ${stateClass}">
-      <button class="item-drag-handle" type="button" draggable="true"
-        ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
-        ondragend="endManagerItemDrag(event)"
-        title="Drag to reorder"
-        aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
-      ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
-      <div class="item-name"><input type="text" value="${escHtml(item.name)}"
-        aria-label="Item name for ${escHtml(item.name)}"
-        onblur="renameItem('${catId}','${item.id}',this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      <div class="item-row-main">
+        <button class="item-drag-handle" type="button" draggable="true"
+          ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
+          ondragend="endManagerItemDrag(event)"
+          title="Drag to reorder"
+          aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
+        ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
+        <div class="item-name"><input type="text" value="${escHtml(item.name)}"
+          aria-label="Item name for ${escHtml(item.name)}"
+          onblur="renameItem('${catId}','${item.id}',this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      </div>
       <span class="item-actions-compact">
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
@@ -4076,6 +4642,9 @@ function buildPricingRowHtml(item, catId) {
   const badgeText = is86 ? '86' : '';
   const upcharges = item.upcharges || [];
   const upchargeCount = upcharges.length;
+  const upchargeMeta = upchargeCount
+    ? `${upchargeCount} upcharge${upchargeCount === 1 ? '' : 's'} ready`
+    : 'Base price only';
   let summaryHtml = '';
   if (upchargeCount > 0) {
     summaryHtml = `<div class="upcharges-summary" id="upcharges-summary-${item.id}">${upcharges.map(u => `<span class="upcharge-chip">${escHtml(u.label)} <strong>${escHtml(u.price)}</strong></span>`).join('')}</div>`;
@@ -4093,18 +4662,27 @@ function buildPricingRowHtml(item, catId) {
     </div>
   </div>`;
   return `<div class="current-item pricing-row ${stateClass}">
-      <div class="item-name">
-        <span class="item-name-static">${escHtml(item.name)}</span>
-        ${badgeText ? `<span class="item-state-badge ${badgeClass}" style="margin-left:8px">${badgeText}</span>` : ''}
+      <div class="pricing-row-main">
+        <div class="pricing-row-title">
+          <span class="item-name-static">${escHtml(item.name)}</span>
+          ${badgeText ? `<span class="item-state-badge ${badgeClass}">${badgeText}</span>` : ''}
+        </div>
+        <p class="pricing-row-meta">${escHtml(upchargeMeta)}</p>
       </div>
-      <input class="price-input" type="text" placeholder="Price…" aria-label="Price for ${escHtml(item.name)}"
-        onblur="savePrice('${catId}','${item.id}',this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"
-        value="${escHtml(item.price||'')}"/>
-      <button class="upcharge-toggle-btn" title="Manage upcharges" aria-label="Manage upcharges for ${escHtml(item.name)}" aria-expanded="false" onclick="toggleUpcharges('${catId}','${item.id}')">
-        <span class="upcharge-toggle-icon">+$</span>
-        ${upchargeCount > 0 ? `<span class="upcharge-count">${upchargeCount}</span>` : ''}
-      </button>
+      <div class="pricing-row-controls">
+        <label class="pricing-inline-field">
+          <span class="pricing-inline-label">Base price</span>
+          <input class="price-input" type="text" placeholder="Price…" aria-label="Price for ${escHtml(item.name)}"
+            onblur="savePrice('${catId}','${item.id}',this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()"
+            value="${escHtml(item.price||'')}"/>
+        </label>
+        <button class="upcharge-toggle-btn" title="Manage upcharges" aria-label="Manage upcharges for ${escHtml(item.name)}" aria-expanded="false" onclick="toggleUpcharges('${catId}','${item.id}')">
+          <span class="upcharge-toggle-icon">+$</span>
+          <span class="upcharge-toggle-label">Upcharges</span>
+          ${upchargeCount > 0 ? `<span class="upcharge-count">${upchargeCount}</span>` : ''}
+        </button>
+      </div>
     </div>
     ${summaryHtml}
     ${panelHtml}`;
@@ -4174,14 +4752,17 @@ function buildDescriptionRowHtml(item, catId) {
 function renderManagerItems(catId) {
   const state = menuState[catId] || { items: [], lastSent: [] };
   const lastSentNames = new Set(state.lastSent.filter(i => i.onMenu !== false).map(i => i.name.trim().toLowerCase()));
-  const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const visibleItems = getRenderableCategoryItems(catId);
   const listEl = document.getElementById('mgr-items-' + catId);
   if (!listEl) return;
   listEl.innerHTML = '';
   if (!visibleItems.length) {
-    const cat = CATEGORY_DEFS.find(c => c.id === catId);
+    const cat = catId === UNCATEGORIZED_ID ? getUncategorizedCategoryDef() : CATEGORY_DEFS.find(c => c.id === catId);
     const ph = cat?.placeholder ? ` Try: "${escHtml(cat.placeholder)}"` : '';
-    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>Nothing here yet.${ph}</span></div>`;
+    const emptyCopy = catId === UNCATEGORIZED_ID
+      ? 'Pool is empty — add items or delete a category to populate it.'
+      : `Nothing here yet.${ph}`;
+    listEl.innerHTML = `<div class="empty-state"><span class="empty-state-icon">+</span><span>${emptyCopy}</span></div>`;
     return;
   }
   visibleItems.forEach(item => {
@@ -4210,9 +4791,8 @@ function renderPricingSection() {
   const container = document.getElementById('manager-pricing-categories');
   if (!container) return;
   container.innerHTML = '';
-  getManagedCategoryDefs().forEach(cat => {
-    const state = menuState[cat.id] || { items: [] };
-    const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const renderCategoryPricing = cat => {
+    const visibleItems = getRenderableCategoryItems(cat.id);
     if (!visibleItems.length) return;
     const card = document.createElement('div');
     card.className = 'cat-card';
@@ -4238,7 +4818,9 @@ function renderPricingSection() {
       wrapper.innerHTML = buildPricingRowHtml(item, cat.id);
       listEl.appendChild(wrapper);
     });
-  });
+  };
+  getManagedCategoryDefs().forEach(renderCategoryPricing);
+  renderCategoryPricing(getUncategorizedCategoryDef());
 }
 
 // ─── DESCRIPTION SECTION RENDERER ────────────────────────────────────────────
@@ -4246,9 +4828,8 @@ function renderDescriptionSection() {
   const container = document.getElementById('manager-description-categories');
   if (!container) return;
   container.innerHTML = '';
-  getManagedCategoryDefs().forEach(cat => {
-    const state = menuState[cat.id] || { items: [] };
-    const visibleItems = state.items.filter(i => i.onMenu !== false);
+  const renderCategoryDescriptions = cat => {
+    const visibleItems = getRenderableCategoryItems(cat.id);
     if (!visibleItems.length) return;
     const card = document.createElement('div');
     card.className = 'cat-card';
@@ -4274,7 +4855,9 @@ function renderDescriptionSection() {
       wrapper.innerHTML = buildDescriptionRowHtml(item, cat.id);
       listEl.appendChild(wrapper);
     });
-  });
+  };
+  getManagedCategoryDefs().forEach(renderCategoryDescriptions);
+  renderCategoryDescriptions(getUncategorizedCategoryDef());
 }
 
 function startManagerItemDrag(event, catId, itemId) {
@@ -4309,7 +4892,7 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   if (!_managerDraggedItemId || _managerDraggedCatId !== catId || _managerDraggedItemId === targetItemId) return;
   event.preventDefault();
   const items = menuState[catId]?.items || [];
-  const visibleItems = items.filter(item => item.onMenu !== false);
+  const visibleItems = getRenderableCategoryItems(catId);
   const fromIndex = visibleItems.findIndex(item => item.id === _managerDraggedItemId);
   const toIndex = visibleItems.findIndex(item => item.id === targetItemId);
   if (fromIndex < 0 || toIndex < 0) return;
@@ -4317,10 +4900,12 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   const reorderedVisible = [...visibleItems];
   const [movedItem] = reorderedVisible.splice(fromIndex, 1);
   reorderedVisible.splice(toIndex, 0, movedItem);
-  menuState[catId].items = [
-    ...reorderedVisible,
-    ...items.filter(item => item.onMenu === false),
-  ];
+  menuState[catId].items = catId === UNCATEGORIZED_ID
+    ? reorderedVisible
+    : [
+      ...reorderedVisible,
+      ...items.filter(item => item.onMenu === false),
+    ];
 
   invalidateDiff();
   renderManagerItems(catId);
@@ -4399,7 +4984,7 @@ function buildItemUpsertRows() {
         desc:            item.desc   || '',
         recipe:          item.recipe || [],
         price:           item.price  || null,
-        is_eighty_sixed: false,
+        is_eighty_sixed: item.eightySixed || false,
         on_menu:         false,
         visibility:      item.visibility || 'public',
         upcharges:       item.upcharges || [],
@@ -4434,7 +5019,8 @@ function finalizePersistStatus(ok) {
   syncManagerActionBarStatus(syncEl);
 }
 
-async function persistState() {
+async function persistState(options = {}) {
+  const { silentFailure = false } = options;
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
   try {
     const catRows = buildCategoryUpsertRows();
@@ -4470,16 +5056,22 @@ async function persistState() {
     return true;
   } catch(e) {
     finalizePersistStatus(false);
-    showToast('⚠️ Cloud save failed.', 'error');
+    if (!silentFailure) showToast('⚠️ Cloud save failed.', 'error');
     return false;
   }
 }
 
-async function saveMenu() {
+async function _saveActiveMenuDraftInternal() {
   const ts = Date.now();
   try {
     const persisted = await persistState();
-    if (!persisted) return;
+    if (!persisted) {
+      return {
+        ok: false,
+        userHandled: true,
+        snapshot: buildMenuSessionSnapshot('save-failed'),
+      };
+    }
     await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
     menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
     lsSet(LS_KEYS.lastUpdated, ts.toString());
@@ -4487,20 +5079,70 @@ async function saveMenu() {
     updateSaveBtn();
     updateLastUpdatedLabel();
     syncLocalMenuCache({ silent: true });
-    showToast('✅ Menu saved!', 'success');
+    return {
+      ok: true,
+      ts,
+      snapshot: buildMenuSessionSnapshot('saved'),
+    };
   } catch(e) {
     finalizePersistStatus(false);
-    showToast('⚠️ Cloud save failed.', 'error');
+    return {
+      ok: false,
+      userHandled: false,
+      snapshot: buildMenuSessionSnapshot('save-failed'),
+    };
   }
+}
+
+async function saveMenu() {
+  try {
+    const result = await ensureCurrentMenuSession().save();
+    if (result?.ok) {
+      showToast('✅ Menu saved!', 'success');
+      return;
+    }
+    if (result?.userHandled) return;
+  } catch (_) {
+    finalizePersistStatus(false);
+  }
+  showToast('⚠️ Cloud save failed.', 'error');
 }
 
 function addItem(catId) {
   const input = document.getElementById('new-input-' + catId);
+  if (!input) return;
   const name = input.value.trim();
   if (!name) return;
   const nameLower = name.toLowerCase();
   let movedFromUncategorized = false;
   if (!menuState[catId]) menuState[catId] = { items: [], lastSent: [] };
+  if (catId === UNCATEGORIZED_ID) {
+    const pool = menuState[catId].items;
+    if (pool.some(item => item.name.trim().toLowerCase() === nameLower)) {
+      showToast('Already in pool.', 'info');
+      return;
+    }
+    pool.push({
+      id: uid(),
+      name,
+      desc: '',
+      recipe: [],
+      price: '',
+      eightySixed: false,
+      onMenu: false,
+      upcharges: [],
+      showDescription: true,
+      showRecipe: false,
+    });
+    input.value = '';
+    hideAutocomplete(catId);
+    invalidateDiff();
+    renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
+    input.focus();
+    updateDraftIndicator();
+    return;
+  }
   const alreadyOnMenu = menuState[catId].items.find(
     i => i.onMenu !== false && i.name.toLowerCase() === nameLower
   );
@@ -4539,7 +5181,7 @@ function addItem(catId) {
   invalidateDiff();
   renderManagerItems(catId);
   markSectionsStale(_activeManagerSection);
-  if (movedFromUncategorized) renderUncategorizedItems();
+  if (movedFromUncategorized) renderManagerItems(UNCATEGORIZED_ID);
   input.focus();
   updateDraftIndicator();
 }
@@ -4558,6 +5200,7 @@ function getAutocompleteIndex(catId) {
 }
 
 function showAutocomplete(catId) {
+  if (catId === UNCATEGORIZED_ID) { hideAutocomplete(catId); return; }
   const val = document.getElementById('new-input-' + catId).value.trim();
   const list = document.getElementById('ac-' + catId);
   _acIdx = -1;
@@ -4816,14 +5459,6 @@ function initDrawerSwipe() {
 }
 
 // ─── DESCRIPTION ──────────────────────────────────────────────────────────────
-function toggleItemDesc(itemId) {
-  const row = document.getElementById('desc-row-' + itemId);
-  if (!row) return;
-  const opening = !row.classList.contains('open');
-  row.classList.toggle('open', opening);
-  if (opening) row.querySelector('textarea').focus();
-}
-
 function toggleDescriptionEditor(itemId) {
   const card = document.getElementById('description-editor-' + itemId);
   const body = document.getElementById('desc-edit-body-' + itemId);
@@ -4871,14 +5506,6 @@ function recipeArray(recipe) {
   if (Array.isArray(recipe)) return recipe.filter(Boolean);
   if (typeof recipe === 'string' && recipe.trim()) return [recipe.trim()];
   return [];
-}
-
-function toggleItemRecipe(itemId) {
-  const row = document.getElementById('recipe-row-' + itemId);
-  if (!row) return;
-  const opening = !row.classList.contains('open');
-  row.classList.toggle('open', opening);
-  if (opening) document.getElementById('ingredient-input-' + itemId)?.focus();
 }
 
 function renderRecipeIngredients(catId, itemId) {
@@ -4961,8 +5588,29 @@ async function savePrice(catId, itemId, val) {
 }
 
 function removeItem(catId, itemId) {
-  const item = findItem(catId, itemId);
+  const state = menuState[catId];
+  const itemIndex = state?.items.findIndex(i => i.id === itemId) ?? -1;
+  const item = itemIndex === -1 ? null : state.items[itemIndex];
   if (!item) return false;
+  if (catId === UNCATEGORIZED_ID) {
+    const [removedItem] = state.items.splice(itemIndex, 1);
+    _deletedItemIds.add(removedItem.id);
+    invalidateDiff();
+    renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
+    updateDraftIndicator();
+    const removedName = removedItem.name;
+    showToast(`"${removedName}" removed`, 'info', () => {
+      state.items.splice(Math.min(itemIndex, state.items.length), 0, removedItem);
+      _deletedItemIds.delete(removedItem.id);
+      invalidateDiff();
+      renderManagerItems(catId);
+      markSectionsStale(_activeManagerSection);
+      updateDraftIndicator();
+      showToast(`"${removedName}" restored`, 'success');
+    });
+    return true;
+  }
   item.onMenu = false;
   invalidateDiff();
   renderManagerItems(catId);
@@ -5180,18 +5828,18 @@ function buildPreviewBlockHtml(section) {
 }
 
 function openPreview() {
-  const diff = getCachedDiff();
+  const preview = getUpdatePublisher().preview();
   const content = document.getElementById('preview-content');
   const confirmBtn = document.getElementById('confirm-btn');
   const modal = document.getElementById('modal-bg');
   if (!content || !confirmBtn || !modal) return;
   content.innerHTML = '';
-  if (!diff.length) {
+  if (!preview.hasChanges) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
     confirmBtn.disabled = true;
   } else {
     confirmBtn.disabled = false;
-    diff.forEach(s => {
+    preview.sections.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
       block.innerHTML = buildPreviewBlockHtml(s);
@@ -5220,6 +5868,265 @@ function buildPatchMessage(diff) {
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
   return lines.join('\n').trim();
+}
+
+function getUpdatePublisher() {
+  if (_updatePublisher) return _updatePublisher;
+  _updatePublisher = createUpdatePublisher();
+  return _updatePublisher;
+}
+
+function createUpdatePublisher() {
+  return {
+    preview() {
+      const diff = getCachedDiff();
+      const patchMessage = diff.length ? buildPatchMessage(diff) : '';
+      return {
+        hasChanges: diff.length > 0,
+        diff,
+        sections: diff,
+        patchMessage,
+        truncated: patchMessage.length > 1000,
+        snapshot: buildMenuSessionSnapshot('preview'),
+      };
+    },
+
+    async publish(options = {}) {
+      const preview = options.preview?.diff ? options.preview : this.preview();
+      if (!preview.hasChanges) {
+        return {
+          ok: false,
+          noop: true,
+          preview,
+          snapshot: buildMenuSessionSnapshot('send-noop'),
+        };
+      }
+
+      const delivery = await dispatchMenuUpdateNotification({
+        menuId: MENU_ID,
+        patchMessage: preview.patchMessage,
+      });
+      if (!delivery.ok) {
+        return {
+          ok: false,
+          preview,
+          notificationStatus: delivery,
+          userMessage: delivery.userMessage,
+          snapshot: buildMenuSessionSnapshot('send-failed'),
+        };
+      }
+
+      const warnings = collectNotificationWarnings(delivery.summary);
+      try {
+        const persisted = await persistState({ silentFailure: true });
+        if (!persisted) throw new Error('persist failed');
+
+        const ts = Date.now();
+        const lastSentState = snapshotCurrentItemsAsLastSent();
+        const currentFeaturedIds = getCurrentFeaturedIds();
+        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
+          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
+          : [];
+        const patchResults = await Promise.all([
+          patchMenuMetaWithCompatibility({
+            last_updated_ts: ts,
+            last_sent_ts: ts,
+            last_sent_state: lastSentState,
+            last_sent_categories: preview.diff.map(section => section.id),
+            last_sent_featured: currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== MENU_ID)
+            .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
+              last_sent_featured: currentFeaturedIds,
+            })),
+        ]);
+        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+        }
+
+        _lastSentFeaturedIds = new Set(currentFeaturedIds);
+        applySentState(preview.diff, ts);
+        _dirty = false;
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+
+        const cacheSynced = syncLocalMenuCache({ silent: true });
+        if (!cacheSynced) {
+          warnings.push('This device could not refresh its local cache after the send.');
+        }
+
+        const logged = await logUpdate(preview.diff, preview.patchMessage);
+        if (!logged) {
+          warnings.push('The recent-changes audit log could not be written for this send.');
+        }
+
+        const finalWarnings = dedupePublisherWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          ts,
+          truncated: preview.truncated,
+          notificationStatus: delivery,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
+          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : 'sent'),
+        };
+      } catch (syncError) {
+        console.warn('sendUpdate post-send sync failed:', syncError);
+        warnings.push('Update sent, but database sync needs attention. Refresh before sending again.');
+        const finalWarnings = dedupePublisherWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          truncated: preview.truncated,
+          notificationStatus: delivery,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
+          snapshot: buildMenuSessionSnapshot('sent-warning'),
+        };
+      }
+    },
+  };
+}
+
+function dedupePublisherWarnings(warnings = []) {
+  return Array.from(new Set((warnings || []).filter(Boolean)));
+}
+
+function formatNotificationChannelName(channel) {
+  switch (channel) {
+    case 'groupme': return 'GroupMe';
+    case 'sms': return 'SMS';
+    case 'discord': return 'Discord';
+    case 'webhook': return 'Webhook';
+    default: return channel || 'Unknown channel';
+  }
+}
+
+function summarizeNotificationResults(results = {}) {
+  const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
+  const okChannels = [];
+  const skippedChannels = [];
+  const failedChannels = [];
+  const failedDetails = [];
+
+  entries.forEach(([channel, status]) => {
+    if (status === 'ok') {
+      okChannels.push(channel);
+      return;
+    }
+    if (status === 'skipped') {
+      skippedChannels.push(channel);
+      return;
+    }
+    failedChannels.push(channel);
+    failedDetails.push({
+      channel,
+      status: typeof status === 'string' ? status : 'error:unknown',
+    });
+  });
+
+  return {
+    results,
+    okChannels,
+    skippedChannels,
+    failedChannels,
+    failedDetails,
+    anyOk: okChannels.length > 0,
+    anyError: failedChannels.length > 0,
+    allSkipped: entries.length > 0 && skippedChannels.length === entries.length,
+  };
+}
+
+function collectNotificationWarnings(summary) {
+  if (!summary) return [];
+  const warnings = [];
+  if (summary.allSkipped) {
+    warnings.push('No notification channels were enabled for this menu.');
+  } else if (summary.anyOk && summary.anyError) {
+    warnings.push(`Some notification channels failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`);
+  }
+  return warnings;
+}
+
+async function dispatchMenuUpdateNotification({ menuId, patchMessage }) {
+  const authHeaders = currentUser?.accessToken
+    ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
+    : {};
+
+  let response;
+  try {
+    response = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ menu_id: menuId, text: patchMessage }),
+    });
+  } catch (_) {
+    return {
+      ok: false,
+      statusCode: 0,
+      summary: summarizeNotificationResults({}),
+      userMessage: '❌ Network error. Check connection.',
+    };
+  }
+
+  let body = {};
+  try {
+    body = await response.json();
+  } catch (_) {
+    body = {};
+  }
+
+  const summary = summarizeNotificationResults(body?.results || {});
+  if (response.status >= 200 && response.status < 300) {
+    return {
+      ok: true,
+      statusCode: response.status,
+      partial: response.status === 207,
+      results: body?.results || {},
+      summary,
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: '❌ Not authorized. Please sign in.',
+    };
+  }
+
+  if (response.status === 403) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: '❌ Access denied. Your account role does not allow sending updates.',
+    };
+  }
+
+  if (response.status === 400 && typeof body?.error === 'string' && body.error.trim()) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: `❌ ${body.error.trim()}`,
+    };
+  }
+
+  const failedSummary = summary.failedChannels.length
+    ? ` Failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`
+    : '';
+  return {
+    ok: false,
+    statusCode: response.status,
+    summary,
+    userMessage: `❌ Notification error. Check channel config in Admin settings.${failedSummary}`,
+  };
 }
 
 function snapshotLastSentState() {
@@ -5268,12 +6175,15 @@ async function logUpdate(diff, patchMessage) {
   }
 }
 
-async function sendUpdate() {
-  const diff = getCachedDiff();
-  if (!diff.length) { closeModal(); return; }
-  const patchMessage = buildPatchMessage(diff);
+async function _publishActiveMenuUpdateInternal(options = {}) {
+  return getUpdatePublisher().publish(options);
+}
 
-  if (patchMessage.length > 1000) {
+async function sendUpdate() {
+  const preview = getUpdatePublisher().preview();
+  if (!preview.hasChanges) { closeModal(); return; }
+
+  if (preview.truncated) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
@@ -5282,92 +6192,72 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING…';
 
   try {
-    const authHeaders = currentUser?.accessToken
-      ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
-      : {};
-    const r1 = await fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
-    });
-
-    if (r1.status >= 200 && r1.status < 300) {
-      showToast(`✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
-      const ts = Date.now();
+    const result = await ensureCurrentMenuSession().sendUpdate({ preview });
+    if (result?.noop) {
       closeModal();
-      try {
-        const persisted = await persistState();
-        if (!persisted) throw new Error('persist failed');
-        const lastSentState = snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = getCurrentFeaturedIds();
-        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
-          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
-          : [];
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await Promise.all([
-          sbPatchMenuMeta({
-            last_updated_ts:      ts,
-            last_sent_ts:         ts,
-            last_sent_state:      lastSentState,
-            last_sent_categories: diff.map(d => d.id),
-            last_sent_featured:   currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== MENU_ID)
-            .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
-        ]);
-        applySentState(diff, ts);
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
-        renderManagerWorkspace({ includeRecentChanges: false });
-        updateDraftIndicator();
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        if (!cacheSynced) {
-          showToast('⚠️ Update sent, but this device could not refresh its local cache.', 'warning');
-        }
-        const logged = await logUpdate(diff, patchMessage);
-        if (!logged) console.warn('sendUpdate audit log insert failed');
-        renderRecentChanges();
-      } catch (syncError) {
-        console.warn('sendUpdate post-send sync failed:', syncError);
-        showToast('⚠️ Update sent, but database sync needs attention. Refresh before sending again.', 'warning');
-      }
-    } else if (r1.status === 401) {
-      showToast('❌ Not authorized. Please sign in.', 'error');
-    } else if (r1.status === 403) {
-      showToast('❌ Access denied. Your account role does not allow sending updates.', 'error');
-    } else {
-      showToast('❌ Notification error. Check channel config in Admin settings.', 'error');
+      return;
     }
-  } catch(e) {
-    showToast('❌ Network error. Check connection.', 'error');
+    if (result?.ok) {
+      closeModal();
+      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
+      renderManagerWorkspace({ includeRecentChanges: false });
+      updateDraftIndicator();
+      renderRecentChanges();
+      const warnings = Array.isArray(result.warnings) ? result.warnings : (result.warningMessage ? [result.warningMessage] : []);
+      warnings.forEach(message => showToast(`⚠️ ${message}`, 'warning'));
+      return;
+    }
+    if (result?.userMessage) showToast(result.userMessage, 'error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'SEND UPDATE';
   }
-
-  confirmBtn.disabled = false;
-  confirmBtn.textContent = 'SEND UPDATE';
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 let _toastUndoTimer = null;
+let _toastResetTimer = null;
 function _flashSaved(el) {
   if (!el) return;
   el.classList.add('field-saved');
   setTimeout(() => el.classList.remove('field-saved'), 1200);
 }
 
+function hideToast() {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.classList.remove('show');
+  if (_toastResetTimer) clearTimeout(_toastResetTimer);
+  _toastResetTimer = setTimeout(() => {
+    if (t.classList.contains('show')) return;
+    t.className = 'toast';
+    t.textContent = '';
+  }, 280);
+}
+
 function showToast(msg, type='info', undoCallback=null) {
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
+  if (_toastResetTimer) { clearTimeout(_toastResetTimer); _toastResetTimer = null; }
   const t = document.getElementById('toast');
+  if (!t) return;
+  const message = String(msg ?? '').trim();
+  if (!message) {
+    window._toastUndoCallback = null;
+    hideToast();
+    return;
+  }
   t.className = `toast ${type} show`;
   if (undoCallback) {
-    t.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-undo-btn" onclick="_toastUndo()">Undo</button>`;
+    t.innerHTML = `<span>${escHtml(message)}</span><button class="toast-undo-btn" onclick="_toastUndo()">Undo</button>`;
     window._toastUndoCallback = undoCallback;
-    _toastUndoTimer = setTimeout(() => { t.classList.remove('show'); window._toastUndoCallback = null; }, 5000);
+    _toastUndoTimer = setTimeout(() => {
+      window._toastUndoCallback = null;
+      hideToast();
+    }, 5000);
   } else {
-    t.textContent = msg;
+    t.textContent = message;
     window._toastUndoCallback = null;
-    _toastUndoTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    _toastUndoTimer = setTimeout(() => hideToast(), 3200);
   }
 }
 function _toastUndo() {
@@ -5375,9 +6265,8 @@ function _toastUndo() {
     window._toastUndoCallback();
     window._toastUndoCallback = null;
   }
-  const t = document.getElementById('toast');
-  t.classList.remove('show');
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
+  hideToast();
 }
 
 document.getElementById('modal-bg')?.addEventListener('click', e => {
@@ -5701,30 +6590,7 @@ document.getElementById('invite-modal-bg')?.addEventListener('click', e => {
 // ─── FEATURED ITEMS ──────────────────────────────────────────────────────────
 
 function getActiveRestaurantSpecialGroup() {
-  return _featuredGroups[0] || null;
-}
-
-async function callRestaurantSpecialsApi(action, payload = {}) {
-  const response = await fetch('/api/specials', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
-    },
-    body: JSON.stringify({
-      action,
-      restaurantId: RESTAURANT_ID,
-      ...payload,
-    }),
-  });
-  let data = {};
-  try {
-    data = await response.json();
-  } catch (_) {
-    data = {};
-  }
-  if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-  return data;
+  return getRestaurantSpecialsService().getActiveGroup();
 }
 
 function renderFeaturedTab() {
@@ -5811,17 +6677,7 @@ function renderFeaturedTab() {
 }
 
 function getFeatureableMatches(groupId, query) {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const group = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
-  const existingItemIds = new Set((group?.slots || []).map(s => s.itemId));
-  return getRestaurantSpecialsCatalog()
-    .filter(item =>
-      item.onMenu !== false &&
-      !existingItemIds.has(item.id) &&
-      String(item.name || '').toLowerCase().includes(q)
-    )
-    .slice(0, 8);
+  return getRestaurantSpecialsService().getMatches(groupId, query);
 }
 
 function filterFeaturedPicker(groupId, query) {
@@ -5867,86 +6723,56 @@ async function addFeaturedSlotFromInput(groupId) {
 }
 
 async function addFeaturedSlot(groupId, itemId) {
-  if (!currentUserCanEditRestaurantSpecials()) {
-    showToast('Specials require access to both menus for this restaurant.', 'error');
-    return;
-  }
   try {
-    const existingGroup = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
-    const slotCount = existingGroup?.slots?.length || 0;
-    if (slotCount >= 5) { showToast('Max 5 specials per restaurant.', 'info'); return; }
-    if ((existingGroup?.slots || []).some(slot => slot.itemId === itemId)) {
-      showToast('That item is already in specials.', 'info');
+    const result = await getRestaurantSpecialsService().addSlot({ groupId, itemId });
+    if (!result?.ok) {
+      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
       return;
     }
-    await callRestaurantSpecialsApi('add', { itemId });
-    await refreshFeaturedForActiveMenu();
     renderFeaturedTab();
     renderPublicView();
-    invalidateDiff();
-    updateDraftIndicator();
     const input = document.getElementById('featured-add-' + (groupId || 'pending'));
     if (input) input.value = '';
     filterFeaturedPicker(groupId, '');
-    showToast('Special added!', 'success');
-  } catch(e) { showToast('Failed to add special.', 'error'); }
+    showToast(result.successMessage || 'Special added!', 'success');
+  } catch(e) { showToast(e?.message || 'Failed to add special.', 'error'); }
 }
 
 async function removeFeaturedSlot(slotId, groupId) {
-  if (!currentUserCanEditRestaurantSpecials()) {
-    showToast('Specials require access to both menus for this restaurant.', 'error');
-    return;
-  }
   try {
-    await callRestaurantSpecialsApi('remove', { slotId });
-    await refreshFeaturedForActiveMenu();
+    const result = await getRestaurantSpecialsService().removeSlot({ slotId, groupId });
+    if (!result?.ok) {
+      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
+      return;
+    }
     renderFeaturedTab();
     renderPublicView();
-    invalidateDiff();
-    updateDraftIndicator();
-    showToast('Special removed.', 'success');
-  } catch(e) { showToast('Failed to remove.', 'error'); }
+    showToast(result.successMessage || 'Special removed.', 'success');
+  } catch(e) { showToast(e?.message || 'Failed to remove.', 'error'); }
 }
 
 async function saveFeaturedSellNote(slotId, note) {
-  if (!currentUserCanEditRestaurantSpecials()) return;
   try {
-    await callRestaurantSpecialsApi('note', { slotId, note });
+    await getRestaurantSpecialsService().saveNote({ slotId, note });
   } catch(e) {}
 }
 
 async function moveFeaturedSlot(groupId, slotId, direction) {
-  if (!currentUserCanEditRestaurantSpecials()) {
-    showToast('Specials require access to both menus for this restaurant.', 'error');
-    return;
-  }
-  const group = _featuredGroups.find(g => g.id === groupId) || getActiveRestaurantSpecialGroup();
-  if (!group) return;
-  const idx = group.slots.findIndex(s => s.id === slotId);
-  if (idx < 0) return;
-  const newIdx = idx + direction;
-  if (newIdx < 0 || newIdx >= group.slots.length) return;
   try {
-    await callRestaurantSpecialsApi('move', { slotId, direction });
-    await refreshFeaturedForActiveMenu();
+    const result = await getRestaurantSpecialsService().moveSlot({ groupId, slotId, direction });
+    if (!result?.ok) {
+      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
+      return;
+    }
     renderFeaturedTab();
     renderPublicView();
-  } catch(e) { showToast('Failed to reorder.', 'error'); }
+  } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
 // ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
 
 function _needsFeaturedConfirmation() {
-  if (!currentUserCanEditRestaurantSpecials()) return false;
-  if (sessionStorage.getItem(getFeaturedConfirmationKey())) return false;
-  if (!_featuredGroups.some(g => g.slots.length)) return false;
-  return _featuredGroups.some(g => g.slots.some(s => {
-    if (!s.confirmedAt) return true;
-    const confirmed = new Date(s.confirmedAt);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return confirmed < today;
-  }));
+  return getRestaurantSpecialsService().needsConfirmation();
 }
 
 function checkFeaturedConfirmation() {
@@ -5954,16 +6780,15 @@ function checkFeaturedConfirmation() {
 }
 
 async function confirmFeaturedToday() {
-  if (!currentUserCanEditRestaurantSpecials()) {
-    showToast('Specials require access to both menus for this restaurant.', 'error');
-    return;
-  }
   try {
-    await callRestaurantSpecialsApi('confirm');
-    sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
+    const result = await getRestaurantSpecialsService().confirmToday();
+    if (!result?.ok) {
+      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
+      return;
+    }
     updateManagerActionBar();
-    showToast('Specials confirmed for today!', 'success');
-  } catch(e) { showToast('Failed to confirm.', 'error'); }
+    showToast(result.successMessage || 'Specials confirmed for today!', 'success');
+  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
 }
 
 function editFeaturedFromBanner() {
@@ -6059,7 +6884,7 @@ function buildDatabaseRows() {
       category: 'Uncategorized',
       recipe: recipeArray(item.recipe),
       onMenu: false,
-      eightySixed: false,
+      eightySixed: !!item.eightySixed,
     });
     totalItems++;
   });
@@ -6152,9 +6977,6 @@ setInterval(() => {
   });
 })();
 
-// ─── PREVIEW ROLE-SWITCHER TOOLBAR ───────────────────────────────────────────
-let _previewRole = null; // tracks active mock role; null = using real session
-
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
 
 async function fetchRestaurantMenuIndex() {
@@ -6228,51 +7050,4 @@ async function renderMenusPanel() {
   }
 }
 
-function _initPreviewToolbar() {
-  if (!IS_PREVIEW) return;
-  const toolbar = document.createElement('div');
-  toolbar.id = 'preview-toolbar';
-  toolbar.setAttribute('aria-label', 'Preview role switcher');
-  toolbar.innerHTML = `
-    <div class="preview-toolbar-label">PREVIEW</div>
-    <button class="preview-toolbar-btn" data-role="public"  onclick="_setPreviewRole('public')">Public</button>
-    <button class="preview-toolbar-btn" data-role="manager" onclick="_setPreviewRole('manager')">Manager</button>
-    <button class="preview-toolbar-btn" data-role="admin"   onclick="_setPreviewRole('admin')">Admin</button>
-    <div class="preview-toolbar-divider"></div>
-    <button class="preview-toolbar-btn preview-toolbar-login" onclick="openAuthOverlay()">Login</button>
-  `;
-  document.body.appendChild(toolbar);
-  _updatePreviewToolbar();
-}
-
-function _setPreviewRole(role) {
-  _previewRole = role;
-  if (role === 'public') {
-    if (isManagerMode || isAdminMode) exitView();
-    currentUser = null;
-    applyRole('none');
-    renderUserHeader();
-  } else {
-    // Mock session — no real tokens; writes will fail gracefully
-    currentUser = {
-      uid: 'preview-user', email: 'preview@preview.test',
-      name: 'Preview User', role, accessibleMenuIds: MENU_ID ? [MENU_ID] : [],
-      accessToken: null, refreshToken: null, expiresAt: 0,
-    };
-    applyRole(role);
-    renderUserHeader();
-    if (role === 'admin') { if (!isAdminMode) enterAdmin(); }
-    else { if (!isManagerMode) enterManager(); }
-  }
-  _updatePreviewToolbar();
-}
-
-function _updatePreviewToolbar() {
-  const active = _previewRole ?? (currentUser?.role || 'public');
-  document.querySelectorAll('#preview-toolbar .preview-toolbar-btn[data-role]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.role === active);
-  });
-}
-
 init();
-if (IS_PREVIEW) _initPreviewToolbar();
