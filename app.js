@@ -803,6 +803,8 @@ function createAccessSessionService() {
       };
 
       if (!currentUser) return requireAuth();
+      const authOverlay = document.getElementById('auth-overlay');
+      if (authOverlay?.classList.contains('open')) closeAuthOverlay();
 
       if (_appPageMode === 'manager') {
         _setLoadingMessage('Checking manager access…');
@@ -1555,26 +1557,6 @@ function getRestaurantSpecialsService() {
   if (_restaurantSpecialsService) return _restaurantSpecialsService;
   _restaurantSpecialsService = createRestaurantSpecialsService();
   return _restaurantSpecialsService;
-}
-
-function resetRestaurantSpecialsCatalog() {
-  return getRestaurantSpecialsService().resetCatalog();
-}
-
-function buildCurrentMenuSpecialsCatalog() {
-  return getRestaurantSpecialsService().buildCurrentMenuCatalog();
-}
-
-function getRestaurantSpecialsCatalog() {
-  return getRestaurantSpecialsService().getCatalog();
-}
-
-async function ensureRestaurantSpecialsGroup(restaurantId = RESTAURANT_ID) {
-  return getRestaurantSpecialsService().ensureGroup(restaurantId);
-}
-
-async function refreshRestaurantSpecialsCatalog(restaurantId = RESTAURANT_ID) {
-  return getRestaurantSpecialsService().refreshCatalog(restaurantId);
 }
 
 async function refreshFeaturedForActiveMenu() {
@@ -6609,10 +6591,6 @@ document.getElementById('invite-modal-bg')?.addEventListener('click', e => {
 
 function getActiveRestaurantSpecialGroup() {
   return getRestaurantSpecialsService().getActiveGroup();
-}
-
-async function callRestaurantSpecialsApi(action, payload = {}) {
-  return getRestaurantSpecialsService().request(action, payload);
 }
 
 function renderFeaturedTab() {
