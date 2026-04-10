@@ -13,19 +13,26 @@ to target (e.g. `/leroyslounge`, `/elroyscantina`, `/manager`, `/admin`, `/`).
 
 - **screen** (required): the route or page to focus on
   (e.g. `/leroyslounge`, `/elroyscantina`, `/manager`, `/admin`, `/`)
+- **--passes N** (optional): run exactly N code-changing passes after the audit
+  then stop. Omit to pause and ask after every pass.
 
 If the user does not specify a screen, ask which one before proceeding.
 
 ## Source Of Truth
 
-- inspect only the Vercel preview deployment for the current branch or commit
+- inspect only the Vercel preview deployment for the current branch
 - never use localhost, a local dev server, a local build, or any locally run
   copy of the site for Playwright inspection
+- derive the preview URL by running `git rev-parse HEAD` to get the commit
+  hash, then `vercel ls` (personal account, no `--scope` needed) and matching
+  the deployment for the current branch
 - each pass is incomplete until you inspect the current preview, implement the
-  pass, validate locally as needed, commit, push, wait for the preview update,
-  and inspect the updated preview again
-- if the Vercel preview cannot be accessed, loaded, or audited successfully,
-  stop and ask the user; do not fall back to localhost
+  pass, run `deploy`, poll until the preview is ready, and inspect the updated
+  preview again
+- if the Vercel preview cannot be reached, check `vercel ls` for build status
+  first — if still building, wait and poll; if errored, surface the error
+  message to the user; only stop and ask if the deployment is ready but still
+  unreachable; never fall back to localhost
 
 ## Repo Guardrails
 
@@ -39,13 +46,34 @@ If the user does not specify a screen, ask which one before proceeding.
   product direction, information architecture, core workflows, or brand
   character
 
+## Persistent State
+
+All design-loop output for a screen lives in `design-loop/<screen>/`:
+
+- **`design-loop-issues.md`** — living document of open issues. Written fresh
+  after each audit pass. Issues are removed once fixed. Issues are tagged
+  `[CRITICAL]` when they break functionality, cause visible regressions, or
+  significantly degrade the experience. This file is committed to the repo and
+  read at the start of every new session.
+- **`design-loop-log.md`** — append-only full pass report after every pass
+  (audit and code-changing). Gitignored.
+- **Screenshots** — saved to `design-loop/<screen>/` with descriptive names
+  (e.g. `pass1-audit-desktop-light-top.png`). Gitignored.
+
+At session start:
+
+1. Read `design-loop-issues.md` if it exists.
+2. If any `[CRITICAL]` issues are present → skip the audit pass and go
+   straight to the first code-changing pass targeting those issues.
+3. If no critical issues (or no issues file) → run a fresh audit pass and
+   merge new findings into the issues file before proceeding.
+
 ## Companion Skills
 
-Use these when the affected area is clear:
-
-- `playwright` for browser inspection and screenshots
-- `deploy` and `verify` for commit, push, and preview-update workflow
-- `menu-regression-reviewer` after meaningful behavior changes
+- `deploy` — mandatory after every code-changing pass (handles verify, commit,
+  and push)
+- `menu-regression-reviewer` — mandatory after any pass that touches behavior,
+  not just visuals
 - `public-route-builder` for route-owned public pages
 - `manager-ui-maintainer` for manager or admin UI work
 - `auth-and-access-guard` for auth, recovery, role, or access changes
@@ -56,35 +84,63 @@ Use these when the affected area is clear:
 
 ## Pass Audit
 
-1. Find the current Vercel preview URL for the branch or commit you are about
-   to improve.
-2. **Always use a headed (visible) browser session** — never headless. Launch
-   Playwright with `headless: false` / `browser_navigate` so the user can
-   watch the audit live in a managed Chrome window. Do not use background or
-   headless Playwright, even if that is the default.
-3. Inspect the target screen with Playwright in:
+### Pass 1 (Audit — no code changes)
+
+1. Find the Vercel preview URL: run `git rev-parse HEAD`, then `vercel ls`,
+   match the deployment for the current branch.
+2. Launch Playwright headed (visible browser) so the user can watch live.
+   Use headless only if the user has opted out of watching or the environment
+   has no display.
+3. Inspect the target screen in all four mode combinations:
    - desktop light mode
    - desktop dark mode
    - mobile light mode
    - mobile dark mode
-4. **Scroll the full page** in each mode combination. Do not rely on the
-   initial viewport alone — many issues hide below the fold. Scroll from the
-   very top to the very bottom in measured increments (e.g. viewport-height
-   steps), pausing to capture or evaluate each section. Take a screenshot at
-   the top, middle, and bottom of the page at minimum. Only after you have
-   seen every pixel of the page should you move on to interaction states.
-5. Go deep on the target screen. Don't just skim — inhabit it. Interact with
-   every reachable state: navigation, modals, forms, menus, tabs, drawers,
-   hover, focus, active, disabled, loading, empty, and error states.
-6. Capture screenshots when they help compare before vs after.
-7. Rank the highest-leverage issues for this pass. Favor a few cohesive wins
-   over many shallow tweaks.
+4. **Scroll the full page in every mode.** Scroll in viewport-height increments
+   from top to bottom, pausing to screenshot and evaluate every section. Never
+   rely on the initial viewport alone — do not move on until you have seen
+   every pixel of the page.
+5. Interact with every reachable state: navigation, modals, forms, menus, tabs,
+   drawers, hover, focus, active, disabled, loading, empty, and error states.
+6. Apply the Creative Evaluation Lens (see below) in full.
+7. Document every issue found. Tag `[CRITICAL]` where appropriate.
+8. Write `design-loop-issues.md` (merge with any existing issues).
+9. Append the audit report to `design-loop-log.md`.
+10. Propose what the first code-changing pass will tackle.
+11. In pause-after-every-pass mode: ask for approval before proceeding.
+    With `--passes N`: proceed automatically.
+
+### Code-Changing Passes (Pass 2+)
+
+1. Re-inspect only the modes and states relevant to what this pass will change.
+   Scroll in viewport-height increments — screenshot every section.
+2. Before editing, state:
+   - what you found
+   - what you are changing
+   - why the current state falls short and what the change does for the
+     experience
+3. Make the changes.
+4. Run `deploy`. Use commit message format:
+   `design(<screen>): pass N — <one-line summary>`
+5. Poll `vercel ls` until the deployment status is Ready.
+6. Reinspect the affected modes and states. Compare before vs after.
+7. Confirm the pass improved the experience and did not introduce regressions.
+8. Run `menu-regression-reviewer` if the pass touched any behavioral code.
+9. Update `design-loop-issues.md`: remove issues that are now fixed.
+10. Append the pass report to `design-loop-log.md`.
+11. Plan the next pass based on current state — one pass at a time, never
+    plan all passes upfront.
+12. In pause-after-every-pass mode: ask whether to continue.
+    With `--passes N`: continue automatically until N code-changing passes
+    are complete.
 
 ## Creative Evaluation Lens
 
-Look at the screen the way a demanding creative director would — someone who
-ships world-class consumer products, not just "correct" ones. Go beyond
-checklists. Ask yourself:
+Apply in full on pass 1 and on any pass where the scope is undecided. On
+targeted passes, keep it in mind — always ask whether the fix is enough or
+whether a bolder move would better serve the experience. The goal is not just
+to correct what is broken but to raise the bar. Suggest what the screen could
+become, not just what needs patching.
 
 - **Feel**: Does this screen feel good? Is there a moment of delight, or does
   it feel utilitarian and flat? What would make someone say "nice" when they
@@ -117,29 +173,6 @@ Push beyond the safe, incremental fix. If the screen is fundamentally okay but
 uninspired, say so and propose something bolder. If the bones are great but a
 detail is off, zoom in on that detail.
 
-## Pass Execution
-
-1. Before editing, state briefly:
-   - what you found on the target screen
-   - what you are changing
-   - why it matters — not just "improves spacing" but why the current state
-     falls short and what the change does for the experience
-2. If the pass adds a new feature, ask the user first.
-3. Match the scale of changes to what the screen actually needs. If a large
-   redesign is the right move, propose it and get user approval before
-   proceeding — do not artificially shrink the scope just to avoid a big diff.
-   If polish is what's needed, polish. If a structural overhaul is what's
-   needed, say so clearly and ask. The goal is the strongest user-visible ROI,
-   not the smallest change.
-4. Run targeted validation for the changed files and flows.
-5. Commit with a clear message and push the current branch.
-6. Wait for the Vercel preview deployment to finish updating.
-7. Reinspect the target screen in all four mode combinations.
-8. Compare before vs after across all affected states.
-9. Confirm the pass improved the experience and did not introduce regressions.
-10. Decide whether another pass is warranted, then continue until the remaining
-    gains are marginal.
-
 ## Priorities
 
 - prefer moves that change how the screen feels, not just how it measures
@@ -149,15 +182,19 @@ detail is off, zoom in on that detail.
 - don't polish what should be redesigned; don't redesign what just needs polish
 - keep changes production-ready, maintainable, and aligned with repo
   conventions
+- match the scale of changes to what the screen actually needs — if a large
+  redesign is the right move, propose it and get approval; do not shrink scope
+  just to avoid a big diff
 
 ## Output Per Pass
 
-Report:
+Append to `design-loop-log.md`:
 
+- pass number and type (audit or code-changing)
 - target screen and states inspected
 - highest-leverage issues found
-- changes made
+- changes made (or issues documented, for audit pass)
 - why the pass mattered — what shifted in the experience
 - preview URL inspected
 - validation and regression results
-- whether another pass should happen and what it would tackle
+- what the next pass would tackle
