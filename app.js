@@ -450,6 +450,22 @@ function navigateToPage(path) {
   window.location.assign(path);
 }
 
+function restoreMenuStateFromFallback(expectedRestaurantId = '') {
+  const cached = readCachedMenuState(expectedRestaurantId);
+  if (cached) {
+    try {
+      hydrateState(cached);
+      return { source: 'cache', usedFallback: true };
+    } catch (_) {
+      /* fall through to defaults */
+    }
+  }
+  menuState = defaultState();
+  currentDesign = { ...DESIGN_DEFAULTS };
+  _restaurantCustomDesignEnabled = true;
+  return { source: 'default', usedFallback: true };
+}
+
 function buildCurrentMenuPageRequest(overrides = {}) {
   const pathname = overrides.pathname ?? window.location.pathname;
   const search = overrides.search ?? window.location.search;
@@ -487,9 +503,15 @@ function buildMenuSessionSnapshot(source = 'live') {
 
 function createMenuLifecycleService(ports) {
   return {
+    async openPageState(options = {}) {
+      return ports.openPageState(options);
+    },
     async refreshPageState(options = {}) {
       if (options.reason === 'poll') return ports.pollPageState(options);
-      return ports.loadPageState(options);
+      return {
+        ok: true,
+        snapshot: await ports.loadPageState(options),
+      };
     },
     async savePageDraft(options = {}) {
       return ports.savePageDraft(options);
@@ -508,6 +530,10 @@ function createMenuRuntime({ lifecycle }) {
         _syncRequest(nextRequest = {}) {
           this._request = { ...this._request, ...nextRequest };
           return this._request;
+        },
+        async open(options = {}) {
+          this._syncRequest(buildCurrentMenuPageRequest(options));
+          return lifecycle.openPageState({ request: this._request, ...options });
         },
         getSnapshot(source = 'live') {
           this._syncRequest(buildCurrentMenuPageRequest());
@@ -562,6 +588,7 @@ function createMenuRuntime({ lifecycle }) {
 function getMenuLifecycleService() {
   if (_menuLifecycleService) return _menuLifecycleService;
   _menuLifecycleService = createMenuLifecycleService({
+    openPageState: options => _openCurrentMenuPageInternal(options),
     loadPageState: options => _loadActiveMenuStateInternal(options),
     pollPageState: options => _pollActiveMenuStateInternal(options),
     savePageDraft: options => _saveActiveMenuDraftInternal(options),
@@ -1105,6 +1132,56 @@ async function refreshFeaturedForActiveMenu() {
   return _featuredGroups;
 }
 
+async function _openCurrentMenuPageInternal(options = {}) {
+  const {
+    request = buildCurrentMenuPageRequest(),
+    resolveMenu = true,
+    fallbackToDefault = true,
+    includeFeatured = true,
+    persistCache = true,
+    expectedRestaurantId = request.siteRestaurantId || '',
+  } = options;
+
+  if (resolveMenu && SUPABASE_URL) await sbResolveMenu();
+
+  if (!SUPABASE_URL || !MENU_ID) {
+    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+    return {
+      ok: true,
+      source: fallback.source,
+      usedFallback: fallback.usedFallback,
+      showLoadError: false,
+      snapshot: buildMenuSessionSnapshot(fallback.source),
+    };
+  }
+
+  try {
+    const snapshot = await _loadActiveMenuStateInternal({
+      fallbackToDefault,
+      includeFeatured,
+      persistCache,
+      source: 'network',
+    });
+    return {
+      ok: true,
+      source: snapshot.source || 'network',
+      usedFallback: false,
+      showLoadError: false,
+      snapshot,
+    };
+  } catch (error) {
+    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+    return {
+      ok: false,
+      error,
+      source: fallback.source,
+      usedFallback: fallback.usedFallback,
+      showLoadError: true,
+      snapshot: buildMenuSessionSnapshot(fallback.source),
+    };
+  }
+}
+
 async function _loadActiveMenuStateInternal(options = {}) {
   const {
     fallbackToDefault = true,
@@ -1164,7 +1241,8 @@ async function _pollActiveMenuStateInternal() {
 }
 
 async function loadActiveMenuState(options = {}) {
-  return ensureCurrentMenuSession().refresh(options);
+  const result = await ensureCurrentMenuSession().refresh(options);
+  return result?.snapshot || result;
 }
 
 async function sbPatchMenuMeta(update) {
@@ -2152,34 +2230,16 @@ async function init() {
     return;
   }
 
-  if (SUPABASE_URL) await sbResolveMenu();
-
-  if (!SUPABASE_URL || !MENU_ID) {
-    // Offline or unconfigured — serve from localStorage cache if available
-    const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
-    if (cached) {
-      try { hydrateState(cached); } catch(e) { menuState = defaultState(); }
-    } else {
-      menuState = defaultState();
-    }
-    applyDesign(currentDesign);
-    await showPublicView();
+  const pageSession = ensureCurrentMenuSession();
+  const openResult = await pageSession.open({
+    resolveMenu: true,
+    expectedRestaurantId: _siteRestaurant?.id || RESTAURANT_ID || '',
+  });
+  applyDesign(currentDesign);
+  if (openResult?.showLoadError) {
+    await showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
   } else {
-    try {
-      await loadActiveMenuState();
-      applyDesign(currentDesign);
-      await showPublicView();
-    } catch(e) {
-      // Fallback to localStorage cache
-      const cached = readCachedMenuState(_siteRestaurant?.id || RESTAURANT_ID || '');
-      if (cached) {
-        try { hydrateState(cached); } catch(e2) { menuState = defaultState(); }
-      } else {
-        menuState = defaultState();
-      }
-      applyDesign(currentDesign);
-      await showPublicViewWithError('⚠️ Could not load menu data. Check your connection.');
-    }
+    await showPublicView();
   }
 
   // Restore Supabase session — recovery callback takes priority over stored tokens
@@ -2352,9 +2412,19 @@ async function _loadSettingsPageMenuContext(menuId) {
     url.searchParams.set('menu', fallbackMenu.slug);
     history.replaceState({}, '', url.toString());
   }
-  await sbResolveMenu();
-  if (!MENU_ID) return false;
-  await loadActiveMenuState();
+  const session = ensureCurrentMenuSession({
+    requestedMenuId: menuId,
+    requestedMenuSlug: fallbackMenu?.slug || '',
+    siteRestaurantId: fallbackMenu?.restaurantId || '',
+  });
+  const openResult = await session.open({
+    resolveMenu: true,
+    expectedRestaurantId: fallbackMenu?.restaurantId || '',
+    requestedMenuId: menuId,
+    requestedMenuSlug: fallbackMenu?.slug || '',
+    siteRestaurantId: fallbackMenu?.restaurantId || '',
+  });
+  if (!MENU_ID || !openResult?.snapshot?.menuId) return false;
   applyDesign(currentDesign);
   return true;
 }
@@ -3462,6 +3532,11 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   const url = new URL(location.href);
   url.searchParams.set('menu', slug);
   history.replaceState({}, '', url.toString());
+  ensureCurrentMenuSession({
+    requestedMenuId: menuId,
+    requestedMenuSlug: slug,
+    siteRestaurantId: restaurantId || '',
+  });
   closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
   renderUserHeader();
