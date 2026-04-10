@@ -6160,9 +6160,6 @@ setInterval(() => {
   });
 })();
 
-// ─── PREVIEW ROLE-SWITCHER TOOLBAR ───────────────────────────────────────────
-let _previewRole = null; // tracks active mock role; null = using real session
-
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
 
 async function fetchRestaurantMenuIndex() {
@@ -6236,51 +6233,4 @@ async function renderMenusPanel() {
   }
 }
 
-function _initPreviewToolbar() {
-  if (!IS_PREVIEW) return;
-  const toolbar = document.createElement('div');
-  toolbar.id = 'preview-toolbar';
-  toolbar.setAttribute('aria-label', 'Preview role switcher');
-  toolbar.innerHTML = `
-    <div class="preview-toolbar-label">PREVIEW</div>
-    <button class="preview-toolbar-btn" data-role="public"  onclick="_setPreviewRole('public')">Public</button>
-    <button class="preview-toolbar-btn" data-role="manager" onclick="_setPreviewRole('manager')">Manager</button>
-    <button class="preview-toolbar-btn" data-role="admin"   onclick="_setPreviewRole('admin')">Admin</button>
-    <div class="preview-toolbar-divider"></div>
-    <button class="preview-toolbar-btn preview-toolbar-login" onclick="openAuthOverlay()">Login</button>
-  `;
-  document.body.appendChild(toolbar);
-  _updatePreviewToolbar();
-}
-
-function _setPreviewRole(role) {
-  _previewRole = role;
-  if (role === 'public') {
-    if (isManagerMode || isAdminMode) exitView();
-    currentUser = null;
-    applyRole('none');
-    renderUserHeader();
-  } else {
-    // Mock session — no real tokens; writes will fail gracefully
-    currentUser = {
-      uid: 'preview-user', email: 'preview@preview.test',
-      name: 'Preview User', role, accessibleMenuIds: MENU_ID ? [MENU_ID] : [],
-      accessToken: null, refreshToken: null, expiresAt: 0,
-    };
-    applyRole(role);
-    renderUserHeader();
-    if (role === 'admin') { if (!isAdminMode) enterAdmin(); }
-    else { if (!isManagerMode) enterManager(); }
-  }
-  _updatePreviewToolbar();
-}
-
-function _updatePreviewToolbar() {
-  const active = _previewRole ?? (currentUser?.role || 'public');
-  document.querySelectorAll('#preview-toolbar .preview-toolbar-btn[data-role]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.role === active);
-  });
-}
-
 init();
-if (IS_PREVIEW) _initPreviewToolbar();
