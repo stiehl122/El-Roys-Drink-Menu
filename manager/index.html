@@ -44,6 +44,13 @@
               <div class="manager-shell-header-badges">
                 <span class="manager-shell-header-badge">Manager</span>
                 <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
+                <button
+                  class="manager-shell-header-badge manager-shell-header-return"
+                  id="manager-return-btn"
+                  type="button"
+                  onclick="exitView()"
+                  style="display:none"
+                >Return to menu</button>
               </div>
             </div>
             <div class="manager-shell-title-row">
@@ -183,10 +190,10 @@
                     <p class="settings-section-kicker">Featured</p>
                     <h3>Featured Items</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Current featured lineup. Unconfirmed items appear in the action bar below.</p>
+                  <p class="manager-shell-card-copy">Current featured lineup across this restaurant's menus.</p>
                 </div>
                 <div id="featured-mgr-wrap"></div>
-                <button class="btn-small manager-shell-overview-link" onclick="editFeaturedFromBanner()" style="margin-top:14px">Edit Featured</button>
+                <button class="btn-small manager-shell-overview-link" onclick="focusFeaturedManagerCard()" style="margin-top:14px">Edit Featured</button>
               </section>
 
               <section class="manager-shell-overview-card manager-shell-overview-card--recent" id="manager-recent-section">
@@ -329,7 +336,7 @@
           <div class="manager-shell-footer-copy">
             <p class="manager-shell-footer-kicker">Current Menu</p>
             <h3>Manager Workspace</h3>
-            <p class="manager-shell-footer-note">Keep drafts private, confirm featured items, and publish updates when service is ready.</p>
+            <p class="manager-shell-footer-note">Keep drafts private and publish updates when service is ready.</p>
           </div>
           <div class="manager-shell-footer-meta">
             <div class="manager-shell-footer-pills">
@@ -337,7 +344,6 @@
               <span class="manager-shell-footer-pill" id="manager-footer-last-updated">Updated —</span>
               <span class="manager-shell-footer-pill" id="manager-footer-version">Version —</span>
             </div>
-            <button class="logout-link manager-shell-exit" onclick="exitView()">Back to menu view</button>
           </div>
         </footer>
       </main>
@@ -349,10 +355,6 @@
         <p class="workspace-actions-sub" id="manager-action-bar-summary"></p>
       </div>
       <div class="manager-shell-actionbar-groups">
-        <div class="manager-shell-actionbar-featured" id="manager-featured-action-group" hidden>
-          <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
-          <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
-        </div>
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group" hidden>
           <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Draft</button>
           <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review and publish changes to the live menu">Send Update</button>

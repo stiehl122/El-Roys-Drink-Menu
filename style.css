@@ -1259,9 +1259,6 @@
 .featured-slot-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .featured-sell-note { font-size: 11px; color: var(--ember); font-style: italic; margin-top: 2px; }
 
-/* Featured confirm banner */
-.featured-confirm-banner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--ember); border-radius: 8px; margin: 8px 0; font-size: 13px; color: var(--text); flex-wrap: wrap; }
-
 /* Specials manager card */
 .featured-specials-card { margin-bottom: 12px; }
 .featured-specials-icon { background: var(--terra); color: var(--bg); }
@@ -2728,27 +2725,6 @@ body.manager-stitch-shell #setup-banner h3 {
 body.manager-stitch-shell #setup-banner p,
 body.manager-stitch-shell #setup-banner strong {
   color: var(--manager-shell-muted);
-}
-
-body.manager-stitch-shell .featured-confirm-banner {
-  margin: 0 0 24px;
-  border-radius: 2px;
-  background: linear-gradient(135deg, var(--manager-shell-primary-soft), var(--manager-shell-primary));
-  border: none;
-  color: var(--manager-shell-bg);
-  padding: 22px 24px;
-}
-
-body.manager-stitch-shell .featured-confirm-banner .btn-small {
-  background: var(--manager-shell-surface);
-  border-color: var(--manager-shell-surface);
-  color: var(--manager-shell-primary);
-}
-
-body.manager-stitch-shell .featured-confirm-banner .btn-small:hover {
-  background: var(--manager-shell-accent-soft);
-  border-color: var(--manager-shell-accent-soft);
-  color: var(--manager-shell-accent);
 }
 
 body.manager-stitch-shell .manager-shell-stats-grid,
@@ -4365,6 +4341,25 @@ body.manager-stitch-shell .manager-shell-header-badge {
 
 body.manager-stitch-shell .manager-shell-header-badge--muted {
   color: var(--manager-shell-muted);
+}
+
+body.manager-stitch-shell .manager-shell-header-return {
+  appearance: none;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+body.manager-stitch-shell .manager-shell-header-return:hover {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .manager-shell-header-return:focus-visible {
+  outline: 2px solid var(--manager-shell-primary);
+  outline-offset: 2px;
 }
 
 body.manager-stitch-shell .manager-shell-title-row {

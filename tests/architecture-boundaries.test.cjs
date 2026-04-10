@@ -293,7 +293,7 @@ test('public route contract exposes a stable snapshot and switchMenu action', as
   assert.equal(applyCalls, 1);
 });
 
-test('restaurant specials service centralizes add, matches, and confirm flows', async () => {
+test('restaurant specials service centralizes add and match flows', async () => {
   const sandbox = loadAppSandbox();
   const requestCalls = [];
   const refreshCalls = [];
@@ -342,11 +342,134 @@ test('restaurant specials service centralizes add, matches, and confirm flows', 
   assert.equal(added.ok, true);
   assert.equal(requestCalls[0][0], 'add');
   assert.equal(refreshCalls.length, 1);
+});
 
-  const confirmed = await service.confirmToday();
-  assert.equal(confirmed.ok, true);
-  assert.equal(sandbox.sessionStorage.getItem('featured_confirmed:00000000-0000-0000-0000-000000000010'), '1');
-  assert.equal(requestCalls[1][0], 'confirm');
+test('manager menu switching closes the mobile drawer after the menu refresh completes', async () => {
+  const sandbox = loadAppSandbox();
+  const mobileCalls = [];
+
+  setState(sandbox, {
+    currentDesign: {},
+    showMenuPicker: onPick => {
+      mobileCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        mobileCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      mobileCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      mobileCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      mobileCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      mobileCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      mobileCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      mobileCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      mobileCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 920;
+  sandbox.window.innerWidth = 920;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(mobileCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+    'close',
+  ]);
+
+  const desktopCalls = [];
+  setState(sandbox, {
+    showMenuPicker: onPick => {
+      desktopCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        desktopCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      desktopCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      desktopCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      desktopCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      desktopCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      desktopCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      desktopCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      desktopCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 921;
+  sandbox.window.innerWidth = 921;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(desktopCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+  ]);
+});
+
+test('manager header return button only appears while manager mode is active', () => {
+  const sandbox = loadAppSandbox();
+  const returnBtn = sandbox.document._registerElement('manager-return-btn', createElement('button', 'manager-return-btn'));
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      name: 'Alex',
+      accessibleMenuIds: ['menu-main'],
+    },
+    currentUserCanManageMenu: () => true,
+    isManagerMode: true,
+  });
+
+  sandbox.renderUserHeader();
+  assert.equal(returnBtn.style.display, '');
+
+  setState(sandbox, { isManagerMode: false });
+  sandbox.renderUserHeader();
+  assert.equal(returnBtn.style.display, 'none');
 });
 
 test('public route contract and route renderers register and hydrate both restaurant shells', async () => {
@@ -383,25 +506,23 @@ test('public route contract and route renderers register and hydrate both restau
         {
           id: 'group-1',
           name: 'Specials',
-          slots: [
-            {
-              id: 'slot-1',
-              itemId: 'special-1',
-              sellNote: '',
-              item: {
-                id: 'special-1',
-                name: 'House Margarita',
-                price: '$12',
-                visibility: 'public',
-                eightySixed: false,
-                desc: 'Citrus and salt',
-                recipe: ['tequila', 'lime'],
-                upcharges: [],
-                showDescription: true,
-                showRecipe: true,
-              },
+          slots: Array.from({ length: 5 }, (_, index) => ({
+            id: `slot-${index + 1}`,
+            itemId: `special-${index + 1}`,
+            sellNote: '',
+            item: {
+              id: `special-${index + 1}`,
+              name: `House Margarita ${index + 1}`,
+              price: '$12',
+              visibility: 'public',
+              eightySixed: false,
+              desc: 'Citrus and salt',
+              recipe: ['tequila', 'lime'],
+              upcharges: [],
+              showDescription: true,
+              showRecipe: true,
             },
-          ],
+          })),
         },
       ],
       menuState: makeMenuState({
@@ -475,7 +596,8 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
-    assert.match(featuredWrap.innerHTML, /House Margarita/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 1/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 5/);
     assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
   }
 });

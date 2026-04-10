@@ -320,10 +320,6 @@ function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user
   return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
 }
 
-function getFeaturedConfirmationKey(restaurantId = RESTAURANT_ID) {
-  return `featured_confirmed:${restaurantId || 'unknown'}`;
-}
-
 function getMenuTypeLabel(menuType) {
   return (menuType || '').toLowerCase() === 'food' ? 'Food' : 'Drinks';
 }
@@ -1529,27 +1525,6 @@ function createRestaurantSpecialsService() {
       return { ok: true };
     },
 
-    needsConfirmation(restaurantId = RESTAURANT_ID) {
-      if (!currentUserCanEditRestaurantSpecials(restaurantId)) return false;
-      if (sessionStorage.getItem(getFeaturedConfirmationKey(restaurantId))) return false;
-      if (!_featuredGroups.some(group => group.slots.length)) return false;
-      return _featuredGroups.some(group => group.slots.some(slot => {
-        if (!slot.confirmedAt) return true;
-        const confirmed = new Date(slot.confirmedAt);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return confirmed < today;
-      }));
-    },
-
-    async confirmToday() {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('confirm');
-      sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-      return { ok: true, successMessage: 'Specials confirmed for today!' };
-    },
   };
 }
 
@@ -2151,31 +2126,20 @@ function updateManagerActionBar() {
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
-  const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
   const syncEl = document.getElementById('sync-status');
-  const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
   const isCompactViewport = window.innerWidth <= 480;
 
   if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
-  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
-  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+  bar.hidden = !hasDraftChanges;
   syncManagerActionBarStatus(syncEl);
 
   if (summary) {
-    if (hasDraftChanges && hasFeaturedPrompt) {
-      summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private, Send Update publishes, and featured still needs confirmation.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
-    } else if (hasDraftChanges) {
+    if (hasDraftChanges) {
       summary.textContent = isCompactViewport
         ? 'Drafts are ready. Save keeps them private and Send Update publishes live.'
         : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
-    } else if (hasFeaturedPrompt) {
-      summary.textContent = isCompactViewport
-        ? 'Featured still needs confirmation.'
-        : "Today's featured lineup needs confirmation.";
     } else {
       summary.textContent = '';
     }
@@ -3455,6 +3419,7 @@ function renderUserHeader() {
   const actionBtn = document.getElementById('action-btn');
   const adminBtn  = document.getElementById('admin-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
+  const managerReturnBtn = document.getElementById('manager-return-btn');
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
@@ -3468,6 +3433,9 @@ function renderUserHeader() {
   if (adminDrawerBtn) {
     adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminDrawerBtn.classList.toggle('active', isAdminMode);
+  }
+  if (managerReturnBtn) {
+    managerReturnBtn.style.display = isManagerMode ? '' : 'none';
   }
 
   _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
@@ -3950,7 +3918,8 @@ async function onSwitchMenuClick() {
     renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
-    checkFeaturedConfirmation();
+    updateManagerActionBar();
+    if (window.innerWidth <= 920) closeSettingsDrawer();
   }, { managerOnly: true });
 }
 
@@ -4252,7 +4221,7 @@ function enterManager() {
   _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  checkFeaturedConfirmation();
+  updateManagerActionBar();
 }
 
 function exitManager() {
@@ -6769,32 +6738,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
   } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
-// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
-
-function _needsFeaturedConfirmation() {
-  return getRestaurantSpecialsService().needsConfirmation();
-}
-
-function checkFeaturedConfirmation() {
-  updateManagerActionBar();
-}
-
-async function confirmFeaturedToday() {
-  try {
-    const result = await getRestaurantSpecialsService().confirmToday();
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    updateManagerActionBar();
-    showToast(result.successMessage || 'Specials confirmed for today!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
-}
-
-function editFeaturedFromBanner() {
+function focusFeaturedManagerCard() {
   if (!currentUserCanEditRestaurantSpecials()) return;
-  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-  updateManagerActionBar();
   const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
   focusSettingsSection('manager-overview-section', overviewTrigger || null);
   requestAnimationFrame(() => {
