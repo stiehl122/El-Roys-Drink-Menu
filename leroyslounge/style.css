@@ -42,10 +42,24 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-board-page {
+  /* Light-theme vars must live on .ll-board-page so they outweigh the
+     duplicate block in the shared style.css at the same specificity
+     (style.css ~L345). Dark-mode values are set at the bottom of this
+     file inside the prefers-color-scheme media query. */
+  --ll-board-bg: rgb(125 127 124 / 1);
+  --ll-board-frame: rgb(65 0 0 / 0.95);
+  --ll-board-line: rgb(17 24 39 / 0.28);
+  --ll-board-ink: rgb(17 24 39 / 1);
+  --ll-board-ink-muted: rgb(17 24 39 / 0.72);
+  --ll-board-red: rgb(211 11 11 / 1);
+  --ll-board-red-dark: rgb(125 6 6 / 1);
+  --ll-board-pill-bg: rgb(17 24 39 / 0.08);
+  --ll-board-pill-border: rgb(17 24 39 / 0.22);
+  color-scheme: light;
   min-height: 100vh;
   min-height: 100dvh;
   background: var(--ll-board-surface);
-  color: rgb(229 226 225 / 1);
+  color: var(--ll-board-ink);
   font-family: 'Work Sans', sans-serif;
   display: flex;
   flex-direction: column;
