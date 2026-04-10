@@ -4015,16 +4015,18 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
   const badgeText = is86 ? '86' : isNew ? 'NEW' : '';
   const stateLabel = is86 ? "86'd" : isNew ? 'New' : 'Active';
   return `<div class="current-item items-row ${stateClass}">
-      <button class="item-drag-handle" type="button" draggable="true"
-        ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
-        ondragend="endManagerItemDrag(event)"
-        title="Drag to reorder"
-        aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
-      ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
-      <div class="item-name"><input type="text" value="${escHtml(item.name)}"
-        aria-label="Item name for ${escHtml(item.name)}"
-        onblur="renameItem('${catId}','${item.id}',this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      <div class="item-row-main">
+        <button class="item-drag-handle" type="button" draggable="true"
+          ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
+          ondragend="endManagerItemDrag(event)"
+          title="Drag to reorder"
+          aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
+        ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
+        <div class="item-name"><input type="text" value="${escHtml(item.name)}"
+          aria-label="Item name for ${escHtml(item.name)}"
+          onblur="renameItem('${catId}','${item.id}',this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      </div>
       <span class="item-actions-compact">
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
@@ -4039,6 +4041,9 @@ function buildPricingRowHtml(item, catId) {
   const badgeText = is86 ? '86' : '';
   const upcharges = item.upcharges || [];
   const upchargeCount = upcharges.length;
+  const upchargeMeta = upchargeCount
+    ? `${upchargeCount} upcharge${upchargeCount === 1 ? '' : 's'} ready`
+    : 'Base price only';
   let summaryHtml = '';
   if (upchargeCount > 0) {
     summaryHtml = `<div class="upcharges-summary" id="upcharges-summary-${item.id}">${upcharges.map(u => `<span class="upcharge-chip">${escHtml(u.label)} <strong>${escHtml(u.price)}</strong></span>`).join('')}</div>`;
@@ -4056,18 +4061,27 @@ function buildPricingRowHtml(item, catId) {
     </div>
   </div>`;
   return `<div class="current-item pricing-row ${stateClass}">
-      <div class="item-name">
-        <span class="item-name-static">${escHtml(item.name)}</span>
-        ${badgeText ? `<span class="item-state-badge ${badgeClass}" style="margin-left:8px">${badgeText}</span>` : ''}
+      <div class="pricing-row-main">
+        <div class="pricing-row-title">
+          <span class="item-name-static">${escHtml(item.name)}</span>
+          ${badgeText ? `<span class="item-state-badge ${badgeClass}">${badgeText}</span>` : ''}
+        </div>
+        <p class="pricing-row-meta">${escHtml(upchargeMeta)}</p>
       </div>
-      <input class="price-input" type="text" placeholder="Price…" aria-label="Price for ${escHtml(item.name)}"
-        onblur="savePrice('${catId}','${item.id}',this.value)"
-        onkeydown="if(event.key==='Enter')this.blur()"
-        value="${escHtml(item.price||'')}"/>
-      <button class="upcharge-toggle-btn" title="Manage upcharges" aria-label="Manage upcharges for ${escHtml(item.name)}" aria-expanded="false" onclick="toggleUpcharges('${catId}','${item.id}')">
-        <span class="upcharge-toggle-icon">+$</span>
-        ${upchargeCount > 0 ? `<span class="upcharge-count">${upchargeCount}</span>` : ''}
-      </button>
+      <div class="pricing-row-controls">
+        <label class="pricing-inline-field">
+          <span class="pricing-inline-label">Base price</span>
+          <input class="price-input" type="text" placeholder="Price…" aria-label="Price for ${escHtml(item.name)}"
+            onblur="savePrice('${catId}','${item.id}',this.value)"
+            onkeydown="if(event.key==='Enter')this.blur()"
+            value="${escHtml(item.price||'')}"/>
+        </label>
+        <button class="upcharge-toggle-btn" title="Manage upcharges" aria-label="Manage upcharges for ${escHtml(item.name)}" aria-expanded="false" onclick="toggleUpcharges('${catId}','${item.id}')">
+          <span class="upcharge-toggle-icon">+$</span>
+          <span class="upcharge-toggle-label">Upcharges</span>
+          ${upchargeCount > 0 ? `<span class="upcharge-count">${upchargeCount}</span>` : ''}
+        </button>
+      </div>
     </div>
     ${summaryHtml}
     ${panelHtml}`;

@@ -5769,6 +5769,311 @@ body.manager-stitch-shell .del-item {
   }
 }
 
+/* 10. Manager edit-section pass */
+body.manager-stitch-shell #manager-items-section .current-items,
+body.manager-stitch-shell #manager-pricing-section .current-items,
+body.manager-stitch-shell #manager-description-section .current-items {
+  gap: 10px;
+}
+
+body.manager-stitch-shell #manager-items-section .items-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 18px;
+  background: var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell #manager-items-section .item-row-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 12px;
+}
+
+body.manager-stitch-shell #manager-items-section .item-drag-handle {
+  width: 32px;
+  min-height: 44px;
+  border: 1px dashed var(--manager-shell-border);
+  border-radius: 12px;
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell #manager-items-section .item-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+body.manager-stitch-shell #manager-items-section .item-name input {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 14px;
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell #manager-items-section .item-actions-compact {
+  margin-left: 0;
+  gap: 8px;
+}
+
+body.manager-stitch-shell #manager-items-section .items-row.is-eighty-sixed,
+body.manager-stitch-shell #manager-pricing-section .pricing-row.is-eighty-sixed {
+  background: rgba(186, 26, 26, 0.04);
+  border-color: rgba(186, 26, 26, 0.16);
+}
+
+body.manager-stitch-shell #manager-items-section .items-row.is-off-menu {
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 20px;
+  background: var(--manager-shell-surface);
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-row-meta {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-row-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 96px;
+}
+
+body.manager-stitch-shell #manager-pricing-section .pricing-inline-label {
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell #manager-pricing-section .price-input {
+  width: 96px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 14px;
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharge-toggle-btn {
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  gap: 8px;
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharge-toggle-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharges-summary,
+body.manager-stitch-shell #manager-pricing-section .upcharges-panel {
+  margin-top: -8px;
+  border-radius: 0 0 18px 18px;
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharges-summary {
+  padding: 0 18px 14px;
+  background: transparent;
+  border: 0;
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharges-panel {
+  padding: 12px 18px 16px;
+  background: var(--manager-shell-surface-muted);
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharge-row,
+body.manager-stitch-shell #manager-pricing-section .upcharge-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+body.manager-stitch-shell #manager-pricing-section .upcharge-add-row {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+body.manager-stitch-shell #manager-description-section .description-editor-card {
+  border-radius: 20px;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-row-header {
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-row-title .item-name-static {
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-row-meta {
+  max-width: 42ch;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-edit-body {
+  padding: 16px;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-field-block,
+body.manager-stitch-shell #manager-description-section .recipe-field-block {
+  padding: 14px;
+  border-radius: 16px;
+}
+
+body.manager-stitch-shell #manager-description-section .desc-field-heading {
+  align-items: flex-start;
+}
+
+body.manager-stitch-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  body.manager-stitch-shell #manager-items-section .items-row.is-eighty-sixed,
+  body.manager-stitch-shell #manager-pricing-section .pricing-row.is-eighty-sixed {
+    background: rgba(255, 180, 171, 0.06);
+    border-color: rgba(255, 180, 171, 0.18);
+  }
+}
+
+@media (max-width: 720px) {
+  body.manager-stitch-shell #manager-items-section .items-row {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  body.manager-stitch-shell #manager-items-section .item-row-main {
+    gap: 8px 10px;
+  }
+
+  body.manager-stitch-shell #manager-items-section .item-drag-handle {
+    width: 30px;
+  }
+
+  body.manager-stitch-shell #manager-items-section .item-actions-compact {
+    gap: 6px;
+  }
+
+  body.manager-stitch-shell #manager-pricing-section .pricing-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  body.manager-stitch-shell #manager-pricing-section .pricing-row-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+  }
+
+  body.manager-stitch-shell #manager-pricing-section .pricing-inline-field {
+    min-width: 0;
+  }
+
+  body.manager-stitch-shell #manager-pricing-section .price-input {
+    width: 100%;
+    text-align: left;
+    font-size: 16px;
+  }
+
+  body.manager-stitch-shell #manager-pricing-section .upcharge-row,
+  body.manager-stitch-shell #manager-pricing-section .upcharge-add-row {
+    grid-template-columns: minmax(0, 1fr) 84px auto;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-row-header {
+    padding: 14px 16px;
+    gap: 8px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-row-title .item-name-static {
+    font-size: 17px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-indicator {
+    padding: 5px 8px;
+    font-size: 9px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-edit-body {
+    padding: 12px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-field-block,
+  body.manager-stitch-shell #manager-description-section .recipe-field-block {
+    padding: 12px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-field-heading {
+    gap: 8px;
+  }
+
+  body.manager-stitch-shell #manager-description-section .desc-visibility-toggle {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  body.manager-stitch-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-stitch-shell #manager-description-section .recipe-field-block .add-ingredient-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 /* ─── REDUCED MOTION ─────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
