@@ -186,6 +186,8 @@ let _managerDraggedCatId = '';
 let _menuLifecycleService = null;
 let _menuRuntime = null;
 let _currentMenuSession = null;
+let _updatePublisher = null;
+let _menuMetaSupportsLastSentFeatured = true;
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
 function updateSaveBtn() {
   const btn = document.getElementById('save-btn');
@@ -1355,13 +1357,13 @@ function isMissingColumnError(error, columnName) {
     (message.includes('column') || message.includes('schema cache'));
 }
 
-async function patchMenuMetaWithCompatibility(update) {
+async function patchMenuMetaForMenuWithCompatibility(menuId, update) {
   const payload = { ...update };
   if (_menuMetaSupportsLastSentFeatured === false) {
     delete payload.last_sent_featured;
   }
   try {
-    await sbPatchMenuMeta(payload);
+    await sbPatchMenuMetaForMenu(menuId, payload);
     if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured')) {
       _menuMetaSupportsLastSentFeatured = true;
     }
@@ -1369,12 +1371,16 @@ async function patchMenuMetaWithCompatibility(update) {
   } catch (error) {
     if (Object.prototype.hasOwnProperty.call(payload, 'last_sent_featured') && isMissingColumnError(error, 'last_sent_featured')) {
       const { last_sent_featured, ...fallbackPayload } = payload;
-      await sbPatchMenuMeta(fallbackPayload);
+      await sbPatchMenuMetaForMenu(menuId, fallbackPayload);
       _menuMetaSupportsLastSentFeatured = false;
       return { downgradedFields: ['last_sent_featured'] };
     }
     throw error;
   }
+}
+
+async function patchMenuMetaWithCompatibility(update) {
+  return patchMenuMetaForMenuWithCompatibility(MENU_ID, update);
 }
 
 async function sbPatchRestaurantDesign(design) {
@@ -4651,7 +4657,8 @@ function finalizePersistStatus(ok) {
   syncManagerActionBarStatus(syncEl);
 }
 
-async function persistState() {
+async function persistState(options = {}) {
+  const { silentFailure = false } = options;
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
   try {
     const catRows = buildCategoryUpsertRows();
@@ -4687,7 +4694,7 @@ async function persistState() {
     return true;
   } catch(e) {
     finalizePersistStatus(false);
-    showToast('⚠️ Cloud save failed.', 'error');
+    if (!silentFailure) showToast('⚠️ Cloud save failed.', 'error');
     return false;
   }
 }
@@ -5459,18 +5466,18 @@ function buildPreviewBlockHtml(section) {
 }
 
 function openPreview() {
-  const diff = getCachedDiff();
+  const preview = getUpdatePublisher().preview();
   const content = document.getElementById('preview-content');
   const confirmBtn = document.getElementById('confirm-btn');
   const modal = document.getElementById('modal-bg');
   if (!content || !confirmBtn || !modal) return;
   content.innerHTML = '';
-  if (!diff.length) {
+  if (!preview.hasChanges) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
     confirmBtn.disabled = true;
   } else {
     confirmBtn.disabled = false;
-    diff.forEach(s => {
+    preview.sections.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
       block.innerHTML = buildPreviewBlockHtml(s);
@@ -5499,6 +5506,265 @@ function buildPatchMessage(diff) {
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
   return lines.join('\n').trim();
+}
+
+function getUpdatePublisher() {
+  if (_updatePublisher) return _updatePublisher;
+  _updatePublisher = createUpdatePublisher();
+  return _updatePublisher;
+}
+
+function createUpdatePublisher() {
+  return {
+    preview() {
+      const diff = getCachedDiff();
+      const patchMessage = diff.length ? buildPatchMessage(diff) : '';
+      return {
+        hasChanges: diff.length > 0,
+        diff,
+        sections: diff,
+        patchMessage,
+        truncated: patchMessage.length > 1000,
+        snapshot: buildMenuSessionSnapshot('preview'),
+      };
+    },
+
+    async publish(options = {}) {
+      const preview = options.preview?.diff ? options.preview : this.preview();
+      if (!preview.hasChanges) {
+        return {
+          ok: false,
+          noop: true,
+          preview,
+          snapshot: buildMenuSessionSnapshot('send-noop'),
+        };
+      }
+
+      const delivery = await dispatchMenuUpdateNotification({
+        menuId: MENU_ID,
+        patchMessage: preview.patchMessage,
+      });
+      if (!delivery.ok) {
+        return {
+          ok: false,
+          preview,
+          notificationStatus: delivery,
+          userMessage: delivery.userMessage,
+          snapshot: buildMenuSessionSnapshot('send-failed'),
+        };
+      }
+
+      const warnings = collectNotificationWarnings(delivery.summary);
+      try {
+        const persisted = await persistState({ silentFailure: true });
+        if (!persisted) throw new Error('persist failed');
+
+        const ts = Date.now();
+        const lastSentState = snapshotCurrentItemsAsLastSent();
+        const currentFeaturedIds = getCurrentFeaturedIds();
+        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
+          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
+          : [];
+        const patchResults = await Promise.all([
+          patchMenuMetaWithCompatibility({
+            last_updated_ts: ts,
+            last_sent_ts: ts,
+            last_sent_state: lastSentState,
+            last_sent_categories: preview.diff.map(section => section.id),
+            last_sent_featured: currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== MENU_ID)
+            .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
+              last_sent_featured: currentFeaturedIds,
+            })),
+        ]);
+        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+        }
+
+        _lastSentFeaturedIds = new Set(currentFeaturedIds);
+        applySentState(preview.diff, ts);
+        _dirty = false;
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+
+        const cacheSynced = syncLocalMenuCache({ silent: true });
+        if (!cacheSynced) {
+          warnings.push('This device could not refresh its local cache after the send.');
+        }
+
+        const logged = await logUpdate(preview.diff, preview.patchMessage);
+        if (!logged) {
+          warnings.push('The recent-changes audit log could not be written for this send.');
+        }
+
+        const finalWarnings = dedupePublisherWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          ts,
+          truncated: preview.truncated,
+          notificationStatus: delivery,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
+          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : 'sent'),
+        };
+      } catch (syncError) {
+        console.warn('sendUpdate post-send sync failed:', syncError);
+        warnings.push('Update sent, but database sync needs attention. Refresh before sending again.');
+        const finalWarnings = dedupePublisherWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          truncated: preview.truncated,
+          notificationStatus: delivery,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
+          snapshot: buildMenuSessionSnapshot('sent-warning'),
+        };
+      }
+    },
+  };
+}
+
+function dedupePublisherWarnings(warnings = []) {
+  return Array.from(new Set((warnings || []).filter(Boolean)));
+}
+
+function formatNotificationChannelName(channel) {
+  switch (channel) {
+    case 'groupme': return 'GroupMe';
+    case 'sms': return 'SMS';
+    case 'discord': return 'Discord';
+    case 'webhook': return 'Webhook';
+    default: return channel || 'Unknown channel';
+  }
+}
+
+function summarizeNotificationResults(results = {}) {
+  const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
+  const okChannels = [];
+  const skippedChannels = [];
+  const failedChannels = [];
+  const failedDetails = [];
+
+  entries.forEach(([channel, status]) => {
+    if (status === 'ok') {
+      okChannels.push(channel);
+      return;
+    }
+    if (status === 'skipped') {
+      skippedChannels.push(channel);
+      return;
+    }
+    failedChannels.push(channel);
+    failedDetails.push({
+      channel,
+      status: typeof status === 'string' ? status : 'error:unknown',
+    });
+  });
+
+  return {
+    results,
+    okChannels,
+    skippedChannels,
+    failedChannels,
+    failedDetails,
+    anyOk: okChannels.length > 0,
+    anyError: failedChannels.length > 0,
+    allSkipped: entries.length > 0 && skippedChannels.length === entries.length,
+  };
+}
+
+function collectNotificationWarnings(summary) {
+  if (!summary) return [];
+  const warnings = [];
+  if (summary.allSkipped) {
+    warnings.push('No notification channels were enabled for this menu.');
+  } else if (summary.anyOk && summary.anyError) {
+    warnings.push(`Some notification channels failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`);
+  }
+  return warnings;
+}
+
+async function dispatchMenuUpdateNotification({ menuId, patchMessage }) {
+  const authHeaders = currentUser?.accessToken
+    ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
+    : {};
+
+  let response;
+  try {
+    response = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
+      body: JSON.stringify({ menu_id: menuId, text: patchMessage }),
+    });
+  } catch (_) {
+    return {
+      ok: false,
+      statusCode: 0,
+      summary: summarizeNotificationResults({}),
+      userMessage: '❌ Network error. Check connection.',
+    };
+  }
+
+  let body = {};
+  try {
+    body = await response.json();
+  } catch (_) {
+    body = {};
+  }
+
+  const summary = summarizeNotificationResults(body?.results || {});
+  if (response.status >= 200 && response.status < 300) {
+    return {
+      ok: true,
+      statusCode: response.status,
+      partial: response.status === 207,
+      results: body?.results || {},
+      summary,
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: '❌ Not authorized. Please sign in.',
+    };
+  }
+
+  if (response.status === 403) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: '❌ Access denied. Your account role does not allow sending updates.',
+    };
+  }
+
+  if (response.status === 400 && typeof body?.error === 'string' && body.error.trim()) {
+    return {
+      ok: false,
+      statusCode: response.status,
+      summary,
+      userMessage: `❌ ${body.error.trim()}`,
+    };
+  }
+
+  const failedSummary = summary.failedChannels.length
+    ? ` Failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`
+    : '';
+  return {
+    ok: false,
+    statusCode: response.status,
+    summary,
+    userMessage: `❌ Notification error. Check channel config in Admin settings.${failedSummary}`,
+  };
 }
 
 function snapshotLastSentState() {
@@ -5547,89 +5813,15 @@ async function logUpdate(diff, patchMessage) {
   }
 }
 
-async function _publishActiveMenuUpdateInternal() {
-  const diff = getCachedDiff();
-  if (!diff.length) {
-    return { ok: false, noop: true, snapshot: buildMenuSessionSnapshot('send-noop') };
-  }
-  const patchMessage = buildPatchMessage(diff);
-  try {
-    const authHeaders = currentUser?.accessToken
-      ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
-      : {};
-    const r1 = await fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ menu_id: MENU_ID, text: patchMessage })
-    });
-
-    if (r1.status >= 200 && r1.status < 300) {
-      const ts = Date.now();
-      try {
-        const persisted = await persistState();
-        if (!persisted) throw new Error('persist failed');
-        const lastSentState = snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = getCurrentFeaturedIds();
-        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
-          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
-          : [];
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        await Promise.all([
-          sbPatchMenuMeta({
-            last_updated_ts:      ts,
-            last_sent_ts:         ts,
-            last_sent_state:      lastSentState,
-            last_sent_categories: diff.map(d => d.id),
-            last_sent_featured:   currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== MENU_ID)
-            .map(menuId => sbPatchMenuMetaForMenu(menuId, { last_sent_featured: currentFeaturedIds })),
-        ]);
-        applySentState(diff, ts);
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        const logged = await logUpdate(diff, patchMessage);
-        if (!logged) console.warn('sendUpdate audit log insert failed');
-        return {
-          ok: true,
-          truncated: patchMessage.length > 1000,
-          warningMessage: !cacheSynced
-            ? '⚠️ Update sent, but this device could not refresh its local cache.'
-            : '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot('sent'),
-        };
-      } catch (syncError) {
-        console.warn('sendUpdate post-send sync failed:', syncError);
-        return {
-          ok: true,
-          truncated: patchMessage.length > 1000,
-          warningMessage: '⚠️ Update sent, but database sync needs attention. Refresh before sending again.',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot('sent-warning'),
-        };
-      }
-    } else if (r1.status === 401) {
-      return { ok: false, userMessage: '❌ Not authorized. Please sign in.' };
-    } else if (r1.status === 403) {
-      return { ok: false, userMessage: '❌ Access denied. Your account role does not allow sending updates.' };
-    } else {
-      return { ok: false, userMessage: '❌ Notification error. Check channel config in Admin settings.' };
-    }
-  } catch(e) {
-    return { ok: false, userMessage: '❌ Network error. Check connection.' };
-  }
+async function _publishActiveMenuUpdateInternal(options = {}) {
+  return getUpdatePublisher().publish(options);
 }
 
 async function sendUpdate() {
-  const diff = getCachedDiff();
-  if (!diff.length) { closeModal(); return; }
+  const preview = getUpdatePublisher().preview();
+  if (!preview.hasChanges) { closeModal(); return; }
 
-  const patchMessage = buildPatchMessage(diff);
-  if (patchMessage.length > 1000) {
+  if (preview.truncated) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
@@ -5638,7 +5830,7 @@ async function sendUpdate() {
   confirmBtn.textContent = 'SENDING…';
 
   try {
-    const result = await ensureCurrentMenuSession().sendUpdate();
+    const result = await ensureCurrentMenuSession().sendUpdate({ preview });
     if (result?.noop) {
       closeModal();
       return;
@@ -5649,7 +5841,8 @@ async function sendUpdate() {
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       renderRecentChanges();
-      if (result.warningMessage) showToast(result.warningMessage, 'warning');
+      const warnings = Array.isArray(result.warnings) ? result.warnings : (result.warningMessage ? [result.warningMessage] : []);
+      warnings.forEach(message => showToast(`⚠️ ${message}`, 'warning'));
       return;
     }
     if (result?.userMessage) showToast(result.userMessage, 'error');
