@@ -19,3 +19,8 @@ supabase/config.toml
 /output/
 /screenshots/
 /landing*.png
+
+# Design loop artifacts (logs and screenshots only; issues files are committed)
+design-loop/**/design-loop-log.md
+design-loop/**/*.png
+design-loop/**/*.jpg
