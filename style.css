@@ -882,8 +882,8 @@
   .config-json-textarea { width: 100%; min-height: 110px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: monospace; font-size: 13px; padding: 12px; resize: none; box-sizing: border-box; margin-top: 4px; }
 
   /* ── TOAST ── */
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(70px); background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 12px 18px; font-size: 13px; z-index: 100; transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); white-space: nowrap; box-shadow: 0 7px 24px rgba(0,0,0,0.18); color: var(--text); }
-  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(calc(100% + 16px)); opacity: 0; visibility: hidden; pointer-events: none; background: var(--card); border: 1px solid var(--border); border-radius: 11px; padding: 12px 18px; font-size: 13px; z-index: 100; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease, visibility 0s linear 0.28s; white-space: normal; line-height: 1.4; box-shadow: 0 7px 24px rgba(0,0,0,0.18); color: var(--text); max-width: min(calc(100vw - 24px), 34rem); text-align: left; }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; visibility: visible; pointer-events: auto; transition: transform 0.28s cubic-bezier(0.34,1.56,0.64,1), opacity 0.22s ease; }
   .toast.success { border-color: var(--green); color: var(--green); }
   .toast.error { border-color: var(--red); color: var(--red); }
   .toast.warning { border-color: var(--gold); color: var(--gold); }
@@ -3380,6 +3380,7 @@ body.manager-stitch-shell .manager-shell-actionbar-featured .btn-small {
 
 body.manager-stitch-shell .toast {
   bottom: 108px;
+  max-width: min(calc(100vw - 32px), 28rem);
 }
 
 body.manager-stitch-shell .manager-shell-backdrop {
@@ -5083,19 +5084,36 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 }
 
 @media (max-width: 920px) {
+  body.manager-stitch-shell #app-shell > header.manager-shell-topbar {
+    margin-bottom: 8px;
+    background: transparent;
+    border-bottom: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
   body.manager-stitch-shell .settings-section {
     scroll-margin-top: 68px;
   }
 
   body.manager-stitch-shell .manager-shell-topbar-inner {
-    width: calc(100% - 24px);
-    min-height: calc(58px + env(safe-area-inset-top));
-    padding: calc(7px + env(safe-area-inset-top)) 0 7px;
+    width: calc(100% - 20px);
+    min-height: 0;
+    margin: calc(8px + env(safe-area-inset-top)) auto 0;
+    padding: 10px 12px;
+    border: 1px solid var(--manager-shell-border);
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 38%),
+      linear-gradient(135deg, var(--manager-shell-glass-bg), var(--manager-shell-surface-muted));
+    box-shadow: 0 16px 28px var(--manager-shell-shadow);
+    backdrop-filter: blur(18px);
   }
 
   body.manager-stitch-shell .manager-shell-topbar-primary {
     grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
+    gap: 10px;
+    align-items: start;
   }
 
   body.manager-stitch-shell .manager-shell-layout {
@@ -5224,8 +5242,10 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .manager-shell-user-tools {
-    align-items: center;
-    gap: 6px;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0;
+    flex-direction: row;
   }
 
   body.manager-stitch-shell .manager-shell-header-summary,
@@ -5240,12 +5260,23 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     border-radius: 12px;
   }
 
+  body.manager-stitch-shell .manager-shell-brand-wrap {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+  }
+
   body.manager-stitch-shell .manager-shell-brand-copy {
-    gap: 2px;
+    gap: 5px;
+    min-width: 0;
   }
 
   body.manager-stitch-shell .manager-shell-brand-row {
     margin-bottom: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   body.manager-stitch-shell .manager-shell-brand-mark {
@@ -5254,6 +5285,8 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
 
   body.manager-stitch-shell .manager-shell-header-badges {
     gap: 6px;
+    min-width: 0;
+    max-width: 100%;
   }
 
   body.manager-stitch-shell .header-action-group {
@@ -5265,7 +5298,24 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell #app-shell > header h1 {
-    font-size: 1.08rem;
+    font-size: 1.16rem;
+    line-height: 1.02;
+  }
+
+  body.manager-stitch-shell .manager-shell-title-row {
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  body.manager-stitch-shell .manager-shell-title-copy {
+    gap: 4px;
+  }
+
+  body.manager-stitch-shell .manager-shell-header-badge--muted {
+    max-width: min(58vw, 270px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   body.manager-stitch-shell.settings-drawer-open #app-shell > header.manager-shell-topbar {
@@ -5525,42 +5575,48 @@ body.manager-stitch-shell .del-item {
   }
 
   body.manager-stitch-shell .manager-shell-topbar-inner {
-    width: calc(100% - 18px);
-    min-height: calc(48px + env(safe-area-inset-top));
-    padding: calc(5px + env(safe-area-inset-top)) 0 5px;
+    width: calc(100% - 16px);
+    min-height: 0;
+    margin-top: calc(6px + env(safe-area-inset-top));
+    padding: 8px 10px;
+    border-radius: 18px;
   }
 
   body.manager-stitch-shell .manager-shell-topbar-primary {
-    gap: 6px;
+    gap: 8px;
   }
 
   body.manager-stitch-shell .manager-shell-brand-wrap {
     gap: 8px;
-    align-items: center;
+    align-items: start;
   }
 
   body.manager-stitch-shell .manager-shell-menu-toggle {
-    width: 34px;
-    height: 34px;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
   }
 
   body.manager-stitch-shell .manager-shell-brand-copy {
-    gap: 1px;
+    gap: 5px;
   }
 
   body.manager-stitch-shell .manager-shell-header-badges {
-    gap: 4px;
+    gap: 5px;
   }
 
   body.manager-stitch-shell .manager-shell-header-badge {
-    min-height: 18px;
-    padding: 0 6px;
+    min-height: 20px;
+    padding: 0 7px;
     font-size: 8px;
   }
 
+  body.manager-stitch-shell .manager-shell-header-badge--muted {
+    max-width: min(50vw, 190px);
+  }
+
   body.manager-stitch-shell #app-shell > header h1 {
-    font-size: 0.98rem;
+    font-size: 1.08rem;
   }
 
   body.manager-stitch-shell .manager-shell-layout {
@@ -5670,6 +5726,16 @@ body.manager-stitch-shell .del-item {
     grid-column: 2;
     grid-row: 1 / span 3;
     align-self: center;
+  }
+
+  body.manager-stitch-shell .toast {
+    top: calc(env(safe-area-inset-top) + 82px);
+    bottom: auto;
+    max-width: calc(100vw - 20px);
+    padding: 10px 14px;
+    font-size: 12px;
+    border-radius: 12px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.18);
   }
 }
 

@@ -5354,24 +5354,48 @@ async function sendUpdate() {
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
 let _toastUndoTimer = null;
+let _toastResetTimer = null;
 function _flashSaved(el) {
   if (!el) return;
   el.classList.add('field-saved');
   setTimeout(() => el.classList.remove('field-saved'), 1200);
 }
 
+function hideToast() {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.classList.remove('show');
+  if (_toastResetTimer) clearTimeout(_toastResetTimer);
+  _toastResetTimer = setTimeout(() => {
+    if (t.classList.contains('show')) return;
+    t.className = 'toast';
+    t.textContent = '';
+  }, 280);
+}
+
 function showToast(msg, type='info', undoCallback=null) {
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
+  if (_toastResetTimer) { clearTimeout(_toastResetTimer); _toastResetTimer = null; }
   const t = document.getElementById('toast');
+  if (!t) return;
+  const message = String(msg ?? '').trim();
+  if (!message) {
+    window._toastUndoCallback = null;
+    hideToast();
+    return;
+  }
   t.className = `toast ${type} show`;
   if (undoCallback) {
-    t.innerHTML = `<span>${escHtml(msg)}</span><button class="toast-undo-btn" onclick="_toastUndo()">Undo</button>`;
+    t.innerHTML = `<span>${escHtml(message)}</span><button class="toast-undo-btn" onclick="_toastUndo()">Undo</button>`;
     window._toastUndoCallback = undoCallback;
-    _toastUndoTimer = setTimeout(() => { t.classList.remove('show'); window._toastUndoCallback = null; }, 5000);
+    _toastUndoTimer = setTimeout(() => {
+      window._toastUndoCallback = null;
+      hideToast();
+    }, 5000);
   } else {
-    t.textContent = msg;
+    t.textContent = message;
     window._toastUndoCallback = null;
-    _toastUndoTimer = setTimeout(() => t.classList.remove('show'), 3200);
+    _toastUndoTimer = setTimeout(() => hideToast(), 3200);
   }
 }
 function _toastUndo() {
@@ -5379,9 +5403,8 @@ function _toastUndo() {
     window._toastUndoCallback();
     window._toastUndoCallback = null;
   }
-  const t = document.getElementById('toast');
-  t.classList.remove('show');
   if (_toastUndoTimer) { clearTimeout(_toastUndoTimer); _toastUndoTimer = null; }
+  hideToast();
 }
 
 document.getElementById('modal-bg')?.addEventListener('click', e => {
