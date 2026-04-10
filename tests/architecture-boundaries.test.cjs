@@ -166,6 +166,109 @@ test('update publisher consolidates send results, persistence, and warnings', as
   assert.ok(patches.length >= 1);
 });
 
+test('update publisher can publish without firing notifications', async () => {
+  const sandbox = loadAppSandbox();
+  const diff = [
+    {
+      id: 'beer',
+      icon: '🍺',
+      label: 'Beers on Tap',
+      added: ['New Lager'],
+      removed: [],
+      eightySixed: [],
+      restored: [],
+    },
+  ];
+  const persistCalls = [];
+  let fetchCalls = 0;
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    getCachedDiff: () => diff,
+    buildMenuSessionSnapshot: source => ({ source }),
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => ['feature-1'],
+    currentUserCanEditRestaurantSpecials: () => false,
+    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
+    syncLocalMenuCache: () => true,
+    logUpdate: async () => true,
+    fetch: async () => {
+      fetchCalls += 1;
+      return createFetchResponse(500, {});
+    },
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notificationStatus, null);
+  assert.equal(fetchCalls, 0);
+  assert.equal(persistCalls.length, 1);
+  assert.equal(persistCalls[0].silentFailure, true);
+  assert.equal(result.warnings.length, 0);
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager action bar stays visible and reflects idle and active draft states', () => {
+  const sandbox = loadAppSandbox();
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  const primaryGroup = sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  const summary = sandbox.document._registerElement('manager-action-bar-summary', createElement('div', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  const saveBtn = sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  const sendBtn = sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+
+  sandbox.innerWidth = 960;
+  sandbox.window.innerWidth = 960;
+
+  setState(sandbox, {
+    _dirty: false,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(bar.hidden, false);
+  assert.equal(primaryGroup.hidden, false);
+  assert.equal(summary.textContent, 'No Pending Changes');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(bar.classList.contains('is-idle'), true);
+
+  setState(sandbox, {
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: ['Old Lager'],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '2 pending changes. Save Draft keeps them private. Save opens Patch Notes Preview.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(bar.classList.contains('is-idle'), false);
+});
+
 test('access session service restores sessions and resolves settings access', async () => {
   const sandbox = loadAppSandbox();
   const refreshCalls = [];
@@ -450,13 +553,13 @@ test('manager menu switching closes the mobile drawer after the menu refresh com
   ]);
 });
 
-test('manager header return button only appears while manager mode is active', () => {
+test('manager user header no longer depends on a header return button', () => {
   const sandbox = loadAppSandbox();
-  const returnBtn = sandbox.document._registerElement('manager-return-btn', createElement('button', 'manager-return-btn'));
+  const adminDrawerBtn = sandbox.document._registerElement('admin-btn-drawer', createElement('button', 'admin-btn-drawer'));
 
   setState(sandbox, {
     currentUser: {
-      role: 'manager',
+      role: 'admin',
       name: 'Alex',
       accessibleMenuIds: ['menu-main'],
     },
@@ -465,11 +568,7 @@ test('manager header return button only appears while manager mode is active', (
   });
 
   sandbox.renderUserHeader();
-  assert.equal(returnBtn.style.display, '');
-
-  setState(sandbox, { isManagerMode: false });
-  sandbox.renderUserHeader();
-  assert.equal(returnBtn.style.display, 'none');
+  assert.equal(adminDrawerBtn.style.display, '');
 });
 
 test('public route contract and route renderers register and hydrate both restaurant shells', async () => {

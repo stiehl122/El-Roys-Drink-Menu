@@ -44,13 +44,6 @@
               <div class="manager-shell-header-badges">
                 <span class="manager-shell-header-badge">Manager</span>
                 <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
-                <button
-                  class="manager-shell-header-badge manager-shell-header-return"
-                  id="manager-return-btn"
-                  type="button"
-                  onclick="exitView()"
-                  style="display:none"
-                >Return to menu</button>
               </div>
             </div>
             <div class="manager-shell-title-row">
@@ -144,6 +137,7 @@
           <div class="manager-shell-drawer-meta">
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
             <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <button class="btn-small manager-shell-drawer-return" type="button" onclick="exitView()">Return to menu</button>
             <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
           </div>
         </div>
@@ -215,7 +209,7 @@
                 <p class="settings-section-kicker">Edit Items</p>
                 <h2>Add, remove, and 86 items.</h2>
               </div>
-              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes are drafts until you Save or Send Update.</p>
+              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
             </div>
             <div id="manager-items-categories"></div>
           </section>
@@ -349,15 +343,15 @@
       </main>
     </div>
 
-    <div class="manager-shell-actionbar" id="manager-action-bar" hidden>
+    <div class="manager-shell-actionbar" id="manager-action-bar">
       <div class="manager-shell-actionbar-copy">
         <p class="workspace-actions-title">Publishing Dock</p>
         <p class="workspace-actions-sub" id="manager-action-bar-summary"></p>
       </div>
       <div class="manager-shell-actionbar-groups">
-        <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group" hidden>
+        <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group">
           <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Draft</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review and publish changes to the live menu">Send Update</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Save</button>
         </div>
       </div>
       <div class="manager-shell-actionbar-status">
@@ -449,11 +443,12 @@
 <div class="modal-bg" id="modal-bg">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h2 id="modal-title">Patch Notes Preview</h2>
-    <div class="modal-sub">Only changes since the last update will be sent.</div>
+    <div class="modal-sub" id="modal-subtitle">Review the changes before publishing them to the live menu.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
+      <button class="btn-cancel" id="cancel-preview-btn" onclick="closeModal()">Cancel</button>
+      <button class="btn-secondary" id="save-menu-btn" onclick="sendUpdate({ notify: false })">Save Menu</button>
+      <button class="btn-confirm" id="save-send-btn" onclick="sendUpdate({ notify: true })">Save &amp; Send</button>
     </div>
   </div>
 </div>
