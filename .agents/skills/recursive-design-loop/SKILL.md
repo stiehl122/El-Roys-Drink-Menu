@@ -124,10 +124,13 @@ detail is off, zoom in on that detail.
    - what you are changing
    - why it matters — not just "improves spacing" but why the current state
      falls short and what the change does for the experience
-2. If the pass adds a feature or creates a major design shift, stop and ask the
-   user first.
-3. Implement the smallest cohesive set of changes with the strongest
-   user-visible ROI.
+2. If the pass adds a new feature, ask the user first.
+3. Match the scale of changes to what the screen actually needs. If a large
+   redesign is the right move, propose it and get user approval before
+   proceeding — do not artificially shrink the scope just to avoid a big diff.
+   If polish is what's needed, polish. If a structural overhaul is what's
+   needed, say so clearly and ask. The goal is the strongest user-visible ROI,
+   not the smallest change.
 4. Run targeted validation for the changed files and flows.
 5. Commit with a clear message and push the current branch.
 6. Wait for the Vercel preview deployment to finish updating.
