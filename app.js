@@ -2735,13 +2735,109 @@ async function showPublicViewWithError(msg) {
   await renderPublicView();
 }
 
+function buildPublicRouteRenderSnapshot() {
+  const restaurantSpecials = _featuredGroups.length > 1
+    ? {
+        id: '__restaurant_specials__',
+        name: getRestaurantSpecialLabel(RESTAURANT_ID),
+        slots: _featuredGroups.flatMap(group => group.slots || []),
+      }
+    : (_featuredGroups[0] || null);
+  return {
+    activeMenuName: _activeMenuName,
+    appVersion: APP_VERSION,
+    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+    categoryDefs: getManagedCategoryDefs(),
+    currentUser,
+    featuredGroups: _featuredGroups,
+    isPreview: IS_PREVIEW,
+    knownMenus: knownMenuList(),
+    lastUpdatedTs: getLastUpdatedTs(),
+    menuId: MENU_ID,
+    menuState,
+    menuType: MENU_TYPE,
+    restaurantId: RESTAURANT_ID,
+    restaurantSpecials,
+    siteRestaurant: _siteRestaurant,
+  };
+}
+
+async function switchPublicRouteMenu(menuRef) {
+  const menu = typeof menuRef === 'string'
+    ? (getMenuById(menuRef) || getMenuBySlug(menuRef))
+    : menuRef;
+  if (!menu?.id) return { ok: false, userHandled: true };
+
+  selectMenu(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
+  const targetHref = getPublicHrefForCurrentMenu();
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (targetHref && targetHref !== currentHref) {
+    navigateToPage(targetHref);
+    return { ok: true, navigated: true, targetHref };
+  }
+
+  await loadActiveMenuState();
+  applyDesign(currentDesign);
+  await renderPublicViews();
+  return {
+    ok: true,
+    navigated: false,
+    snapshot: buildPublicRouteRenderSnapshot(),
+  };
+}
+
+function createPublicRouteContract() {
+  return {
+    version: 1,
+    snapshot: buildPublicRouteRenderSnapshot(),
+    helpers: {
+      escHtml,
+      formatUpdatedAt,
+      getMenuTypeLabel,
+    },
+    actions: {
+      closeDropdowns: () => closeRouteDropdowns(),
+      openManager: () => onActionBtnClick(),
+      openAdmin: () => onAdminBtnClick(),
+      canManageMenu: (menuId, user = currentUser) => currentUserCanManageMenu(menuId, user),
+      switchMenu: menu => switchPublicRouteMenu(menu),
+    },
+  };
+}
+
+function getRegisteredPublicRouteRenderer() {
+  const renderer = window.__publicRouteRenderer || window.__pendingPublicRouteRenderer || null;
+  if (!renderer || typeof renderer.render !== 'function') return null;
+  if (window.__pendingPublicRouteRenderer && !window.__publicRouteRenderer) {
+    window.__publicRouteRenderer = window.__pendingPublicRouteRenderer;
+    delete window.__pendingPublicRouteRenderer;
+  }
+  if (renderer.restaurantId && _siteRestaurant?.id && renderer.restaurantId !== _siteRestaurant.id) {
+    return null;
+  }
+  return renderer;
+}
+
+window.registerPublicRouteRenderer = function registerPublicRouteRenderer(renderer) {
+  window.__publicRouteRenderer = renderer || null;
+  if (window.__pendingPublicRouteRenderer) delete window.__pendingPublicRouteRenderer;
+  return window.__publicRouteRenderer;
+};
+
 function showRouteBootView() {
   if (!isDedicatedRestaurantPage()) return;
   const publicView = document.getElementById('public-view');
   const loadingView = document.getElementById('loading-view');
   if (loadingView) loadingView.style.display = 'none';
   if (publicView) publicView.style.display = 'block';
-  if (typeof window.renderRouteBootShell === 'function') {
+  const renderer = getRegisteredPublicRouteRenderer();
+  if (renderer?.boot) {
+    const didRender = renderer.boot(createPublicRouteContract());
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  } else if (typeof window.renderRouteBootShell === 'function') {
     const didRender = window.renderRouteBootShell();
     if (didRender !== false) {
       _togglePublicShellMode('site');
@@ -3153,13 +3249,6 @@ async function _renderCustomDesignView() {
   const siteWrapper = document.getElementById('restaurant-site-wrapper');
   const renderIntoSiteWrapper = isDedicatedRestaurantPage() && !!siteWrapper;
   const container = renderIntoSiteWrapper ? siteWrapper : fallbackContainer;
-  const restaurantSpecials = _featuredGroups.length > 1
-    ? {
-        id: '__restaurant_specials__',
-        name: getRestaurantSpecialLabel(RESTAURANT_ID),
-        slots: _featuredGroups.flatMap(group => group.slots || []),
-      }
-    : (_featuredGroups[0] || null);
   if (!_restaurantCustomDesignEnabled || !container) {
     _togglePublicShellMode('default');
     _renderDefaultPublicView();
@@ -3168,23 +3257,16 @@ async function _renderCustomDesignView() {
 
   document.getElementById('custom-design-style')?.remove();
 
-  if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
-    const didRender = window.initializeRoute(menuState, {
-      activeMenuName: _activeMenuName,
-      appVersion: APP_VERSION,
-      canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
-      categoryDefs: getManagedCategoryDefs(),
-      currentUser,
-      featuredGroups: _featuredGroups,
-      isPreview: IS_PREVIEW,
-      knownMenus: knownMenuList(),
-      lastUpdatedTs: getLastUpdatedTs(),
-      menuId: MENU_ID,
-      menuType: MENU_TYPE,
-      restaurantSpecials,
-      restaurantId: RESTAURANT_ID,
-      siteRestaurant: _siteRestaurant,
-    });
+  const routeContract = createPublicRouteContract();
+  const renderer = renderIntoSiteWrapper ? getRegisteredPublicRouteRenderer() : null;
+  if (renderer?.render) {
+    const didRender = renderer.render(routeContract);
+    if (didRender !== false) {
+      _togglePublicShellMode('site');
+      return;
+    }
+  } else if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
+    const didRender = window.initializeRoute(routeContract.snapshot.menuState, routeContract.snapshot);
     if (didRender !== false) {
       _togglePublicShellMode('site');
       return;
