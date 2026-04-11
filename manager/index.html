@@ -137,6 +137,7 @@
           <div class="manager-shell-drawer-meta">
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
             <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <button class="btn-small manager-shell-drawer-return" type="button" onclick="exitView()">Return to menu</button>
             <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
           </div>
         </div>
@@ -183,10 +184,10 @@
                     <p class="settings-section-kicker">Featured</p>
                     <h3>Featured Items</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Current featured lineup. Unconfirmed items appear in the action bar below.</p>
+                  <p class="manager-shell-card-copy">Current featured lineup across this restaurant's menus.</p>
                 </div>
                 <div id="featured-mgr-wrap"></div>
-                <button class="btn-small manager-shell-overview-link" onclick="editFeaturedFromBanner()" style="margin-top:14px">Edit Featured</button>
+                <button class="btn-small manager-shell-overview-link" onclick="focusFeaturedManagerCard()" style="margin-top:14px">Edit Featured</button>
               </section>
 
               <section class="manager-shell-overview-card manager-shell-overview-card--recent" id="manager-recent-section">
@@ -208,7 +209,7 @@
                 <p class="settings-section-kicker">Edit Items</p>
                 <h2>Add, remove, and 86 items.</h2>
               </div>
-              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes are drafts until you Save or Send Update.</p>
+              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
             </div>
             <div id="manager-items-categories"></div>
           </section>
@@ -329,7 +330,7 @@
           <div class="manager-shell-footer-copy">
             <p class="manager-shell-footer-kicker">Current Menu</p>
             <h3>Manager Workspace</h3>
-            <p class="manager-shell-footer-note">Keep drafts private, confirm featured items, and publish updates when service is ready.</p>
+            <p class="manager-shell-footer-note">Keep drafts private and publish updates when service is ready.</p>
           </div>
           <div class="manager-shell-footer-meta">
             <div class="manager-shell-footer-pills">
@@ -337,25 +338,20 @@
               <span class="manager-shell-footer-pill" id="manager-footer-last-updated">Updated —</span>
               <span class="manager-shell-footer-pill" id="manager-footer-version">Version —</span>
             </div>
-            <button class="logout-link manager-shell-exit" onclick="exitView()">Back to menu view</button>
           </div>
         </footer>
       </main>
     </div>
 
-    <div class="manager-shell-actionbar" id="manager-action-bar" hidden>
+    <div class="manager-shell-actionbar" id="manager-action-bar">
       <div class="manager-shell-actionbar-copy">
         <p class="workspace-actions-title">Publishing Dock</p>
         <p class="workspace-actions-sub" id="manager-action-bar-summary"></p>
       </div>
       <div class="manager-shell-actionbar-groups">
-        <div class="manager-shell-actionbar-featured" id="manager-featured-action-group" hidden>
-          <button class="btn-small" onclick="confirmFeaturedToday()">Keep Today's Featured</button>
-          <button class="btn-small" onclick="editFeaturedFromBanner()">Update Featured</button>
-        </div>
-        <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group" hidden>
+        <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group">
           <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Draft</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review and publish changes to the live menu">Send Update</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Save</button>
         </div>
       </div>
       <div class="manager-shell-actionbar-status">
@@ -447,11 +443,12 @@
 <div class="modal-bg" id="modal-bg">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h2 id="modal-title">Patch Notes Preview</h2>
-    <div class="modal-sub">Only changes since the last update will be sent.</div>
+    <div class="modal-sub" id="modal-subtitle">Review the changes before publishing them to the live menu.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-      <button class="btn-confirm" id="confirm-btn" onclick="sendUpdate()">SEND UPDATE</button>
+      <button class="btn-cancel" id="cancel-preview-btn" onclick="closeModal()">Cancel</button>
+      <button class="btn-secondary" id="save-menu-btn" onclick="sendUpdate({ notify: false })">Save Menu</button>
+      <button class="btn-confirm" id="save-send-btn" onclick="sendUpdate({ notify: true })">Save &amp; Send</button>
     </div>
   </div>
 </div>
