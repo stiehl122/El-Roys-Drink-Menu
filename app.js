@@ -65,7 +65,7 @@ let _accessSessionService = null;
 let _restaurantSpecialsService = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
-let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
+let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
 let _restaurantSpecialsCatalogKey = '';
 let _restaurantSpecialsCatalogPromise = null;
@@ -191,9 +191,16 @@ let _currentMenuSession = null;
 let _updatePublisher = null;
 let _menuMetaSupportsLastSentFeatured = true;
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+function getDraftChangeCount() {
+  return getCachedDiff().reduce((count, section) => (
+    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
+  ), 0);
+}
 function updateSaveBtn() {
-  const btn = document.getElementById('save-btn');
-  if (btn) btn.disabled = !_dirty;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
+  if (saveBtn) saveBtn.disabled = !_dirty;
+  if (publishBtn) publishBtn.disabled = !_dirty;
   updateManagerActionBar();
 }
 function getCachedDiff() {
@@ -318,10 +325,6 @@ function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user
   if (!requiredMenuIds.length) return false;
   const accessibleMenuIds = new Set(normalizeAccessibleMenuIds(user.accessibleMenuIds));
   return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
-}
-
-function getFeaturedConfirmationKey(restaurantId = RESTAURANT_ID) {
-  return `featured_confirmed:${restaurantId || 'unknown'}`;
 }
 
 function getMenuTypeLabel(menuType) {
@@ -1529,27 +1532,6 @@ function createRestaurantSpecialsService() {
       return { ok: true };
     },
 
-    needsConfirmation(restaurantId = RESTAURANT_ID) {
-      if (!currentUserCanEditRestaurantSpecials(restaurantId)) return false;
-      if (sessionStorage.getItem(getFeaturedConfirmationKey(restaurantId))) return false;
-      if (!_featuredGroups.some(group => group.slots.length)) return false;
-      return _featuredGroups.some(group => group.slots.some(slot => {
-        if (!slot.confirmedAt) return true;
-        const confirmed = new Date(slot.confirmedAt);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return confirmed < today;
-      }));
-    },
-
-    async confirmToday() {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('confirm');
-      sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-      return { ok: true, successMessage: 'Specials confirmed for today!' };
-    },
   };
 }
 
@@ -2151,33 +2133,28 @@ function updateManagerActionBar() {
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
-  const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
   const syncEl = document.getElementById('sync-status');
-  const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
+  const changeCount = getDraftChangeCount();
   const isCompactViewport = window.innerWidth <= 480;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
 
-  if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
-  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
-  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+  if (primaryGroup) primaryGroup.hidden = false;
+  if (saveBtn) saveBtn.disabled = !hasDraftChanges;
+  if (publishBtn) publishBtn.disabled = !hasDraftChanges;
+  bar.hidden = false;
+  bar.classList.toggle('is-idle', !hasDraftChanges);
   syncManagerActionBarStatus(syncEl);
 
   if (summary) {
-    if (hasDraftChanges && hasFeaturedPrompt) {
+    if (hasDraftChanges) {
       summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private, Send Update publishes, and featured still needs confirmation.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
-    } else if (hasDraftChanges) {
-      summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private and Send Update publishes live.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
-    } else if (hasFeaturedPrompt) {
-      summary.textContent = isCompactViewport
-        ? 'Featured still needs confirmation.'
-        : "Today's featured lineup needs confirmation.";
+        ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save reviews; Save Draft stays private.`
+        : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft keeps them private. Save opens Patch Notes Preview.`;
     } else {
-      summary.textContent = '';
+      summary.textContent = 'No Pending Changes';
     }
   }
 }
@@ -3950,7 +3927,8 @@ async function onSwitchMenuClick() {
     renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
-    checkFeaturedConfirmation();
+    updateManagerActionBar();
+    if (window.innerWidth <= 920) closeSettingsDrawer();
   }, { managerOnly: true });
 }
 
@@ -4252,7 +4230,7 @@ function enterManager() {
   _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  checkFeaturedConfirmation();
+  updateManagerActionBar();
 }
 
 function exitManager() {
@@ -5273,7 +5251,7 @@ function toggle86(catId, itemId) {
     wrapper.classList.add(cls);
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
-  showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
+  showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
 }
 
 // ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
@@ -5707,15 +5685,8 @@ function renameItem(catId, itemId, newName) {
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
-  const diff = getCachedDiff();
-  const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
-  if (total > 0) {
-    btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
-    btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
-  } else {
-    btn.innerHTML = 'Send Update';
-    btn.style.boxShadow = '';
-  }
+  btn.textContent = 'Save';
+  btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
   renderManagerOverviewStats();
   updateManagerActionBar();
 }
@@ -5830,15 +5801,20 @@ function buildPreviewBlockHtml(section) {
 function openPreview() {
   const preview = getUpdatePublisher().preview();
   const content = document.getElementById('preview-content');
-  const confirmBtn = document.getElementById('confirm-btn');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const subtitle = document.getElementById('modal-subtitle');
   const modal = document.getElementById('modal-bg');
-  if (!content || !confirmBtn || !modal) return;
+  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
   content.innerHTML = '';
+  if (subtitle) subtitle.textContent = 'Review the changes before publishing them to the live menu.';
   if (!preview.hasChanges) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
-    confirmBtn.disabled = true;
+    saveMenuBtn.disabled = true;
+    saveSendBtn.disabled = true;
   } else {
-    confirmBtn.disabled = false;
+    saveMenuBtn.disabled = false;
+    saveSendBtn.disabled = false;
     preview.sections.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
@@ -5850,7 +5826,7 @@ function openPreview() {
 }
 function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
-// ─── SEND UPDATE ──────────────────────────────────────────────────────────────
+// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
 function buildPatchMessage(diff) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
@@ -5893,6 +5869,7 @@ function createUpdatePublisher() {
 
     async publish(options = {}) {
       const preview = options.preview?.diff ? options.preview : this.preview();
+      const notify = options.notify !== false;
       if (!preview.hasChanges) {
         return {
           ok: false,
@@ -5902,21 +5879,29 @@ function createUpdatePublisher() {
         };
       }
 
-      const delivery = await dispatchMenuUpdateNotification({
-        menuId: MENU_ID,
-        patchMessage: preview.patchMessage,
-      });
-      if (!delivery.ok) {
-        return {
-          ok: false,
-          preview,
-          notificationStatus: delivery,
-          userMessage: delivery.userMessage,
-          snapshot: buildMenuSessionSnapshot('send-failed'),
-        };
+      let delivery = {
+        ok: true,
+        skipped: true,
+        statusCode: null,
+        summary: summarizeNotificationResults({}),
+      };
+      if (notify) {
+        delivery = await dispatchMenuUpdateNotification({
+          menuId: MENU_ID,
+          patchMessage: preview.patchMessage,
+        });
+        if (!delivery.ok) {
+          return {
+            ok: false,
+            preview,
+            notificationStatus: delivery,
+            userMessage: delivery.userMessage,
+            snapshot: buildMenuSessionSnapshot('send-failed'),
+          };
+        }
       }
 
-      const warnings = collectNotificationWarnings(delivery.summary);
+      const warnings = notify ? collectNotificationWarnings(delivery.summary) : [];
       try {
         const persisted = await persistState({ silentFailure: true });
         if (!persisted) throw new Error('persist failed');
@@ -5967,11 +5952,13 @@ function createUpdatePublisher() {
           preview,
           ts,
           truncated: preview.truncated,
-          notificationStatus: delivery,
+          notificationStatus: notify ? delivery : null,
           warnings: finalWarnings,
           warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : 'sent'),
+          successMessage: notify
+            ? `✅ ${_activeMenuName || 'Menu'} saved and sent!`
+            : `✅ ${_activeMenuName || 'Menu'} saved to the live menu.`,
+          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : (notify ? 'sent' : 'saved-live')),
         };
       } catch (syncError) {
         console.warn('sendUpdate post-send sync failed:', syncError);
@@ -5981,10 +5968,12 @@ function createUpdatePublisher() {
           ok: true,
           preview,
           truncated: preview.truncated,
-          notificationStatus: delivery,
+          notificationStatus: notify ? delivery : null,
           warnings: finalWarnings,
           warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
+          successMessage: notify
+            ? `✅ ${_activeMenuName || 'Menu'} saved and sent!`
+            : `✅ ${_activeMenuName || 'Menu'} saved to the live menu.`,
           snapshot: buildMenuSessionSnapshot('sent-warning'),
         };
       }
@@ -6179,27 +6168,44 @@ async function _publishActiveMenuUpdateInternal(options = {}) {
   return getUpdatePublisher().publish(options);
 }
 
-async function sendUpdate() {
-  const preview = getUpdatePublisher().preview();
+function setPreviewModalActionState(mode = '') {
+  const cancelBtn = document.getElementById('cancel-preview-btn');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const isBusy = !!mode;
+  if (cancelBtn) cancelBtn.disabled = isBusy;
+  if (saveMenuBtn) {
+    saveMenuBtn.disabled = isBusy;
+    saveMenuBtn.textContent = mode === 'save-menu' ? 'Saving…' : 'Save Menu';
+  }
+  if (saveSendBtn) {
+    saveSendBtn.disabled = isBusy;
+    saveSendBtn.textContent = mode === 'save-send' ? 'Saving & Sending…' : 'Save & Send';
+  }
+}
+
+async function sendUpdate(options = {}) {
+  const notify = options.notify !== false;
+  const preview = options.preview?.diff ? options.preview : getUpdatePublisher().preview();
   if (!preview.hasChanges) { closeModal(); return; }
 
   if (preview.truncated) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
-  const confirmBtn = document.getElementById('confirm-btn');
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = 'SENDING…';
+  setPreviewModalActionState(notify ? 'save-send' : 'save-menu');
 
   try {
-    const result = await ensureCurrentMenuSession().sendUpdate({ preview });
+    const result = await ensureCurrentMenuSession().sendUpdate({ preview, notify });
     if (result?.noop) {
       closeModal();
       return;
     }
     if (result?.ok) {
       closeModal();
-      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
+      showToast(result.successMessage || (notify
+        ? `✅ ${_activeMenuName || 'Menu'} saved and sent!`
+        : `✅ ${_activeMenuName || 'Menu'} saved to the live menu.`), 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       renderRecentChanges();
@@ -6209,8 +6215,7 @@ async function sendUpdate() {
     }
     if (result?.userMessage) showToast(result.userMessage, 'error');
   } finally {
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = 'SEND UPDATE';
+    setPreviewModalActionState();
   }
 }
 
@@ -6769,32 +6774,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
   } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
-// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
-
-function _needsFeaturedConfirmation() {
-  return getRestaurantSpecialsService().needsConfirmation();
-}
-
-function checkFeaturedConfirmation() {
-  updateManagerActionBar();
-}
-
-async function confirmFeaturedToday() {
-  try {
-    const result = await getRestaurantSpecialsService().confirmToday();
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    updateManagerActionBar();
-    showToast(result.successMessage || 'Specials confirmed for today!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
-}
-
-function editFeaturedFromBanner() {
+function focusFeaturedManagerCard() {
   if (!currentUserCanEditRestaurantSpecials()) return;
-  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-  updateManagerActionBar();
   const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
   focusSettingsSection('manager-overview-section', overviewTrigger || null);
   requestAnimationFrame(() => {

@@ -166,6 +166,109 @@ test('update publisher consolidates send results, persistence, and warnings', as
   assert.ok(patches.length >= 1);
 });
 
+test('update publisher can publish without firing notifications', async () => {
+  const sandbox = loadAppSandbox();
+  const diff = [
+    {
+      id: 'beer',
+      icon: '🍺',
+      label: 'Beers on Tap',
+      added: ['New Lager'],
+      removed: [],
+      eightySixed: [],
+      restored: [],
+    },
+  ];
+  const persistCalls = [];
+  let fetchCalls = 0;
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    getCachedDiff: () => diff,
+    buildMenuSessionSnapshot: source => ({ source }),
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => ['feature-1'],
+    currentUserCanEditRestaurantSpecials: () => false,
+    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
+    syncLocalMenuCache: () => true,
+    logUpdate: async () => true,
+    fetch: async () => {
+      fetchCalls += 1;
+      return createFetchResponse(500, {});
+    },
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notificationStatus, null);
+  assert.equal(fetchCalls, 0);
+  assert.equal(persistCalls.length, 1);
+  assert.equal(persistCalls[0].silentFailure, true);
+  assert.equal(result.warnings.length, 0);
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager action bar stays visible and reflects idle and active draft states', () => {
+  const sandbox = loadAppSandbox();
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  const primaryGroup = sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  const summary = sandbox.document._registerElement('manager-action-bar-summary', createElement('div', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  const saveBtn = sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  const sendBtn = sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+
+  sandbox.innerWidth = 960;
+  sandbox.window.innerWidth = 960;
+
+  setState(sandbox, {
+    _dirty: false,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(bar.hidden, false);
+  assert.equal(primaryGroup.hidden, false);
+  assert.equal(summary.textContent, 'No Pending Changes');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(bar.classList.contains('is-idle'), true);
+
+  setState(sandbox, {
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: ['Old Lager'],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '2 pending changes. Save Draft keeps them private. Save opens Patch Notes Preview.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(bar.classList.contains('is-idle'), false);
+});
+
 test('access session service restores sessions and resolves settings access', async () => {
   const sandbox = loadAppSandbox();
   const refreshCalls = [];
@@ -293,7 +396,7 @@ test('public route contract exposes a stable snapshot and switchMenu action', as
   assert.equal(applyCalls, 1);
 });
 
-test('restaurant specials service centralizes add, matches, and confirm flows', async () => {
+test('restaurant specials service centralizes add and match flows', async () => {
   const sandbox = loadAppSandbox();
   const requestCalls = [];
   const refreshCalls = [];
@@ -342,11 +445,130 @@ test('restaurant specials service centralizes add, matches, and confirm flows', 
   assert.equal(added.ok, true);
   assert.equal(requestCalls[0][0], 'add');
   assert.equal(refreshCalls.length, 1);
+});
 
-  const confirmed = await service.confirmToday();
-  assert.equal(confirmed.ok, true);
-  assert.equal(sandbox.sessionStorage.getItem('featured_confirmed:00000000-0000-0000-0000-000000000010'), '1');
-  assert.equal(requestCalls[1][0], 'confirm');
+test('manager menu switching closes the mobile drawer after the menu refresh completes', async () => {
+  const sandbox = loadAppSandbox();
+  const mobileCalls = [];
+
+  setState(sandbox, {
+    currentDesign: {},
+    showMenuPicker: onPick => {
+      mobileCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        mobileCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      mobileCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      mobileCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      mobileCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      mobileCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      mobileCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      mobileCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      mobileCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 920;
+  sandbox.window.innerWidth = 920;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(mobileCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+    'close',
+  ]);
+
+  const desktopCalls = [];
+  setState(sandbox, {
+    showMenuPicker: onPick => {
+      desktopCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        desktopCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      desktopCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      desktopCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      desktopCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      desktopCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      desktopCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      desktopCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      desktopCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 921;
+  sandbox.window.innerWidth = 921;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(desktopCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+  ]);
+});
+
+test('manager user header no longer depends on a header return button', () => {
+  const sandbox = loadAppSandbox();
+  const adminDrawerBtn = sandbox.document._registerElement('admin-btn-drawer', createElement('button', 'admin-btn-drawer'));
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'admin',
+      name: 'Alex',
+      accessibleMenuIds: ['menu-main'],
+    },
+    currentUserCanManageMenu: () => true,
+    isManagerMode: true,
+  });
+
+  sandbox.renderUserHeader();
+  assert.equal(adminDrawerBtn.style.display, '');
 });
 
 test('public route contract and route renderers register and hydrate both restaurant shells', async () => {
@@ -383,25 +605,23 @@ test('public route contract and route renderers register and hydrate both restau
         {
           id: 'group-1',
           name: 'Specials',
-          slots: [
-            {
-              id: 'slot-1',
-              itemId: 'special-1',
-              sellNote: '',
-              item: {
-                id: 'special-1',
-                name: 'House Margarita',
-                price: '$12',
-                visibility: 'public',
-                eightySixed: false,
-                desc: 'Citrus and salt',
-                recipe: ['tequila', 'lime'],
-                upcharges: [],
-                showDescription: true,
-                showRecipe: true,
-              },
+          slots: Array.from({ length: 5 }, (_, index) => ({
+            id: `slot-${index + 1}`,
+            itemId: `special-${index + 1}`,
+            sellNote: '',
+            item: {
+              id: `special-${index + 1}`,
+              name: `House Margarita ${index + 1}`,
+              price: '$12',
+              visibility: 'public',
+              eightySixed: false,
+              desc: 'Citrus and salt',
+              recipe: ['tequila', 'lime'],
+              upcharges: [],
+              showDescription: true,
+              showRecipe: true,
             },
-          ],
+          })),
         },
       ],
       menuState: makeMenuState({
@@ -475,7 +695,8 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
-    assert.match(featuredWrap.innerHTML, /House Margarita/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 1/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 5/);
     assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
   }
 });
