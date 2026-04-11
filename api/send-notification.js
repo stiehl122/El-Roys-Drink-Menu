@@ -1,24 +1,17 @@
-import { requireMenuAccess, requireRole } from './_auth.js';
+import { authorizeNotificationRequest } from './_notification-gateway.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  let caller;
+  let payload;
   try {
-    caller = await requireRole(req, 'manager', 'admin');
+    payload = await authorizeNotificationRequest(req);
   } catch (e) {
     return res.status(e.status).json({ error: e.message });
   }
 
-  const { menu_id, text } = req.body;
-  if (!menu_id) return res.status(400).json({ error: 'Missing menu_id' });
-  if (!text)    return res.status(400).json({ error: 'Missing text' });
-
-  try {
-    await requireMenuAccess(caller.uid, caller.role, menu_id);
-  } catch (e) {
-    return res.status(e.status).json({ error: e.message });
-  }
+  const menu_id = payload.menuId;
+  const safeText = payload.text;
 
   const sbUrl     = process.env.SUPABASE_URL;
   const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -69,11 +62,6 @@ export default async function handler(req, res) {
     }
     return globalDefault ? process.env[globalDefault] : undefined;
   };
-
-  const MAX_LEN = 1000;
-  const safeText = text.length > MAX_LEN
-    ? text.slice(0, MAX_LEN - 16) + '... (truncated)'
-    : text;
 
   const results = {};
 
