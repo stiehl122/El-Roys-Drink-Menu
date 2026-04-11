@@ -1338,7 +1338,7 @@ body.admin-console-page .wrapper {
 }
 
 .admin-console-shell {
-  display: grid;
+  display: grid !important;
   grid-template-columns: 236px minmax(0, 1fr);
   align-items: start;
   gap: 24px;
@@ -2014,6 +2014,7 @@ body.admin-console-page .picker-box {
   }
 
   .admin-console-shell {
+    display: grid !important;
     grid-template-columns: 1fr;
     gap: 12px;
     min-height: 0;
