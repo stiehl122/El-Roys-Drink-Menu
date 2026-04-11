@@ -443,6 +443,31 @@ test('save-and-update persists live state before dispatching notifications', asy
   assert.equal(result.ok, true);
   assert.deepEqual(calls, ['persist', 'notify']);
 });
+
+test('manager item badges mark live unsent changes distinctly from drafts', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: false,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  const badge = sandbox.getItemStateBadge({ id: 'item-1', name: 'Lager', eightySixed: false }, 'beer', new Set());
+  assert.equal(badge.text, 'UNSENT');
+  assert.equal(badge.className, 'item-state-badge--unsent');
+});
 test('access session service restores sessions and resolves settings access', async () => {
   const sandbox = loadAppSandbox();
   const refreshCalls = [];

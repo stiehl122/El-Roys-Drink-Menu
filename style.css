@@ -3815,6 +3815,14 @@ body.manager-stitch-shell .item-state-badge--new {
   background: var(--manager-shell-accent);
   color: var(--manager-shell-bg);
 }
+body.manager-stitch-shell .item-state-badge--draft {
+  background: var(--manager-shell-surface-strong);
+  color: var(--manager-shell-text);
+}
+body.manager-stitch-shell .item-state-badge--unsent {
+  background: var(--fire);
+  color: #fff;
+}
 body.manager-stitch-shell .item-state-badge--off {
   background: var(--manager-shell-surface-strong);
   color: var(--manager-shell-muted);
