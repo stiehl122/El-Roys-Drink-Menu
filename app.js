@@ -30,7 +30,6 @@ const LS_KEYS = {
 
 let BOT_ID        = '';
 let NOTIFICATIONS = null; // per-menu notification channel config from menu_meta.notifications
-let MENU_URL  = localStorage.getItem(LS_KEYS.menuUrl) || '';
 let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
 let SUPABASE_URL      = '';
@@ -63,6 +62,11 @@ let _settingsRedirectTimer = null;
 let _settingsRedirectCleanup = null;
 let _accessSessionService = null;
 let _restaurantSpecialsService = null;
+let _publicRenderCoordinator = null;
+let _menuPollScheduler = null;
+let _menuFallbackStore = null;
+let _menuLinkResolver = null;
+let _featuredViewPolicy = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -109,8 +113,16 @@ const KNOWN_MENU_ORDER = [
   MENUS.ELROYS_FOOD.id,
 ];
 const RESTAURANT_SPECIALS = {
-  [RESTAURANTS.LEROYS.id]: { name: "Leroy's Specials", menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id] },
-  [RESTAURANTS.ELROYS.id]: { name: "El Roy's Specials", menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id] },
+  [RESTAURANTS.LEROYS.id]: {
+    canonicalId: 'leroyslounge-specials',
+    name: "Leroy's Specials",
+    menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id],
+  },
+  [RESTAURANTS.ELROYS.id]: {
+    canonicalId: 'elroyscantina-specials',
+    name: "El Roy's Specials",
+    menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id],
+  },
 };
 const LEGACY_MENU_SLUG_ALIASES = {
   'el-roys': MENUS.ELROYS_DRINKS.slug,
@@ -316,6 +328,49 @@ function getRestaurantSpecialLabel(restaurantId = RESTAURANT_ID) {
   return getRestaurantSpecialConfig(restaurantId)?.name || 'Specials';
 }
 
+function actorCanViewFeaturedSellNotes(actor = currentUser) {
+  return actor?.role === 'manager' || actor?.role === 'admin';
+}
+
+function createFeaturedViewPolicy({ actorResolver }) {
+  return {
+    buildSnapshot({ actor, restaurantId, featuredGroups }) {
+      const resolvedActor = Object.prototype.hasOwnProperty.call(arguments[0] || {}, 'actor')
+        ? actor
+        : actorResolver?.();
+      const groups = Array.isArray(featuredGroups) ? featuredGroups : [];
+      const canViewSellNotes = actorCanViewFeaturedSellNotes(resolvedActor);
+      const filteredGroups = groups.map(group => ({
+        ...group,
+        slots: (group.slots || []).map(slot => ({
+          ...slot,
+          sellNote: canViewSellNotes ? (slot.sellNote || '') : '',
+        })),
+      }));
+      const restaurantSpecials = filteredGroups.length > 1
+        ? {
+            id: '__restaurant_specials__',
+            name: getRestaurantSpecialLabel(restaurantId),
+            slots: filteredGroups.flatMap(group => group.slots || []),
+          }
+        : (filteredGroups[0] || null);
+      return {
+        canViewSellNotes,
+        featuredGroups: filteredGroups,
+        restaurantSpecials,
+      };
+    },
+  };
+}
+
+function getFeaturedViewPolicy() {
+  if (_featuredViewPolicy) return _featuredViewPolicy;
+  _featuredViewPolicy = createFeaturedViewPolicy({
+    actorResolver: () => currentUser,
+  });
+  return _featuredViewPolicy;
+}
+
 function isLegacySpecialCategory(catOrId) {
   const id = typeof catOrId === 'string' ? catOrId : catOrId?.id;
   return id === 'special';
@@ -499,6 +554,56 @@ function getPublicHrefForCurrentMenu() {
   return getPublicHrefForMenuId(MENU_ID);
 }
 
+function normalizeMenuUrl(value = '') {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed, window.location.origin).toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+function createMenuLinkResolver({ routeBuilder, settingsStore }) {
+  return {
+    resolveForNotification({ menuId = MENU_ID, restaurantId = RESTAURANT_ID } = {}) {
+      const configured = normalizeMenuUrl(settingsStore?.getMenuUrl?.(menuId));
+      if (configured) return configured;
+      const href = routeBuilder?.(menuId, restaurantId) || '';
+      if (!href) return '';
+      try {
+        return new URL(href, window.location.origin).toString();
+      } catch (_) {
+        return '';
+      }
+    },
+  };
+}
+
+function getMenuLinkResolver() {
+  if (_menuLinkResolver) return _menuLinkResolver;
+  _menuLinkResolver = createMenuLinkResolver({
+    routeBuilder: (menuId, restaurantId) => {
+      const href = getPublicHrefForMenuId(menuId);
+      if (href) return href;
+      const fallbackPath = SITE_PATHS[restaurantId] || getDefaultPublicPath();
+      return fallbackPath;
+    },
+    settingsStore: {
+      getMenuUrl(menuId) {
+        if (!menuId || menuId !== MENU_ID) return '';
+        return NOTIFICATIONS?.menu_url || '';
+      },
+    },
+  });
+  return _menuLinkResolver;
+}
+
+function getNotificationMenuLink(menuId = MENU_ID, restaurantId = RESTAURANT_ID) {
+  return getMenuLinkResolver().resolveForNotification({ menuId, restaurantId });
+}
+
 function getManagerHrefForMenuId(menuId) {
   const menu = getMenuById(menuId);
   if (!menu?.slug) return SHARED_PAGE_PATHS.manager;
@@ -511,8 +616,33 @@ function navigateToPage(path) {
   window.location.assign(path);
 }
 
-function restoreMenuStateFromFallback(expectedRestaurantId = '') {
-  const cached = readCachedMenuState(expectedRestaurantId);
+function getDefaultCategoryDefsForMenuType(menuType = 'drinks') {
+  if ((menuType || '').toLowerCase() === 'food') {
+    return DEFAULT_FOOD_CATEGORY_DEFS.map(cat => ({
+      id: cat.key,
+      icon: cat.icon || '',
+      color: cat.color || '',
+      title: cat.label || '',
+      sub: cat.sub || '',
+      placeholder: cat.placeholder || '',
+    }));
+  }
+  return DEFAULT_CATEGORY_DEFS.map(cat => ({ ...cat }));
+}
+
+function applyDefaultCategoryDefsForMenuType(menuType = 'drinks') {
+  CATEGORY_DEFS = getDefaultCategoryDefsForMenuType(menuType);
+}
+
+function restoreMenuStateFromFallback(context = {}) {
+  const menu = getMenuById(context.menuId) || getMenuBySlug(context.menuSlug || '');
+  const resolved = {
+    menuId: context.menuId || menu?.id || MENU_ID,
+    restaurantId: context.restaurantId || menu?.restaurantId || RESTAURANT_ID,
+    menuType: context.menuType || menu?.type || MENU_TYPE || 'drinks',
+  };
+  MENU_TYPE = (resolved.menuType || 'drinks').toLowerCase() === 'food' ? 'food' : 'drinks';
+  const cached = readCachedMenuState(resolved);
   if (cached) {
     try {
       hydrateState(cached);
@@ -521,6 +651,7 @@ function restoreMenuStateFromFallback(expectedRestaurantId = '') {
       /* fall through to defaults */
     }
   }
+  applyDefaultCategoryDefsForMenuType(MENU_TYPE);
   menuState = defaultState();
   currentDesign = { ...DESIGN_DEFAULTS };
   _restaurantCustomDesignEnabled = true;
@@ -652,8 +783,14 @@ function getMenuSessionPorts() {
     canLoadFromNetwork() {
       return !!(SUPABASE_URL && MENU_ID);
     },
-    restoreFallback({ expectedRestaurantId = '' } = {}) {
-      const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+    restoreFallback({ expectedRestaurantId = '', request = {} } = {}) {
+      const requestedMenu = getMenuById(request.requestedMenuId) || getMenuBySlug(request.requestedMenuSlug || '');
+      const fallback = restoreMenuStateFromFallback({
+        menuId: request.requestedMenuId || requestedMenu?.id || MENU_ID,
+        menuSlug: request.requestedMenuSlug || requestedMenu?.slug || '',
+        restaurantId: expectedRestaurantId || requestedMenu?.restaurantId || request.siteRestaurantId || RESTAURANT_ID,
+        menuType: requestedMenu?.type || MENU_TYPE,
+      });
       return {
         source: fallback.source,
         usedFallback: fallback.usedFallback,
@@ -1377,25 +1514,99 @@ function getAccessSessionService() {
   return _accessSessionService;
 }
 
-function readCachedMenuState(expectedRestaurantId = '') {
-  const cached = localStorage.getItem(LS_KEYS.menuCache);
-  if (!cached) return null;
-  try {
-    const parsed = JSON.parse(cached);
-    const cachedRestaurantId = parsed?.restaurant?.id || '';
-    if (!isValidRestaurant(cachedRestaurantId)) {
-      _clearActiveMenuContext({ clearCache: true });
-      return null;
+function buildFallbackMenuContext(context = {}) {
+  const resolvedMenu = getMenuById(context.menuId) || getMenuBySlug(context.menuSlug || '');
+  const restaurantId = context.restaurantId || resolvedMenu?.restaurantId || '';
+  const menuId = context.menuId || resolvedMenu?.id || '';
+  const menuType = context.menuType || resolvedMenu?.type || MENU_TYPE || 'drinks';
+  return {
+    menuId,
+    restaurantId,
+    menuType: (menuType || 'drinks').toLowerCase() === 'food' ? 'food' : 'drinks',
+  };
+}
+
+function buildFallbackContextKey(context = {}) {
+  const resolved = buildFallbackMenuContext(context);
+  return `${resolved.restaurantId || ''}:${resolved.menuId || ''}:${resolved.menuType || ''}`;
+}
+
+function createMenuFallbackStore({ storage = localStorage, storageKey = LS_KEYS.menuCache }) {
+  function parseStore() {
+    const raw = storage.getItem(storageKey);
+    if (!raw) return { version: 2, entries: {} };
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed?.version === 2 && parsed?.entries && typeof parsed.entries === 'object') {
+        return parsed;
+      }
+      const context = buildFallbackMenuContext(parsed?.context || {});
+      if (context.menuId && context.restaurantId && parsed?.cats) {
+        return {
+          version: 2,
+          entries: {
+            [buildFallbackContextKey(context)]: {
+              context,
+              snapshot: parsed,
+            },
+          },
+        };
+      }
+      return { version: 2, entries: {} };
+    } catch (_) {
+      return { version: 2, entries: {} };
     }
-    if (expectedRestaurantId && cachedRestaurantId !== expectedRestaurantId) {
-      localStorage.removeItem(LS_KEYS.menuCache);
-      return null;
-    }
-    return parsed;
-  } catch (_) {
-    localStorage.removeItem(LS_KEYS.menuCache);
-    return null;
   }
+
+  function persist(context = {}, snapshot = null, options = {}) {
+    const resolved = buildFallbackMenuContext(context);
+    if (!resolved.menuId || !isValidRestaurant(resolved.restaurantId) || !snapshot) return false;
+    const store = parseStore();
+    store.entries[buildFallbackContextKey(resolved)] = {
+      context: resolved,
+      snapshot: {
+        ...snapshot,
+        context: resolved,
+      },
+    };
+    return lsSet(storageKey, JSON.stringify(store), options);
+  }
+
+  function restore(context = {}) {
+    const resolved = buildFallbackMenuContext(context);
+    const store = parseStore();
+    if (!resolved.menuId && !resolved.restaurantId) return null;
+    const directMatch = resolved.menuId
+      ? store.entries[buildFallbackContextKey(resolved)] || null
+      : null;
+    const fallbackMatch = directMatch || Object.values(store.entries).find(entry => {
+      const entryContext = buildFallbackMenuContext(entry?.context || {});
+      if (!entryContext.menuId || !entryContext.restaurantId) return false;
+      if (resolved.menuId && entryContext.menuId !== resolved.menuId) return false;
+      if (resolved.restaurantId && entryContext.restaurantId !== resolved.restaurantId) return false;
+      if (resolved.menuType && entryContext.menuType !== resolved.menuType) return false;
+      return true;
+    });
+    return fallbackMatch?.snapshot || null;
+  }
+
+  return {
+    persist,
+    restore,
+  };
+}
+
+function getMenuFallbackStore() {
+  if (_menuFallbackStore) return _menuFallbackStore;
+  _menuFallbackStore = createMenuFallbackStore({});
+  return _menuFallbackStore;
+}
+
+function readCachedMenuState(expectedContext = '') {
+  const context = typeof expectedContext === 'string'
+    ? { restaurantId: expectedContext, menuId: MENU_ID, menuType: MENU_TYPE }
+    : (expectedContext || {});
+  return getMenuFallbackStore().restore(context);
 }
 
 function getDefaultMenuForRestaurant(restaurant) {
@@ -2219,6 +2430,11 @@ function snapshotCurrentItemsAsLastSent() {
 }
 
 function buildMenuCacheSnapshot() {
+  const context = buildFallbackMenuContext({
+    menuId: MENU_ID,
+    restaurantId: RESTAURANT_ID,
+    menuType: MENU_TYPE,
+  });
   const cats = CATEGORY_DEFS.map((cat, index) => ({
     id: cat._uuid || `local-${cat.id}`,
     key: cat.id,
@@ -2289,7 +2505,7 @@ function buildMenuCacheSnapshot() {
         use_custom_design: _restaurantCustomDesignEnabled,
       }
     : null;
-  return { cats, meta, restaurant };
+  return { context, cats, meta, restaurant };
 }
 
 function buildPersistedDraftStateSnapshot(savedAt = Date.now()) {
@@ -2302,7 +2518,11 @@ function buildPersistedDraftStateSnapshot(savedAt = Date.now()) {
 }
 
 function syncLocalMenuCache(options = {}) {
-  return lsSet(LS_KEYS.menuCache, JSON.stringify(buildMenuCacheSnapshot()), options);
+  return getMenuFallbackStore().persist({
+    menuId: MENU_ID,
+    restaurantId: RESTAURANT_ID,
+    menuType: MENU_TYPE,
+  }, buildMenuCacheSnapshot(), options);
 }
 
 function isMissingColumnError(error, columnName) {
@@ -2374,26 +2594,49 @@ async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options
   const config = getRestaurantSpecialConfig(restaurantId);
   if (!SUPABASE_URL || !config?.name) return null;
   try {
-    const groups = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
+    if (config.canonicalId) {
+      const canonicalGroups = await sbReadJsonOrThrow(
+        `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
+        { headers: sbHeaders() }
+      );
+      if (canonicalGroups?.[0]) return canonicalGroups[0];
+    }
+    const legacyGroups = await sbReadJsonOrThrow(
+      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
       { headers: sbHeaders() }
     );
-    if (groups?.[0]) return groups[0];
+    if (legacyGroups?.[0]) {
+      if (config.canonicalId && !legacyGroups[0].canonical_id) {
+        await fetch(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${legacyGroups[0].id}`, {
+          method: 'PATCH',
+          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ canonical_id: config.canonicalId }),
+        });
+      }
+      return legacyGroups[0];
+    }
     if (!createIfMissing || !currentUser?.accessToken) return null;
     const created = await sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
       method: 'POST',
       headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify({ name: config.name }),
+      body: JSON.stringify(config.canonicalId
+        ? { name: config.name, canonical_id: config.canonicalId }
+        : { name: config.name }),
     });
     return created?.[0] || null;
   } catch (e) {
     if (!createIfMissing) return null;
     try {
-      const groups = await sbReadJsonOrThrow(
-        `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name&limit=1`,
-        { headers: sbHeaders() }
-      );
-      return groups?.[0] || null;
+      const retryGroups = config.canonicalId
+        ? await sbReadJsonOrThrow(
+          `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
+          { headers: sbHeaders() }
+        )
+        : await sbReadJsonOrThrow(
+          `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
+          { headers: sbHeaders() }
+        );
+      return retryGroups?.[0] || null;
     } catch (_) {
       return null;
     }
@@ -3243,7 +3486,21 @@ function migrateLocalStorage() {
       }));
       const meta = { lastUpdated: localStorage.getItem('lastUpdated') || '' };
       if (oldBotId) meta.botId = oldBotId;
-      localStorage.setItem(LS_KEYS.menuCache, JSON.stringify({ cats, meta }));
+      const seededMenu = getMenuById(localStorage.getItem(LS_KEYS.menuId) || '') || MENUS.LEROYS_DRINKS;
+      const context = buildFallbackMenuContext({
+        menuId: seededMenu.id,
+        restaurantId: seededMenu.restaurantId,
+        menuType: seededMenu.type,
+      });
+      localStorage.setItem(LS_KEYS.menuCache, JSON.stringify({
+        version: 2,
+        entries: {
+          [buildFallbackContextKey(context)]: {
+            context,
+            snapshot: { context, cats, meta },
+          },
+        },
+      }));
     }
 
     // Clean up old keys
@@ -3344,21 +3601,25 @@ async function showPublicViewWithError(msg) {
   await renderPublicView();
 }
 
-function buildPublicRouteRenderSnapshot() {
-  const restaurantSpecials = _featuredGroups.length > 1
-    ? {
-        id: '__restaurant_specials__',
-        name: getRestaurantSpecialLabel(RESTAURANT_ID),
-        slots: _featuredGroups.flatMap(group => group.slots || []),
-      }
-    : (_featuredGroups[0] || null);
+function buildPublicRouteRenderSnapshot(options = {}) {
+  const actor = Object.prototype.hasOwnProperty.call(options, 'actor')
+    ? options.actor
+    : currentUser;
+  const siteRestaurant = options.siteRestaurantId
+    ? (getRestaurantById(options.siteRestaurantId) || _siteRestaurant)
+    : _siteRestaurant;
+  const featuredSnapshot = getFeaturedViewPolicy().buildSnapshot({
+    actor,
+    restaurantId: RESTAURANT_ID,
+    featuredGroups: _featuredGroups,
+  });
   return {
     activeMenuName: _activeMenuName,
     appVersion: APP_VERSION,
-    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, currentUser),
+    canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, actor),
     categoryDefs: getManagedCategoryDefs(),
-    currentUser,
-    featuredGroups: _featuredGroups,
+    currentUser: actor,
+    featuredGroups: featuredSnapshot.featuredGroups,
     isPreview: IS_PREVIEW,
     knownMenus: knownMenuList(),
     lastUpdatedTs: getLastUpdatedTs(),
@@ -3366,8 +3627,8 @@ function buildPublicRouteRenderSnapshot() {
     menuState,
     menuType: MENU_TYPE,
     restaurantId: RESTAURANT_ID,
-    restaurantSpecials,
-    siteRestaurant: _siteRestaurant,
+    restaurantSpecials: featuredSnapshot.restaurantSpecials,
+    siteRestaurant,
   };
 }
 
@@ -3427,7 +3688,7 @@ function createPublicRouteAdapter(contractOrMenuState, legacyState = {}, options
 function createPublicRouteContract() {
   return {
     version: 1,
-    snapshot: buildPublicRouteRenderSnapshot(),
+    snapshot: buildPublicRouteRenderSnapshot({ actor, siteRestaurantId }),
     helpers: {
       escHtml,
       formatUpdatedAt,
@@ -3437,7 +3698,7 @@ function createPublicRouteContract() {
       closeDropdowns: () => closeRouteDropdowns(),
       openManager: () => onActionBtnClick(),
       openAdmin: () => onAdminBtnClick(),
-      canManageMenu: (menuId, user = currentUser) => currentUserCanManageMenu(menuId, user),
+      canManageMenu: (menuId, user = actor) => currentUserCanManageMenu(menuId, user),
       switchMenu: menu => switchPublicRouteMenu(menu),
     },
   };
@@ -3622,37 +3883,138 @@ async function _syncRequestedPageMode() {
 }
 
 // ─── AUTO-REFRESH POLLING ────────────────────────────────────────────────────
-function startPolling() {
-  stopPolling();
-  if (!SUPABASE_URL || !MENU_ID) return;
+function handlePollSuccess(result = {}) {
+  _pollFailCount = 0;
+  const syncEl = document.getElementById('sync-status');
+  if (syncEl?.classList.contains('sync-poll-error')) {
+    syncEl.textContent = '';
+    syncEl.className = '';
+  }
+  syncManagerActionBarStatus(syncEl);
+  return result;
+}
 
-  const pollCycle = async () => {
-    if (isManagerMode) return;
-    try {
-      const result = await ensureCurrentMenuSession().refresh({ reason: 'poll' });
+function handlePollError() {
+  _pollFailCount++;
+  if (_pollFailCount >= 3) {
+    const syncEl = document.getElementById('sync-status');
+    if (syncEl) {
+      syncEl.textContent = '⚠️ Sync paused — reconnecting…';
+      syncEl.className = 'sync-poll-error';
+    }
+    syncManagerActionBarStatus(syncEl);
+  }
+}
+
+function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
+  let activeToken = 0;
+  let inFlight = null;
+  let queuedReason = '';
+  let queuedToken = 0;
+
+  async function run(reason = 'interval') {
+    const token = ++activeToken;
+    if (inFlight) {
+      queuedReason = reason;
+      queuedToken = token;
+      return inFlight;
+    }
+
+    inFlight = (async () => {
+      let currentReason = reason;
+      let currentToken = token;
+      let finalResult = { skipped: true };
+      while (true) {
+        const requestContext = getContextKey();
+        if (!requestContext) {
+          finalResult = { skipped: true, reason: 'missing-context' };
+        } else {
+          try {
+            const result = await loader({ reason: currentReason, requestContext });
+            const isLatest = currentToken === activeToken;
+            const contextUnchanged = requestContext === getContextKey();
+            if (isLatest && contextUnchanged) {
+              finalResult = await onResult(result, { reason: currentReason, requestContext });
+            } else {
+              finalResult = { ignored: true, reason: 'stale-result' };
+            }
+          } catch (error) {
+            const isLatest = currentToken === activeToken;
+            const contextUnchanged = requestContext === getContextKey();
+            if (isLatest && contextUnchanged) onError(error, { reason: currentReason, requestContext });
+            finalResult = { error };
+          }
+        }
+
+        if (!queuedReason) break;
+        currentReason = queuedReason;
+        currentToken = queuedToken || ++activeToken;
+        queuedReason = '';
+        queuedToken = 0;
+      }
+      return finalResult;
+    })().finally(() => {
+      inFlight = null;
+    });
+
+    return inFlight;
+  }
+
+  return {
+    tick() {
+      return run('interval');
+    },
+    resume() {
+      return run('resume');
+    },
+    reset() {
+      activeToken = 0;
+      inFlight = null;
+      queuedReason = '';
+      queuedToken = 0;
+    },
+  };
+}
+
+function getMenuPollScheduler() {
+  if (_menuPollScheduler) return _menuPollScheduler;
+  _menuPollScheduler = createMenuPollScheduler({
+    loader: async ({ requestContext }) => {
+      const [menuId, menuType, restaurantId] = requestContext.split('|');
+      return ensureCurrentMenuSession({
+        requestedMenuId: menuId,
+        requestedMenuSlug: getMenuById(menuId)?.slug || '',
+        siteRestaurantId: restaurantId || '',
+      }).refresh({
+        reason: 'poll',
+        requestedMenuId: menuId,
+        source: 'poll',
+        expectedMenuType: menuType,
+      });
+    },
+    onResult: async result => {
       if (result?.changed) {
         await renderPublicViews();
       }
       if (result?.designChanged) applyDesign(currentDesign);
+      return handlePollSuccess(result);
+    },
+    onError: () => {
+      handlePollError();
+    },
+    getContextKey: () => (MENU_ID ? `${MENU_ID}|${MENU_TYPE}|${RESTAURANT_ID || ''}` : ''),
+  });
+  return _menuPollScheduler;
+}
 
-      _pollFailCount = 0;
-      const syncEl = document.getElementById('sync-status');
-      if (syncEl?.classList.contains('sync-poll-error')) {
-        syncEl.textContent = '';
-        syncEl.className = '';
-      }
-      syncManagerActionBarStatus(syncEl);
-    } catch(e) {
-      _pollFailCount++;
-      if (_pollFailCount >= 3) {
-        const syncEl = document.getElementById('sync-status');
-        if (syncEl) {
-          syncEl.textContent = '⚠️ Sync paused — reconnecting…';
-          syncEl.className = 'sync-poll-error';
-        }
-        syncManagerActionBarStatus(syncEl);
-      }
-    }
+function startPolling() {
+  stopPolling();
+  if (!SUPABASE_URL || !MENU_ID) return;
+  const scheduler = getMenuPollScheduler();
+
+  const pollCycle = () => {
+    if (isManagerMode || isAdminMode) return;
+    scheduler.tick();
   };
 
   // Start the 10-second polling interval (only while tab is visible)
@@ -3663,7 +4025,7 @@ function startPolling() {
   _visibilityHandler = () => {
     if (document.visibilityState === 'visible') {
       // Tab became visible — poll immediately and restart the interval
-      pollCycle();
+      scheduler.resume();
       if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
       startInterval();
     } else {
@@ -3680,6 +4042,7 @@ function stopPolling() {
     document.removeEventListener('visibilitychange', _visibilityHandler);
     _visibilityHandler = null;
   }
+  _menuPollScheduler?.reset?.();
 }
 
 function getLastUpdatedTs() {
@@ -3711,6 +4074,10 @@ function formatRelativeTime(ts) {
 function updateLastUpdatedLabel() {
   const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
+  if (!el) {
+    renderFooter();
+    return;
+  }
   if (ts) {
     const rel = formatRelativeTime(ts);
     const abs = formatUpdatedAt(ts, 'Last Updated: ');
@@ -3754,14 +4121,20 @@ function renderFooter() {
 function renderFeaturedPublicSection() {
   const featuredEl = document.getElementById('featured-public-section');
   if (!featuredEl) return;
-  const hasSlots = _featuredGroups.some(g => g.slots.length > 0);
+  const featuredView = getFeaturedViewPolicy().buildSnapshot({
+    actor: currentUser,
+    restaurantId: RESTAURANT_ID,
+    featuredGroups: _featuredGroups,
+  });
+  const featuredGroups = featuredView.featuredGroups;
+  const hasSlots = featuredGroups.some(g => g.slots.length > 0);
   if (!hasSlots) {
     featuredEl.style.display = 'none';
     featuredEl.innerHTML = '';
     return;
   }
   featuredEl.style.display = '';
-  featuredEl.innerHTML = _featuredGroups
+  featuredEl.innerHTML = featuredGroups
     .filter(g => g.slots.length)
     .map(group => {
       const slotsHtml = group.slots.map(slot => {
@@ -3778,8 +4151,7 @@ function renderFeaturedPublicSection() {
         const upchargesHtml = upcharges.length
           ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
           : '';
-        const isStaffRole = currentUser?.role === 'manager' || currentUser?.role === 'admin';
-        const sellNoteHtml = (isStaffRole && slot.sellNote)
+        const sellNoteHtml = slot.sellNote
           ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
           : '';
         return `<div class="${classes}">
@@ -3866,7 +4238,67 @@ function buildPublicCategorySection(cat, state, lastSentCats) {
 
 // ─── PUBLIC VIEW ──────────────────────────────────────────────────────────────
 async function renderPublicView() {
-  await _renderCustomDesignView();
+  await getPublicRenderCoordinator().schedule({ cause: 'public-view' });
+}
+
+function shouldRenderPublicShell() {
+  if (isManagerMode || isAdminMode) return false;
+  const publicView = document.getElementById('public-view');
+  if (publicView && publicView.style.display === 'none') return false;
+  return true;
+}
+
+function createPublicRenderCoordinator({ renderer, isVisible }) {
+  let scheduledPass = null;
+  let renderInFlight = false;
+  let rerenderRequested = false;
+
+  async function runPass() {
+    if (!isVisible()) return { rendered: false, skipped: 'hidden' };
+    renderInFlight = true;
+    try {
+      do {
+        rerenderRequested = false;
+        await renderer();
+      } while (rerenderRequested && isVisible());
+      return { rendered: true };
+    } finally {
+      renderInFlight = false;
+    }
+  }
+
+  return {
+    async schedule() {
+      if (!isVisible()) return { rendered: false, skipped: 'hidden' };
+      if (renderInFlight) {
+        rerenderRequested = true;
+        return scheduledPass || { rendered: false, queued: true };
+      }
+      if (scheduledPass) return scheduledPass;
+      scheduledPass = Promise.resolve()
+        .then(() => runPass())
+        .finally(() => {
+          scheduledPass = null;
+        });
+      return scheduledPass;
+    },
+    reset() {
+      scheduledPass = null;
+      renderInFlight = false;
+      rerenderRequested = false;
+    },
+  };
+}
+
+function getPublicRenderCoordinator() {
+  if (_publicRenderCoordinator) return _publicRenderCoordinator;
+  _publicRenderCoordinator = createPublicRenderCoordinator({
+    renderer: async () => {
+      await _renderCustomDesignView();
+    },
+    isVisible: () => shouldRenderPublicShell(),
+  });
+  return _publicRenderCoordinator;
 }
 
 function _renderDefaultPublicView() {
@@ -4088,7 +4520,7 @@ function _setDisplayBySelectorFiltered(selector, display, predicate) {
   });
 }
 
-function renderUserHeader() {
+function renderUserHeader(options = {}) {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
   const isAdmin   = role === 'admin';
@@ -4157,7 +4589,11 @@ function renderUserHeader() {
   }
 
   const publicView = document.getElementById('public-view');
-  if (isDedicatedRestaurantPage() && !isManagerMode && !isAdminMode && publicView?.style.display !== 'none') {
+  if (!options.skipPublicRender &&
+      isDedicatedRestaurantPage() &&
+      !isManagerMode &&
+      !isAdminMode &&
+      publicView?.style.display !== 'none') {
     renderPublicView();
   }
 }
@@ -4569,7 +5005,7 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   });
   closeMenuPicker({ skipOnClose: true });
   updateActiveMenuBar();
-  renderUserHeader();
+  renderUserHeader({ skipPublicRender: !!cb });
   if (cb) cb();
 }
 
@@ -4625,7 +5061,7 @@ async function onPublicSwitchMenuClick() {
     // Reload public view in place when the selection stays on the same route.
     await ensureCurrentMenuSession().refresh();
     applyDesign(currentDesign);
-    renderPublicViews();
+    await renderPublicViews();
   });
 }
 
@@ -4967,10 +5403,30 @@ function _populateAdminNotificationsPanel(n) {
   }
 }
 
+async function fetchMenuNotificationsConfig(menuId) {
+  if (!SUPABASE_URL || !currentUser?.accessToken || !menuId) return {};
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) return {};
+    const [meta] = await r.json();
+    return meta?.notifications || {};
+  } catch (_) {
+    return {};
+  }
+}
+
 async function saveNotifications() {
   const targetMenuId = _adminSwitcherState.notif.menuId;
   if (!targetMenuId) { showToast('No menu selected.', 'info'); return; }
-  const notifications = {};
+  const existingNotifications = targetMenuId === MENU_ID
+    ? (NOTIFICATIONS || {})
+    : await fetchMenuNotificationsConfig(targetMenuId);
+  const notifications = {
+    ...existingNotifications,
+  };
   for (const channel of ['groupme', 'sms', 'discord', 'webhook']) {
     notifications[channel] = {
       enabled: !!document.getElementById(`notif-${channel}-enabled`)?.checked,
@@ -5039,10 +5495,41 @@ async function saveNotifCredKeys() {
 }
 
 async function saveMenuUrl() {
-  const val = document.getElementById('menu-url-input').value.trim();
-  if (!val) { showToast('Enter a URL first.', 'info'); return; }
-  MENU_URL = val; lsSet(LS_KEYS.menuUrl, MENU_URL);
-  showToast('✅ Menu URL saved!', 'success');
+  const targetMenuId = _adminSwitcherState.notif.menuId || MENU_ID;
+  if (!targetMenuId) {
+    showToast('No menu selected.', 'info');
+    return;
+  }
+
+  const rawValue = document.getElementById('menu-url-input')?.value || '';
+  const normalizedUrl = normalizeMenuUrl(rawValue);
+  if (rawValue.trim() && !normalizedUrl) {
+    showToast('Enter a valid URL.', 'error');
+    return;
+  }
+
+  const baseNotifications = targetMenuId === MENU_ID
+    ? (NOTIFICATIONS || {})
+    : await fetchMenuNotificationsConfig(targetMenuId);
+  const notifications = { ...baseNotifications };
+  if (normalizedUrl) notifications.menu_url = normalizedUrl;
+  else delete notifications.menu_url;
+
+  try {
+    if (SUPABASE_URL && currentUser?.accessToken) {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
+        method: 'PATCH',
+        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ notifications }),
+      });
+      if (!r.ok) throw new Error(`menu URL patch: ${r.status}`);
+    }
+    if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
+    localStorage.removeItem(LS_KEYS.menuUrl);
+    showToast('✅ Menu URL saved!', 'success');
+  } catch (e) {
+    showToast(`Failed to save menu URL: ${escHtml(e.message)}`, 'error');
+  }
 }
 
 // ─── ADMIN SWITCHER ───────────────────────────────────────────────────────────
@@ -5117,17 +5604,19 @@ async function _loadAdminTabData(context) {
       return;
     }
     const urlInput = document.getElementById('menu-url-input');
-    if (urlInput) urlInput.value = MENU_URL || '';
-    if (!menuId) { _populateAdminNotificationsPanel({}); }
+    if (!menuId) {
+      _populateAdminNotificationsPanel({});
+      if (urlInput) urlInput.value = getNotificationMenuLink() || '';
+    }
     else {
-      try {
-        const r = await fetch(
-          `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
-          { headers: sbHeaders() }
-        );
-        const [meta] = r.ok ? await r.json() : [{}];
-        _populateAdminNotificationsPanel(meta?.notifications || {});
-      } catch { _populateAdminNotificationsPanel({}); }
+      const notifications = await fetchMenuNotificationsConfig(menuId);
+      if (menuId === MENU_ID) NOTIFICATIONS = notifications;
+      _populateAdminNotificationsPanel(notifications);
+      if (urlInput) {
+        urlInput.value = normalizeMenuUrl(notifications?.menu_url || '') ||
+          getNotificationMenuLink(menuId, restaurantId) ||
+          '';
+      }
     }
     // Load per-restaurant credential keys
     if (restaurantId) {
@@ -6602,7 +7091,8 @@ function buildPatchMessage(sections) {
     }
     lines.push('');
   });
-  if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
+  const menuLink = getNotificationMenuLink();
+  if (menuLink) lines.push(`📋 Full menu: ${menuLink}`);
   return lines.join('\n').trim();
 }
 
@@ -7259,7 +7749,7 @@ async function saveUserName(userId) {
 }
 
 function openInviteModal() {
-  const url = MENU_URL || window.location.origin;
+  const url = getNotificationMenuLink() || window.location.origin;
   const brand = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'the menu';
   const output = document.getElementById('invite-text-output');
   const modal = document.getElementById('invite-modal-bg');
