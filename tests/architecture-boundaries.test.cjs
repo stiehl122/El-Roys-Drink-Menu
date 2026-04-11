@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -985,7 +986,8 @@ test('public route contract and route renderers register and hydrate both restau
       routeCase.prefix === 'll' ? 'll-route-specials' : 'erc-route-specials'
     );
 
-    assert.match(footerVersion.innerHTML, /v0\.8\.6/);
+    const expectedVersion = getState(sandbox, 'APP_VERSION');
+    assert.match(footerVersion.innerHTML, new RegExp(expectedVersion.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
@@ -993,4 +995,207 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(featuredWrap.innerHTML, /House Margarita 5/);
     assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
   }
+});
+
+test('menu fallback store keys snapshots by menu identity and menu type', () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const restaurants = getState(sandbox, 'RESTAURANTS');
+  const store = sandbox.createMenuFallbackStore({
+    storage: sandbox.localStorage,
+    storageKey: 'hf_menu_cache_test',
+  });
+
+  const drinksContext = {
+    menuId: menus.ELROYS_DRINKS.id,
+    restaurantId: restaurants.ELROYS.id,
+    menuType: 'drinks',
+  };
+  const foodContext = {
+    menuId: menus.ELROYS_FOOD.id,
+    restaurantId: restaurants.ELROYS.id,
+    menuType: 'food',
+  };
+
+  assert.equal(store.persist(drinksContext, { context: drinksContext, cats: [{ key: 'beer' }] }), true);
+  assert.equal(store.persist(foodContext, { context: foodContext, cats: [{ key: 'tacos' }] }), true);
+
+  const restoredFood = store.restore(foodContext);
+  assert.equal(restoredFood.cats[0].key, 'tacos');
+
+  const wrongType = store.restore({ ...foodContext, menuType: 'drinks' });
+  assert.equal(wrongType, null);
+});
+
+test('fallback defaults reset category definitions by menu type', () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const restaurants = getState(sandbox, 'RESTAURANTS');
+  setState(sandbox, {
+    MENU_ID: menus.ELROYS_FOOD.id,
+    MENU_TYPE: 'food',
+    RESTAURANT_ID: restaurants.ELROYS.id,
+  });
+
+  const result = sandbox.restoreMenuStateFromFallback({
+    menuId: menus.ELROYS_FOOD.id,
+    restaurantId: restaurants.ELROYS.id,
+    menuType: 'food',
+  });
+
+  assert.equal(result.source, 'default');
+  const categoryIds = getState(sandbox, 'CATEGORY_DEFS.map(cat => cat.id)');
+  assert.equal(Array.from(categoryIds).slice(0, 3).join(','), 'starters,tacos,entrees');
+});
+
+test('menu link resolver uses per-menu configuration with canonical route fallback', () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const restaurants = getState(sandbox, 'RESTAURANTS');
+
+  setState(sandbox, {
+    MENU_ID: menus.LEROYS_DRINKS.id,
+    MENU_TYPE: 'drinks',
+    RESTAURANT_ID: restaurants.LEROYS.id,
+    NOTIFICATIONS: { menu_url: 'https://menus.example.com/leroys-drinks' },
+    _activeMenuName: "Leroy's Lounge Drinks",
+  });
+  assert.equal(sandbox.getNotificationMenuLink(), 'https://menus.example.com/leroys-drinks');
+
+  setState(sandbox, {
+    MENU_ID: menus.ELROYS_DRINKS.id,
+    MENU_TYPE: 'drinks',
+    RESTAURANT_ID: restaurants.ELROYS.id,
+    NOTIFICATIONS: {},
+    _activeMenuName: "El Roy's Cantina Drinks",
+  });
+  assert.equal(
+    sandbox.getNotificationMenuLink(),
+    'https://example.com/elroyscantina?menu=el-roys-cantina-drinks'
+  );
+});
+
+test('public render coordinator dedupes queued rerenders and skips hidden shells', async () => {
+  const sandbox = loadAppSandbox();
+  let renderCount = 0;
+  const coordinator = sandbox.createPublicRenderCoordinator({
+    renderer: async () => {
+      renderCount += 1;
+    },
+    isVisible: () => true,
+  });
+
+  await Promise.all([coordinator.schedule({ cause: 'menu-switch' }), coordinator.schedule({ cause: 'menu-switch' })]);
+  assert.equal(renderCount, 1);
+
+  let releaseFirstRender;
+  const rerenderCoordinator = sandbox.createPublicRenderCoordinator({
+    renderer: async () => {
+      renderCount += 1;
+      if (renderCount === 2) {
+        await new Promise(resolve => {
+          releaseFirstRender = resolve;
+        });
+      }
+    },
+    isVisible: () => true,
+  });
+
+  const first = rerenderCoordinator.schedule({ cause: 'first-pass' });
+  await Promise.resolve();
+  const second = rerenderCoordinator.schedule({ cause: 'inflight-request' });
+  releaseFirstRender();
+  await Promise.all([first, second]);
+  assert.equal(renderCount, 3);
+
+  let hiddenCount = 0;
+  const hiddenCoordinator = sandbox.createPublicRenderCoordinator({
+    renderer: async () => {
+      hiddenCount += 1;
+    },
+    isVisible: () => false,
+  });
+  const hiddenResult = await hiddenCoordinator.schedule({ cause: 'hidden' });
+  assert.equal(hiddenCount, 0);
+  assert.equal(hiddenResult.skipped, 'hidden');
+});
+
+test('menu poll scheduler is single-flight and ignores stale poll results', async () => {
+  const sandbox = loadAppSandbox();
+  const resolverQueue = [];
+  const loaderCalls = [];
+  const appliedResults = [];
+  let errorCount = 0;
+  const scheduler = sandbox.createMenuPollScheduler({
+    loader: async ({ reason }) => {
+      loaderCalls.push(reason);
+      return await new Promise(resolve => resolverQueue.push(resolve));
+    },
+    onResult: async result => {
+      appliedResults.push(result.id);
+      return result;
+    },
+    onError: () => {
+      errorCount += 1;
+    },
+    getContextKey: () => 'menu-main|drinks|restaurant-main',
+  });
+
+  const intervalRun = scheduler.tick();
+  const resumeRun = scheduler.resume();
+  assert.equal(loaderCalls.length, 1);
+
+  resolverQueue.shift()({ id: 'old-result' });
+  for (let i = 0; i < 10 && loaderCalls.length < 2; i += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(loaderCalls.length, 2);
+
+  resolverQueue.shift()({ id: 'new-result' });
+  await Promise.all([intervalRun, resumeRun]);
+
+  assert.deepEqual(appliedResults, ['new-result']);
+  assert.equal(errorCount, 0);
+});
+
+test('featured view policy filters sell notes by explicit staff visibility', () => {
+  const sandbox = loadAppSandbox();
+  const groups = [
+    {
+      id: 'featured-group-1',
+      name: 'Specials',
+      slots: [
+        {
+          id: 'slot-1',
+          itemId: 'item-1',
+          sellNote: 'Staff-only note',
+          item: { id: 'item-1', name: 'Margarita' },
+        },
+      ],
+    },
+  ];
+  const policy = sandbox.createFeaturedViewPolicy({ actorResolver: () => ({ role: 'none' }) });
+  const anonSnapshot = policy.buildSnapshot({
+    actor: { role: 'none' },
+    restaurantId: '00000000-0000-0000-0000-000000000001',
+    featuredGroups: groups,
+  });
+  assert.equal(anonSnapshot.featuredGroups[0].slots[0].sellNote, '');
+
+  const managerSnapshot = policy.buildSnapshot({
+    actor: { role: 'manager' },
+    restaurantId: '00000000-0000-0000-0000-000000000001',
+    featuredGroups: groups,
+  });
+  assert.equal(managerSnapshot.featuredGroups[0].slots[0].sellNote, 'Staff-only note');
+});
+
+test('notification routes rely on the shared notification gateway authorization boundary', () => {
+  const groupmeSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'send-groupme.js'), 'utf8');
+  const notifySource = fs.readFileSync(path.join(__dirname, '..', 'api', 'send-notification.js'), 'utf8');
+
+  assert.match(groupmeSource, /authorizeNotificationRequest/);
+  assert.match(notifySource, /authorizeNotificationRequest/);
+  assert.doesNotMatch(groupmeSource, /requireMenuAccess, requireRole/);
+  assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
 });
