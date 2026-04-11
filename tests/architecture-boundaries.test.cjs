@@ -4,7 +4,6 @@ const test = require('node:test');
 
 const {
   createElement,
-  createFetchResponse,
   getState,
   loadAppSandbox,
   loadScript,
@@ -62,48 +61,7 @@ function makeMenuState(itemsByCategory = {}, lastUpdatedTs = '1712705100000') {
   return state;
 }
 
-test('menu runtime delegates menu session lifecycle calls', async () => {
-  const sandbox = loadAppSandbox();
-  const calls = [];
-  sandbox.location.search = '?menu=leroys-lounge-drinks';
-
-  const runtime = sandbox.createMenuRuntime({
-    lifecycle: {
-      openPageState: async options => {
-        calls.push(['open', options]);
-        return { snapshot: { stage: 'open' } };
-      },
-      refreshPageState: async options => {
-        calls.push(['refresh', options]);
-        return { snapshot: { stage: 'refresh' } };
-      },
-      savePageDraft: async options => {
-        calls.push(['save', options]);
-        return { snapshot: { stage: 'save' } };
-      },
-      publishPageUpdate: async options => {
-        calls.push(['send', options]);
-        return { snapshot: { stage: 'send' } };
-      },
-    },
-  });
-
-  const session = runtime.openPage({ requestedMenuSlug: 'leroys-lounge-drinks' });
-  await session.open({ resolveMenu: true });
-  await session.refresh({ reason: 'poll' });
-  await session.save({ reason: 'manual' });
-  await session.sendUpdate({ preview: { hasChanges: false, diff: [] } });
-
-  assert.equal(calls.length, 4);
-  assert.equal(calls[0][0], 'open');
-  assert.equal(calls[0][1].request.search, '?menu=leroys-lounge-drinks');
-  assert.equal(calls[1][0], 'refresh');
-  assert.equal(calls[2][0], 'save');
-  assert.equal(calls[3][0], 'send');
-});
-
-test('update publisher consolidates send results, persistence, and warnings', async () => {
-  const sandbox = loadAppSandbox();
+function createMenuSessionPorts(overrides = {}) {
   const diff = [
     {
       id: 'beer',
@@ -115,103 +73,260 @@ test('update publisher consolidates send results, persistence, and warnings', as
       restored: [],
     },
   ];
-  const patches = [];
-  const persistCalls = [];
 
-  setState(sandbox, {
-    MENU_ID: 'menu-main',
-    _activeMenuName: 'Main Menu',
-    currentUser: { accessToken: 'token-1', uid: 'user-1' },
-    getCachedDiff: () => diff,
-    buildMenuSessionSnapshot: source => ({ source }),
+  return {
+    buildRequest: overridesRequest => ({
+      pathname: '/leroyslounge',
+      search: '?menu=leroys-lounge-drinks',
+      pageMode: 'public',
+      actor: null,
+      siteRestaurantId: 'restaurant-main',
+      requestedMenuId: 'menu-main',
+      requestedMenuSlug: 'leroys-lounge-drinks',
+      ...overridesRequest,
+    }),
+    buildSnapshot: (source, request) => ({ source, request }),
+    resolveMenu: async () => null,
+    canLoadFromNetwork: () => true,
+    restoreFallback: ({ request }) => ({
+      source: 'cache',
+      usedFallback: true,
+      snapshot: { source: 'cache', request },
+    }),
+    loadState: async ({ request, source = 'network' }) => ({ source, request }),
+    pollState: async ({ request }) => ({
+      changed: false,
+      designChanged: false,
+      snapshot: { source: 'poll', request },
+    }),
+    now: () => 1712705100000,
+    persistState: async () => true,
+    patchMenuMeta: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenu: async () => ({ downgradedFields: [] }),
+    finalizePersistStatus() {},
+    commitDraft() {},
+    buildPreview: snapshot => ({
+      hasChanges: true,
+      diff,
+      sections: diff,
+      patchMessage: 'Patch message',
+      truncated: false,
+      snapshot,
+    }),
+    getMenuId: () => 'menu-main',
+    getRestaurantId: () => 'restaurant-main',
+    getMenuName: () => 'Main Menu',
     snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
     getCurrentFeaturedIds: () => ['feature-1'],
-    currentUserCanEditRestaurantSpecials: () => true,
-    getRestaurantSpecialConfig: () => ({ menuIds: ['menu-main', 'menu-sibling'] }),
+    canEditRestaurantSpecials: () => true,
+    getRestaurantMenuIds: () => ['menu-main', 'menu-sibling'],
+    dispatchNotification: async () => ({
+      ok: true,
+      statusCode: 207,
+      summary: {
+        anyOk: true,
+        anyError: true,
+        failedChannels: ['sms'],
+        allSkipped: false,
+      },
+    }),
+    collectNotificationWarnings: summary => {
+      if (!summary?.anyError) return [];
+      return ['Some notification channels failed: SMS.'];
+    },
+    syncLocalCache: () => false,
+    logUpdate: async () => false,
+    commitPublished() {},
+    dedupeWarnings: warnings => Array.from(new Set(warnings.filter(Boolean))),
+    ...overrides,
+  };
+}
+
+test('menu session lifecycle handles redirect and fallback-aware open results', async () => {
+  const sandbox = loadAppSandbox();
+  const restored = [];
+  let loadCalls = 0;
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    resolveMenu: async ({ request }) => {
+      if (request.requestedMenuSlug === 'el-roys') {
+        return { redirect: { href: '/elroyscantina?menu=el-roys-cantina-drinks' } };
+      }
+      return null;
+    },
+    canLoadFromNetwork: ({ request }) => request.requestedMenuSlug !== 'fallback-only',
+    restoreFallback: ({ expectedRestaurantId, request }) => {
+      restored.push({ expectedRestaurantId, request });
+      return {
+        source: 'cache',
+        usedFallback: true,
+        snapshot: { source: 'cache', request },
+      };
+    },
+    loadState: async ({ request, source = 'network' }) => {
+      loadCalls += 1;
+      if (request.requestedMenuSlug === 'load-fails') throw new Error('boom');
+      return { source, request };
+    },
+  }));
+
+  const redirect = await lifecycle.open({ requestedMenuSlug: 'el-roys' });
+  assert.equal(redirect.redirect.href, '/elroyscantina?menu=el-roys-cantina-drinks');
+
+  const fallback = await lifecycle.open({
+    requestedMenuSlug: 'fallback-only',
+    expectedRestaurantId: 'restaurant-main',
+  });
+  assert.equal(fallback.ok, true);
+  assert.equal(fallback.usedFallback, true);
+  assert.equal(fallback.showLoadError, false);
+  assert.equal(fallback.snapshot.source, 'cache');
+  assert.equal(restored[0].expectedRestaurantId, 'restaurant-main');
+
+  const failed = await lifecycle.open({
+    requestedMenuSlug: 'load-fails',
+    expectedRestaurantId: 'restaurant-main',
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.showLoadError, true);
+  assert.equal(failed.snapshot.source, 'cache');
+  assert.equal(loadCalls, 1);
+});
+
+test('menu session lifecycle routes poll and manual refreshes through one boundary', async () => {
+  const sandbox = loadAppSandbox();
+  const calls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    loadState: async ({ request, source = 'network' }) => {
+      calls.push(['load', request.requestedMenuSlug, source]);
+      return { source, request };
+    },
+    pollState: async ({ request }) => {
+      calls.push(['poll', request.requestedMenuSlug]);
+      return {
+        changed: true,
+        designChanged: true,
+        snapshot: { source: 'poll', request },
+      };
+    },
+  }));
+
+  const pollResult = await lifecycle.refresh({ reason: 'poll', requestedMenuSlug: 'leroys-lounge-drinks' });
+  const manualResult = await lifecycle.refresh({ requestedMenuSlug: 'leroys-lounge-food', source: 'manual' });
+
+  assert.equal(pollResult.changed, true);
+  assert.equal(pollResult.designChanged, true);
+  assert.equal(pollResult.snapshot.source, 'poll');
+  assert.equal(manualResult.ok, true);
+  assert.equal(manualResult.snapshot.source, 'manual');
+  assert.deepEqual(calls, [
+    ['poll', 'leroys-lounge-drinks'],
+    ['load', 'leroys-lounge-food', 'manual'],
+  ]);
+});
+
+test('menu session lifecycle saveDraft persists and patches last-updated metadata', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+  const patchCalls = [];
+  const commitCalls = [];
+  const finalizeCalls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
     persistState: async options => {
       persistCalls.push(options);
       return true;
     },
-    patchMenuMetaWithCompatibility: async update => {
-      patches.push(['primary', update]);
-      return { downgradedFields: ['last_sent_featured'] };
-    },
-    patchMenuMetaForMenuWithCompatibility: async (menuId, update) => {
-      patches.push([menuId, update]);
+    patchMenuMeta: async update => {
+      patchCalls.push(update);
       return { downgradedFields: [] };
     },
-    syncLocalMenuCache: () => false,
-    logUpdate: async () => false,
-    fetch: async () => createFetchResponse(207, {
-      results: {
-        groupme: 'ok',
-        sms: 'error:500',
-        discord: 'skipped',
-        webhook: 'skipped',
-      },
-    }),
-  });
+    commitDraft: ts => {
+      commitCalls.push(ts);
+    },
+    finalizePersistStatus: ok => {
+      finalizeCalls.push(ok);
+    },
+  }));
 
-  const publisher = sandbox.createUpdatePublisher();
-  const result = await publisher.publish();
+  const result = await lifecycle.saveDraft();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.snapshot.source, 'saved');
+  assert.equal(persistCalls.length, 1);
+  assert.equal(patchCalls[0].last_updated_ts, 1712705100000);
+  assert.deepEqual(commitCalls, [1712705100000]);
+  assert.deepEqual(finalizeCalls, []);
+});
+
+test('menu session lifecycle publishes updates through one preview-aware boundary', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+  const patchCalls = [];
+  const commitCalls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMeta: async update => {
+      patchCalls.push(['primary', update]);
+      return { downgradedFields: ['last_sent_featured'] };
+    },
+    patchMenuMetaForMenu: async (menuId, update) => {
+      patchCalls.push([menuId, update]);
+      return { downgradedFields: [] };
+    },
+    commitPublished: payload => {
+      commitCalls.push(payload);
+    },
+  }));
+
+  const preview = lifecycle.preview();
+  const result = await lifecycle.publishUpdate({ preview });
 
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus.statusCode, 207);
+  assert.equal(result.preview, preview);
   assert.equal(persistCalls.length, 1);
   assert.equal(persistCalls[0].silentFailure, true);
   assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
   assert.ok(result.warnings.some(message => message.includes('legacy metadata compatibility')));
   assert.ok(result.warnings.some(message => message.includes('local cache')));
   assert.ok(result.warnings.some(message => message.includes('audit log')));
-  assert.ok(patches.length >= 1);
+  assert.equal(patchCalls[0][0], 'primary');
+  assert.equal(patchCalls[1][0], 'menu-sibling');
+  assert.equal(commitCalls[0].ts, 1712705100000);
+  assert.equal(commitCalls[0].featuredIds[0], 'feature-1');
 });
 
-test('update publisher can publish without firing notifications', async () => {
+test('menu session lifecycle can publish without firing notifications', async () => {
   const sandbox = loadAppSandbox();
-  const diff = [
-    {
-      id: 'beer',
-      icon: '🍺',
-      label: 'Beers on Tap',
-      added: ['New Lager'],
-      removed: [],
-      eightySixed: [],
-      restored: [],
-    },
-  ];
   const persistCalls = [];
-  let fetchCalls = 0;
+  let notificationCalls = 0;
 
-  setState(sandbox, {
-    MENU_ID: 'menu-main',
-    _activeMenuName: 'Main Menu',
-    currentUser: { accessToken: 'token-1', uid: 'user-1' },
-    getCachedDiff: () => diff,
-    buildMenuSessionSnapshot: source => ({ source }),
-    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
-    getCurrentFeaturedIds: () => ['feature-1'],
-    currentUserCanEditRestaurantSpecials: () => false,
-    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    canEditRestaurantSpecials: () => false,
+    getRestaurantMenuIds: () => [],
+    dispatchNotification: async () => {
+      notificationCalls += 1;
+      return { ok: true, statusCode: 200, summary: { anyOk: true, anyError: false, failedChannels: [], allSkipped: false } };
+    },
     persistState: async options => {
       persistCalls.push(options);
       return true;
     },
-    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
-    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
-    syncLocalMenuCache: () => true,
+    syncLocalCache: () => true,
     logUpdate: async () => true,
-    fetch: async () => {
-      fetchCalls += 1;
-      return createFetchResponse(500, {});
-    },
-  });
+  }));
 
-  const publisher = sandbox.createUpdatePublisher();
-  const result = await publisher.publish({ notify: false });
+  const result = await lifecycle.publishUpdate({ notify: false });
 
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus, null);
-  assert.equal(fetchCalls, 0);
+  assert.equal(notificationCalls, 0);
   assert.equal(persistCalls.length, 1);
   assert.equal(persistCalls[0].silentFailure, true);
   assert.equal(result.warnings.length, 0);
