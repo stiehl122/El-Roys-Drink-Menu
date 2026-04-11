@@ -1,0 +1,4 @@
+-- Placeholder migration to mirror an existing remote history entry.
+-- The linked Supabase project has this version recorded already.
+-- This file is intentionally a no-op so local migration history can reconcile
+-- with remote history without rewriting the remote migration table.

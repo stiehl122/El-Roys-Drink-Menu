@@ -65,7 +65,7 @@ let _accessSessionService = null;
 let _restaurantSpecialsService = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
-let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
+let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
 let _restaurantSpecialsCatalogKey = '';
 let _restaurantSpecialsCatalogPromise = null;
@@ -185,15 +185,76 @@ let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistStat
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
 let _managerDraggedItemId = '';
 let _managerDraggedCatId = '';
-let _menuLifecycleService = null;
-let _menuRuntime = null;
 let _currentMenuSession = null;
-let _updatePublisher = null;
 let _menuMetaSupportsLastSentFeatured = true;
+let _menuMetaSupportsDraftState = true;
+let _draftSaveOnlyChanges = new Map();
+let _hasSharedDraft = false;
+let _sharedDraftSavedTs = '';
+let _previewModalState = null;
+let _previewSelectionState = {};
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+function countDiffLines(diff = getCachedDiff()) {
+  return (diff || []).reduce((count, section) => (
+    count + (section.added?.length || 0) +
+    (section.removed?.length || 0) +
+    (section.eightySixed?.length || 0) +
+    (section.restored?.length || 0)
+  ), 0);
+}
+function getDraftSaveOnlyChanges() {
+  return Array.from(_draftSaveOnlyChanges.values());
+}
+function clearDraftSaveOnlyChanges() {
+  _draftSaveOnlyChanges = new Map();
+}
+function hasSharedDraftState() {
+  return !!_hasSharedDraft;
+}
+function getDraftSavedTs() {
+  return _sharedDraftSavedTs || '';
+}
+function clearSharedDraftState() {
+  _hasSharedDraft = false;
+  _sharedDraftSavedTs = '';
+}
+function setSharedDraftState(savedTs = '') {
+  _hasSharedDraft = true;
+  _sharedDraftSavedTs = savedTs ? String(savedTs) : '';
+}
+function upsertDraftSaveOnlyChange(change) {
+  if (!change?.key) return null;
+  const nextChange = {
+    id: change.id || change.key,
+    key: change.key,
+    label: change.label || 'Saved change',
+    message: change.message || change.label || 'Saved change',
+    sectionId: change.sectionId || '',
+    itemId: change.itemId || '',
+    kind: change.kind || 'save-only',
+  };
+  _draftSaveOnlyChanges.set(nextChange.key, nextChange);
+  return nextChange;
+}
+function markSaveOnlyDraftChange(change) {
+  upsertDraftSaveOnlyChange(change);
+  _dirty = true;
+  updateSaveBtn();
+}
+function getDraftChangeCount() {
+  return countDiffLines() + getDraftSaveOnlyChanges().length;
+}
 function updateSaveBtn() {
-  const btn = document.getElementById('save-btn');
-  if (btn) btn.disabled = !_dirty;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
+  const hasLocalDraft = !!_dirty;
+  const hasDraftWork = hasLocalDraft || hasSharedDraftState();
+  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
+  if (saveBtn) saveBtn.disabled = !hasLocalDraft;
+  if (publishBtn) {
+    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+  }
   updateManagerActionBar();
 }
 function getCachedDiff() {
@@ -318,10 +379,6 @@ function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user
   if (!requiredMenuIds.length) return false;
   const accessibleMenuIds = new Set(normalizeAccessibleMenuIds(user.accessibleMenuIds));
   return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
-}
-
-function getFeaturedConfirmationKey(restaurantId = RESTAURANT_ID) {
-  return `featured_confirmed:${restaurantId || 'unknown'}`;
 }
 
 function getMenuTypeLabel(menuType) {
@@ -488,9 +545,14 @@ function buildCurrentMenuPageRequest(overrides = {}) {
   };
 }
 
-function buildMenuSessionSnapshot(source = 'live') {
+function buildMenuSessionSnapshot(source = 'live', request = buildCurrentMenuPageRequest()) {
+  const notifyDiff = getCachedDiff();
+  const saveOnlyChanges = getDraftSaveOnlyChanges();
+  const hasLocalDraft = !!_dirty;
+  const hasSharedDraft = hasSharedDraftState();
+  const hasPendingUpdate = !hasLocalDraft && !hasSharedDraft && countDiffLines(notifyDiff) > 0;
   return {
-    request: buildCurrentMenuPageRequest(),
+    request,
     source,
     menuId: MENU_ID,
     menuType: MENU_TYPE,
@@ -500,118 +562,477 @@ function buildMenuSessionSnapshot(source = 'live') {
     menuState,
     currentDesign,
     featuredGroups: _featuredGroups,
-    dirty: _dirty,
+    dirty: hasLocalDraft,
+    hasSharedDraft,
+    draftSavedTs: getDraftSavedTs(),
+    saveOnlyChanges,
+    notifyDiff,
+    status: hasLocalDraft ? 'DRAFTING' : (hasSharedDraft ? 'DRAFTED' : (hasPendingUpdate ? 'LIVE | UNSENT' : 'LIVE')),
     hasMultipleMenus: _hasMultipleMenus,
   };
 }
 
-function createMenuLifecycleService(ports) {
+function buildMenuSessionPreview(snapshot = buildMenuSessionSnapshot('preview')) {
+  const diff = snapshot.notifyDiff || getCachedDiff();
+  const sections = buildNotificationPreviewSections(diff);
+  const notificationChanges = sections.flatMap(section => section.changes);
+  const saveOnlyChanges = snapshot.saveOnlyChanges || getDraftSaveOnlyChanges();
+  const patchMessage = notificationChanges.length ? buildPatchMessage(sections) : '';
+  const hasLocalDraft = !!snapshot.dirty;
+  const hasSharedDraft = !!snapshot.hasSharedDraft;
+  const mode = (hasLocalDraft || hasSharedDraft) ? 'save' : (notificationChanges.length ? 'update-only' : 'save');
   return {
-    async openPageState(options = {}) {
-      return ports.openPageState(options);
+    hasChanges: notificationChanges.length > 0 || saveOnlyChanges.length > 0,
+    hasLocalDraft,
+    hasSharedDraft,
+    hasNotificationChanges: notificationChanges.length > 0,
+    hasSaveOnlyChanges: saveOnlyChanges.length > 0,
+    diff,
+    sections,
+    notificationChanges,
+    saveOnlyChanges,
+    patchMessage,
+    truncated: patchMessage.length > 1000,
+    snapshot,
+    mode,
+  };
+}
+
+function createPreviewChangeId(sectionId, kind, name) {
+  return `${sectionId}::${kind}::${encodeURIComponent(String(name || '').trim().toLowerCase())}`;
+}
+
+function buildNotificationPreviewSections(diff = []) {
+  return (diff || []).map(section => {
+    const changes = [];
+    (section.added || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'added', name), kind: 'added', text: `+ ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.removed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'removed', name), kind: 'removed', text: `− ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.eightySixed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'eightySixed', name), kind: 'eightySixed', text: `86'd: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.restored || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'restored', name), kind: 'restored', text: `${restoreLabel(section.id)}: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    return { ...section, changes };
+  }).filter(section => section.changes.length > 0);
+}
+
+function groupNotificationChangesBySection(changes = []) {
+  const sections = new Map();
+  (changes || []).forEach(change => {
+    if (!sections.has(change.sectionId)) {
+      sections.set(change.sectionId, {
+        id: change.sectionId,
+        icon: change.icon,
+        label: change.sectionLabel,
+        changes: [],
+      });
+    }
+    sections.get(change.sectionId).changes.push(change);
+  });
+  return Array.from(sections.values());
+}
+
+function getMenuSessionPorts() {
+  return {
+    buildRequest(overrides = {}) {
+      return buildCurrentMenuPageRequest(overrides);
     },
-    async refreshPageState(options = {}) {
-      if (options.reason === 'poll') return ports.pollPageState(options);
+    buildSnapshot(source = 'live', request = buildCurrentMenuPageRequest()) {
+      return buildMenuSessionSnapshot(source, request);
+    },
+    async resolveMenu() {
+      if (!SUPABASE_URL) return null;
+      return sbResolveMenu();
+    },
+    canLoadFromNetwork() {
+      return !!(SUPABASE_URL && MENU_ID);
+    },
+    restoreFallback({ expectedRestaurantId = '' } = {}) {
+      const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+      return {
+        source: fallback.source,
+        usedFallback: fallback.usedFallback,
+      };
+    },
+    async loadState(options = {}) {
+      return _loadActiveMenuStateInternal(options);
+    },
+    async pollState(options = {}) {
+      return _pollActiveMenuStateInternal(options);
+    },
+    now() {
+      return Date.now();
+    },
+    async persistState(options = {}) {
+      return persistState(options);
+    },
+    async patchMenuMeta(update) {
+      return patchMenuMetaWithCompatibility(update);
+    },
+    async patchMenuMetaForMenu(menuId, update) {
+      return patchMenuMetaForMenuWithCompatibility(menuId, update);
+    },
+    async patchMenuDraftState(snapshot, savedAt) {
+      return patchMenuDraftState(snapshot, savedAt);
+    },
+    finalizePersistStatus(ok) {
+      finalizePersistStatus(ok);
+    },
+    commitDraft(ts) {
+      _dirty = false;
+      setSharedDraftState(ts);
+      updateSaveBtn();
+    },
+    buildPreview(snapshot) {
+      return buildMenuSessionPreview(snapshot);
+    },
+    getMenuId() {
+      return MENU_ID;
+    },
+    getRestaurantId() {
+      return RESTAURANT_ID;
+    },
+    getMenuName() {
+      return _activeMenuName;
+    },
+    snapshotCurrentItemsAsLastSent() {
+      return snapshotCurrentItemsAsLastSent();
+    },
+    getCurrentFeaturedIds() {
+      return getCurrentFeaturedIds();
+    },
+    canEditRestaurantSpecials(restaurantId) {
+      return currentUserCanEditRestaurantSpecials(restaurantId);
+    },
+    getRestaurantMenuIds(restaurantId) {
+      return getRestaurantSpecialConfig(restaurantId)?.menuIds || [];
+    },
+    async dispatchNotification(payload) {
+      return dispatchMenuUpdateNotification(payload);
+    },
+    collectNotificationWarnings(summary) {
+      return collectNotificationWarnings(summary);
+    },
+    syncLocalCache(options = {}) {
+      return syncLocalMenuCache(options);
+    },
+    async logUpdate(diff, patchMessage) {
+      return logUpdate(diff, patchMessage);
+    },
+    commitPublished({ diff, ts, featuredIds }) {
+      _lastSentFeaturedIds = new Set(featuredIds);
+      applySentState(diff, ts);
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
+      updateSaveBtn();
+      updateLastUpdatedLabel();
+    },
+    dedupeWarnings(warnings = []) {
+      return dedupePublisherWarnings(warnings);
+    },
+  };
+}
+
+function createMenuSessionLifecycle(ports) {
+  const sessionPorts = ports || getMenuSessionPorts();
+  let request = sessionPorts.buildRequest();
+
+  function syncRequest(overrides = {}) {
+    request = { ...request, ...sessionPorts.buildRequest(overrides) };
+    return request;
+  }
+
+  function buildSnapshot(source = 'live') {
+    return sessionPorts.buildSnapshot(source, request);
+  }
+
+  const session = {
+    syncRequest,
+    snapshot(source = 'live') {
+      syncRequest();
+      return buildSnapshot(source);
+    },
+    async open(options = {}) {
+      const nextRequest = syncRequest(options);
+      const expectedRestaurantId = options.expectedRestaurantId || nextRequest.siteRestaurantId || '';
+
+      if (options.resolveMenu !== false) {
+        const resolution = await sessionPorts.resolveMenu({ request: nextRequest, ...options });
+        if (resolution?.redirect) return resolution;
+      }
+
+      if (!sessionPorts.canLoadFromNetwork({ request: nextRequest, ...options })) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, ...options });
+        return {
+          ok: true,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: false,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+
+      try {
+        const snapshot = await sessionPorts.loadState({
+          request: nextRequest,
+          fallbackToDefault: options.fallbackToDefault,
+          includeFeatured: options.includeFeatured,
+          persistCache: options.persistCache,
+          source: options.source || 'network',
+        });
+        return {
+          ok: true,
+          source: snapshot.source || 'network',
+          usedFallback: false,
+          showLoadError: false,
+          snapshot,
+        };
+      } catch (error) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, error, ...options });
+        return {
+          ok: false,
+          error,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: true,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+    },
+    async refresh(options = {}) {
+      const nextRequest = syncRequest(options);
+      if (options.reason === 'poll') {
+        return sessionPorts.pollState({ request: nextRequest, ...options });
+      }
       return {
         ok: true,
-        snapshot: await ports.loadPageState(options),
+        snapshot: await sessionPorts.loadState({ request: nextRequest, ...options }),
       };
     },
-    async savePageDraft(options = {}) {
-      return ports.savePageDraft(options);
+    preview() {
+      syncRequest();
+      return sessionPorts.buildPreview(buildSnapshot('preview'));
     },
-    async publishPageUpdate(options = {}) {
-      return ports.publishPageUpdate(options);
+    async saveDraft(options = {}) {
+      syncRequest(options);
+      const snapshot = buildSnapshot('draft');
+      if (!snapshot.dirty) {
+        return {
+          ok: false,
+          noop: true,
+          snapshot: buildSnapshot('draft-noop'),
+        };
+      }
+      const ts = sessionPorts.now();
+      try {
+        await sessionPorts.patchMenuDraftState(buildPersistedDraftStateSnapshot(ts), ts);
+        sessionPorts.commitDraft(ts);
+        return {
+          ok: true,
+          ts,
+          snapshot: buildSnapshot('draft-saved'),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: error?.message || 'Draft save failed.',
+          snapshot: buildSnapshot('draft-save-failed'),
+        };
+      }
     },
-  };
-}
+    async publishUpdate(options = {}) {
+      syncRequest(options);
+      const preview = options.preview?.sections ? options.preview : session.preview();
+      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
+      const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
+      const selectedSections = groupNotificationChangesBySection(selectedChanges);
+      const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+      const mode = options.mode || (preview.mode === 'update-only'
+        ? (options.notify === false ? 'save' : 'update-only')
+        : (options.notify === false ? 'save' : 'save-and-update'));
+      if (!preview.hasChanges) {
+        return {
+          ok: false,
+          noop: true,
+          preview,
+          snapshot: buildSnapshot('publish-noop'),
+        };
+      }
 
-function createMenuRuntime({ lifecycle }) {
-  return {
-    openPage(pageRequest = {}) {
-      const session = {
-        _request: { ...pageRequest },
-        _syncRequest(nextRequest = {}) {
-          this._request = { ...this._request, ...nextRequest };
-          return this._request;
-        },
-        async open(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.openPageState({ request: this._request, ...options });
-        },
-        getSnapshot(source = 'live') {
-          this._syncRequest(buildCurrentMenuPageRequest());
-          return buildMenuSessionSnapshot(source);
-        },
-        update(mutator) {
-          if (typeof mutator === 'function') {
-            mutator({
-              menuState,
-              currentDesign,
-              featuredGroups: _featuredGroups,
-              menuId: MENU_ID,
-              restaurantId: RESTAURANT_ID,
-            });
-            invalidateDiff();
-          }
-          return this.getSnapshot();
-        },
-        async refresh(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.refreshPageState({ request: this._request, ...options });
-        },
-        async save(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.savePageDraft({ request: this._request, ...options });
-        },
-        async sendUpdate(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.publishPageUpdate({ request: this._request, ...options });
-        },
-        async switchMenu(menuRef) {
-          const requested = typeof menuRef === 'string'
-            ? (getMenuById(menuRef) || getMenuBySlug(menuRef))
-            : (menuRef?.id ? getMenuById(menuRef.id) : getMenuBySlug(menuRef?.slug || ''));
-          if (!requested) return this.getSnapshot();
-          selectMenu(
-            requested.id,
-            requested.slug,
-            requested.name,
-            requested.type,
-            requested.restaurantId
-          );
-          return this.refresh();
-        },
+      const warnings = [];
+      let liveSaveTs = null;
+      if (preview.hasLocalDraft || preview.hasSharedDraft) {
+        const persisted = await sessionPorts.persistState({ silentFailure: true });
+        if (!persisted) {
+          return {
+            ok: false,
+            preview,
+            userHandled: true,
+            snapshot: buildSnapshot('publish-live-save-failed'),
+          };
+        }
+        liveSaveTs = sessionPorts.now();
+        try {
+          await sessionPorts.patchMenuMeta({ last_updated_ts: liveSaveTs });
+          await sessionPorts.patchMenuDraftState(null, liveSaveTs);
+        } catch (_) {
+          warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
+        }
+        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(liveSaveTs) };
+        lsSet(LS_KEYS.lastUpdated, String(liveSaveTs));
+        _dirty = false;
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
+      }
+
+      const shouldNotify = (mode === 'save-and-update' || mode === 'update-only') && selectedSections.length > 0;
+      let delivery = {
+        ok: true,
+        skipped: !shouldNotify,
+        statusCode: null,
+        summary: summarizeNotificationResults({}),
       };
-      session._syncRequest(buildCurrentMenuPageRequest(pageRequest));
-      return session;
+      if (shouldNotify) {
+        delivery = await sessionPorts.dispatchNotification({
+          menuId: sessionPorts.getMenuId(),
+          patchMessage,
+        });
+      }
+
+      if (shouldNotify && delivery.partial) {
+        warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs attention.`,
+          snapshot: buildSnapshot('send-partial'),
+        };
+      }
+
+      if (shouldNotify && !delivery.ok) {
+        warnings.push(delivery.userMessage || 'Update could not be sent.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs to be sent.`,
+          snapshot: buildSnapshot('send-failed-live-saved'),
+        };
+      }
+
+      if (shouldNotify) warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+
+      if (mode === 'save-and-update' || mode === 'update-only') {
+        const ts = liveSaveTs || sessionPorts.now();
+        const lastSentState = sessionPorts.snapshotCurrentItemsAsLastSent();
+        const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
+        const restaurantId = sessionPorts.getRestaurantId();
+        const restaurantMenuIds = sessionPorts.canEditRestaurantSpecials(restaurantId)
+          ? sessionPorts.getRestaurantMenuIds(restaurantId)
+          : [];
+        const patchResults = await Promise.all([
+          sessionPorts.patchMenuMeta({
+            last_updated_ts: ts,
+            last_sent_ts: ts,
+            last_sent_state: lastSentState,
+            last_sent_categories: preview.diff.map(section => section.id),
+            last_sent_featured: currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== sessionPorts.getMenuId())
+            .map(menuId => sessionPorts.patchMenuMetaForMenu(menuId, {
+              last_sent_featured: currentFeaturedIds,
+            })),
+        ]);
+        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+        }
+
+        sessionPorts.commitPublished({
+          diff: preview.diff,
+          ts,
+          featuredIds: currentFeaturedIds,
+        });
+
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) {
+          warnings.push('This device could not refresh its local cache after the send.');
+        }
+
+        const logged = patchMessage ? await sessionPorts.logUpdate(serializeNotificationSectionsForLog(selectedSections), patchMessage) : true;
+        if (!logged) {
+          warnings.push('The recent-changes audit log could not be written for this send.');
+        }
+
+        const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          ts,
+          truncated: preview.truncated,
+          notificationStatus: shouldNotify ? delivery : null,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: shouldNotify
+            ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved and sent!`
+            : `✅ ${sessionPorts.getMenuName() || 'Menu'} update list cleared without notifying channels.`,
+          snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+        };
+      }
+
+      const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+      return {
+        ok: true,
+        preview,
+        ts: liveSaveTs || sessionPorts.now(),
+        truncated: preview.truncated,
+        notificationStatus: shouldNotify ? delivery : null,
+        warnings: finalWarnings,
+        warningMessage: finalWarnings[0] || '',
+        successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved to the live menu.`,
+        snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+      };
+    },
+    async save(options = {}) {
+      return session.saveDraft(options);
+    },
+    async sendUpdate(options = {}) {
+      return session.publishUpdate(options);
+    },
+    getSnapshot(source = 'live') {
+      return session.snapshot(source);
+    },
+    _syncRequest(nextRequest = {}) {
+      return syncRequest(nextRequest);
     },
   };
-}
 
-function getMenuLifecycleService() {
-  if (_menuLifecycleService) return _menuLifecycleService;
-  _menuLifecycleService = createMenuLifecycleService({
-    openPageState: options => _openCurrentMenuPageInternal(options),
-    loadPageState: options => _loadActiveMenuStateInternal(options),
-    pollPageState: options => _pollActiveMenuStateInternal(options),
-    savePageDraft: options => _saveActiveMenuDraftInternal(options),
-    publishPageUpdate: options => _publishActiveMenuUpdateInternal(options),
-  });
-  return _menuLifecycleService;
-}
-
-function getMenuRuntime() {
-  if (_menuRuntime) return _menuRuntime;
-  _menuRuntime = createMenuRuntime({ lifecycle: getMenuLifecycleService() });
-  return _menuRuntime;
+  return session;
 }
 
 function ensureCurrentMenuSession(overrides = {}) {
   if (!_currentMenuSession) {
-    _currentMenuSession = getMenuRuntime().openPage(buildCurrentMenuPageRequest(overrides));
+    _currentMenuSession = createMenuSessionLifecycle();
+    _currentMenuSession.syncRequest(overrides);
   } else {
-    _currentMenuSession._syncRequest(buildCurrentMenuPageRequest(overrides));
+    _currentMenuSession.syncRequest(overrides);
   }
   return _currentMenuSession;
 }
@@ -1202,6 +1623,12 @@ function hydrateMenuItem(record, overrides = {}) {
   };
 }
 
+function normalizeDraftCategoryUuid(rawId = '', key = '') {
+  if (!rawId) return key === UNCATEGORIZED_ID ? _uncatCategoryUuid : '';
+  if (String(rawId).startsWith('local-')) return key === UNCATEGORIZED_ID ? _uncatCategoryUuid : '';
+  return rawId;
+}
+
 function cloneMenuItemState(item) {
   return {
     ...item,
@@ -1279,6 +1706,62 @@ function hydrateState({ cats, meta, restaurant }) {
     if (meta.last_updated_ts) lsSet(LS_KEYS.lastUpdated, meta.last_updated_ts.toString());
     if (meta.last_sent_featured) _lastSentFeaturedIds = new Set(meta.last_sent_featured);
   }
+  clearSharedDraftState();
+}
+
+function applyPersistedDraftState(draftState = {}) {
+  const cats = Array.isArray(draftState?.cats) ? draftState.cats : [];
+  if (!cats.length) {
+    clearSharedDraftState();
+    return false;
+  }
+
+  const liveMeta = menuState._meta ? { ...menuState._meta } : {};
+  const liveLastSentState = {};
+  CATEGORY_DEFS.forEach(cat => {
+    liveLastSentState[cat.id] = (menuState[cat.id]?.lastSent || []).map(cloneMenuItemState);
+  });
+
+  const realCats = cats.filter(cat => cat.key !== UNCATEGORIZED_ID);
+  const uncatCat = cats.find(cat => cat.key === UNCATEGORIZED_ID) || null;
+
+  CATEGORY_DEFS = realCats.map(cat => ({
+    id: cat.key,
+    _uuid: normalizeDraftCategoryUuid(cat.id, cat.key),
+    icon: cat.icon || '',
+    color: cat.color || '',
+    title: cat.label,
+    sub: cat.sub || '',
+    placeholder: cat.placeholder || '',
+  }));
+
+  menuState = {};
+  realCats.forEach(cat => {
+    menuState[cat.key] = {
+      items: (cat.items || [])
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        .map(item => hydrateMenuItem(item)),
+      lastSent: liveLastSentState[cat.key] || [],
+    };
+  });
+
+  _uncatCategoryUuid = normalizeDraftCategoryUuid(uncatCat?.id || '', UNCATEGORIZED_ID);
+  if (uncatCat) {
+    menuState[UNCATEGORIZED_ID] = {
+      items: (uncatCat.items || [])
+        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+        .map(item => hydrateMenuItem(item, { onMenu: false })),
+      lastSent: [],
+    };
+  }
+
+  menuState._meta = liveMeta;
+  _draftSaveOnlyChanges = new Map((Array.isArray(draftState?.saveOnlyChanges) ? draftState.saveOnlyChanges : [])
+    .filter(change => change?.key)
+    .map(change => [change.key, change]));
+  setSharedDraftState(draftState.savedAt || draftState.saved_at || '');
+  _dirty = false;
+  return true;
 }
 
 function getCategoryStateSnapshot() {
@@ -1529,27 +2012,6 @@ function createRestaurantSpecialsService() {
       return { ok: true };
     },
 
-    needsConfirmation(restaurantId = RESTAURANT_ID) {
-      if (!currentUserCanEditRestaurantSpecials(restaurantId)) return false;
-      if (sessionStorage.getItem(getFeaturedConfirmationKey(restaurantId))) return false;
-      if (!_featuredGroups.some(group => group.slots.length)) return false;
-      return _featuredGroups.some(group => group.slots.some(slot => {
-        if (!slot.confirmedAt) return true;
-        const confirmed = new Date(slot.confirmedAt);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return confirmed < today;
-      }));
-    },
-
-    async confirmToday() {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('confirm');
-      sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-      return { ok: true, successMessage: 'Specials confirmed for today!' };
-    },
   };
 }
 
@@ -1563,77 +2025,38 @@ async function refreshFeaturedForActiveMenu() {
   return getRestaurantSpecialsService().refreshForActiveMenu(RESTAURANT_ID);
 }
 
-async function _openCurrentMenuPageInternal(options = {}) {
-  const {
-    request = buildCurrentMenuPageRequest(),
-    resolveMenu = true,
-    fallbackToDefault = true,
-    includeFeatured = true,
-    persistCache = true,
-    expectedRestaurantId = request.siteRestaurantId || '',
-  } = options;
-
-  if (resolveMenu && SUPABASE_URL) await sbResolveMenu();
-
-  if (!SUPABASE_URL || !MENU_ID) {
-    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
-    return {
-      ok: true,
-      source: fallback.source,
-      usedFallback: fallback.usedFallback,
-      showLoadError: false,
-      snapshot: buildMenuSessionSnapshot(fallback.source),
-    };
-  }
-
-  try {
-    const snapshot = await _loadActiveMenuStateInternal({
-      fallbackToDefault,
-      includeFeatured,
-      persistCache,
-      source: 'network',
-    });
-    return {
-      ok: true,
-      source: snapshot.source || 'network',
-      usedFallback: false,
-      showLoadError: false,
-      snapshot,
-    };
-  } catch (error) {
-    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
-    return {
-      ok: false,
-      error,
-      source: fallback.source,
-      usedFallback: fallback.usedFallback,
-      showLoadError: true,
-      snapshot: buildMenuSessionSnapshot(fallback.source),
-    };
-  }
-}
-
 async function _loadActiveMenuStateInternal(options = {}) {
   const {
     fallbackToDefault = true,
     includeFeatured = true,
     persistCache = true,
+    request = buildCurrentMenuPageRequest(),
   } = options;
+  const includePersistedDraft = options.includePersistedDraft ?? (request.pageMode === 'manager' || request.pageMode === 'admin');
   try {
     const data = await sbRead();
     if (data) {
       hydrateState(data);
+      const loadedDraft = includePersistedDraft ? applyPersistedDraftState(data.meta?.draft_state || null) : false;
+      _dirty = false;
+      if (!loadedDraft) clearDraftSaveOnlyChanges();
       if (persistCache) lsSet(LS_KEYS.menuCache, JSON.stringify(data));
     } else if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
       _restaurantCustomDesignEnabled = true;
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
     }
   } catch (e) {
     if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
       _restaurantCustomDesignEnabled = true;
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
     } else {
       throw e;
     }
@@ -1776,6 +2199,15 @@ function buildMenuCacheSnapshot() {
   return { cats, meta, restaurant };
 }
 
+function buildPersistedDraftStateSnapshot(savedAt = Date.now()) {
+  return {
+    version: 1,
+    savedAt,
+    cats: buildMenuCacheSnapshot().cats,
+    saveOnlyChanges: getDraftSaveOnlyChanges(),
+  };
+}
+
 function syncLocalMenuCache(options = {}) {
   return lsSet(LS_KEYS.menuCache, JSON.stringify(buildMenuCacheSnapshot()), options);
 }
@@ -1784,6 +2216,10 @@ function isMissingColumnError(error, columnName) {
   const message = `${error?.message || error || ''}`.toLowerCase();
   return message.includes(columnName.toLowerCase()) &&
     (message.includes('column') || message.includes('schema cache'));
+}
+
+function isMissingDraftStateColumnError(error) {
+  return isMissingColumnError(error, 'draft_state') || isMissingColumnError(error, 'draft_saved_ts');
 }
 
 async function patchMenuMetaForMenuWithCompatibility(menuId, update) {
@@ -1810,6 +2246,24 @@ async function patchMenuMetaForMenuWithCompatibility(menuId, update) {
 
 async function patchMenuMetaWithCompatibility(update) {
   return patchMenuMetaForMenuWithCompatibility(MENU_ID, update);
+}
+
+async function patchMenuDraftState(snapshot, savedAt = Date.now()) {
+  const payload = {
+    draft_state: snapshot || {},
+    draft_saved_ts: snapshot ? savedAt : null,
+  };
+  try {
+    await sbPatchMenuMetaForMenu(MENU_ID, payload);
+    _menuMetaSupportsDraftState = true;
+    return { downgradedFields: [] };
+  } catch (error) {
+    if (isMissingDraftStateColumnError(error)) {
+      _menuMetaSupportsDraftState = false;
+      throw new Error('Save Draft requires the latest Supabase draft-state migration before it can persist shared drafts.');
+    }
+    throw error;
+  }
 }
 
 async function sbPatchRestaurantDesign(design) {
@@ -2127,9 +2581,10 @@ function renderManagerOverviewStats() {
   const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
     total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
   ), 0);
-  const draftCount = getCachedDiff().reduce((count, section) => (
-    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
-  ), 0);
+  const draftCount = getDraftChangeCount();
+  const hasLocalDraft = !!_dirty;
+  const hasSharedDraft = hasSharedDraftState();
+  const notifyCount = !hasSharedDraft && !hasLocalDraft ? countDiffLines() : 0;
   const statusValue = document.getElementById('manager-overview-status-value');
   const statusMeta = document.getElementById('manager-overview-status-meta');
   const activeValue = document.getElementById('manager-overview-active-value');
@@ -2137,10 +2592,20 @@ function renderManagerOverviewStats() {
   const eightysixValue = document.getElementById('manager-overview-86-value');
   const eightysixMeta = document.getElementById('manager-overview-86-meta');
 
-  if (statusValue) statusValue.textContent = draftCount > 0 ? 'Drafting' : 'Live';
-  if (statusMeta) statusMeta.textContent = draftCount > 0
-    ? `${draftCount} unsent change${draftCount === 1 ? '' : 's'}`
-    : 'No unsent changes';
+  if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (hasSharedDraft ? 'Drafted' : (notifyCount > 0 ? 'Live | Unsent' : 'Live'));
+  if (statusMeta) {
+    if (hasLocalDraft) {
+      statusMeta.textContent = hasSharedDraft
+        ? `${draftCount} pending change${draftCount === 1 ? '' : 's'} on top of the saved draft`
+        : `${draftCount} pending change${draftCount === 1 ? '' : 's'}`;
+    } else if (hasSharedDraft) {
+      statusMeta.textContent = `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish`;
+    } else if (notifyCount > 0) {
+      statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
+    } else {
+      statusMeta.textContent = 'No unsent changes';
+    }
+  }
   if (activeValue) activeValue.textContent = String(activeItems);
   if (activeMeta) activeMeta.textContent = activeItems === 1 ? 'active item' : 'active items';
   if (eightysixValue) eightysixValue.textContent = String(eightySixed);
@@ -2151,33 +2616,39 @@ function updateManagerActionBar() {
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
-  const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
   const syncEl = document.getElementById('sync-status');
-  const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
+  const hasSharedDraft = hasSharedDraftState();
+  const hasDraftWork = hasDraftChanges || hasSharedDraft;
+  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
+  const changeCount = getDraftChangeCount();
   const isCompactViewport = window.innerWidth <= 480;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
 
-  if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
-  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
-  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+  if (primaryGroup) primaryGroup.hidden = false;
+  if (saveBtn) saveBtn.disabled = !hasDraftChanges;
+  if (publishBtn) {
+    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+  }
+  bar.hidden = false;
+  bar.classList.toggle('is-idle', !hasDraftWork && !hasPendingUpdate);
   syncManagerActionBarStatus(syncEl);
 
   if (summary) {
-    if (hasDraftChanges && hasFeaturedPrompt) {
+    if (hasDraftChanges) {
       summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private, Send Update publishes, and featured still needs confirmation.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
-    } else if (hasDraftChanges) {
-      summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private and Send Update publishes live.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
-    } else if (hasFeaturedPrompt) {
-      summary.textContent = isCompactViewport
-        ? 'Featured still needs confirmation.'
-        : "Today's featured lineup needs confirmation.";
+        ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
+        : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
+    } else if (hasSharedDraft) {
+      summary.textContent = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
+    } else if (hasPendingUpdate) {
+      const notifyCount = countDiffLines();
+      summary.textContent = `${notifyCount} update line${notifyCount === 1 ? ' is' : 's are'} live and ready to send.`;
     } else {
-      summary.textContent = '';
+      summary.textContent = 'No Pending Changes';
     }
   }
 }
@@ -3950,7 +4421,8 @@ async function onSwitchMenuClick() {
     renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
-    checkFeaturedConfirmation();
+    updateManagerActionBar();
+    if (window.innerWidth <= 920) closeSettingsDrawer();
   }, { managerOnly: true });
 }
 
@@ -4252,7 +4724,7 @@ function enterManager() {
   _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  checkFeaturedConfirmation();
+  updateManagerActionBar();
 }
 
 function exitManager() {
@@ -4609,12 +5081,9 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
 }
 
 function buildItemsRowHtml(item, catId, lastSentNames) {
-  const isNew = !lastSentNames.has(item.name.trim().toLowerCase());
   const is86 = !!item.eightySixed;
   const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
-  const badgeClass = is86 ? 'item-state-badge--86' : isNew ? 'item-state-badge--new' : 'item-state-badge--active';
-  const badgeText = is86 ? '86' : isNew ? 'NEW' : '';
-  const stateLabel = is86 ? "86'd" : isNew ? 'New' : 'Active';
+  const badge = getItemStateBadge(item, catId, lastSentNames);
   return `<div class="current-item items-row ${stateClass}">
       <div class="item-row-main">
         <button class="item-drag-handle" type="button" draggable="true"
@@ -4622,7 +5091,7 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
           ondragend="endManagerItemDrag(event)"
           title="Drag to reorder"
           aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
-        ${badgeText ? `<div class="item-state-badge ${badgeClass}" role="img" aria-label="${stateLabel}" title="${stateLabel}">${badgeText}</div>` : ''}
+        ${badge.text ? `<div class="item-state-badge ${badge.className}" role="img" aria-label="${badge.label}" title="${badge.label}">${badge.text}</div>` : ''}
         <div class="item-name"><input type="text" value="${escHtml(item.name)}"
           aria-label="Item name for ${escHtml(item.name)}"
           onblur="renameItem('${catId}','${item.id}',this.value)"
@@ -4635,11 +5104,49 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
     </div>`;
 }
 
+function getDraftChangeLookup() {
+  return {
+    byItemId: new Set(getDraftSaveOnlyChanges().map(change => change.itemId).filter(Boolean)),
+    byCategoryName: new Map(getCachedDiff().map(section => [
+      section.id,
+      new Set([
+        ...(section.added || []),
+        ...(section.eightySixed || []),
+        ...(section.restored || []),
+      ].map(name => name.trim().toLowerCase())),
+    ])),
+  };
+}
+
+function getItemStateBadge(item, catId, lastSentNames = null) {
+  const is86 = !!item.eightySixed;
+  const nameKey = item.name.trim().toLowerCase();
+  const changeLookup = getDraftChangeLookup();
+  const sectionNames = changeLookup.byCategoryName.get(catId) || new Set();
+  const hasDraftWork = !!_dirty || hasSharedDraftState();
+  const hasDraftTag = hasDraftWork && (changeLookup.byItemId.has(item.id) || sectionNames.has(nameKey));
+  const hasUnsentTag = !hasDraftWork && sectionNames.has(nameKey);
+  const isNew = lastSentNames ? !lastSentNames.has(nameKey) : false;
+
+  if (hasUnsentTag) {
+    return { className: 'item-state-badge--unsent', text: 'UNSENT', label: 'Unsent update' };
+  }
+  if (hasDraftTag) {
+    return { className: 'item-state-badge--draft', text: 'DRAFT', label: 'Draft change' };
+  }
+  if (is86) {
+    return { className: 'item-state-badge--86', text: '86', label: "86'd" };
+  }
+  if (isNew) {
+    return { className: 'item-state-badge--new', text: 'NEW', label: 'New' };
+  }
+  return { className: 'item-state-badge--active', text: '', label: 'Active' };
+}
+
 function buildPricingRowHtml(item, catId) {
   const is86 = !!item.eightySixed;
   const stateClass = is86 ? 'is-eighty-sixed' : '';
-  const badgeClass = is86 ? 'item-state-badge--86' : '';
-  const badgeText = is86 ? '86' : '';
+  const badge = getItemStateBadge(item, catId);
   const upcharges = item.upcharges || [];
   const upchargeCount = upcharges.length;
   const upchargeMeta = upchargeCount
@@ -4665,7 +5172,7 @@ function buildPricingRowHtml(item, catId) {
       <div class="pricing-row-main">
         <div class="pricing-row-title">
           <span class="item-name-static">${escHtml(item.name)}</span>
-          ${badgeText ? `<span class="item-state-badge ${badgeClass}">${badgeText}</span>` : ''}
+          ${badge.text ? `<span class="item-state-badge ${badge.className}">${badge.text}</span>` : ''}
         </div>
         <p class="pricing-row-meta">${escHtml(upchargeMeta)}</p>
       </div>
@@ -4697,8 +5204,7 @@ function buildDescriptionRowHtml(item, catId) {
   const showDescription = isItemDescriptionPublic(item);
   const showRecipe = !isFood && isItemRecipePublic(item);
   const stateClass = is86 ? 'is-eighty-sixed' : '';
-  const badgeClass = is86 ? 'item-state-badge--86' : '';
-  const badgeText = is86 ? '86' : '';
+  const badge = getItemStateBadge(item, catId);
   const summaryParts = [hasDesc ? 'Description added' : 'No description'];
   if (!isFood) {
     summaryParts.push(hasRecipe ? `${ingredients.length} recipe entr${ingredients.length === 1 ? 'y' : 'ies'}` : 'No recipe');
@@ -4708,7 +5214,7 @@ function buildDescriptionRowHtml(item, catId) {
         <div class="desc-row-main">
           <div class="desc-row-title">
             <span class="item-name-static">${escHtml(item.name)}</span>
-            ${badgeText ? `<span class="item-state-badge ${badgeClass}">${badgeText}</span>` : ''}
+            ${badge.text ? `<span class="item-state-badge ${badge.className}">${badge.text}</span>` : ''}
           </div>
           <p class="desc-row-meta">${escHtml(summaryParts.join(' · '))}</p>
         </div>
@@ -4966,6 +5472,7 @@ function buildItemUpsertRows() {
         recipe:          item.recipe         || [],
         price:           item.price          || null,
         is_eighty_sixed: item.eightySixed    || false,
+        is_draft:        false,
         on_menu:         item.onMenu         !== false,
         visibility:      item.visibility     || 'public',
         upcharges:       item.upcharges      || [],
@@ -4985,6 +5492,7 @@ function buildItemUpsertRows() {
         recipe:          item.recipe || [],
         price:           item.price  || null,
         is_eighty_sixed: item.eightySixed || false,
+        is_draft:        false,
         on_menu:         false,
         visibility:      item.visibility || 'public',
         upcharges:       item.upcharges || [],
@@ -5061,51 +5569,109 @@ async function persistState(options = {}) {
   }
 }
 
-async function _saveActiveMenuDraftInternal() {
-  const ts = Date.now();
+function finalizeLiveCommit(ts) {
+  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
+  lsSet(LS_KEYS.lastUpdated, String(ts));
+  _dirty = false;
+  clearDraftSaveOnlyChanges();
+  clearSharedDraftState();
+  updateSaveBtn();
+  updateLastUpdatedLabel();
+}
+
+async function commitLiveMenuChanges() {
+  const warnings = [];
   try {
-    const persisted = await persistState();
+    const persisted = await persistState({ silentFailure: true });
     if (!persisted) {
       return {
         ok: false,
         userHandled: true,
-        snapshot: buildMenuSessionSnapshot('save-failed'),
+        snapshot: buildMenuSessionSnapshot('live-save-failed'),
       };
     }
-    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
-    menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-    lsSet(LS_KEYS.lastUpdated, ts.toString());
-    _dirty = false;
-    updateSaveBtn();
-    updateLastUpdatedLabel();
-    syncLocalMenuCache({ silent: true });
+    const ts = Date.now();
+    try {
+      await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
+      await patchMenuDraftState(null);
+    } catch (_) {
+      warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
+    }
+    finalizeLiveCommit(ts);
+    const cacheSynced = syncLocalMenuCache({ silent: true });
+    if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
     return {
       ok: true,
       ts,
-      snapshot: buildMenuSessionSnapshot('saved'),
+      warnings,
+      snapshot: buildMenuSessionSnapshot(warnings.length ? 'saved-live-warning' : 'saved-live'),
     };
-  } catch(e) {
+  } catch (e) {
     finalizePersistStatus(false);
     return {
       ok: false,
       userHandled: false,
-      snapshot: buildMenuSessionSnapshot('save-failed'),
+      snapshot: buildMenuSessionSnapshot('live-save-failed'),
+    };
+  }
+}
+
+async function _saveActiveMenuDraftInternal() {
+  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) {
+    return {
+      ok: false,
+      userHandled: false,
+      snapshot: buildMenuSessionSnapshot('draft-save-failed'),
+    };
+  }
+  if (!_dirty) {
+    return {
+      ok: false,
+      noop: true,
+      snapshot: buildMenuSessionSnapshot('draft-noop'),
+    };
+  }
+
+  const ts = Date.now();
+  try {
+    await patchMenuDraftState(buildPersistedDraftStateSnapshot(ts), ts);
+    _dirty = false;
+    setSharedDraftState(ts);
+    updateSaveBtn();
+    return {
+      ok: true,
+      ts,
+      snapshot: buildMenuSessionSnapshot('draft-saved'),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      userHandled: false,
+      userMessage: error?.message || 'Draft save failed.',
+      snapshot: buildMenuSessionSnapshot('draft-save-failed'),
     };
   }
 }
 
 async function saveMenu() {
   try {
-    const result = await ensureCurrentMenuSession().save();
+    const result = await ensureCurrentMenuSession().saveDraft();
+    if (result?.noop) return;
     if (result?.ok) {
-      showToast('✅ Menu saved!', 'success');
+      showToast(`✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
+      renderManagerWorkspace({ includeRecentChanges: false });
+      updateDraftIndicator();
       return;
     }
     if (result?.userHandled) return;
+    if (result?.userMessage) {
+      showToast(`⚠️ ${result.userMessage}`, 'error');
+      return;
+    }
   } catch (_) {
     finalizePersistStatus(false);
   }
-  showToast('⚠️ Cloud save failed.', 'error');
+  showToast('⚠️ Draft save failed.', 'error');
 }
 
 function addItem(catId) {
@@ -5273,7 +5839,7 @@ function toggle86(catId, itemId) {
     wrapper.classList.add(cls);
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
-  showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
+  showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
 }
 
 // ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
@@ -5582,7 +6148,14 @@ async function savePrice(catId, itemId, val) {
   if (item.price !== price) {
     item.price = price;
     markSectionsStale(_activeManagerSection);
-    await persistState();
+    markSaveOnlyDraftChange({
+      key: `price:${catId}:${itemId}`,
+      label: `Updated price for ${item.name}`,
+      message: `Updated price for ${item.name}`,
+      sectionId: catId,
+      itemId,
+      kind: 'price',
+    });
     _flashSaved(document.querySelector(`#pricing-wrapper-${itemId} .price-input`) || document.querySelector(`#wrapper-${itemId} .price-input`));
   }
 }
@@ -5707,15 +6280,8 @@ function renameItem(catId, itemId, newName) {
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
-  const diff = getCachedDiff();
-  const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
-  if (total > 0) {
-    btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
-    btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
-  } else {
-    btn.innerHTML = 'Send Update';
-    btn.style.boxShadow = '';
-  }
+  btn.textContent = 'Save';
+  btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
   renderManagerOverviewStats();
   updateManagerActionBar();
 }
@@ -5818,180 +6384,127 @@ function computeDiff() {
 }
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
-function buildPreviewBlockHtml(section) {
-  let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
-  section.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
-  section.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
-  section.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
-  section.restored.forEach(n    => { html += `<div class="preview-line add"><span>↩</span> ${restoreLabel(section.id)}: ${escHtml(n)}</div>`; });
-  return html;
-}
-
 function openPreview() {
-  const preview = getUpdatePublisher().preview();
+  const preview = ensureCurrentMenuSession().preview();
   const content = document.getElementById('preview-content');
-  const confirmBtn = document.getElementById('confirm-btn');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const subtitle = document.getElementById('modal-subtitle');
   const modal = document.getElementById('modal-bg');
-  if (!content || !confirmBtn || !modal) return;
+  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
+  _previewModalState = preview;
+  _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
   content.innerHTML = '';
+  if (subtitle) {
+    subtitle.textContent = preview.mode === 'update-only'
+      ? 'These lines are already live. Choose which ones to send now.'
+      : 'Review the changes before publishing them to the live menu.';
+  }
+  saveMenuBtn.style.display = preview.mode === 'update-only' ? 'none' : '';
+  saveMenuBtn.disabled = !(preview.hasLocalDraft || preview.hasSharedDraft);
+  saveMenuBtn.textContent = 'Save Menu';
+  saveSendBtn.textContent = preview.mode === 'update-only' ? 'Send Update' : 'Save & Update';
+  saveSendBtn.disabled = !preview.hasNotificationChanges;
   if (!preview.hasChanges) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
-    confirmBtn.disabled = true;
+    saveMenuBtn.disabled = true;
+    saveSendBtn.disabled = true;
   } else {
-    confirmBtn.disabled = false;
     preview.sections.forEach(s => {
       const block = document.createElement('div');
       block.className = 'preview-block';
-      block.innerHTML = buildPreviewBlockHtml(s);
+      block.innerHTML = buildPreviewBlockHtml(s, { selectable: true });
       content.appendChild(block);
     });
+    if (preview.saveOnlyChanges?.length) {
+      const saveOnlyBlock = document.createElement('div');
+      saveOnlyBlock.className = 'preview-block';
+      saveOnlyBlock.innerHTML = buildSaveOnlyPreviewBlockHtml(preview.saveOnlyChanges);
+      content.appendChild(saveOnlyBlock);
+    }
   }
   modal.classList.add('open');
 }
 function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
-// ─── SEND UPDATE ──────────────────────────────────────────────────────────────
-function buildPatchMessage(diff) {
+// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
+function buildPatchMessage(sections) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
   const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
   const menuLabel = _activeMenuName ? _activeMenuName.toUpperCase() : 'MENU';
   const lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
-  diff.forEach(section => {
+  (sections || []).forEach(section => {
     lines.push(`${section.icon} ${section.label.toUpperCase()}`);
-    section.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));
-    section.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
-    section.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
-    section.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
+    if (Array.isArray(section.changes)) {
+      section.changes.forEach(change => {
+        if (change.kind === 'added') lines.push(`  ✅ + ${cleanName(change.name)}`);
+        if (change.kind === 'removed') lines.push(`  ❌ - ${cleanName(change.name)}`);
+        if (change.kind === 'eightySixed') lines.push(`  🚫 86'd: ${cleanName(change.name)}`);
+        if (change.kind === 'restored') lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(change.name)}`);
+      });
+    } else {
+      (section.added || []).forEach(n => lines.push(`  ✅ + ${cleanName(n)}`));
+      (section.removed || []).forEach(n => lines.push(`  ❌ - ${cleanName(n)}`));
+      (section.eightySixed || []).forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
+      (section.restored || []).forEach(n => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
+    }
     lines.push('');
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
   return lines.join('\n').trim();
 }
 
-function getUpdatePublisher() {
-  if (_updatePublisher) return _updatePublisher;
-  _updatePublisher = createUpdatePublisher();
-  return _updatePublisher;
+function serializeNotificationSectionsForLog(sections = []) {
+  return (sections || []).map(section => ({
+    id: section.id,
+    icon: section.icon,
+    label: section.label,
+    added: (section.changes || []).filter(change => change.kind === 'added').map(change => change.name),
+    removed: (section.changes || []).filter(change => change.kind === 'removed').map(change => change.name),
+    eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
+    restored: (section.changes || []).filter(change => change.kind === 'restored').map(change => change.name),
+  }));
 }
 
-function createUpdatePublisher() {
-  return {
-    preview() {
-      const diff = getCachedDiff();
-      const patchMessage = diff.length ? buildPatchMessage(diff) : '';
-      return {
-        hasChanges: diff.length > 0,
-        diff,
-        sections: diff,
-        patchMessage,
-        truncated: patchMessage.length > 1000,
-        snapshot: buildMenuSessionSnapshot('preview'),
-      };
-    },
-
-    async publish(options = {}) {
-      const preview = options.preview?.diff ? options.preview : this.preview();
-      if (!preview.hasChanges) {
-        return {
-          ok: false,
-          noop: true,
-          preview,
-          snapshot: buildMenuSessionSnapshot('send-noop'),
-        };
-      }
-
-      const delivery = await dispatchMenuUpdateNotification({
-        menuId: MENU_ID,
-        patchMessage: preview.patchMessage,
-      });
-      if (!delivery.ok) {
-        return {
-          ok: false,
-          preview,
-          notificationStatus: delivery,
-          userMessage: delivery.userMessage,
-          snapshot: buildMenuSessionSnapshot('send-failed'),
-        };
-      }
-
-      const warnings = collectNotificationWarnings(delivery.summary);
-      try {
-        const persisted = await persistState({ silentFailure: true });
-        if (!persisted) throw new Error('persist failed');
-
-        const ts = Date.now();
-        const lastSentState = snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = getCurrentFeaturedIds();
-        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
-          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
-          : [];
-        const patchResults = await Promise.all([
-          patchMenuMetaWithCompatibility({
-            last_updated_ts: ts,
-            last_sent_ts: ts,
-            last_sent_state: lastSentState,
-            last_sent_categories: preview.diff.map(section => section.id),
-            last_sent_featured: currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== MENU_ID)
-            .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
-              last_sent_featured: currentFeaturedIds,
-            })),
-        ]);
-        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
-          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
-        }
-
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        applySentState(preview.diff, ts);
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
-
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        if (!cacheSynced) {
-          warnings.push('This device could not refresh its local cache after the send.');
-        }
-
-        const logged = await logUpdate(preview.diff, preview.patchMessage);
-        if (!logged) {
-          warnings.push('The recent-changes audit log could not be written for this send.');
-        }
-
-        const finalWarnings = dedupePublisherWarnings(warnings);
-        return {
-          ok: true,
-          preview,
-          ts,
-          truncated: preview.truncated,
-          notificationStatus: delivery,
-          warnings: finalWarnings,
-          warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : 'sent'),
-        };
-      } catch (syncError) {
-        console.warn('sendUpdate post-send sync failed:', syncError);
-        warnings.push('Update sent, but database sync needs attention. Refresh before sending again.');
-        const finalWarnings = dedupePublisherWarnings(warnings);
-        return {
-          ok: true,
-          preview,
-          truncated: preview.truncated,
-          notificationStatus: delivery,
-          warnings: finalWarnings,
-          warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot('sent-warning'),
-        };
-      }
-    },
-  };
+function setPreviewChangeSelected(changeId, checked) {
+  _previewSelectionState[changeId] = !!checked;
 }
 
+function getSelectedPreviewChangeIds() {
+  return Object.entries(_previewSelectionState)
+    .filter(([, checked]) => checked)
+    .map(([changeId]) => changeId);
+}
+
+function buildPreviewBlockHtml(section, options = {}) {
+  const { selectable = false } = options;
+  let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
+  if (Array.isArray(section.changes)) {
+    (section.changes || []).forEach(change => {
+      const lineClass = change.kind === 'removed' || change.kind === 'eightySixed' ? 'remove' : 'add';
+      if (selectable) {
+        html += `<label class="preview-line ${lineClass}"><input type="checkbox" checked onchange="setPreviewChangeSelected('${escHtml(change.id)}',this.checked)"/><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</label>`;
+      } else {
+        html += `<div class="preview-line ${lineClass}"><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</div>`;
+      }
+    });
+    return html;
+  }
+  (section.added || []).forEach(n => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
+  (section.removed || []).forEach(n => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
+  (section.eightySixed || []).forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
+  (section.restored || []).forEach(n => { html += `<div class="preview-line add"><span>↩</span> ${escHtml(restoreLabel(section.id))}: ${escHtml(n)}</div>`; });
+  return html;
+}
+
+function buildSaveOnlyPreviewBlockHtml(changes = []) {
+  if (!changes.length) return '';
+  return `<div class="preview-cat">Quiet Live Changes</div>${changes.map(change => (
+    `<div class="preview-line"><span>•</span> ${escHtml(change.message || change.label || 'Saved change')}</div>`
+  )).join('')}`;
+}
 function dedupePublisherWarnings(warnings = []) {
   return Array.from(new Set((warnings || []).filter(Boolean)));
 }
@@ -6175,31 +6688,47 @@ async function logUpdate(diff, patchMessage) {
   }
 }
 
-async function _publishActiveMenuUpdateInternal(options = {}) {
-  return getUpdatePublisher().publish(options);
+function setPreviewModalActionState(mode = '') {
+  const cancelBtn = document.getElementById('cancel-preview-btn');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const isBusy = !!mode;
+  if (cancelBtn) cancelBtn.disabled = isBusy;
+  if (saveMenuBtn) {
+    saveMenuBtn.disabled = isBusy;
+    saveMenuBtn.textContent = mode === 'save-menu' ? 'Saving…' : 'Save Menu';
+  }
+  if (saveSendBtn) {
+    saveSendBtn.disabled = isBusy;
+    saveSendBtn.textContent = mode === 'send-update'
+      ? 'Sending…'
+      : (mode === 'save-send' ? 'Saving & Sending…' : ((_previewModalState?.mode === 'update-only') ? 'Send Update' : 'Save & Update'));
+  }
 }
 
-async function sendUpdate() {
-  const preview = getUpdatePublisher().preview();
+async function sendUpdate(options = {}) {
+  const preview = options.preview?.sections ? options.preview : (_previewModalState || ensureCurrentMenuSession().preview());
   if (!preview.hasChanges) { closeModal(); return; }
 
   if (preview.truncated) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
-  const confirmBtn = document.getElementById('confirm-btn');
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = 'SENDING…';
+  const selectedChangeIds = getSelectedPreviewChangeIds();
+  const mode = options.notify === false
+    ? 'save'
+    : (preview.mode === 'update-only' ? 'update-only' : 'save-and-update');
+  setPreviewModalActionState(mode === 'save' ? 'save-menu' : (mode === 'update-only' ? 'send-update' : 'save-send'));
 
   try {
-    const result = await ensureCurrentMenuSession().sendUpdate({ preview });
+    const result = await ensureCurrentMenuSession().publishUpdate({ preview, mode, selectedChangeIds });
     if (result?.noop) {
       closeModal();
       return;
     }
     if (result?.ok) {
       closeModal();
-      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
+      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} updated.`, 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       renderRecentChanges();
@@ -6209,8 +6738,7 @@ async function sendUpdate() {
     }
     if (result?.userMessage) showToast(result.userMessage, 'error');
   } finally {
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = 'SEND UPDATE';
+    setPreviewModalActionState();
   }
 }
 
@@ -6769,32 +7297,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
   } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
-// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
-
-function _needsFeaturedConfirmation() {
-  return getRestaurantSpecialsService().needsConfirmation();
-}
-
-function checkFeaturedConfirmation() {
-  updateManagerActionBar();
-}
-
-async function confirmFeaturedToday() {
-  try {
-    const result = await getRestaurantSpecialsService().confirmToday();
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    updateManagerActionBar();
-    showToast(result.successMessage || 'Specials confirmed for today!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
-}
-
-function editFeaturedFromBanner() {
+function focusFeaturedManagerCard() {
   if (!currentUserCanEditRestaurantSpecials()) return;
-  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-  updateManagerActionBar();
   const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
   focusSettingsSection('manager-overview-section', overviewTrigger || null);
   requestAnimationFrame(() => {

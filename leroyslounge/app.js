@@ -78,9 +78,9 @@
   function buildFeaturedHtml(sharedState) {
     const featuredSlots = (sharedState.restaurantSpecials?.slots || [])
       .filter(slot => slot.item)
-      .slice(0, 3);
+      .slice(0, 5);
     if (!featuredSlots.length) return '<p class="ll-route-empty">Nothing featured right now.</p>';
-    return featuredSlots.slice(0, 3).map((slot, index) => buildItemHtml(slot.item, index === 0 ? "Chef's Choice" : '')).join('');
+    return featuredSlots.slice(0, 5).map((slot, index) => buildItemHtml(slot.item, index === 0 ? "Chef's Choice" : '')).join('');
   }
 
   function buildCategoryHtml(sharedState, category) {

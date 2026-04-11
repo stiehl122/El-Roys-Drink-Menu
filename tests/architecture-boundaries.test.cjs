@@ -4,7 +4,6 @@ const test = require('node:test');
 
 const {
   createElement,
-  createFetchResponse,
   getState,
   loadAppSandbox,
   loadScript,
@@ -62,48 +61,7 @@ function makeMenuState(itemsByCategory = {}, lastUpdatedTs = '1712705100000') {
   return state;
 }
 
-test('menu runtime delegates menu session lifecycle calls', async () => {
-  const sandbox = loadAppSandbox();
-  const calls = [];
-  sandbox.location.search = '?menu=leroys-lounge-drinks';
-
-  const runtime = sandbox.createMenuRuntime({
-    lifecycle: {
-      openPageState: async options => {
-        calls.push(['open', options]);
-        return { snapshot: { stage: 'open' } };
-      },
-      refreshPageState: async options => {
-        calls.push(['refresh', options]);
-        return { snapshot: { stage: 'refresh' } };
-      },
-      savePageDraft: async options => {
-        calls.push(['save', options]);
-        return { snapshot: { stage: 'save' } };
-      },
-      publishPageUpdate: async options => {
-        calls.push(['send', options]);
-        return { snapshot: { stage: 'send' } };
-      },
-    },
-  });
-
-  const session = runtime.openPage({ requestedMenuSlug: 'leroys-lounge-drinks' });
-  await session.open({ resolveMenu: true });
-  await session.refresh({ reason: 'poll' });
-  await session.save({ reason: 'manual' });
-  await session.sendUpdate({ preview: { hasChanges: false, diff: [] } });
-
-  assert.equal(calls.length, 4);
-  assert.equal(calls[0][0], 'open');
-  assert.equal(calls[0][1].request.search, '?menu=leroys-lounge-drinks');
-  assert.equal(calls[1][0], 'refresh');
-  assert.equal(calls[2][0], 'save');
-  assert.equal(calls[3][0], 'send');
-});
-
-test('update publisher consolidates send results, persistence, and warnings', async () => {
-  const sandbox = loadAppSandbox();
+function createMenuSessionPorts(overrides = {}) {
   const diff = [
     {
       id: 'beer',
@@ -115,55 +73,494 @@ test('update publisher consolidates send results, persistence, and warnings', as
       restored: [],
     },
   ];
+
+  return {
+    buildRequest: overridesRequest => ({
+      pathname: '/leroyslounge',
+      search: '?menu=leroys-lounge-drinks',
+      pageMode: 'public',
+      actor: null,
+      siteRestaurantId: 'restaurant-main',
+      requestedMenuId: 'menu-main',
+      requestedMenuSlug: 'leroys-lounge-drinks',
+      ...overridesRequest,
+    }),
+    buildSnapshot: (source, request) => ({ source, request }),
+    resolveMenu: async () => null,
+    canLoadFromNetwork: () => true,
+    restoreFallback: ({ request }) => ({
+      source: 'cache',
+      usedFallback: true,
+      snapshot: { source: 'cache', request },
+    }),
+    loadState: async ({ request, source = 'network' }) => ({ source, request }),
+    pollState: async ({ request }) => ({
+      changed: false,
+      designChanged: false,
+      snapshot: { source: 'poll', request },
+    }),
+    now: () => 1712705100000,
+    persistState: async () => true,
+    patchMenuMeta: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenu: async () => ({ downgradedFields: [] }),
+    patchMenuDraftState: async () => ({ downgradedFields: [] }),
+    finalizePersistStatus() {},
+    commitDraft() {},
+    buildPreview: snapshot => ({
+      hasChanges: true,
+      hasLocalDraft: false,
+      hasSharedDraft: false,
+      hasNotificationChanges: true,
+      hasSaveOnlyChanges: false,
+      diff,
+      sections: diff.map(section => ({
+        ...section,
+        changes: (section.added || []).map(name => ({
+          id: `${section.id}::added::${name.toLowerCase()}`,
+          kind: 'added',
+          name,
+          text: `+ ${name}`,
+          sectionId: section.id,
+          sectionLabel: section.label,
+          icon: section.icon,
+        })),
+      })),
+      notificationChanges: diff.flatMap(section => (section.added || []).map(name => ({
+        id: `${section.id}::added::${name.toLowerCase()}`,
+        kind: 'added',
+        name,
+        text: `+ ${name}`,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+      }))),
+      saveOnlyChanges: [],
+      patchMessage: 'Patch message',
+      truncated: false,
+      snapshot,
+      mode: 'update-only',
+    }),
+    getMenuId: () => 'menu-main',
+    getRestaurantId: () => 'restaurant-main',
+    getMenuName: () => 'Main Menu',
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => ['feature-1'],
+    canEditRestaurantSpecials: () => true,
+    getRestaurantMenuIds: () => ['menu-main', 'menu-sibling'],
+    dispatchNotification: async () => ({
+      ok: true,
+      statusCode: 207,
+      partial: true,
+      summary: {
+        anyOk: true,
+        anyError: true,
+        failedChannels: ['sms'],
+        allSkipped: false,
+      },
+    }),
+    collectNotificationWarnings: summary => {
+      if (!summary?.anyError) return [];
+      return ['Some notification channels failed: SMS.'];
+    },
+    syncLocalCache: () => false,
+    logUpdate: async () => false,
+    commitPublished() {},
+    dedupeWarnings: warnings => Array.from(new Set(warnings.filter(Boolean))),
+    ...overrides,
+  };
+}
+
+test('menu session lifecycle handles redirect and fallback-aware open results', async () => {
+  const sandbox = loadAppSandbox();
+  const restored = [];
+  let loadCalls = 0;
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    resolveMenu: async ({ request }) => {
+      if (request.requestedMenuSlug === 'el-roys') {
+        return { redirect: { href: '/elroyscantina?menu=el-roys-cantina-drinks' } };
+      }
+      return null;
+    },
+    canLoadFromNetwork: ({ request }) => request.requestedMenuSlug !== 'fallback-only',
+    restoreFallback: ({ expectedRestaurantId, request }) => {
+      restored.push({ expectedRestaurantId, request });
+      return {
+        source: 'cache',
+        usedFallback: true,
+        snapshot: { source: 'cache', request },
+      };
+    },
+    loadState: async ({ request, source = 'network' }) => {
+      loadCalls += 1;
+      if (request.requestedMenuSlug === 'load-fails') throw new Error('boom');
+      return { source, request };
+    },
+  }));
+
+  const redirect = await lifecycle.open({ requestedMenuSlug: 'el-roys' });
+  assert.equal(redirect.redirect.href, '/elroyscantina?menu=el-roys-cantina-drinks');
+
+  const fallback = await lifecycle.open({
+    requestedMenuSlug: 'fallback-only',
+    expectedRestaurantId: 'restaurant-main',
+  });
+  assert.equal(fallback.ok, true);
+  assert.equal(fallback.usedFallback, true);
+  assert.equal(fallback.showLoadError, false);
+  assert.equal(fallback.snapshot.source, 'cache');
+  assert.equal(restored[0].expectedRestaurantId, 'restaurant-main');
+
+  const failed = await lifecycle.open({
+    requestedMenuSlug: 'load-fails',
+    expectedRestaurantId: 'restaurant-main',
+  });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.showLoadError, true);
+  assert.equal(failed.snapshot.source, 'cache');
+  assert.equal(loadCalls, 1);
+});
+
+test('menu session lifecycle routes poll and manual refreshes through one boundary', async () => {
+  const sandbox = loadAppSandbox();
+  const calls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    loadState: async ({ request, source = 'network' }) => {
+      calls.push(['load', request.requestedMenuSlug, source]);
+      return { source, request };
+    },
+    pollState: async ({ request }) => {
+      calls.push(['poll', request.requestedMenuSlug]);
+      return {
+        changed: true,
+        designChanged: true,
+        snapshot: { source: 'poll', request },
+      };
+    },
+  }));
+
+  const pollResult = await lifecycle.refresh({ reason: 'poll', requestedMenuSlug: 'leroys-lounge-drinks' });
+  const manualResult = await lifecycle.refresh({ requestedMenuSlug: 'leroys-lounge-food', source: 'manual' });
+
+  assert.equal(pollResult.changed, true);
+  assert.equal(pollResult.designChanged, true);
+  assert.equal(pollResult.snapshot.source, 'poll');
+  assert.equal(manualResult.ok, true);
+  assert.equal(manualResult.snapshot.source, 'manual');
+  assert.deepEqual(calls, [
+    ['poll', 'leroys-lounge-drinks'],
+    ['load', 'leroys-lounge-food', 'manual'],
+  ]);
+});
+
+test('menu session lifecycle saveDraft persists and patches last-updated metadata', async () => {
+  const sandbox = loadAppSandbox();
+  const patchDraftCalls = [];
+  const commitCalls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    buildSnapshot: (source, request) => ({ source, request, dirty: true }),
+    patchMenuDraftState: async (snapshot, ts) => {
+      patchDraftCalls.push([snapshot, ts]);
+      return { downgradedFields: [] };
+    },
+    commitDraft: ts => {
+      commitCalls.push(ts);
+    },
+  }));
+
+  const result = await lifecycle.saveDraft();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.snapshot.source, 'draft-saved');
+  assert.equal(patchDraftCalls.length, 1);
+  assert.ok(Array.isArray(patchDraftCalls[0][0].cats));
+  assert.equal(patchDraftCalls[0][1], 1712705100000);
+  assert.deepEqual(commitCalls, [1712705100000]);
+});
+
+test('menu session lifecycle publishes updates through one preview-aware boundary', async () => {
+  const sandbox = loadAppSandbox();
+  const patchCalls = [];
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    patchMenuMeta: async update => {
+      patchCalls.push(['primary', update]);
+      return { downgradedFields: ['last_sent_featured'] };
+    },
+    patchMenuMetaForMenu: async (menuId, update) => {
+      patchCalls.push([menuId, update]);
+      return { downgradedFields: [] };
+    },
+    syncLocalCache: () => false,
+    logUpdate: async () => false,
+  }));
+
+  const preview = lifecycle.preview();
+  const result = await lifecycle.publishUpdate({ preview });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notificationStatus.statusCode, 207);
+  assert.equal(result.preview, preview);
+  assert.equal(patchCalls.length, 0);
+  assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
+  assert.ok(result.warnings.some(message => message.includes('remain ready to send again')));
+});
+
+test('menu session lifecycle can publish without firing notifications', async () => {
+  const sandbox = loadAppSandbox();
+  let notificationCalls = 0;
+
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    canEditRestaurantSpecials: () => false,
+    getRestaurantMenuIds: () => [],
+    dispatchNotification: async () => {
+      notificationCalls += 1;
+      return { ok: true, statusCode: 200, summary: { anyOk: true, anyError: false, failedChannels: [], allSkipped: false } };
+    },
+    syncLocalCache: () => true,
+    logUpdate: async () => true,
+  }));
+
+  const result = await lifecycle.publishUpdate({ notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notificationStatus, null);
+  assert.equal(notificationCalls, 0);
+  assert.equal(result.warnings.length, 0);
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager action bar stays visible and reflects idle and active draft states', () => {
+  const sandbox = loadAppSandbox();
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  const primaryGroup = sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  const summary = sandbox.document._registerElement('manager-action-bar-summary', createElement('div', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  const saveBtn = sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  const sendBtn = sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+
+  sandbox.innerWidth = 960;
+  sandbox.window.innerWidth = 960;
+
+  setState(sandbox, {
+    _dirty: false,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(bar.hidden, false);
+  assert.equal(primaryGroup.hidden, false);
+  assert.equal(summary.textContent, 'No Pending Changes');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(bar.classList.contains('is-idle'), true);
+
+  setState(sandbox, {
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: ['Old Lager'],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(bar.classList.contains('is-idle'), false);
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '1 saved draft change is ready to publish.');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Save');
+});
+
+test('save-only menu edits stay in the draft session until save', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+
+  setState(sandbox, {
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            price: '$8',
+            desc: '',
+            recipe: [],
+            onMenu: true,
+          },
+        ],
+        lastSent: [],
+      },
+    },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+  });
+
+  await sandbox.savePrice('beer', 'item-1', '$9');
+
+  assert.equal(persistCalls.length, 0);
+  assert.equal(getState(sandbox, '_dirty'), true);
+  assert.equal(getState(sandbox, 'getDraftSaveOnlyChanges().length'), 1);
+});
+
+test('save draft persists a shared draft snapshot without publishing the live menu', async () => {
+  const sandbox = loadAppSandbox();
   const patches = [];
   const persistCalls = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
-    _activeMenuName: 'Main Menu',
+    SUPABASE_URL: 'https://example.supabase.co',
     currentUser: { accessToken: 'token-1', uid: 'user-1' },
-    getCachedDiff: () => diff,
-    buildMenuSessionSnapshot: source => ({ source }),
-    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
-    getCurrentFeaturedIds: () => ['feature-1'],
-    currentUserCanEditRestaurantSpecials: () => true,
-    getRestaurantSpecialConfig: () => ({ menuIds: ['menu-main', 'menu-sibling'] }),
+    _dirty: true,
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            desc: '',
+            recipe: [],
+            price: '$9',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            upcharges: [],
+            showDescription: true,
+            showRecipe: false,
+          },
+        ],
+        lastSent: [],
+      },
+      _meta: {},
+    },
     persistState: async options => {
       persistCalls.push(options);
       return true;
     },
-    patchMenuMetaWithCompatibility: async update => {
-      patches.push(['primary', update]);
-      return { downgradedFields: ['last_sent_featured'] };
+    sbPatchMenuMetaForMenu: async (_menuId, update) => {
+      patches.push(update);
     },
-    patchMenuMetaForMenuWithCompatibility: async (menuId, update) => {
-      patches.push([menuId, update]);
-      return { downgradedFields: [] };
-    },
-    syncLocalMenuCache: () => false,
-    logUpdate: async () => false,
-    fetch: async () => createFetchResponse(207, {
-      results: {
-        groupme: 'ok',
-        sms: 'error:500',
-        discord: 'skipped',
-        webhook: 'skipped',
-      },
-    }),
   });
 
-  const publisher = sandbox.createUpdatePublisher();
-  const result = await publisher.publish();
+  const result = await sandbox._saveActiveMenuDraftInternal();
 
   assert.equal(result.ok, true);
-  assert.equal(result.notificationStatus.statusCode, 207);
+  assert.equal(persistCalls.length, 0);
+  assert.equal(patches.length, 1);
+  assert.ok(Array.isArray(patches[0].draft_state.cats));
+  assert.equal(getState(sandbox, '_dirty'), false);
+  assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
+});
+
+test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+  const draftClears = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Draft Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuDraftState: async snapshot => {
+      draftClears.push(snapshot);
+      return { downgradedFields: [] };
+    },
+    syncLocalMenuCache: () => true,
+  });
+
+  const session = sandbox.ensureCurrentMenuSession();
+  const result = await session.publishUpdate({ preview: session.preview(), notify: false });
+
+  assert.equal(result.ok, true);
   assert.equal(persistCalls.length, 1);
-  assert.equal(persistCalls[0].silentFailure, true);
-  assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
-  assert.ok(result.warnings.some(message => message.includes('legacy metadata compatibility')));
-  assert.ok(result.warnings.some(message => message.includes('local cache')));
-  assert.ok(result.warnings.some(message => message.includes('audit log')));
-  assert.ok(patches.length >= 1);
+  assert.equal(draftClears.length, 1);
+  assert.equal(draftClears[0], null);
+  assert.equal(getState(sandbox, '_hasSharedDraft'), false);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager item badges mark live unsent changes distinctly from drafts', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: false,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  const badge = sandbox.getItemStateBadge({ id: 'item-1', name: 'Lager', eightySixed: false }, 'beer', new Set());
+  assert.equal(badge.text, 'UNSENT');
+  assert.equal(badge.className, 'item-state-badge--unsent');
 });
 
 test('access session service restores sessions and resolves settings access', async () => {
@@ -293,7 +690,7 @@ test('public route contract exposes a stable snapshot and switchMenu action', as
   assert.equal(applyCalls, 1);
 });
 
-test('restaurant specials service centralizes add, matches, and confirm flows', async () => {
+test('restaurant specials service centralizes add and match flows', async () => {
   const sandbox = loadAppSandbox();
   const requestCalls = [];
   const refreshCalls = [];
@@ -342,11 +739,130 @@ test('restaurant specials service centralizes add, matches, and confirm flows', 
   assert.equal(added.ok, true);
   assert.equal(requestCalls[0][0], 'add');
   assert.equal(refreshCalls.length, 1);
+});
 
-  const confirmed = await service.confirmToday();
-  assert.equal(confirmed.ok, true);
-  assert.equal(sandbox.sessionStorage.getItem('featured_confirmed:00000000-0000-0000-0000-000000000010'), '1');
-  assert.equal(requestCalls[1][0], 'confirm');
+test('manager menu switching closes the mobile drawer after the menu refresh completes', async () => {
+  const sandbox = loadAppSandbox();
+  const mobileCalls = [];
+
+  setState(sandbox, {
+    currentDesign: {},
+    showMenuPicker: onPick => {
+      mobileCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        mobileCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      mobileCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      mobileCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      mobileCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      mobileCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      mobileCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      mobileCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      mobileCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 920;
+  sandbox.window.innerWidth = 920;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(mobileCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+    'close',
+  ]);
+
+  const desktopCalls = [];
+  setState(sandbox, {
+    showMenuPicker: onPick => {
+      desktopCalls.push('picker');
+      return onPick();
+    },
+    ensureCurrentMenuSession: () => ({
+      refresh: async () => {
+        desktopCalls.push('refresh');
+      },
+    }),
+    applyDesign: () => {
+      desktopCalls.push('design');
+    },
+    sbEnsureUncategorized: async () => {
+      desktopCalls.push('uncategorized');
+    },
+    renderManagerWorkspace: () => {
+      desktopCalls.push('render');
+    },
+    updateDraftIndicator: () => {
+      desktopCalls.push('draft');
+    },
+    updateSaveBtn: () => {
+      desktopCalls.push('save');
+    },
+    updateManagerActionBar: () => {
+      desktopCalls.push('actionbar');
+    },
+    closeSettingsDrawer: () => {
+      desktopCalls.push('close');
+    },
+  });
+
+  sandbox.innerWidth = 921;
+  sandbox.window.innerWidth = 921;
+  sandbox.onSwitchMenuClick();
+  await new Promise(resolve => setTimeout(resolve, 0));
+
+  assert.deepEqual(desktopCalls, [
+    'picker',
+    'refresh',
+    'design',
+    'uncategorized',
+    'render',
+    'draft',
+    'save',
+    'actionbar',
+  ]);
+});
+
+test('manager user header no longer depends on a header return button', () => {
+  const sandbox = loadAppSandbox();
+  const adminDrawerBtn = sandbox.document._registerElement('admin-btn-drawer', createElement('button', 'admin-btn-drawer'));
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'admin',
+      name: 'Alex',
+      accessibleMenuIds: ['menu-main'],
+    },
+    currentUserCanManageMenu: () => true,
+    isManagerMode: true,
+  });
+
+  sandbox.renderUserHeader();
+  assert.equal(adminDrawerBtn.style.display, '');
 });
 
 test('public route contract and route renderers register and hydrate both restaurant shells', async () => {
@@ -383,25 +899,23 @@ test('public route contract and route renderers register and hydrate both restau
         {
           id: 'group-1',
           name: 'Specials',
-          slots: [
-            {
-              id: 'slot-1',
-              itemId: 'special-1',
-              sellNote: '',
-              item: {
-                id: 'special-1',
-                name: 'House Margarita',
-                price: '$12',
-                visibility: 'public',
-                eightySixed: false,
-                desc: 'Citrus and salt',
-                recipe: ['tequila', 'lime'],
-                upcharges: [],
-                showDescription: true,
-                showRecipe: true,
-              },
+          slots: Array.from({ length: 5 }, (_, index) => ({
+            id: `slot-${index + 1}`,
+            itemId: `special-${index + 1}`,
+            sellNote: '',
+            item: {
+              id: `special-${index + 1}`,
+              name: `House Margarita ${index + 1}`,
+              price: '$12',
+              visibility: 'public',
+              eightySixed: false,
+              desc: 'Citrus and salt',
+              recipe: ['tequila', 'lime'],
+              upcharges: [],
+              showDescription: true,
+              showRecipe: true,
             },
-          ],
+          })),
         },
       ],
       menuState: makeMenuState({
@@ -475,7 +989,8 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
-    assert.match(featuredWrap.innerHTML, /House Margarita/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 1/);
+    assert.match(featuredWrap.innerHTML, /House Margarita 5/);
     assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
   }
 });
