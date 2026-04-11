@@ -190,10 +190,74 @@ let _menuRuntime = null;
 let _currentMenuSession = null;
 let _updatePublisher = null;
 let _menuMetaSupportsLastSentFeatured = true;
+let _menuMetaSupportsDraftState = true;
+let _draftSaveOnlyChanges = new Map();
+let _hasSharedDraft = false;
+let _sharedDraftSavedTs = '';
+let _previewModalState = null;
+let _previewSelectionState = {};
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
+function countDiffLines(diff = getCachedDiff()) {
+  return (diff || []).reduce((count, section) => (
+    count + (section.added?.length || 0) +
+    (section.removed?.length || 0) +
+    (section.eightySixed?.length || 0) +
+    (section.restored?.length || 0)
+  ), 0);
+}
+function getDraftSaveOnlyChanges() {
+  return Array.from(_draftSaveOnlyChanges.values());
+}
+function clearDraftSaveOnlyChanges() {
+  _draftSaveOnlyChanges = new Map();
+}
+function hasSharedDraftState() {
+  return !!_hasSharedDraft;
+}
+function getDraftSavedTs() {
+  return _sharedDraftSavedTs || '';
+}
+function clearSharedDraftState() {
+  _hasSharedDraft = false;
+  _sharedDraftSavedTs = '';
+}
+function setSharedDraftState(savedTs = '') {
+  _hasSharedDraft = true;
+  _sharedDraftSavedTs = savedTs ? String(savedTs) : '';
+}
+function upsertDraftSaveOnlyChange(change) {
+  if (!change?.key) return null;
+  const nextChange = {
+    id: change.id || change.key,
+    key: change.key,
+    label: change.label || 'Saved change',
+    message: change.message || change.label || 'Saved change',
+    sectionId: change.sectionId || '',
+    itemId: change.itemId || '',
+    kind: change.kind || 'save-only',
+  };
+  _draftSaveOnlyChanges.set(nextChange.key, nextChange);
+  return nextChange;
+}
+function markSaveOnlyDraftChange(change) {
+  upsertDraftSaveOnlyChange(change);
+  _dirty = true;
+  updateSaveBtn();
+}
+function getDraftChangeCount() {
+  return countDiffLines() + getDraftSaveOnlyChanges().length;
+}
 function updateSaveBtn() {
-  const btn = document.getElementById('save-btn');
-  if (btn) btn.disabled = !_dirty;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
+  const hasLocalDraft = !!_dirty;
+  const hasDraftWork = hasLocalDraft || hasSharedDraftState();
+  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
+  if (saveBtn) saveBtn.disabled = !hasLocalDraft;
+  if (publishBtn) {
+    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+  }
   updateManagerActionBar();
 }
 function getCachedDiff() {
@@ -489,6 +553,10 @@ function buildCurrentMenuPageRequest(overrides = {}) {
 }
 
 function buildMenuSessionSnapshot(source = 'live') {
+  const notifyDiff = getCachedDiff();
+  const saveOnlyChanges = getDraftSaveOnlyChanges();
+  const hasLocalDraft = !!_dirty;
+  const hasPendingUpdate = countDiffLines(notifyDiff) > 0;
   return {
     request: buildCurrentMenuPageRequest(),
     source,
@@ -500,8 +568,27 @@ function buildMenuSessionSnapshot(source = 'live') {
     menuState,
     currentDesign,
     featuredGroups: _featuredGroups,
-    dirty: _dirty,
+    dirty: hasLocalDraft,
+    saveOnlyChanges,
+    notifyDiff,
+    status: hasLocalDraft ? 'DRAFTING' : (hasPendingUpdate ? 'LIVE | UNSENT' : 'LIVE'),
     hasMultipleMenus: _hasMultipleMenus,
+  };
+}
+
+function createMenuDraftSession(options = {}) {
+  const {
+    getSnapshot = () => buildMenuSessionSnapshot('draft-session'),
+    saveDraft = async () => ({ ok: false }),
+  } = options;
+
+  return {
+    snapshot() {
+      return getSnapshot();
+    },
+    async saveDraft() {
+      return saveDraft(this.snapshot());
+    },
   };
 }
 
@@ -614,6 +701,13 @@ function ensureCurrentMenuSession(overrides = {}) {
     _currentMenuSession._syncRequest(buildCurrentMenuPageRequest(overrides));
   }
   return _currentMenuSession;
+}
+
+function getMenuDraftSession() {
+  return createMenuDraftSession({
+    getSnapshot: source => buildMenuSessionSnapshot(source || 'draft-session'),
+    saveDraft: () => _saveActiveMenuDraftInternal(),
+  });
 }
 
 function resolveRequestedSettingsRoute(user = currentUser) {
@@ -1623,17 +1717,23 @@ async function _loadActiveMenuStateInternal(options = {}) {
     const data = await sbRead();
     if (data) {
       hydrateState(data);
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
       if (persistCache) lsSet(LS_KEYS.menuCache, JSON.stringify(data));
     } else if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
       _restaurantCustomDesignEnabled = true;
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
     }
   } catch (e) {
     if (fallbackToDefault) {
       menuState = defaultState();
       currentDesign = { ...DESIGN_DEFAULTS };
       _restaurantCustomDesignEnabled = true;
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
     } else {
       throw e;
     }
@@ -2127,9 +2227,9 @@ function renderManagerOverviewStats() {
   const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
     total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
   ), 0);
-  const draftCount = getCachedDiff().reduce((count, section) => (
-    count + section.added.length + section.removed.length + section.eightySixed.length + section.restored.length
-  ), 0);
+  const draftCount = getDraftChangeCount();
+  const notifyCount = countDiffLines();
+  const hasLocalDraft = !!_dirty;
   const statusValue = document.getElementById('manager-overview-status-value');
   const statusMeta = document.getElementById('manager-overview-status-meta');
   const activeValue = document.getElementById('manager-overview-active-value');
@@ -2137,10 +2237,16 @@ function renderManagerOverviewStats() {
   const eightysixValue = document.getElementById('manager-overview-86-value');
   const eightysixMeta = document.getElementById('manager-overview-86-meta');
 
-  if (statusValue) statusValue.textContent = draftCount > 0 ? 'Drafting' : 'Live';
-  if (statusMeta) statusMeta.textContent = draftCount > 0
-    ? `${draftCount} unsent change${draftCount === 1 ? '' : 's'}`
-    : 'No unsent changes';
+  if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (notifyCount > 0 ? 'Live | Unsent' : 'Live');
+  if (statusMeta) {
+    if (hasLocalDraft) {
+      statusMeta.textContent = `${draftCount} pending change${draftCount === 1 ? '' : 's'}`;
+    } else if (notifyCount > 0) {
+      statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
+    } else {
+      statusMeta.textContent = 'No unsent changes';
+    }
+  }
   if (activeValue) activeValue.textContent = String(activeItems);
   if (activeMeta) activeMeta.textContent = activeItems === 1 ? 'active item' : 'active items';
   if (eightysixValue) eightysixValue.textContent = String(eightySixed);
@@ -2151,33 +2257,39 @@ function updateManagerActionBar() {
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
-  const featuredGroup = document.getElementById('manager-featured-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
   const syncEl = document.getElementById('sync-status');
-  const hasFeaturedPrompt = _needsFeaturedConfirmation();
   const hasDraftChanges = !!_dirty;
+  const hasSharedDraft = hasSharedDraftState();
+  const hasDraftWork = hasDraftChanges || hasSharedDraft;
+  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
+  const changeCount = getDraftChangeCount();
   const isCompactViewport = window.innerWidth <= 480;
+  const saveBtn = document.getElementById('save-btn');
+  const publishBtn = document.getElementById('send-btn');
 
-  if (primaryGroup) primaryGroup.hidden = !hasDraftChanges;
-  if (featuredGroup) featuredGroup.hidden = !hasFeaturedPrompt;
-  bar.hidden = !(hasDraftChanges || hasFeaturedPrompt);
+  if (primaryGroup) primaryGroup.hidden = false;
+  if (saveBtn) saveBtn.disabled = !hasDraftChanges;
+  if (publishBtn) {
+    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+  }
+  bar.hidden = false;
+  bar.classList.toggle('is-idle', !hasDraftWork && !hasPendingUpdate);
   syncManagerActionBarStatus(syncEl);
 
   if (summary) {
-    if (hasDraftChanges && hasFeaturedPrompt) {
+    if (hasDraftChanges) {
       summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private, Send Update publishes, and featured still needs confirmation.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu. Featured items also need confirmation.';
-    } else if (hasDraftChanges) {
-      summary.textContent = isCompactViewport
-        ? 'Drafts are ready. Save keeps them private and Send Update publishes live.'
-        : 'Unsent changes ready. Save Draft keeps them private. Send Update publishes to the live menu.';
-    } else if (hasFeaturedPrompt) {
-      summary.textContent = isCompactViewport
-        ? 'Featured still needs confirmation.'
-        : "Today's featured lineup needs confirmation.";
+        ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
+        : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
+    } else if (hasSharedDraft) {
+      summary.textContent = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
+    } else if (hasPendingUpdate) {
+      const notifyCount = countDiffLines();
+      summary.textContent = `${notifyCount} update line${notifyCount === 1 ? ' is' : 's are'} live and ready to send.`;
     } else {
-      summary.textContent = '';
+      summary.textContent = 'No Pending Changes';
     }
   }
 }
@@ -2465,9 +2577,15 @@ async function saveCategoryEdit(catId) {
   const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
   cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
   toggleCategoryEdit(catId);
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `category-edit:${catId}`,
+    label: `Updated category ${title}`,
+    message: `Updated category ${title}`,
+    sectionId: catId,
+    kind: 'category-edit',
+  });
   refreshAllViews();
-  showToast('✅ Category updated!', 'success');
+  showToast('Category update added to this draft.', 'info');
 }
 
 async function moveCategoryUp(catId) {
@@ -2475,7 +2593,14 @@ async function moveCategoryUp(catId) {
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
-  await persistState();
+  const cat = CATEGORY_DEFS[idx - 1];
+  markSaveOnlyDraftChange({
+    key: `category-order:${catId}`,
+    label: `Reordered category ${cat?.title || catId}`,
+    message: `Reordered category ${cat?.title || catId}`,
+    sectionId: catId,
+    kind: 'category-order',
+  });
   refreshAllViews();
 }
 
@@ -2484,7 +2609,14 @@ async function moveCategoryDown(catId) {
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
-  await persistState();
+  const cat = CATEGORY_DEFS[idx + 1];
+  markSaveOnlyDraftChange({
+    key: `category-order:${catId}`,
+    label: `Reordered category ${cat?.title || catId}`,
+    message: `Reordered category ${cat?.title || catId}`,
+    sectionId: catId,
+    kind: 'category-order',
+  });
   refreshAllViews();
 }
 
@@ -2504,42 +2636,18 @@ async function deleteCategory(catId) {
     const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
     if (!exists) pool.push({ ...item, onMenu: false });
   });
-  if (items.length > 0 && SUPABASE_URL) {
-    await sbEnsureUncategorized();
-    if (_uncatCategoryUuid) {
-      // Directly upsert the entire pool now — handles both DB-backed items
-      // (ON CONFLICT updates their category_id) and memory-only items (inserts them).
-      // This is explicit and doesn't rely on persistState() to handle orphaned items.
-      const rows = pool.map((item, idx) => ({
-        id:              item.id,
-        category_id:     _uncatCategoryUuid,
-        name:            item.name,
-        desc:            item.desc            || '',
-        recipe:          item.recipe          || [],
-        price:           item.price           || null,
-        is_eighty_sixed: item.eightySixed     || false,
-        on_menu:         false,
-        visibility:      item.visibility      || 'public',
-        upcharges:       item.upcharges       || [],
-        show_description:isItemDescriptionPublic(item),
-        show_recipe:     isItemRecipePublic(item),
-        display_order:   idx,
-      }));
-      await fetch(`${SUPABASE_URL}/rest/v1/items`, {
-        method:  'POST',
-        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body:    JSON.stringify(rows),
-      });
-    }
-  }
-  // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
-  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   delete menuState[catId];
   invalidateDiff();
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `category-delete:${catId}`,
+    label: `Deleted category ${cat.title}`,
+    message: `Deleted category ${cat.title}`,
+    sectionId: catId,
+    kind: 'category-delete',
+  });
   refreshAllViews();
-  showToast('✅ Category deleted.', 'success');
+  showToast('Category deletion added to this draft.', 'info');
 }
 
 function toggleAddCategoryForm() {
@@ -2572,9 +2680,15 @@ async function confirmAddCategory() {
   document.getElementById('catmgr-add-form').style.display = 'none';
   const btn = document.getElementById('show-add-cat-btn');
   if (btn) btn.textContent = '+ Add Category';
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `category-add:${id}`,
+    label: `Added category ${title}`,
+    message: `Added category ${title}`,
+    sectionId: id,
+    kind: 'category-add',
+  });
   refreshAllViews();
-  showToast(`✅ Category "${title}" added!`, 'success');
+  showToast(`Category "${title}" added to this draft.`, 'info');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -4907,12 +5021,19 @@ function handleManagerItemDrop(event, catId, targetItemId) {
       ...items.filter(item => item.onMenu === false),
     ];
 
-  invalidateDiff();
+  markSaveOnlyDraftChange({
+    key: `item-order:${catId}`,
+    label: `Reordered items in ${CATEGORY_DEFS.find(cat => cat.id === catId)?.title || catId}`,
+    message: `Reordered items in ${CATEGORY_DEFS.find(cat => cat.id === catId)?.title || catId}`,
+    sectionId: catId,
+    itemId: _managerDraggedItemId,
+    kind: 'item-order',
+  });
   renderManagerItems(catId);
   markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   renderManagerOverviewStats();
-  showToast('Item order updated.', 'success');
+  showToast('Item order added to this draft.', 'info');
 }
 
 function buildCategoryUpsertRows() {
@@ -5047,10 +5168,7 @@ async function persistState(options = {}) {
 
     await flushDeletedItems();
 
-    await Promise.all([
-      sbPatchMenuMeta({ bot_id: BOT_ID }),
-      sbPatchRestaurantDesign(currentDesign),
-    ]);
+    await sbPatchMenuMeta({ bot_id: BOT_ID });
 
     finalizePersistStatus(true);
     return true;
@@ -5061,44 +5179,70 @@ async function persistState(options = {}) {
   }
 }
 
-async function _saveActiveMenuDraftInternal() {
-  const ts = Date.now();
+function finalizeLocalDraftCommit(ts) {
+  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
+  lsSet(LS_KEYS.lastUpdated, String(ts));
+  _dirty = false;
+  clearDraftSaveOnlyChanges();
+  updateSaveBtn();
+  updateLastUpdatedLabel();
+}
+
+async function commitLiveMenuChanges() {
+  const warnings = [];
   try {
-    const persisted = await persistState();
+    const persisted = await persistState({ silentFailure: true });
     if (!persisted) {
       return {
         ok: false,
         userHandled: true,
-        snapshot: buildMenuSessionSnapshot('save-failed'),
+        snapshot: buildMenuSessionSnapshot('live-save-failed'),
       };
     }
-    await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
-    menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: ts.toString() };
-    lsSet(LS_KEYS.lastUpdated, ts.toString());
-    _dirty = false;
-    updateSaveBtn();
-    updateLastUpdatedLabel();
-    syncLocalMenuCache({ silent: true });
+    const ts = Date.now();
+    try {
+      await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
+    } catch (_) {
+      warnings.push('Live menu saved, but the updated timestamp could not be synced.');
+    }
+    finalizeLocalDraftCommit(ts);
+    const cacheSynced = syncLocalMenuCache({ silent: true });
+    if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
     return {
       ok: true,
       ts,
-      snapshot: buildMenuSessionSnapshot('saved'),
+      warnings,
+      snapshot: buildMenuSessionSnapshot(warnings.length ? 'saved-live-warning' : 'saved-live'),
     };
   } catch(e) {
     finalizePersistStatus(false);
     return {
       ok: false,
       userHandled: false,
-      snapshot: buildMenuSessionSnapshot('save-failed'),
+      snapshot: buildMenuSessionSnapshot('live-save-failed'),
     };
   }
 }
 
+async function _saveActiveMenuDraftInternal() {
+  return commitLiveMenuChanges();
+}
+
 async function saveMenu() {
   try {
-    const result = await ensureCurrentMenuSession().save();
+    const result = await getMenuDraftSession().saveDraft();
     if (result?.ok) {
-      showToast('✅ Menu saved!', 'success');
+      const warningMessage = Array.isArray(result.warnings) ? result.warnings[0] : '';
+      const notifyCount = countDiffLines();
+      showToast(
+        notifyCount > 0
+          ? `✅ ${_activeMenuName || 'Menu'} saved live. Update is ready when you want to notify channels.`
+          : `✅ ${_activeMenuName || 'Menu'} saved live.`,
+        'success'
+      );
+      if (warningMessage) showToast(`⚠️ ${warningMessage}`, 'warning');
+      renderManagerWorkspace({ includeRecentChanges: false });
+      updateDraftIndicator();
       return;
     }
     if (result?.userHandled) return;
@@ -5301,7 +5445,14 @@ function addUpcharge(catId, itemId) {
   item.upcharges.push({ label, price: price || '+$0' });
   labelInput.value = '';
   priceInput.value = '';
-  invalidateDiff();
+  markSaveOnlyDraftChange({
+    key: `upcharge:${catId}:${itemId}`,
+    label: `Updated upcharges for ${item.name}`,
+    message: `Updated upcharges for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'upcharge',
+  });
   updateDraftIndicator();
   renderPricingSection();
   markSectionsStale('manager-pricing-section');
@@ -5311,7 +5462,14 @@ function updateUpcharge(catId, itemId, index, field, value) {
   const item = findItem(catId, itemId);
   if (!item || !item.upcharges || !item.upcharges[index]) return;
   item.upcharges[index][field] = value.trim();
-  invalidateDiff();
+  markSaveOnlyDraftChange({
+    key: `upcharge:${catId}:${itemId}`,
+    label: `Updated upcharges for ${item.name}`,
+    message: `Updated upcharges for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'upcharge',
+  });
   updateDraftIndicator();
   markSectionsStale('manager-pricing-section');
 }
@@ -5320,7 +5478,14 @@ function removeUpcharge(catId, itemId, index) {
   const item = findItem(catId, itemId);
   if (!item || !item.upcharges) return;
   item.upcharges.splice(index, 1);
-  invalidateDiff();
+  markSaveOnlyDraftChange({
+    key: `upcharge:${catId}:${itemId}`,
+    label: `Updated upcharges for ${item.name}`,
+    message: `Updated upcharges for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'upcharge',
+  });
   updateDraftIndicator();
   renderPricingSection();
   markSectionsStale('manager-pricing-section');
@@ -5531,7 +5696,14 @@ async function addIngredient(catId, itemId) {
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
   input.focus();
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `recipe:${catId}:${itemId}`,
+    label: `Updated recipe for ${item.name}`,
+    message: `Updated recipe for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'recipe',
+  });
 }
 
 async function removeIngredient(catId, itemId, idx) {
@@ -5541,7 +5713,14 @@ async function removeIngredient(catId, itemId, idx) {
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `recipe:${catId}:${itemId}`,
+    label: `Updated recipe for ${item.name}`,
+    message: `Updated recipe for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'recipe',
+  });
 }
 
 function handleIngredientKeydown(event, catId, itemId) {
@@ -5558,7 +5737,14 @@ async function saveDesc(catId, itemId, val) {
     markSectionsStale(_activeManagerSection);
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
-    await persistState();
+    markSaveOnlyDraftChange({
+      key: `description:${catId}:${itemId}`,
+      label: `Updated description for ${item.name}`,
+      message: `Updated description for ${item.name}`,
+      sectionId: catId,
+      itemId,
+      kind: 'description',
+    });
     _flashSaved(document.querySelector(`#desc-input-${itemId}`));
   }
 }
@@ -5571,7 +5757,14 @@ async function saveItemVisibilityFlag(catId, itemId, field, checked, sourceEl = 
   if (!!item[normalizedField] === nextValue) return;
   item[normalizedField] = nextValue;
   syncDescriptionSummary(itemId, item);
-  await persistState();
+  markSaveOnlyDraftChange({
+    key: `visibility:${normalizedField}:${catId}:${itemId}`,
+    label: `${normalizedField === 'showRecipe' ? 'Recipe' : 'Description'} visibility updated for ${item.name}`,
+    message: `${normalizedField === 'showRecipe' ? 'Recipe' : 'Description'} visibility updated for ${item.name}`,
+    sectionId: catId,
+    itemId,
+    kind: 'visibility',
+  });
   if (sourceEl?.closest) _flashSaved(sourceEl.closest('.desc-visibility-toggle'));
 }
 
@@ -5582,7 +5775,14 @@ async function savePrice(catId, itemId, val) {
   if (item.price !== price) {
     item.price = price;
     markSectionsStale(_activeManagerSection);
-    await persistState();
+    markSaveOnlyDraftChange({
+      key: `price:${catId}:${itemId}`,
+      label: `Updated price for ${item.name}`,
+      message: `Updated price for ${item.name}`,
+      sectionId: catId,
+      itemId,
+      kind: 'price',
+    });
     _flashSaved(document.querySelector(`#pricing-wrapper-${itemId} .price-input`) || document.querySelector(`#wrapper-${itemId} .price-input`));
   }
 }
@@ -5700,22 +5900,27 @@ function renameItem(catId, itemId, newName) {
     return;
   }
   const item = findItem(catId, itemId);
-  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); markSectionsStale(_activeManagerSection); updateDraftIndicator(); }
+  if (item && item.name !== name) {
+    item.name = name;
+    markSaveOnlyDraftChange({
+      key: `rename:${catId}:${itemId}`,
+      label: `Renamed ${name}`,
+      message: `Renamed ${name}`,
+      sectionId: catId,
+      itemId,
+      kind: 'rename',
+    });
+    renderManagerItems(catId);
+    markSectionsStale(_activeManagerSection);
+    updateDraftIndicator();
+  }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
-  const diff = getCachedDiff();
-  const total = diff.reduce((n, s) => n + s.added.length + s.removed.length + s.eightySixed.length + s.restored.length, 0);
-  if (total > 0) {
-    btn.innerHTML = `Send Update <span class="send-update-count">(${total} Change${total > 1 ? 's' : ''})</span>`;
-    btn.style.boxShadow = '0 4px 22px rgba(255,77,0,0.55)';
-  } else {
-    btn.innerHTML = 'Send Update';
-    btn.style.boxShadow = '';
-  }
+  btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
   renderManagerOverviewStats();
   updateManagerActionBar();
 }
@@ -5818,135 +6023,303 @@ function computeDiff() {
 }
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
-function buildPreviewBlockHtml(section) {
-  let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
-  section.added.forEach(n       => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
-  section.removed.forEach(n     => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
-  section.eightySixed.forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
-  section.restored.forEach(n    => { html += `<div class="preview-line add"><span>↩</span> ${restoreLabel(section.id)}: ${escHtml(n)}</div>`; });
-  return html;
+function createPreviewChangeId(sectionId, kind, name) {
+  return `${sectionId}::${kind}::${encodeURIComponent(String(name || '').trim().toLowerCase())}`;
 }
 
-function openPreview() {
-  const preview = getUpdatePublisher().preview();
-  const content = document.getElementById('preview-content');
-  const confirmBtn = document.getElementById('confirm-btn');
-  const modal = document.getElementById('modal-bg');
-  if (!content || !confirmBtn || !modal) return;
-  content.innerHTML = '';
-  if (!preview.hasChanges) {
-    content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
-    confirmBtn.disabled = true;
-  } else {
-    confirmBtn.disabled = false;
-    preview.sections.forEach(s => {
-      const block = document.createElement('div');
-      block.className = 'preview-block';
-      block.innerHTML = buildPreviewBlockHtml(s);
-      content.appendChild(block);
+function buildNotificationPreviewSections(diff = []) {
+  return (diff || []).map(section => {
+    const changes = [];
+    (section.added || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'added', name), kind: 'added', text: `+ ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
     });
-  }
-  modal.classList.add('open');
+    (section.removed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'removed', name), kind: 'removed', text: `− ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.eightySixed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'eightySixed', name), kind: 'eightySixed', text: `86'd: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.restored || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'restored', name), kind: 'restored', text: `${restoreLabel(section.id)}: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    return { ...section, changes };
+  }).filter(section => section.changes.length > 0);
 }
-function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
-// ─── SEND UPDATE ──────────────────────────────────────────────────────────────
-function buildPatchMessage(diff) {
+function groupNotificationChangesBySection(changes = []) {
+  const sections = new Map();
+  (changes || []).forEach(change => {
+    if (!sections.has(change.sectionId)) {
+      sections.set(change.sectionId, {
+        id: change.sectionId,
+        icon: change.icon,
+        label: change.sectionLabel,
+        changes: [],
+      });
+    }
+    sections.get(change.sectionId).changes.push(change);
+  });
+  return Array.from(sections.values());
+}
+
+function buildPatchMessage(sections = []) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
   const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
   const menuLabel = _activeMenuName ? _activeMenuName.toUpperCase() : 'MENU';
   const lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
-  diff.forEach(section => {
+  (sections || []).forEach(section => {
     lines.push(`${section.icon} ${section.label.toUpperCase()}`);
-    section.added.forEach(n       => lines.push(`  ✅ + ${cleanName(n)}`));
-    section.removed.forEach(n     => lines.push(`  ❌ - ${cleanName(n)}`));
-    section.eightySixed.forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
-    section.restored.forEach(n    => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
+    (section.changes || []).forEach(change => {
+      if (change.kind === 'added') lines.push(`  ✅ + ${cleanName(change.name)}`);
+      if (change.kind === 'removed') lines.push(`  ❌ - ${cleanName(change.name)}`);
+      if (change.kind === 'eightySixed') lines.push(`  🚫 86'd: ${cleanName(change.name)}`);
+      if (change.kind === 'restored') lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(change.name)}`);
+    });
     lines.push('');
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
   return lines.join('\n').trim();
 }
 
+function serializeNotificationSectionsForLog(sections = []) {
+  return (sections || []).map(section => ({
+    id: section.id,
+    icon: section.icon,
+    label: section.label,
+    added: (section.changes || []).filter(change => change.kind === 'added').map(change => change.name),
+    removed: (section.changes || []).filter(change => change.kind === 'removed').map(change => change.name),
+    eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
+    restored: (section.changes || []).filter(change => change.kind === 'restored').map(change => change.name),
+  }));
+}
+
+function setPreviewChangeSelected(changeId, checked) {
+  _previewSelectionState[changeId] = !!checked;
+}
+
+function getSelectedPreviewChangeIds() {
+  return Object.entries(_previewSelectionState)
+    .filter(([, checked]) => checked)
+    .map(([changeId]) => changeId);
+}
+
+function buildPreviewBlockHtml(section, options = {}) {
+  const { selectable = false } = options;
+  let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
+  (section.changes || []).forEach(change => {
+    const lineClass = change.kind === 'removed' || change.kind === 'eightySixed' ? 'remove' : 'add';
+    if (selectable) {
+      html += `<label class="preview-line ${lineClass}"><input type="checkbox" checked onchange="setPreviewChangeSelected('${escHtml(change.id)}',this.checked)"/><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</label>`;
+    } else {
+      html += `<div class="preview-line ${lineClass}"><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</div>`;
+    }
+  });
+  return html;
+}
+
+function buildSaveOnlyPreviewBlockHtml(changes = []) {
+  if (!changes.length) return '';
+  return `<div class="preview-cat">Quiet Live Changes</div>${changes.map(change => (
+    `<div class="preview-line"><span>•</span> ${escHtml(change.message || change.label || 'Saved change')}</div>`
+  )).join('')}`;
+}
+
+function openPreview() {
+  const preview = getUpdatePublisher().preview();
+  const content = document.getElementById('preview-content');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const subtitle = document.getElementById('modal-subtitle');
+  const modal = document.getElementById('modal-bg');
+  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
+  _previewModalState = preview;
+  _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
+  content.innerHTML = '';
+  if (subtitle) {
+    subtitle.textContent = preview.mode === 'update-only'
+      ? 'These lines are already live. Choose which ones to send now.'
+      : 'Review the changes before publishing them to the live menu.';
+  }
+  saveMenuBtn.style.display = preview.mode === 'update-only' ? 'none' : '';
+  saveMenuBtn.disabled = !(preview.hasLocalDraft || preview.hasSharedDraft);
+  saveMenuBtn.textContent = 'Save Menu';
+  saveSendBtn.textContent = preview.mode === 'update-only' ? 'Send Update' : 'Save & Update';
+  saveSendBtn.disabled = !preview.hasNotificationChanges;
+  if (!preview.hasChanges) {
+    content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
+    saveMenuBtn.disabled = true;
+    saveSendBtn.disabled = true;
+  } else {
+    preview.sections.forEach(section => {
+      const block = document.createElement('div');
+      block.className = 'preview-block';
+      block.innerHTML = buildPreviewBlockHtml(section, { selectable: true });
+      content.appendChild(block);
+    });
+    if (preview.saveOnlyChanges?.length) {
+      const saveOnlyBlock = document.createElement('div');
+      saveOnlyBlock.className = 'preview-block';
+      saveOnlyBlock.innerHTML = buildSaveOnlyPreviewBlockHtml(preview.saveOnlyChanges);
+      content.appendChild(saveOnlyBlock);
+    }
+  }
+  modal.classList.add('open');
+}
+function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
+
+// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
 function getUpdatePublisher() {
   if (_updatePublisher) return _updatePublisher;
   _updatePublisher = createUpdatePublisher();
   return _updatePublisher;
 }
 
-function createUpdatePublisher() {
+function createMenuPublishTransaction() {
   return {
-    preview() {
-      const diff = getCachedDiff();
-      const patchMessage = diff.length ? buildPatchMessage(diff) : '';
+    preview(snapshot = buildMenuSessionSnapshot('preview')) {
+      const diff = snapshot.notifyDiff || getCachedDiff();
+      const sections = buildNotificationPreviewSections(diff);
+      const notificationChanges = sections.flatMap(section => section.changes);
+      const saveOnlyChanges = snapshot.saveOnlyChanges || getDraftSaveOnlyChanges();
+      const patchMessage = notificationChanges.length ? buildPatchMessage(sections) : '';
+      const hasLocalDraft = !!snapshot.dirty;
+      const hasSharedDraft = !!snapshot.hasSharedDraft;
+      const mode = (hasLocalDraft || hasSharedDraft) ? 'save' : (notificationChanges.length ? 'update-only' : 'save');
       return {
-        hasChanges: diff.length > 0,
+        hasChanges: notificationChanges.length > 0 || saveOnlyChanges.length > 0,
+        hasLocalDraft,
+        hasSharedDraft,
+        hasNotificationChanges: notificationChanges.length > 0,
+        hasSaveOnlyChanges: saveOnlyChanges.length > 0,
         diff,
-        sections: diff,
+        sections,
+        notificationChanges,
+        saveOnlyChanges,
         patchMessage,
         truncated: patchMessage.length > 1000,
-        snapshot: buildMenuSessionSnapshot('preview'),
+        snapshot,
+        mode,
       };
     },
-
-    async publish(options = {}) {
-      const preview = options.preview?.diff ? options.preview : this.preview();
+    async commit(options = {}) {
+      const preview = options.preview?.sections ? options.preview : this.preview(options.snapshot);
+      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
+      const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
+      const selectedSections = groupNotificationChangesBySection(selectedChanges);
+      const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+      const mode = options.mode || preview.mode;
       if (!preview.hasChanges) {
         return {
           ok: false,
           noop: true,
           preview,
-          snapshot: buildMenuSessionSnapshot('send-noop'),
+          snapshot: buildMenuSessionSnapshot('publish-noop'),
         };
       }
+      const warnings = [];
+      let liveSave = { ok: true, warnings: [], ts: null };
+      if (preview.hasLocalDraft || preview.hasSharedDraft) {
+        liveSave = await commitLiveMenuChanges();
+        if (!liveSave?.ok) {
+          return {
+            ok: false,
+            preview,
+            userHandled: liveSave?.userHandled,
+            snapshot: buildMenuSessionSnapshot('publish-live-save-failed'),
+          };
+        }
+        warnings.push(...(liveSave.warnings || []));
+      }
+      const ts = liveSave?.ts || Date.now();
 
-      const delivery = await dispatchMenuUpdateNotification({
-        menuId: MENU_ID,
-        patchMessage: preview.patchMessage,
-      });
-      if (!delivery.ok) {
+      const shouldNotify = (mode === 'save-and-update' || mode === 'update-only') && selectedSections.length > 0;
+      let delivery = {
+        ok: true,
+        skipped: !shouldNotify,
+        statusCode: null,
+        summary: summarizeNotificationResults({}),
+      };
+
+      if (shouldNotify) {
+        delivery = await dispatchMenuUpdateNotification({
+          menuId: MENU_ID,
+          patchMessage,
+        });
+      }
+
+      if (shouldNotify && delivery.partial) {
+        warnings.push(...collectNotificationWarnings(delivery.summary));
+        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
         return {
-          ok: false,
+          ok: true,
           preview,
           notificationStatus: delivery,
-          userMessage: delivery.userMessage,
-          snapshot: buildMenuSessionSnapshot('send-failed'),
+          warnings: dedupePublisherWarnings(warnings),
+          warningMessage: dedupePublisherWarnings(warnings)[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Update still needs attention.`,
+          snapshot: buildMenuSessionSnapshot('send-partial'),
         };
       }
 
-      const warnings = collectNotificationWarnings(delivery.summary);
-      try {
-        const persisted = await persistState({ silentFailure: true });
-        if (!persisted) throw new Error('persist failed');
+      if (shouldNotify && !delivery.ok) {
+        warnings.push(delivery.userMessage || 'Update could not be sent.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: dedupePublisherWarnings(warnings),
+          warningMessage: dedupePublisherWarnings(warnings)[0] || '',
+          successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Update still needs to be sent.`,
+          snapshot: buildMenuSessionSnapshot('send-failed-live-saved'),
+        };
+      }
 
-        const ts = Date.now();
+      if (shouldNotify) warnings.push(...collectNotificationWarnings(delivery.summary));
+
+      if (mode === 'save-and-update' || mode === 'update-only') {
         const lastSentState = snapshotCurrentItemsAsLastSent();
         const currentFeaturedIds = getCurrentFeaturedIds();
         const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
           ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
           : [];
-        const patchResults = await Promise.all([
-          patchMenuMetaWithCompatibility({
-            last_updated_ts: ts,
-            last_sent_ts: ts,
-            last_sent_state: lastSentState,
-            last_sent_categories: preview.diff.map(section => section.id),
-            last_sent_featured: currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== MENU_ID)
-            .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
+        try {
+          const patchResults = await Promise.all([
+            patchMenuMetaWithCompatibility({
+              last_updated_ts: ts,
+              last_sent_ts: ts,
+              last_sent_state: lastSentState,
+              last_sent_categories: preview.diff.map(section => section.id),
               last_sent_featured: currentFeaturedIds,
-            })),
-        ]);
-        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
-          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+            }),
+            ...restaurantMenuIds
+              .filter(menuId => menuId && menuId !== MENU_ID)
+              .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
+                last_sent_featured: currentFeaturedIds,
+              })),
+          ]);
+          if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+            warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+          }
+        } catch (_) {
+          warnings.push('Update delivery finished, but send metadata could not be finalized.');
+          return {
+            ok: true,
+            preview,
+            ts,
+            truncated: preview.truncated,
+            notificationStatus: shouldNotify ? delivery : null,
+            warnings: dedupePublisherWarnings(warnings),
+            warningMessage: dedupePublisherWarnings(warnings)[0] || '',
+            successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Refresh before sending again.`,
+            snapshot: buildMenuSessionSnapshot('send-metadata-warning'),
+          };
         }
 
         _lastSentFeaturedIds = new Set(currentFeaturedIds);
         applySentState(preview.diff, ts);
+        clearDraftSaveOnlyChanges();
         _dirty = false;
         updateSaveBtn();
         updateLastUpdatedLabel();
@@ -5956,38 +6329,50 @@ function createUpdatePublisher() {
           warnings.push('This device could not refresh its local cache after the send.');
         }
 
-        const logged = await logUpdate(preview.diff, preview.patchMessage);
+        const logged = patchMessage ? await logUpdate(serializeNotificationSectionsForLog(selectedSections), patchMessage) : true;
         if (!logged) {
           warnings.push('The recent-changes audit log could not be written for this send.');
         }
-
-        const finalWarnings = dedupePublisherWarnings(warnings);
-        return {
-          ok: true,
-          preview,
-          ts,
-          truncated: preview.truncated,
-          notificationStatus: delivery,
-          warnings: finalWarnings,
-          warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'sent-warning' : 'sent'),
-        };
-      } catch (syncError) {
-        console.warn('sendUpdate post-send sync failed:', syncError);
-        warnings.push('Update sent, but database sync needs attention. Refresh before sending again.');
-        const finalWarnings = dedupePublisherWarnings(warnings);
-        return {
-          ok: true,
-          preview,
-          truncated: preview.truncated,
-          notificationStatus: delivery,
-          warnings: finalWarnings,
-          warningMessage: finalWarnings[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} update sent!`,
-          snapshot: buildMenuSessionSnapshot('sent-warning'),
-        };
       }
+
+      const finalWarnings = dedupePublisherWarnings(warnings);
+      return {
+        ok: true,
+        preview,
+        ts: liveSave?.ts || Date.now(),
+        truncated: preview.truncated,
+        notificationStatus: shouldNotify ? delivery : null,
+        warnings: finalWarnings,
+        warningMessage: finalWarnings[0] || '',
+        successMessage: mode === 'save-and-update' || mode === 'update-only'
+          ? (shouldNotify
+            ? `✅ ${_activeMenuName || 'Menu'} saved and sent!`
+            : `✅ ${_activeMenuName || 'Menu'} update list cleared without notifying channels.`)
+          : `✅ ${_activeMenuName || 'Menu'} saved to the live menu.`,
+        snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+      };
+    },
+  };
+}
+
+function createUpdatePublisher() {
+  const transaction = createMenuPublishTransaction();
+  return {
+    preview() {
+      return transaction.preview();
+    },
+    async publish(options = {}) {
+      const preview = options.preview?.sections ? options.preview : transaction.preview(options.snapshot);
+      let mode = options.mode;
+      if (!mode) {
+        if (preview.mode === 'update-only') mode = options.notify === false ? 'save' : 'update-only';
+        else mode = options.notify === false ? 'save' : 'save-and-update';
+      }
+      return transaction.commit({
+        ...options,
+        preview,
+        mode,
+      });
     },
   };
 }
@@ -6179,27 +6564,47 @@ async function _publishActiveMenuUpdateInternal(options = {}) {
   return getUpdatePublisher().publish(options);
 }
 
-async function sendUpdate() {
-  const preview = getUpdatePublisher().preview();
+function setPreviewModalActionState(mode = '') {
+  const cancelBtn = document.getElementById('cancel-preview-btn');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const isBusy = !!mode;
+  if (cancelBtn) cancelBtn.disabled = isBusy;
+  if (saveMenuBtn) {
+    saveMenuBtn.disabled = isBusy;
+    saveMenuBtn.textContent = mode === 'save-menu' ? 'Saving…' : 'Save Menu';
+  }
+  if (saveSendBtn) {
+    saveSendBtn.disabled = isBusy;
+    saveSendBtn.textContent = mode === 'send-update'
+      ? 'Sending…'
+      : (mode === 'save-send' ? 'Saving & Sending…' : ((_previewModalState?.mode === 'update-only') ? 'Send Update' : 'Save & Update'));
+  }
+}
+
+async function sendUpdate(options = {}) {
+  const preview = options.preview?.sections ? options.preview : (_previewModalState || getUpdatePublisher().preview());
   if (!preview.hasChanges) { closeModal(); return; }
 
   if (preview.truncated) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
-  const confirmBtn = document.getElementById('confirm-btn');
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = 'SENDING…';
+  const selectedChangeIds = getSelectedPreviewChangeIds();
+  const mode = options.notify === false
+    ? 'save'
+    : (preview.mode === 'update-only' ? 'update-only' : 'save-and-update');
+  setPreviewModalActionState(mode === 'save' ? 'save-menu' : (mode === 'update-only' ? 'send-update' : 'save-send'));
 
   try {
-    const result = await ensureCurrentMenuSession().sendUpdate({ preview });
+    const result = await ensureCurrentMenuSession().sendUpdate({ preview, mode, selectedChangeIds });
     if (result?.noop) {
       closeModal();
       return;
     }
     if (result?.ok) {
       closeModal();
-      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} update sent!`, 'success');
+      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} updated.`, 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       renderRecentChanges();
@@ -6209,8 +6614,7 @@ async function sendUpdate() {
     }
     if (result?.userMessage) showToast(result.userMessage, 'error');
   } finally {
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = 'SEND UPDATE';
+    setPreviewModalActionState();
   }
 }
 

@@ -157,15 +157,292 @@ test('update publisher consolidates send results, persistence, and warnings', as
 
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus.statusCode, 207);
-  assert.equal(persistCalls.length, 1);
-  assert.equal(persistCalls[0].silentFailure, true);
+  assert.equal(persistCalls.length, 0);
   assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
-  assert.ok(result.warnings.some(message => message.includes('legacy metadata compatibility')));
-  assert.ok(result.warnings.some(message => message.includes('local cache')));
-  assert.ok(result.warnings.some(message => message.includes('audit log')));
-  assert.ok(patches.length >= 1);
+  assert.ok(result.warnings.some(message => message.includes('remain ready to send again')));
+  assert.equal(patches.length, 0);
 });
 
+test('update publisher can publish without firing notifications', async () => {
+  const sandbox = loadAppSandbox();
+  const diff = [
+    {
+      id: 'beer',
+      icon: '🍺',
+      label: 'Beers on Tap',
+      added: ['New Lager'],
+      removed: [],
+      eightySixed: [],
+      restored: [],
+    },
+  ];
+  const persistCalls = [];
+  let fetchCalls = 0;
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    getCachedDiff: () => diff,
+    buildMenuSessionSnapshot: source => ({ source }),
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => ['feature-1'],
+    currentUserCanEditRestaurantSpecials: () => false,
+    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
+    syncLocalMenuCache: () => true,
+    logUpdate: async () => true,
+    fetch: async () => {
+      fetchCalls += 1;
+      return createFetchResponse(500, {});
+    },
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.notificationStatus, null);
+  assert.equal(fetchCalls, 0);
+  assert.equal(persistCalls.length, 0);
+  assert.equal(result.warnings.length, 0);
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager action bar stays visible and reflects idle and active draft states', () => {
+  const sandbox = loadAppSandbox();
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  const primaryGroup = sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  const summary = sandbox.document._registerElement('manager-action-bar-summary', createElement('div', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  const saveBtn = sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  const sendBtn = sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+
+  sandbox.innerWidth = 960;
+  sandbox.window.innerWidth = 960;
+
+  setState(sandbox, {
+    _dirty: false,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(bar.hidden, false);
+  assert.equal(primaryGroup.hidden, false);
+  assert.equal(summary.textContent, 'No Pending Changes');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(bar.classList.contains('is-idle'), true);
+
+  setState(sandbox, {
+    _dirty: false,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '1 update line is live and ready to send.');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Update');
+  assert.equal(bar.classList.contains('is-idle'), false);
+
+  setState(sandbox, {
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: ['Old Lager'],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(bar.classList.contains('is-idle'), false);
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '1 saved draft change is ready to publish.');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Save');
+});
+
+test('save-only menu edits stay in the draft session until save', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+
+  setState(sandbox, {
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            price: '$8',
+            desc: '',
+            recipe: [],
+            onMenu: true,
+          },
+        ],
+        lastSent: [],
+      },
+    },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+  });
+
+  await sandbox.savePrice('beer', 'item-1', '$9');
+
+  assert.equal(persistCalls.length, 0);
+  assert.equal(getState(sandbox, '_dirty'), true);
+  assert.equal(getState(sandbox, 'getDraftSaveOnlyChanges().length'), 1);
+});
+
+test('save draft persists a shared draft snapshot without publishing the live menu', async () => {
+  const sandbox = loadAppSandbox();
+  const patches = [];
+  const persistCalls = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    SUPABASE_URL: 'https://example.supabase.co',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    _dirty: true,
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            desc: '',
+            recipe: [],
+            price: '$9',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            upcharges: [],
+            showDescription: true,
+            showRecipe: false,
+          },
+        ],
+        lastSent: [],
+      },
+      _meta: {},
+    },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    sbPatchMenuMetaForMenu: async (_menuId, update) => {
+      patches.push(update);
+    },
+  });
+
+  const result = await sandbox._saveActiveMenuDraftInternal();
+
+  assert.equal(result.ok, true);
+  assert.equal(persistCalls.length, 0);
+  assert.equal(patches.length, 1);
+  assert.ok(Array.isArray(patches[0].draft_state.cats));
+  assert.equal(getState(sandbox, '_dirty'), false);
+  assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
+});
+
+test('save-and-update persists live state before dispatching notifications', async () => {
+  const sandbox = loadAppSandbox();
+  const calls = [];
+  const diff = [
+    {
+      id: 'beer',
+      icon: '🍺',
+      label: 'Beers on Tap',
+      added: ['New Lager'],
+      removed: [],
+      eightySixed: [],
+      restored: [],
+    },
+  ];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: diff,
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    persistState: async () => {
+      calls.push('persist');
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => [],
+    currentUserCanEditRestaurantSpecials: () => false,
+    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+    syncLocalMenuCache: () => true,
+    logUpdate: async () => true,
+    fetch: async () => {
+      calls.push('notify');
+      return createFetchResponse(200, { results: { groupme: 'ok' } });
+    },
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: true });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['persist', 'notify']);
+});
 test('access session service restores sessions and resolves settings access', async () => {
   const sandbox = loadAppSandbox();
   const refreshCalls = [];
