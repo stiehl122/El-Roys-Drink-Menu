@@ -3413,10 +3413,11 @@ body.manager-stitch-shell .auth-box {
     linear-gradient(180deg, rgba(253, 221, 185, 0.18), transparent 18%),
     linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
   border-color: var(--manager-shell-border);
-  width: min(100%, 448px);
-  max-width: 448px;
+  width: min(100%, 472px);
+  max-width: 472px;
   padding: 34px 32px 24px;
   box-shadow: 0 26px 60px var(--manager-shell-shadow-strong);
+  margin: 0 auto;
 }
 
 body.manager-stitch-shell .auth-box::before {
@@ -5441,10 +5442,10 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .auth-box {
-    width: 100%;
-    min-height: min(calc(100svh - 108px - env(safe-area-inset-top)), 720px);
-    padding: 24px 18px 18px;
-    border-radius: 24px 24px 18px 18px;
+    width: min(100%, 420px);
+    min-height: 0;
+    padding: 22px 18px 20px;
+    border-radius: 24px;
   }
 
   body.manager-stitch-shell .auth-screen {
