@@ -123,6 +123,9 @@
   }
 
   function resolveRouteContract(contractOrMenuState, legacyState) {
+    if (typeof window.createPublicRouteAdapter === 'function') {
+      return window.createPublicRouteAdapter(contractOrMenuState, legacyState);
+    }
     if (contractOrMenuState?.snapshot && contractOrMenuState?.actions) return contractOrMenuState;
     const snapshot = {
       menuState: contractOrMenuState,

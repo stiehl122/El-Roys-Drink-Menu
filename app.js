@@ -876,88 +876,17 @@ function getMenuSessionPorts() {
   };
 }
 
-function createMenuSessionLifecycle(ports) {
-  const sessionPorts = ports || getMenuSessionPorts();
-  let request = sessionPorts.buildRequest();
+function createMenuPublishService(sessionPorts, runtime = {}) {
+  const buildSnapshot = typeof runtime.buildSnapshot === 'function'
+    ? runtime.buildSnapshot
+    : (() => ({ source: 'unknown' }));
+  const buildPreview = typeof runtime.buildPreview === 'function'
+    ? runtime.buildPreview
+    : (() => sessionPorts.buildPreview(buildSnapshot('preview')));
 
-  function syncRequest(overrides = {}) {
-    request = { ...request, ...sessionPorts.buildRequest(overrides) };
-    return request;
-  }
-
-  function buildSnapshot(source = 'live') {
-    return sessionPorts.buildSnapshot(source, request);
-  }
-
-  const session = {
-    syncRequest,
-    snapshot(source = 'live') {
-      syncRequest();
-      return buildSnapshot(source);
-    },
-    async open(options = {}) {
-      const nextRequest = syncRequest(options);
-      const expectedRestaurantId = options.expectedRestaurantId || nextRequest.siteRestaurantId || '';
-
-      if (options.resolveMenu !== false) {
-        const resolution = await sessionPorts.resolveMenu({ request: nextRequest, ...options });
-        if (resolution?.redirect) return resolution;
-      }
-
-      if (!sessionPorts.canLoadFromNetwork({ request: nextRequest, ...options })) {
-        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, ...options });
-        return {
-          ok: true,
-          source: fallback.source,
-          usedFallback: fallback.usedFallback,
-          showLoadError: false,
-          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
-        };
-      }
-
-      try {
-        const snapshot = await sessionPorts.loadState({
-          request: nextRequest,
-          fallbackToDefault: options.fallbackToDefault,
-          includeFeatured: options.includeFeatured,
-          persistCache: options.persistCache,
-          source: options.source || 'network',
-        });
-        return {
-          ok: true,
-          source: snapshot.source || 'network',
-          usedFallback: false,
-          showLoadError: false,
-          snapshot,
-        };
-      } catch (error) {
-        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, error, ...options });
-        return {
-          ok: false,
-          error,
-          source: fallback.source,
-          usedFallback: fallback.usedFallback,
-          showLoadError: true,
-          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
-        };
-      }
-    },
-    async refresh(options = {}) {
-      const nextRequest = syncRequest(options);
-      if (options.reason === 'poll') {
-        return sessionPorts.pollState({ request: nextRequest, ...options });
-      }
-      return {
-        ok: true,
-        snapshot: await sessionPorts.loadState({ request: nextRequest, ...options }),
-      };
-    },
-    preview() {
-      syncRequest();
-      return sessionPorts.buildPreview(buildSnapshot('preview'));
-    },
+  return {
     async saveDraft(options = {}) {
-      syncRequest(options);
+      void options;
       const snapshot = buildSnapshot('draft');
       if (!snapshot.dirty) {
         return {
@@ -984,9 +913,9 @@ function createMenuSessionLifecycle(ports) {
         };
       }
     },
+
     async publishUpdate(options = {}) {
-      syncRequest(options);
-      const preview = options.preview?.sections ? options.preview : session.preview();
+      const preview = options.preview?.sections ? options.preview : buildPreview();
       const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
       const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
       const selectedSections = groupNotificationChangesBySection(selectedChanges);
@@ -1147,6 +1076,102 @@ function createMenuSessionLifecycle(ports) {
         snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
       };
     },
+  };
+}
+
+function createMenuSessionLifecycle(ports) {
+  const sessionPorts = ports || getMenuSessionPorts();
+  let request = sessionPorts.buildRequest();
+
+  function syncRequest(overrides = {}) {
+    request = { ...request, ...sessionPorts.buildRequest(overrides) };
+    return request;
+  }
+
+  function buildSnapshot(source = 'live') {
+    return sessionPorts.buildSnapshot(source, request);
+  }
+
+  const publishService = createMenuPublishService(sessionPorts, {
+    buildSnapshot,
+    buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
+  });
+
+  const session = {
+    syncRequest,
+    snapshot(source = 'live') {
+      syncRequest();
+      return buildSnapshot(source);
+    },
+    async open(options = {}) {
+      const nextRequest = syncRequest(options);
+      const expectedRestaurantId = options.expectedRestaurantId || nextRequest.siteRestaurantId || '';
+
+      if (options.resolveMenu !== false) {
+        const resolution = await sessionPorts.resolveMenu({ request: nextRequest, ...options });
+        if (resolution?.redirect) return resolution;
+      }
+
+      if (!sessionPorts.canLoadFromNetwork({ request: nextRequest, ...options })) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, ...options });
+        return {
+          ok: true,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: false,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+
+      try {
+        const snapshot = await sessionPorts.loadState({
+          request: nextRequest,
+          fallbackToDefault: options.fallbackToDefault,
+          includeFeatured: options.includeFeatured,
+          persistCache: options.persistCache,
+          source: options.source || 'network',
+        });
+        return {
+          ok: true,
+          source: snapshot.source || 'network',
+          usedFallback: false,
+          showLoadError: false,
+          snapshot,
+        };
+      } catch (error) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, error, ...options });
+        return {
+          ok: false,
+          error,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: true,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+    },
+    async refresh(options = {}) {
+      const nextRequest = syncRequest(options);
+      if (options.reason === 'poll') {
+        return sessionPorts.pollState({ request: nextRequest, ...options });
+      }
+      return {
+        ok: true,
+        snapshot: await sessionPorts.loadState({ request: nextRequest, ...options }),
+      };
+    },
+    preview() {
+      syncRequest();
+      return sessionPorts.buildPreview(buildSnapshot('preview'));
+    },
+    async saveDraft(options = {}) {
+      syncRequest(options);
+      return publishService.saveDraft(options);
+    },
+    async publishUpdate(options = {}) {
+      syncRequest(options);
+      return publishService.publishUpdate(options);
+    },
     async save(options = {}) {
       return session.saveDraft(options);
     },
@@ -1174,69 +1199,89 @@ function ensureCurrentMenuSession(overrides = {}) {
   return _currentMenuSession;
 }
 
-function resolveRequestedSettingsRoute(user = currentUser) {
-  if (!user) {
-    return {
-      kind: 'auth-required',
-      pageMode: _appPageMode,
-    };
-  }
-
-  if (_appPageMode === 'admin') {
-    if (user.role !== 'admin') {
-      return {
-        kind: 'admin-denied',
-        pageMode: 'admin',
-        message: 'Admin access required for this page.',
-      };
-    }
-
-    return {
-      kind: 'admin',
-      pageMode: 'admin',
-      targetMenuId: KNOWN_MENU_ORDER.includes(MENU_ID) ? MENU_ID : (KNOWN_MENU_ORDER[0] || ''),
-    };
-  }
-
-  const requestedMenu = getRequestedMenuForSettingsPage();
-  if (!requestedMenu) {
-    return {
-      kind: 'manager-denied',
-      pageMode: 'manager',
-      message: 'No menu context available for this page.',
-    };
-  }
-
-  if (!currentUserCanManageMenu(requestedMenu.id, user)) {
-    const fallbackMenuId = getFirstAccessibleManagerMenuId(user);
-    if (fallbackMenuId) {
-      const targetPath = getManagerHrefForMenuId(fallbackMenuId);
-      if (targetPath) {
-        return {
-          kind: 'manager-redirect',
-          pageMode: 'manager',
-          targetPath,
-          menuId: fallbackMenuId,
-        };
-      }
-    }
-
-    return {
-      kind: 'manager-denied',
-      pageMode: 'manager',
-      message: 'You don\'t have manager access to this menu.',
-      targetPath: getPublicHrefForMenuId(requestedMenu.id),
-      redirectLabel: 'the public menu',
-      actionLabel: 'Return to the public menu',
-    };
-  }
+function createSettingsRoutePolicyService(deps = {}) {
+  const getPageMode = typeof deps.getPageMode === 'function' ? deps.getPageMode : (() => _appPageMode);
+  const getMenuId = typeof deps.getMenuId === 'function' ? deps.getMenuId : (() => MENU_ID);
+  const getKnownMenuOrder = typeof deps.getKnownMenuOrder === 'function' ? deps.getKnownMenuOrder : (() => KNOWN_MENU_ORDER);
+  const getRequestedMenu = typeof deps.getRequestedMenu === 'function' ? deps.getRequestedMenu : (() => getRequestedMenuForSettingsPage());
+  const canManageMenu = typeof deps.canManageMenu === 'function' ? deps.canManageMenu : ((menuId, user) => currentUserCanManageMenu(menuId, user));
+  const getFallbackMenuId = typeof deps.getFallbackMenuId === 'function' ? deps.getFallbackMenuId : (user => getFirstAccessibleManagerMenuId(user));
+  const getManagerHref = typeof deps.getManagerHrefForMenuId === 'function' ? deps.getManagerHrefForMenuId : (menuId => getManagerHrefForMenuId(menuId));
+  const getPublicHref = typeof deps.getPublicHrefForMenuId === 'function' ? deps.getPublicHrefForMenuId : (menuId => getPublicHrefForMenuId(menuId));
 
   return {
-    kind: 'manager',
-    pageMode: 'manager',
-    targetMenuId: requestedMenu.id,
-    requestedMenu,
+    decide(user = currentUser) {
+      const pageMode = getPageMode();
+      if (!user) {
+        return {
+          kind: 'auth-required',
+          pageMode,
+        };
+      }
+
+      if (pageMode === 'admin') {
+        if (user.role !== 'admin') {
+          return {
+            kind: 'admin-denied',
+            pageMode: 'admin',
+            message: 'Admin access required for this page.',
+          };
+        }
+
+        const knownMenuOrder = getKnownMenuOrder();
+        const currentMenuId = getMenuId();
+        return {
+          kind: 'admin',
+          pageMode: 'admin',
+          targetMenuId: knownMenuOrder.includes(currentMenuId) ? currentMenuId : (knownMenuOrder[0] || ''),
+        };
+      }
+
+      const requestedMenu = getRequestedMenu();
+      if (!requestedMenu) {
+        return {
+          kind: 'manager-denied',
+          pageMode: 'manager',
+          message: 'No menu context available for this page.',
+        };
+      }
+
+      if (!canManageMenu(requestedMenu.id, user)) {
+        const fallbackMenuId = getFallbackMenuId(user);
+        if (fallbackMenuId) {
+          const targetPath = getManagerHref(fallbackMenuId);
+          if (targetPath) {
+            return {
+              kind: 'manager-redirect',
+              pageMode: 'manager',
+              targetPath,
+              menuId: fallbackMenuId,
+            };
+          }
+        }
+
+        return {
+          kind: 'manager-denied',
+          pageMode: 'manager',
+          message: 'You don\'t have manager access to this menu.',
+          targetPath: getPublicHref(requestedMenu.id),
+          redirectLabel: 'the public menu',
+          actionLabel: 'Return to the public menu',
+        };
+      }
+
+      return {
+        kind: 'manager',
+        pageMode: 'manager',
+        targetMenuId: requestedMenu.id,
+        requestedMenu,
+      };
+    },
   };
+}
+
+function resolveRequestedSettingsRoute(user = currentUser) {
+  return createSettingsRoutePolicyService().decide(user);
 }
 
 function createAccessSessionService() {
@@ -2236,73 +2281,121 @@ async function refreshFeaturedForActiveMenu() {
   return getRestaurantSpecialsService().refreshForActiveMenu(RESTAURANT_ID);
 }
 
+function createMenuStateLoaderService(deps = {}) {
+  const readState = typeof deps.readState === 'function' ? deps.readState : (() => sbRead());
+  const hydrateFromState = typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data));
+  const applyDraftState = typeof deps.applyPersistedDraftState === 'function'
+    ? deps.applyPersistedDraftState
+    : (draftState => applyPersistedDraftState(draftState));
+  const setDefaultState = typeof deps.setDefaultState === 'function'
+    ? deps.setDefaultState
+    : (() => {
+        menuState = defaultState();
+        currentDesign = { ...DESIGN_DEFAULTS };
+        _restaurantCustomDesignEnabled = true;
+      });
+  const setDirty = typeof deps.setDirty === 'function' ? deps.setDirty : (value => { _dirty = !!value; });
+  const clearDraftChanges = typeof deps.clearDraftChanges === 'function'
+    ? deps.clearDraftChanges
+    : (() => {
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+      });
+  const writeMenuCache = typeof deps.writeMenuCache === 'function'
+    ? deps.writeMenuCache
+    : (data => lsSet(LS_KEYS.menuCache, JSON.stringify(data)));
+  const refreshFeatured = typeof deps.refreshFeatured === 'function'
+    ? deps.refreshFeatured
+    : (() => refreshFeaturedForActiveMenu());
+  const buildSnapshot = typeof deps.buildSnapshot === 'function'
+    ? deps.buildSnapshot
+    : (source => buildMenuSessionSnapshot(source));
+  const getLastUpdatedTs = typeof deps.getLastUpdatedTs === 'function'
+    ? deps.getLastUpdatedTs
+    : (() => menuState._meta?.lastUpdatedTs);
+  const getCategorySnapshot = typeof deps.getCategorySnapshot === 'function'
+    ? deps.getCategorySnapshot
+    : (() => getCategoryStateSnapshot());
+  const getDesignSnapshotValue = typeof deps.getDesignSnapshot === 'function'
+    ? deps.getDesignSnapshot
+    : (() => getDesignSnapshot());
+  const getFeaturedSnapshotValue = typeof deps.getFeaturedSnapshot === 'function'
+    ? deps.getFeaturedSnapshot
+    : (() => getFeaturedSnapshot());
+
+  return {
+    async load(options = {}) {
+      const {
+        fallbackToDefault = true,
+        includeFeatured = true,
+        persistCache = true,
+        request = buildCurrentMenuPageRequest(),
+      } = options;
+      const includePersistedDraft = options.includePersistedDraft ?? (request.pageMode === 'manager' || request.pageMode === 'admin');
+      try {
+        const data = await readState();
+        if (data) {
+          hydrateFromState(data);
+          const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
+          setDirty(false);
+          if (!loadedDraft) clearDraftChanges();
+          if (persistCache) writeMenuCache(data);
+        } else if (fallbackToDefault) {
+          setDefaultState();
+          setDirty(false);
+          clearDraftChanges();
+        }
+      } catch (error) {
+        if (fallbackToDefault) {
+          setDefaultState();
+          setDirty(false);
+          clearDraftChanges();
+        } else {
+          throw error;
+        }
+      }
+      if (includeFeatured) await refreshFeatured();
+      return buildSnapshot(options.source || 'network');
+    },
+
+    async poll(options = {}) {
+      void options;
+      const oldTs = getLastUpdatedTs();
+      const oldCats = getCategorySnapshot();
+      const oldDesign = getDesignSnapshotValue();
+      const oldFeatured = getFeaturedSnapshotValue();
+      const data = await readState();
+      if (!data) {
+        return {
+          changed: false,
+          designChanged: false,
+          snapshot: buildSnapshot('poll'),
+        };
+      }
+
+      hydrateFromState(data);
+      writeMenuCache(data);
+      const newTs = getLastUpdatedTs();
+      if (newTs !== oldTs) await refreshFeatured();
+
+      const afterCats = getCategorySnapshot();
+      const newDesign = getDesignSnapshotValue();
+      const newFeatured = getFeaturedSnapshotValue();
+      return {
+        changed: afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured,
+        designChanged: newDesign !== oldDesign,
+        snapshot: buildSnapshot('poll'),
+      };
+    },
+  };
+}
+
 async function _loadActiveMenuStateInternal(options = {}) {
-  const {
-    fallbackToDefault = true,
-    includeFeatured = true,
-    persistCache = true,
-    request = buildCurrentMenuPageRequest(),
-  } = options;
-  const includePersistedDraft = options.includePersistedDraft ?? (request.pageMode === 'manager' || request.pageMode === 'admin');
-  try {
-    const data = await sbRead();
-    if (data) {
-      hydrateState(data);
-      const loadedDraft = includePersistedDraft ? applyPersistedDraftState(data.meta?.draft_state || null) : false;
-      _dirty = false;
-      if (!loadedDraft) clearDraftSaveOnlyChanges();
-      if (persistCache) syncLocalMenuCache({ silent: true });
-    } else if (fallbackToDefault) {
-      menuState = defaultState();
-      currentDesign = { ...DESIGN_DEFAULTS };
-      _restaurantCustomDesignEnabled = true;
-      _dirty = false;
-      clearDraftSaveOnlyChanges();
-      clearSharedDraftState();
-    }
-  } catch (e) {
-    if (fallbackToDefault) {
-      menuState = defaultState();
-      currentDesign = { ...DESIGN_DEFAULTS };
-      _restaurantCustomDesignEnabled = true;
-      _dirty = false;
-      clearDraftSaveOnlyChanges();
-      clearSharedDraftState();
-    } else {
-      throw e;
-    }
-  }
-  if (includeFeatured) await refreshFeaturedForActiveMenu();
-  return buildMenuSessionSnapshot(options.source || 'network');
+  return createMenuStateLoaderService().load(options);
 }
 
 async function _pollActiveMenuStateInternal() {
-  const oldTs = menuState._meta?.lastUpdatedTs;
-  const oldCats = getCategoryStateSnapshot();
-  const oldDesign = getDesignSnapshot();
-  const oldFeatured = getFeaturedSnapshot();
-  const data = await sbRead();
-  if (!data) {
-    return {
-      changed: false,
-      designChanged: false,
-      snapshot: buildMenuSessionSnapshot('poll'),
-    };
-  }
-
-  hydrateState(data);
-  syncLocalMenuCache({ silent: true });
-  const newTs = menuState._meta?.lastUpdatedTs;
-  if (newTs !== oldTs) await refreshFeaturedForActiveMenu();
-
-  const afterCats = getCategoryStateSnapshot();
-  const newDesign = getDesignSnapshot();
-  const newFeatured = getFeaturedSnapshot();
-  return {
-    changed: afterCats !== oldCats || newTs !== oldTs || newFeatured !== oldFeatured,
-    designChanged: newDesign !== oldDesign,
-    snapshot: buildMenuSessionSnapshot('poll'),
-  };
+  return createMenuStateLoaderService().poll();
 }
 
 async function loadActiveMenuState(options = {}) {
@@ -2855,45 +2948,108 @@ function renderManagerOverviewStats() {
   if (eightysixMeta) eightysixMeta.textContent = eightySixed === 1 ? "item 86'd" : "items 86'd";
 }
 
+function createDraftLedgerService(deps = {}) {
+  const isDirty = typeof deps.isDirty === 'function' ? deps.isDirty : (() => !!_dirty);
+  const hasSharedDraft = typeof deps.hasSharedDraft === 'function' ? deps.hasSharedDraft : (() => hasSharedDraftState());
+  const getDraftCount = typeof deps.getDraftChangeCount === 'function' ? deps.getDraftChangeCount : (() => getDraftChangeCount());
+  const getDiffLineCount = typeof deps.getDiffLinesCount === 'function' ? deps.getDiffLinesCount : (() => countDiffLines());
+  const getDiffSections = typeof deps.getDiffSections === 'function' ? deps.getDiffSections : (() => getCachedDiff());
+  const getSaveOnlyChanges = typeof deps.getSaveOnlyChanges === 'function' ? deps.getSaveOnlyChanges : (() => getDraftSaveOnlyChanges());
+
+  function buildLookup() {
+    return {
+      byItemId: new Set(getSaveOnlyChanges().map(change => change.itemId).filter(Boolean)),
+      byCategoryName: new Map(getDiffSections().map(section => [
+        section.id,
+        new Set([
+          ...(section.added || []),
+          ...(section.eightySixed || []),
+          ...(section.restored || []),
+        ].map(name => name.trim().toLowerCase())),
+      ])),
+    };
+  }
+
+  return {
+    buildLookup,
+    getActionBarState({ isCompactViewport = false } = {}) {
+      const hasDraftChanges = isDirty();
+      const hasShared = hasSharedDraft();
+      const hasDraftWork = hasDraftChanges || hasShared;
+      const hasPendingUpdate = !hasDraftWork && getDiffLineCount() > 0;
+      const changeCount = getDraftCount();
+      const notifyCount = hasPendingUpdate ? getDiffLineCount() : 0;
+
+      let summaryText = 'No Pending Changes';
+      if (hasDraftChanges) {
+        summaryText = isCompactViewport
+          ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
+          : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
+      } else if (hasShared) {
+        summaryText = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
+      } else if (hasPendingUpdate) {
+        summaryText = `${notifyCount} update line${notifyCount === 1 ? ' is' : 's are'} live and ready to send.`;
+      }
+
+      return {
+        hasDraftChanges,
+        hasSharedDraft: hasShared,
+        hasDraftWork,
+        hasPendingUpdate,
+        changeCount,
+        summaryText,
+        publishLabel: !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save',
+      };
+    },
+    getItemBadge({ item, catId, lastSentNames = null }) {
+      const is86 = !!item?.eightySixed;
+      const nameKey = String(item?.name || '').trim().toLowerCase();
+      const changeLookup = buildLookup();
+      const sectionNames = changeLookup.byCategoryName.get(catId) || new Set();
+      const hasDraftWork = isDirty() || hasSharedDraft();
+      const hasDraftTag = hasDraftWork && (changeLookup.byItemId.has(item?.id) || sectionNames.has(nameKey));
+      const hasUnsentTag = !hasDraftWork && sectionNames.has(nameKey);
+      const isNew = lastSentNames ? !lastSentNames.has(nameKey) : false;
+
+      if (hasUnsentTag) {
+        return { className: 'item-state-badge--unsent', text: 'UNSENT', label: 'Unsent update' };
+      }
+      if (hasDraftTag) {
+        return { className: 'item-state-badge--draft', text: 'DRAFT', label: 'Draft change' };
+      }
+      if (is86) {
+        return { className: 'item-state-badge--86', text: '86', label: "86'd" };
+      }
+      if (isNew) {
+        return { className: 'item-state-badge--new', text: 'NEW', label: 'New' };
+      }
+      return { className: 'item-state-badge--active', text: '', label: 'Active' };
+    },
+  };
+}
+
 function updateManagerActionBar() {
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
   const summary = document.getElementById('manager-action-bar-summary');
   const syncEl = document.getElementById('sync-status');
-  const hasDraftChanges = !!_dirty;
-  const hasSharedDraft = hasSharedDraftState();
-  const hasDraftWork = hasDraftChanges || hasSharedDraft;
-  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
-  const changeCount = getDraftChangeCount();
   const isCompactViewport = window.innerWidth <= 480;
+  const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
 
   if (primaryGroup) primaryGroup.hidden = false;
-  if (saveBtn) saveBtn.disabled = !hasDraftChanges;
+  if (saveBtn) saveBtn.disabled = !ledgerState.hasDraftChanges;
   if (publishBtn) {
-    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
-    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+    publishBtn.disabled = !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate;
+    publishBtn.textContent = ledgerState.publishLabel;
   }
   bar.hidden = false;
-  bar.classList.toggle('is-idle', !hasDraftWork && !hasPendingUpdate);
+  bar.classList.toggle('is-idle', !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate);
   syncManagerActionBarStatus(syncEl);
 
-  if (summary) {
-    if (hasDraftChanges) {
-      summary.textContent = isCompactViewport
-        ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
-        : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
-    } else if (hasSharedDraft) {
-      summary.textContent = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
-    } else if (hasPendingUpdate) {
-      const notifyCount = countDiffLines();
-      summary.textContent = `${notifyCount} update line${notifyCount === 1 ? ' is' : 's are'} live and ready to send.`;
-    } else {
-      summary.textContent = 'No Pending Changes';
-    }
-  }
+  if (summary) summary.textContent = ledgerState.summaryText;
 }
 
 function syncManagerActionBarStatus(syncEl = document.getElementById('sync-status')) {
@@ -3500,15 +3656,36 @@ async function switchPublicRouteMenu(menuRef) {
   };
 }
 
-function createPublicRouteContract(options = {}) {
-  const pathname = options.pathname || window.location.pathname;
-  const actor = Object.prototype.hasOwnProperty.call(options, 'actor')
-    ? options.actor
-    : currentUser;
-  const siteRestaurantId = options.siteRestaurantId ||
-    _siteRestaurant?.id ||
-    getSiteRestaurantFromPath(pathname)?.id ||
-    '';
+function createPublicRouteAdapter(contractOrMenuState, legacyState = {}, options = {}) {
+  if (contractOrMenuState?.snapshot && contractOrMenuState?.actions) return contractOrMenuState;
+
+  const snapshot = {
+    menuState: contractOrMenuState,
+    ...(legacyState || {}),
+  };
+  const helpers = {
+    escHtml,
+    formatUpdatedAt,
+    getMenuTypeLabel,
+    ...(options.helpers || {}),
+  };
+  const actionOverrides = options.actions || {};
+
+  return {
+    version: 0,
+    snapshot,
+    helpers,
+    actions: {
+      closeDropdowns: actionOverrides.closeDropdowns || (() => closeRouteDropdowns()),
+      openManager: actionOverrides.openManager || (() => onActionBtnClick()),
+      openAdmin: actionOverrides.openAdmin || (() => onAdminBtnClick()),
+      canManageMenu: actionOverrides.canManageMenu || ((menuId, user = snapshot.currentUser) => currentUserCanManageMenu(menuId, user)),
+      switchMenu: actionOverrides.switchMenu || (menu => switchPublicRouteMenu(menu)),
+    },
+  };
+}
+
+function createPublicRouteContract() {
   return {
     version: 1,
     snapshot: buildPublicRouteRenderSnapshot({ actor, siteRestaurantId }),
@@ -5601,43 +5778,8 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
     </div>`;
 }
 
-function getDraftChangeLookup() {
-  return {
-    byItemId: new Set(getDraftSaveOnlyChanges().map(change => change.itemId).filter(Boolean)),
-    byCategoryName: new Map(getCachedDiff().map(section => [
-      section.id,
-      new Set([
-        ...(section.added || []),
-        ...(section.eightySixed || []),
-        ...(section.restored || []),
-      ].map(name => name.trim().toLowerCase())),
-    ])),
-  };
-}
-
 function getItemStateBadge(item, catId, lastSentNames = null) {
-  const is86 = !!item.eightySixed;
-  const nameKey = item.name.trim().toLowerCase();
-  const changeLookup = getDraftChangeLookup();
-  const sectionNames = changeLookup.byCategoryName.get(catId) || new Set();
-  const hasDraftWork = !!_dirty || hasSharedDraftState();
-  const hasDraftTag = hasDraftWork && (changeLookup.byItemId.has(item.id) || sectionNames.has(nameKey));
-  const hasUnsentTag = !hasDraftWork && sectionNames.has(nameKey);
-  const isNew = lastSentNames ? !lastSentNames.has(nameKey) : false;
-
-  if (hasUnsentTag) {
-    return { className: 'item-state-badge--unsent', text: 'UNSENT', label: 'Unsent update' };
-  }
-  if (hasDraftTag) {
-    return { className: 'item-state-badge--draft', text: 'DRAFT', label: 'Draft change' };
-  }
-  if (is86) {
-    return { className: 'item-state-badge--86', text: '86', label: "86'd" };
-  }
-  if (isNew) {
-    return { className: 'item-state-badge--new', text: 'NEW', label: 'New' };
-  }
-  return { className: 'item-state-badge--active', text: '', label: 'Active' };
+  return createDraftLedgerService().getItemBadge({ item, catId, lastSentNames });
 }
 
 function buildPricingRowHtml(item, catId) {
@@ -7063,81 +7205,100 @@ function collectNotificationWarnings(summary) {
   return warnings;
 }
 
-async function dispatchMenuUpdateNotification({ menuId, patchMessage }) {
-  const authHeaders = currentUser?.accessToken
-    ? { 'Authorization': `Bearer ${currentUser.accessToken}` }
-    : {};
+function createNotificationDeliveryService(deps = {}) {
+  const fetchImpl = typeof deps.fetchImpl === 'function' ? deps.fetchImpl : fetch;
+  const summarizeResults = typeof deps.summarizeResults === 'function'
+    ? deps.summarizeResults
+    : summarizeNotificationResults;
 
-  let response;
-  try {
-    response = await fetch('/api/send-notification', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      body: JSON.stringify({ menu_id: menuId, text: patchMessage }),
-    });
-  } catch (_) {
-    return {
-      ok: false,
-      statusCode: 0,
-      summary: summarizeNotificationResults({}),
-      userMessage: '❌ Network error. Check connection.',
-    };
-  }
-
-  let body = {};
-  try {
-    body = await response.json();
-  } catch (_) {
-    body = {};
-  }
-
-  const summary = summarizeNotificationResults(body?.results || {});
-  if (response.status >= 200 && response.status < 300) {
-    return {
-      ok: true,
-      statusCode: response.status,
-      partial: response.status === 207,
-      results: body?.results || {},
-      summary,
-    };
-  }
-
-  if (response.status === 401) {
-    return {
-      ok: false,
-      statusCode: response.status,
-      summary,
-      userMessage: '❌ Not authorized. Please sign in.',
-    };
-  }
-
-  if (response.status === 403) {
-    return {
-      ok: false,
-      statusCode: response.status,
-      summary,
-      userMessage: '❌ Access denied. Your account role does not allow sending updates.',
-    };
-  }
-
-  if (response.status === 400 && typeof body?.error === 'string' && body.error.trim()) {
-    return {
-      ok: false,
-      statusCode: response.status,
-      summary,
-      userMessage: `❌ ${body.error.trim()}`,
-    };
-  }
-
-  const failedSummary = summary.failedChannels.length
-    ? ` Failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`
-    : '';
   return {
-    ok: false,
-    statusCode: response.status,
-    summary,
-    userMessage: `❌ Notification error. Check channel config in Admin settings.${failedSummary}`,
+    async sendMenuUpdate({ menuId, patchMessage, accessToken = '' }) {
+      const authHeaders = accessToken
+        ? { 'Authorization': `Bearer ${accessToken}` }
+        : {};
+
+      let response;
+      try {
+        response = await fetchImpl('/api/send-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders },
+          body: JSON.stringify({ menu_id: menuId, text: patchMessage }),
+        });
+      } catch (_) {
+        return {
+          ok: false,
+          statusCode: 0,
+          summary: summarizeResults({}),
+          userMessage: '❌ Network error. Check connection.',
+        };
+      }
+
+      let body = {};
+      try {
+        body = await response.json();
+      } catch (_) {
+        body = {};
+      }
+
+      const summary = summarizeResults(body?.results || {});
+      const statusCode = Number(response?.status || 0);
+      const is2xx = statusCode >= 200 && statusCode < 300;
+      if (is2xx) {
+        return {
+          ok: true,
+          statusCode,
+          partial: statusCode === 207,
+          results: body?.results || {},
+          summary,
+        };
+      }
+
+      if (statusCode === 401) {
+        return {
+          ok: false,
+          statusCode,
+          summary,
+          userMessage: '❌ Not authorized. Please sign in.',
+        };
+      }
+
+      if (statusCode === 403) {
+        return {
+          ok: false,
+          statusCode,
+          summary,
+          userMessage: '❌ Access denied. Your account role does not allow sending updates.',
+        };
+      }
+
+      if (statusCode === 400 && typeof body?.error === 'string' && body.error.trim()) {
+        return {
+          ok: false,
+          statusCode,
+          summary,
+          userMessage: `❌ ${body.error.trim()}`,
+        };
+      }
+
+      const failedSummary = summary.failedChannels.length
+        ? ` Failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`
+        : '';
+      return {
+        ok: false,
+        statusCode,
+        summary,
+        userMessage: `❌ Notification error. Check channel config in Admin settings.${failedSummary}`,
+      };
+    },
   };
+}
+
+async function dispatchMenuUpdateNotification({ menuId, patchMessage }) {
+  return createNotificationDeliveryService().sendMenuUpdate({
+    menuId,
+    patchMessage,
+    accessToken: currentUser?.accessToken || '',
+  });
 }
 
 function snapshotLastSentState() {
