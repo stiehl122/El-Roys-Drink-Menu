@@ -3526,6 +3526,10 @@ function formatRelativeTime(ts) {
 function updateLastUpdatedLabel() {
   const ts = getLastUpdatedTs();
   const el = document.getElementById('last-updated-label');
+  if (!el) {
+    renderFooter();
+    return;
+  }
   if (ts) {
     const rel = formatRelativeTime(ts);
     const abs = formatUpdatedAt(ts, 'Last Updated: ');
