@@ -280,6 +280,38 @@ test('menu session lifecycle saveDraft persists and patches last-updated metadat
   assert.deepEqual(commitCalls, [1712705100000]);
 });
 
+test('menu publish service exposes draft-save and publish boundaries directly', async () => {
+  const sandbox = loadAppSandbox();
+  const patchDraftCalls = [];
+
+  const ports = createMenuSessionPorts({
+    buildSnapshot: source => ({ source, dirty: true }),
+    patchMenuDraftState: async (_snapshot, ts) => {
+      patchDraftCalls.push(ts);
+      return { downgradedFields: [] };
+    },
+    syncLocalCache: () => true,
+    logUpdate: async () => true,
+    canEditRestaurantSpecials: () => false,
+    getRestaurantMenuIds: () => [],
+  });
+
+  const service = sandbox.createMenuPublishService(ports, {
+    buildSnapshot: source => ports.buildSnapshot(source),
+    buildPreview: () => ports.buildPreview(ports.buildSnapshot('preview')),
+  });
+
+  const draftResult = await service.saveDraft();
+  assert.equal(draftResult.ok, true);
+  assert.equal(draftResult.snapshot.source, 'draft-saved');
+  assert.deepEqual(patchDraftCalls, [1712705100000]);
+
+  const publishResult = await service.publishUpdate({ notify: false });
+  assert.equal(publishResult.ok, true);
+  assert.equal(publishResult.notificationStatus, null);
+  assert.equal(publishResult.warnings.length, 0);
+});
+
 test('menu session lifecycle publishes updates through one preview-aware boundary', async () => {
   const sandbox = loadAppSandbox();
   const patchCalls = [];
@@ -330,6 +362,96 @@ test('menu session lifecycle can publish without firing notifications', async ()
   assert.equal(notificationCalls, 0);
   assert.equal(result.warnings.length, 0);
   assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('notification delivery service normalizes API channel results', async () => {
+  const sandbox = loadAppSandbox();
+  const requests = [];
+  const service = sandbox.createNotificationDeliveryService({
+    fetchImpl: async (url, options = {}) => {
+      requests.push([url, options]);
+      return {
+        status: 207,
+        async json() {
+          return {
+            results: {
+              groupme: 'ok',
+              sms: 'error:500',
+              discord: 'skipped',
+            },
+          };
+        },
+      };
+    },
+  });
+
+  const result = await service.sendMenuUpdate({
+    menuId: 'menu-main',
+    patchMessage: 'Patch message',
+    accessToken: 'token-1',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.partial, true);
+  assert.equal(result.statusCode, 207);
+  assert.deepEqual(Array.from(result.summary.okChannels || []), ['groupme']);
+  assert.deepEqual(Array.from(result.summary.failedChannels || []), ['sms']);
+  assert.deepEqual(Array.from(result.summary.skippedChannels || []), ['discord']);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0][0], '/api/send-notification');
+  assert.equal(requests[0][1].headers.Authorization, 'Bearer token-1');
+});
+
+test('draft ledger service provides action-bar and item badge state through one boundary', () => {
+  const sandbox = loadAppSandbox();
+  const service = sandbox.createDraftLedgerService({
+    isDirty: () => true,
+    hasSharedDraft: () => false,
+    getDraftChangeCount: () => 2,
+    getDiffLinesCount: () => 0,
+    getDiffSections: () => [{
+      id: 'beer',
+      added: ['Lager'],
+      eightySixed: [],
+      restored: [],
+    }],
+    getSaveOnlyChanges: () => [{ key: 'beer::item-1', itemId: 'item-1' }],
+  });
+
+  const actionBarState = service.getActionBarState({ isCompactViewport: false });
+  assert.equal(actionBarState.hasDraftChanges, true);
+  assert.equal(actionBarState.hasPendingUpdate, false);
+  assert.equal(actionBarState.publishLabel, 'Save');
+  assert.equal(actionBarState.summaryText, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
+
+  const draftBadge = service.getItemBadge({
+    item: { id: 'item-1', name: 'Lager', eightySixed: false },
+    catId: 'beer',
+    lastSentNames: new Set(),
+  });
+  assert.equal(draftBadge.text, 'DRAFT');
+  assert.equal(draftBadge.className, 'item-state-badge--draft');
+
+  const unsentService = sandbox.createDraftLedgerService({
+    isDirty: () => false,
+    hasSharedDraft: () => false,
+    getDraftChangeCount: () => 0,
+    getDiffLinesCount: () => 1,
+    getDiffSections: () => [{
+      id: 'beer',
+      added: ['Lager'],
+      eightySixed: [],
+      restored: [],
+    }],
+    getSaveOnlyChanges: () => [],
+  });
+  const unsentBadge = unsentService.getItemBadge({
+    item: { id: 'item-1', name: 'Lager', eightySixed: false },
+    catId: 'beer',
+    lastSentNames: new Set(['lager']),
+  });
+  assert.equal(unsentBadge.text, 'UNSENT');
+  assert.equal(unsentBadge.className, 'item-state-badge--unsent');
 });
 
 test('manager action bar stays visible and reflects idle and active draft states', () => {
@@ -631,6 +753,86 @@ test('access session service restores sessions and resolves settings access', as
   assert.equal(adminDecision.kind, 'admin-denied');
 });
 
+test('settings route policy service centralizes manager and admin access decisions', () => {
+  const sandbox = loadAppSandbox();
+  const service = sandbox.createSettingsRoutePolicyService({
+    getPageMode: () => 'manager',
+    getMenuId: () => 'menu-main',
+    getKnownMenuOrder: () => ['menu-main', 'menu-other'],
+    getRequestedMenu: () => ({ id: 'menu-other' }),
+    canManageMenu: (menuId, user) => (user?.accessibleMenuIds || []).includes(menuId),
+    getFallbackMenuId: user => (user?.accessibleMenuIds || [])[0] || '',
+    getManagerHrefForMenuId: menuId => `/manager?menu=${menuId}`,
+    getPublicHrefForMenuId: menuId => `/public?menu=${menuId}`,
+  });
+
+  const redirectDecision = service.decide({
+    role: 'manager',
+    accessibleMenuIds: ['menu-main'],
+  });
+  assert.equal(redirectDecision.kind, 'manager-redirect');
+  assert.equal(redirectDecision.menuId, 'menu-main');
+  assert.equal(redirectDecision.targetPath, '/manager?menu=menu-main');
+
+  const deniedDecision = service.decide({
+    role: 'manager',
+    accessibleMenuIds: [],
+  });
+  assert.equal(deniedDecision.kind, 'manager-denied');
+  assert.equal(deniedDecision.targetPath, '/public?menu=menu-other');
+
+  const adminDenied = sandbox.createSettingsRoutePolicyService({
+    getPageMode: () => 'admin',
+    getMenuId: () => 'menu-main',
+    getKnownMenuOrder: () => ['menu-main'],
+    getRequestedMenu: () => null,
+    canManageMenu: () => false,
+    getFallbackMenuId: () => '',
+    getManagerHrefForMenuId: () => '',
+    getPublicHrefForMenuId: () => '',
+  }).decide({ role: 'manager' });
+  assert.equal(adminDenied.kind, 'admin-denied');
+});
+
+test('menu state loader service applies fallback and featured refresh through one boundary', async () => {
+  const sandbox = loadAppSandbox();
+  let fallbackCalls = 0;
+  let clearCalls = 0;
+  let featuredCalls = 0;
+
+  const service = sandbox.createMenuStateLoaderService({
+    readState: async () => {
+      throw new Error('network failed');
+    },
+    hydrateFromState: () => {},
+    applyPersistedDraftState: () => false,
+    setDefaultState: () => {
+      fallbackCalls += 1;
+    },
+    clearDraftChanges: () => {
+      clearCalls += 1;
+    },
+    writeMenuCache: () => {},
+    refreshFeatured: async () => {
+      featuredCalls += 1;
+    },
+    buildSnapshot: source => ({ source }),
+  });
+
+  const snapshot = await service.load({
+    fallbackToDefault: true,
+    includeFeatured: true,
+    persistCache: true,
+    request: { pageMode: 'public' },
+    source: 'network',
+  });
+
+  assert.equal(snapshot.source, 'network');
+  assert.equal(fallbackCalls, 1);
+  assert.equal(clearCalls, 1);
+  assert.equal(featuredCalls, 1);
+});
+
 test('public route contract exposes a stable snapshot and switchMenu action', async () => {
   const sandbox = loadAppSandbox();
   const selectedMenus = [];
@@ -677,6 +879,70 @@ test('public route contract exposes a stable snapshot and switchMenu action', as
   assert.equal(typeof contract.actions.switchMenu, 'function');
 
   await contract.actions.switchMenu({
+    id: getState(sandbox, 'MENU_ID'),
+    slug: 'leroys-lounge-drinks',
+    name: "Leroy's Lounge Drinks",
+    type: 'drinks',
+    restaurantId: getState(sandbox, 'RESTAURANT_ID'),
+  });
+
+  assert.equal(selectedMenus.length, 1);
+  assert.equal(loadCalls, 1);
+  assert.equal(renderCalls, 1);
+  assert.equal(applyCalls, 1);
+});
+
+test('public route adapter converts legacy snapshot input into a contract boundary', async () => {
+  const sandbox = loadAppSandbox();
+  const selectedMenus = [];
+  let loadCalls = 0;
+  let renderCalls = 0;
+  let applyCalls = 0;
+
+  setState(sandbox, {
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+    MENU_ID: '00000000-0000-0000-0000-000000000020',
+    MENU_TYPE: 'drinks',
+    _activeMenuName: "Leroy's Lounge Drinks",
+    _activeRestaurantName: "Leroy's Lounge",
+    _siteRestaurant: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge" },
+    currentUser: { role: 'manager', name: 'Alex', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+    menuState: makeMenuState({
+      beer: [{ id: 'beer-1', name: 'Draft Lager', onMenu: true, visibility: 'public' }],
+    }),
+    _featuredGroups: [],
+    selectMenu: (...args) => {
+      selectedMenus.push(args);
+    },
+    getPublicHrefForCurrentMenu: () => '/leroyslounge?menu=leroys-lounge-drinks',
+    loadActiveMenuState: async () => {
+      loadCalls += 1;
+    },
+    renderPublicViews: async () => {
+      renderCalls += 1;
+    },
+    applyDesign: () => {
+      applyCalls += 1;
+    },
+  });
+  sandbox.location.pathname = '/leroyslounge';
+  sandbox.location.search = '?menu=leroys-lounge-drinks';
+
+  const adapter = sandbox.createPublicRouteAdapter(
+    getState(sandbox, 'menuState'),
+    {
+      currentUser: getState(sandbox, 'currentUser'),
+      menuId: getState(sandbox, 'MENU_ID'),
+      menuType: getState(sandbox, 'MENU_TYPE'),
+      restaurantId: getState(sandbox, 'RESTAURANT_ID'),
+    }
+  );
+
+  assert.equal(adapter.version, 0);
+  assert.equal(adapter.snapshot.menuId, getState(sandbox, 'MENU_ID'));
+  assert.equal(typeof adapter.actions.switchMenu, 'function');
+
+  await adapter.actions.switchMenu({
     id: getState(sandbox, 'MENU_ID'),
     slug: 'leroys-lounge-drinks',
     name: "Leroy's Lounge Drinks",
@@ -985,7 +1251,8 @@ test('public route contract and route renderers register and hydrate both restau
       routeCase.prefix === 'll' ? 'll-route-specials' : 'erc-route-specials'
     );
 
-    assert.match(footerVersion.innerHTML, /v0\.8\.6/);
+    const escapedVersion = String(getState(sandbox, 'APP_VERSION')).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(footerVersion.innerHTML, new RegExp(escapedVersion));
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
