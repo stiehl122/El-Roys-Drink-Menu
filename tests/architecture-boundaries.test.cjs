@@ -103,15 +103,42 @@ function createMenuSessionPorts(overrides = {}) {
     persistState: async () => true,
     patchMenuMeta: async () => ({ downgradedFields: [] }),
     patchMenuMetaForMenu: async () => ({ downgradedFields: [] }),
+    patchMenuDraftState: async () => ({ downgradedFields: [] }),
     finalizePersistStatus() {},
     commitDraft() {},
     buildPreview: snapshot => ({
       hasChanges: true,
+      hasLocalDraft: false,
+      hasSharedDraft: false,
+      hasNotificationChanges: true,
+      hasSaveOnlyChanges: false,
       diff,
-      sections: diff,
+      sections: diff.map(section => ({
+        ...section,
+        changes: (section.added || []).map(name => ({
+          id: `${section.id}::added::${name.toLowerCase()}`,
+          kind: 'added',
+          name,
+          text: `+ ${name}`,
+          sectionId: section.id,
+          sectionLabel: section.label,
+          icon: section.icon,
+        })),
+      })),
+      notificationChanges: diff.flatMap(section => (section.added || []).map(name => ({
+        id: `${section.id}::added::${name.toLowerCase()}`,
+        kind: 'added',
+        name,
+        text: `+ ${name}`,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+      }))),
+      saveOnlyChanges: [],
       patchMessage: 'Patch message',
       truncated: false,
       snapshot,
+      mode: 'update-only',
     }),
     getMenuId: () => 'menu-main',
     getRestaurantId: () => 'restaurant-main',
@@ -123,6 +150,7 @@ function createMenuSessionPorts(overrides = {}) {
     dispatchNotification: async () => ({
       ok: true,
       statusCode: 207,
+      partial: true,
       summary: {
         anyOk: true,
         anyError: true,
@@ -228,49 +256,35 @@ test('menu session lifecycle routes poll and manual refreshes through one bounda
 
 test('menu session lifecycle saveDraft persists and patches last-updated metadata', async () => {
   const sandbox = loadAppSandbox();
-  const persistCalls = [];
-  const patchCalls = [];
+  const patchDraftCalls = [];
   const commitCalls = [];
-  const finalizeCalls = [];
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
-    persistState: async options => {
-      persistCalls.push(options);
-      return true;
-    },
-    patchMenuMeta: async update => {
-      patchCalls.push(update);
+    buildSnapshot: (source, request) => ({ source, request, dirty: true }),
+    patchMenuDraftState: async (snapshot, ts) => {
+      patchDraftCalls.push([snapshot, ts]);
       return { downgradedFields: [] };
     },
     commitDraft: ts => {
       commitCalls.push(ts);
-    },
-    finalizePersistStatus: ok => {
-      finalizeCalls.push(ok);
     },
   }));
 
   const result = await lifecycle.saveDraft();
 
   assert.equal(result.ok, true);
-  assert.equal(result.snapshot.source, 'saved');
-  assert.equal(persistCalls.length, 1);
-  assert.equal(patchCalls[0].last_updated_ts, 1712705100000);
+  assert.equal(result.snapshot.source, 'draft-saved');
+  assert.equal(patchDraftCalls.length, 1);
+  assert.ok(Array.isArray(patchDraftCalls[0][0].cats));
+  assert.equal(patchDraftCalls[0][1], 1712705100000);
   assert.deepEqual(commitCalls, [1712705100000]);
-  assert.deepEqual(finalizeCalls, []);
 });
 
 test('menu session lifecycle publishes updates through one preview-aware boundary', async () => {
   const sandbox = loadAppSandbox();
-  const persistCalls = [];
   const patchCalls = [];
-  const commitCalls = [];
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
-    persistState: async options => {
-      persistCalls.push(options);
-      return true;
-    },
     patchMenuMeta: async update => {
       patchCalls.push(['primary', update]);
       return { downgradedFields: ['last_sent_featured'] };
@@ -279,9 +293,8 @@ test('menu session lifecycle publishes updates through one preview-aware boundar
       patchCalls.push([menuId, update]);
       return { downgradedFields: [] };
     },
-    commitPublished: payload => {
-      commitCalls.push(payload);
-    },
+    syncLocalCache: () => false,
+    logUpdate: async () => false,
   }));
 
   const preview = lifecycle.preview();
@@ -290,21 +303,13 @@ test('menu session lifecycle publishes updates through one preview-aware boundar
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus.statusCode, 207);
   assert.equal(result.preview, preview);
-  assert.equal(persistCalls.length, 1);
-  assert.equal(persistCalls[0].silentFailure, true);
+  assert.equal(patchCalls.length, 0);
   assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
-  assert.ok(result.warnings.some(message => message.includes('legacy metadata compatibility')));
-  assert.ok(result.warnings.some(message => message.includes('local cache')));
-  assert.ok(result.warnings.some(message => message.includes('audit log')));
-  assert.equal(patchCalls[0][0], 'primary');
-  assert.equal(patchCalls[1][0], 'menu-sibling');
-  assert.equal(commitCalls[0].ts, 1712705100000);
-  assert.equal(commitCalls[0].featuredIds[0], 'feature-1');
+  assert.ok(result.warnings.some(message => message.includes('remain ready to send again')));
 });
 
 test('menu session lifecycle can publish without firing notifications', async () => {
   const sandbox = loadAppSandbox();
-  const persistCalls = [];
   let notificationCalls = 0;
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
@@ -313,10 +318,6 @@ test('menu session lifecycle can publish without firing notifications', async ()
     dispatchNotification: async () => {
       notificationCalls += 1;
       return { ok: true, statusCode: 200, summary: { anyOk: true, anyError: false, failedChannels: [], allSkipped: false } };
-    },
-    persistState: async options => {
-      persistCalls.push(options);
-      return true;
     },
     syncLocalCache: () => true,
     logUpdate: async () => true,
@@ -327,8 +328,6 @@ test('menu session lifecycle can publish without firing notifications', async ()
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus, null);
   assert.equal(notificationCalls, 0);
-  assert.equal(persistCalls.length, 1);
-  assert.equal(persistCalls[0].silentFailure, true);
   assert.equal(result.warnings.length, 0);
   assert.match(result.successMessage, /saved to the live menu/i);
 });
@@ -378,10 +377,190 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   sandbox.updateManagerActionBar();
 
-  assert.equal(summary.textContent, '2 pending changes. Save Draft keeps them private. Save opens Patch Notes Preview.');
+  assert.equal(summary.textContent, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
   assert.equal(saveBtn.disabled, false);
   assert.equal(sendBtn.disabled, false);
   assert.equal(bar.classList.contains('is-idle'), false);
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['New Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, '1 saved draft change is ready to publish.');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Save');
+});
+
+test('save-only menu edits stay in the draft session until save', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+
+  setState(sandbox, {
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            price: '$8',
+            desc: '',
+            recipe: [],
+            onMenu: true,
+          },
+        ],
+        lastSent: [],
+      },
+    },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+  });
+
+  await sandbox.savePrice('beer', 'item-1', '$9');
+
+  assert.equal(persistCalls.length, 0);
+  assert.equal(getState(sandbox, '_dirty'), true);
+  assert.equal(getState(sandbox, 'getDraftSaveOnlyChanges().length'), 1);
+});
+
+test('save draft persists a shared draft snapshot without publishing the live menu', async () => {
+  const sandbox = loadAppSandbox();
+  const patches = [];
+  const persistCalls = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    SUPABASE_URL: 'https://example.supabase.co',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    _dirty: true,
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            desc: '',
+            recipe: [],
+            price: '$9',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            upcharges: [],
+            showDescription: true,
+            showRecipe: false,
+          },
+        ],
+        lastSent: [],
+      },
+      _meta: {},
+    },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    sbPatchMenuMetaForMenu: async (_menuId, update) => {
+      patches.push(update);
+    },
+  });
+
+  const result = await sandbox._saveActiveMenuDraftInternal();
+
+  assert.equal(result.ok, true);
+  assert.equal(persistCalls.length, 0);
+  assert.equal(patches.length, 1);
+  assert.ok(Array.isArray(patches[0].draft_state.cats));
+  assert.equal(getState(sandbox, '_dirty'), false);
+  assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
+});
+
+test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+  const draftClears = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Draft Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuDraftState: async snapshot => {
+      draftClears.push(snapshot);
+      return { downgradedFields: [] };
+    },
+    syncLocalMenuCache: () => true,
+  });
+
+  const session = sandbox.ensureCurrentMenuSession();
+  const result = await session.publishUpdate({ preview: session.preview(), notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(persistCalls.length, 1);
+  assert.equal(draftClears.length, 1);
+  assert.equal(draftClears[0], null);
+  assert.equal(getState(sandbox, '_hasSharedDraft'), false);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('manager item badges mark live unsent changes distinctly from drafts', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: false,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+  });
+
+  const badge = sandbox.getItemStateBadge({ id: 'item-1', name: 'Lager', eightySixed: false }, 'beer', new Set());
+  assert.equal(badge.text, 'UNSENT');
+  assert.equal(badge.className, 'item-state-badge--unsent');
 });
 
 test('access session service restores sessions and resolves settings access', async () => {
