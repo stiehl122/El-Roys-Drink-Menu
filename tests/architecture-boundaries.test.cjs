@@ -444,6 +444,110 @@ test('save-and-update persists live state before dispatching notifications', asy
   assert.deepEqual(calls, ['persist', 'notify']);
 });
 
+test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
+  const sandbox = loadAppSandbox();
+  const persistCalls = [];
+  const draftClears = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Draft Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    persistState: async options => {
+      persistCalls.push(options);
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
+    patchMenuDraftState: async snapshot => {
+      draftClears.push(snapshot);
+      return { downgradedFields: [] };
+    },
+    syncLocalMenuCache: () => true,
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: false });
+
+  assert.equal(result.ok, true);
+  assert.equal(persistCalls.length, 1);
+  assert.equal(draftClears.length, 1);
+  assert.equal(draftClears[0], null);
+  assert.equal(getState(sandbox, '_hasSharedDraft'), false);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
+  assert.match(result.successMessage, /saved to the live menu/i);
+});
+
+test('save and update publishes a shared draft before notifying and clears unsent state', async () => {
+  const sandbox = loadAppSandbox();
+  const calls = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Draft Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    persistState: async () => {
+      calls.push('persist');
+      return true;
+    },
+    patchMenuMetaWithCompatibility: async update => {
+      calls.push(update.last_sent_ts ? 'last-sent-meta' : 'last-updated-meta');
+      return { downgradedFields: [] };
+    },
+    patchMenuDraftState: async snapshot => {
+      calls.push(snapshot === null ? 'clear-draft' : 'save-draft');
+      return { downgradedFields: [] };
+    },
+    patchMenuMetaForMenuWithCompatibility: async () => ({ downgradedFields: [] }),
+    snapshotCurrentItemsAsLastSent: () => ({ beer: [] }),
+    getCurrentFeaturedIds: () => [],
+    currentUserCanEditRestaurantSpecials: () => false,
+    getRestaurantSpecialConfig: () => ({ menuIds: [] }),
+    syncLocalMenuCache: () => true,
+    logUpdate: async () => true,
+    fetch: async () => {
+      calls.push('notify');
+      return createFetchResponse(200, { results: { groupme: 'ok' } });
+    },
+  });
+
+  const publisher = sandbox.createUpdatePublisher();
+  const result = await publisher.publish({ notify: true });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, ['persist', 'last-updated-meta', 'clear-draft', 'notify', 'last-sent-meta']);
+  assert.equal(getState(sandbox, '_hasSharedDraft'), false);
+  assert.equal(getState(sandbox, 'countDiffLines()'), 0);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-send').status"), 'LIVE');
+});
+
 test('manager item badges mark live unsent changes distinctly from drafts', () => {
   const sandbox = loadAppSandbox();
 
