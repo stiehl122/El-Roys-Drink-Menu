@@ -65,7 +65,7 @@ let _accessSessionService = null;
 let _restaurantSpecialsService = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
-let _lastSentFeaturedIds = new Set(); // item IDs that were featured at last Send Update
+let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
 let _restaurantSpecialsCatalogKey = '';
 let _restaurantSpecialsCatalogPromise = null;
@@ -185,10 +185,7 @@ let _deletedItemIds    = new Set();  // item UUIDs to DELETE on next persistStat
 let _uncatCategoryUuid = '';         // DB UUID of the __uncategorized__ category row
 let _managerDraggedItemId = '';
 let _managerDraggedCatId = '';
-let _menuLifecycleService = null;
-let _menuRuntime = null;
 let _currentMenuSession = null;
-let _updatePublisher = null;
 let _menuMetaSupportsLastSentFeatured = true;
 let _menuMetaSupportsDraftState = true;
 let _draftSaveOnlyChanges = new Map();
@@ -384,10 +381,6 @@ function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user
   return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
 }
 
-function getFeaturedConfirmationKey(restaurantId = RESTAURANT_ID) {
-  return `featured_confirmed:${restaurantId || 'unknown'}`;
-}
-
 function getMenuTypeLabel(menuType) {
   return (menuType || '').toLowerCase() === 'food' ? 'Food' : 'Drinks';
 }
@@ -552,14 +545,14 @@ function buildCurrentMenuPageRequest(overrides = {}) {
   };
 }
 
-function buildMenuSessionSnapshot(source = 'live') {
+function buildMenuSessionSnapshot(source = 'live', request = buildCurrentMenuPageRequest()) {
   const notifyDiff = getCachedDiff();
   const saveOnlyChanges = getDraftSaveOnlyChanges();
   const hasLocalDraft = !!_dirty;
   const hasSharedDraft = hasSharedDraftState();
   const hasPendingUpdate = !hasLocalDraft && !hasSharedDraft && countDiffLines(notifyDiff) > 0;
   return {
-    request: buildCurrentMenuPageRequest(),
+    request,
     source,
     menuId: MENU_ID,
     menuType: MENU_TYPE,
@@ -579,138 +572,469 @@ function buildMenuSessionSnapshot(source = 'live') {
   };
 }
 
-function createMenuDraftSession(options = {}) {
-  const {
-    getSnapshot = () => buildMenuSessionSnapshot('draft-session'),
-    saveDraft = async () => ({ ok: false }),
-  } = options;
-
+function buildMenuSessionPreview(snapshot = buildMenuSessionSnapshot('preview')) {
+  const diff = snapshot.notifyDiff || getCachedDiff();
+  const sections = buildNotificationPreviewSections(diff);
+  const notificationChanges = sections.flatMap(section => section.changes);
+  const saveOnlyChanges = snapshot.saveOnlyChanges || getDraftSaveOnlyChanges();
+  const patchMessage = notificationChanges.length ? buildPatchMessage(sections) : '';
+  const hasLocalDraft = !!snapshot.dirty;
+  const hasSharedDraft = !!snapshot.hasSharedDraft;
+  const mode = (hasLocalDraft || hasSharedDraft) ? 'save' : (notificationChanges.length ? 'update-only' : 'save');
   return {
-    snapshot() {
-      return getSnapshot();
+    hasChanges: notificationChanges.length > 0 || saveOnlyChanges.length > 0,
+    hasLocalDraft,
+    hasSharedDraft,
+    hasNotificationChanges: notificationChanges.length > 0,
+    hasSaveOnlyChanges: saveOnlyChanges.length > 0,
+    diff,
+    sections,
+    notificationChanges,
+    saveOnlyChanges,
+    patchMessage,
+    truncated: patchMessage.length > 1000,
+    snapshot,
+    mode,
+  };
+}
+
+function createPreviewChangeId(sectionId, kind, name) {
+  return `${sectionId}::${kind}::${encodeURIComponent(String(name || '').trim().toLowerCase())}`;
+}
+
+function buildNotificationPreviewSections(diff = []) {
+  return (diff || []).map(section => {
+    const changes = [];
+    (section.added || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'added', name), kind: 'added', text: `+ ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.removed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'removed', name), kind: 'removed', text: `− ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.eightySixed || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'eightySixed', name), kind: 'eightySixed', text: `86'd: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    (section.restored || []).forEach(name => {
+      changes.push({ id: createPreviewChangeId(section.id, 'restored', name), kind: 'restored', text: `${restoreLabel(section.id)}: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+    });
+    return { ...section, changes };
+  }).filter(section => section.changes.length > 0);
+}
+
+function groupNotificationChangesBySection(changes = []) {
+  const sections = new Map();
+  (changes || []).forEach(change => {
+    if (!sections.has(change.sectionId)) {
+      sections.set(change.sectionId, {
+        id: change.sectionId,
+        icon: change.icon,
+        label: change.sectionLabel,
+        changes: [],
+      });
+    }
+    sections.get(change.sectionId).changes.push(change);
+  });
+  return Array.from(sections.values());
+}
+
+function getMenuSessionPorts() {
+  return {
+    buildRequest(overrides = {}) {
+      return buildCurrentMenuPageRequest(overrides);
     },
-    async saveDraft() {
-      return saveDraft(this.snapshot());
+    buildSnapshot(source = 'live', request = buildCurrentMenuPageRequest()) {
+      return buildMenuSessionSnapshot(source, request);
+    },
+    async resolveMenu() {
+      if (!SUPABASE_URL) return null;
+      return sbResolveMenu();
+    },
+    canLoadFromNetwork() {
+      return !!(SUPABASE_URL && MENU_ID);
+    },
+    restoreFallback({ expectedRestaurantId = '' } = {}) {
+      const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
+      return {
+        source: fallback.source,
+        usedFallback: fallback.usedFallback,
+      };
+    },
+    async loadState(options = {}) {
+      return _loadActiveMenuStateInternal(options);
+    },
+    async pollState(options = {}) {
+      return _pollActiveMenuStateInternal(options);
+    },
+    now() {
+      return Date.now();
+    },
+    async persistState(options = {}) {
+      return persistState(options);
+    },
+    async patchMenuMeta(update) {
+      return patchMenuMetaWithCompatibility(update);
+    },
+    async patchMenuMetaForMenu(menuId, update) {
+      return patchMenuMetaForMenuWithCompatibility(menuId, update);
+    },
+    async patchMenuDraftState(snapshot, savedAt) {
+      return patchMenuDraftState(snapshot, savedAt);
+    },
+    finalizePersistStatus(ok) {
+      finalizePersistStatus(ok);
+    },
+    commitDraft(ts) {
+      _dirty = false;
+      setSharedDraftState(ts);
+      updateSaveBtn();
+    },
+    buildPreview(snapshot) {
+      return buildMenuSessionPreview(snapshot);
+    },
+    getMenuId() {
+      return MENU_ID;
+    },
+    getRestaurantId() {
+      return RESTAURANT_ID;
+    },
+    getMenuName() {
+      return _activeMenuName;
+    },
+    snapshotCurrentItemsAsLastSent() {
+      return snapshotCurrentItemsAsLastSent();
+    },
+    getCurrentFeaturedIds() {
+      return getCurrentFeaturedIds();
+    },
+    canEditRestaurantSpecials(restaurantId) {
+      return currentUserCanEditRestaurantSpecials(restaurantId);
+    },
+    getRestaurantMenuIds(restaurantId) {
+      return getRestaurantSpecialConfig(restaurantId)?.menuIds || [];
+    },
+    async dispatchNotification(payload) {
+      return dispatchMenuUpdateNotification(payload);
+    },
+    collectNotificationWarnings(summary) {
+      return collectNotificationWarnings(summary);
+    },
+    syncLocalCache(options = {}) {
+      return syncLocalMenuCache(options);
+    },
+    async logUpdate(diff, patchMessage) {
+      return logUpdate(diff, patchMessage);
+    },
+    commitPublished({ diff, ts, featuredIds }) {
+      _lastSentFeaturedIds = new Set(featuredIds);
+      applySentState(diff, ts);
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
+      updateSaveBtn();
+      updateLastUpdatedLabel();
+    },
+    dedupeWarnings(warnings = []) {
+      return dedupePublisherWarnings(warnings);
     },
   };
 }
 
-function createMenuLifecycleService(ports) {
-  return {
-    async openPageState(options = {}) {
-      return ports.openPageState(options);
+function createMenuSessionLifecycle(ports) {
+  const sessionPorts = ports || getMenuSessionPorts();
+  let request = sessionPorts.buildRequest();
+
+  function syncRequest(overrides = {}) {
+    request = { ...request, ...sessionPorts.buildRequest(overrides) };
+    return request;
+  }
+
+  function buildSnapshot(source = 'live') {
+    return sessionPorts.buildSnapshot(source, request);
+  }
+
+  const session = {
+    syncRequest,
+    snapshot(source = 'live') {
+      syncRequest();
+      return buildSnapshot(source);
     },
-    async refreshPageState(options = {}) {
-      if (options.reason === 'poll') return ports.pollPageState(options);
+    async open(options = {}) {
+      const nextRequest = syncRequest(options);
+      const expectedRestaurantId = options.expectedRestaurantId || nextRequest.siteRestaurantId || '';
+
+      if (options.resolveMenu !== false) {
+        const resolution = await sessionPorts.resolveMenu({ request: nextRequest, ...options });
+        if (resolution?.redirect) return resolution;
+      }
+
+      if (!sessionPorts.canLoadFromNetwork({ request: nextRequest, ...options })) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, ...options });
+        return {
+          ok: true,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: false,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+
+      try {
+        const snapshot = await sessionPorts.loadState({
+          request: nextRequest,
+          fallbackToDefault: options.fallbackToDefault,
+          includeFeatured: options.includeFeatured,
+          persistCache: options.persistCache,
+          source: options.source || 'network',
+        });
+        return {
+          ok: true,
+          source: snapshot.source || 'network',
+          usedFallback: false,
+          showLoadError: false,
+          snapshot,
+        };
+      } catch (error) {
+        const fallback = sessionPorts.restoreFallback({ expectedRestaurantId, request: nextRequest, error, ...options });
+        return {
+          ok: false,
+          error,
+          source: fallback.source,
+          usedFallback: fallback.usedFallback,
+          showLoadError: true,
+          snapshot: fallback.snapshot || buildSnapshot(fallback.source),
+        };
+      }
+    },
+    async refresh(options = {}) {
+      const nextRequest = syncRequest(options);
+      if (options.reason === 'poll') {
+        return sessionPorts.pollState({ request: nextRequest, ...options });
+      }
       return {
         ok: true,
-        snapshot: await ports.loadPageState(options),
+        snapshot: await sessionPorts.loadState({ request: nextRequest, ...options }),
       };
     },
-    async savePageDraft(options = {}) {
-      return ports.savePageDraft(options);
+    preview() {
+      syncRequest();
+      return sessionPorts.buildPreview(buildSnapshot('preview'));
     },
-    async publishPageUpdate(options = {}) {
-      return ports.publishPageUpdate(options);
+    async saveDraft(options = {}) {
+      syncRequest(options);
+      const snapshot = buildSnapshot('draft');
+      if (!snapshot.dirty) {
+        return {
+          ok: false,
+          noop: true,
+          snapshot: buildSnapshot('draft-noop'),
+        };
+      }
+      const ts = sessionPorts.now();
+      try {
+        await sessionPorts.patchMenuDraftState(buildPersistedDraftStateSnapshot(ts), ts);
+        sessionPorts.commitDraft(ts);
+        return {
+          ok: true,
+          ts,
+          snapshot: buildSnapshot('draft-saved'),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: error?.message || 'Draft save failed.',
+          snapshot: buildSnapshot('draft-save-failed'),
+        };
+      }
     },
-  };
-}
+    async publishUpdate(options = {}) {
+      syncRequest(options);
+      const preview = options.preview?.sections ? options.preview : session.preview();
+      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
+      const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
+      const selectedSections = groupNotificationChangesBySection(selectedChanges);
+      const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+      const mode = options.mode || (preview.mode === 'update-only'
+        ? (options.notify === false ? 'save' : 'update-only')
+        : (options.notify === false ? 'save' : 'save-and-update'));
+      if (!preview.hasChanges) {
+        return {
+          ok: false,
+          noop: true,
+          preview,
+          snapshot: buildSnapshot('publish-noop'),
+        };
+      }
 
-function createMenuRuntime({ lifecycle }) {
-  return {
-    openPage(pageRequest = {}) {
-      const session = {
-        _request: { ...pageRequest },
-        _syncRequest(nextRequest = {}) {
-          this._request = { ...this._request, ...nextRequest };
-          return this._request;
-        },
-        async open(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.openPageState({ request: this._request, ...options });
-        },
-        getSnapshot(source = 'live') {
-          this._syncRequest(buildCurrentMenuPageRequest());
-          return buildMenuSessionSnapshot(source);
-        },
-        update(mutator) {
-          if (typeof mutator === 'function') {
-            mutator({
-              menuState,
-              currentDesign,
-              featuredGroups: _featuredGroups,
-              menuId: MENU_ID,
-              restaurantId: RESTAURANT_ID,
-            });
-            invalidateDiff();
-          }
-          return this.getSnapshot();
-        },
-        async refresh(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.refreshPageState({ request: this._request, ...options });
-        },
-        async save(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.savePageDraft({ request: this._request, ...options });
-        },
-        async sendUpdate(options = {}) {
-          this._syncRequest(buildCurrentMenuPageRequest(options));
-          return lifecycle.publishPageUpdate({ request: this._request, ...options });
-        },
-        async switchMenu(menuRef) {
-          const requested = typeof menuRef === 'string'
-            ? (getMenuById(menuRef) || getMenuBySlug(menuRef))
-            : (menuRef?.id ? getMenuById(menuRef.id) : getMenuBySlug(menuRef?.slug || ''));
-          if (!requested) return this.getSnapshot();
-          selectMenu(
-            requested.id,
-            requested.slug,
-            requested.name,
-            requested.type,
-            requested.restaurantId
-          );
-          return this.refresh();
-        },
+      const warnings = [];
+      let liveSaveTs = null;
+      if (preview.hasLocalDraft || preview.hasSharedDraft) {
+        const persisted = await sessionPorts.persistState({ silentFailure: true });
+        if (!persisted) {
+          return {
+            ok: false,
+            preview,
+            userHandled: true,
+            snapshot: buildSnapshot('publish-live-save-failed'),
+          };
+        }
+        liveSaveTs = sessionPorts.now();
+        try {
+          await sessionPorts.patchMenuMeta({ last_updated_ts: liveSaveTs });
+          await sessionPorts.patchMenuDraftState(null, liveSaveTs);
+        } catch (_) {
+          warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
+        }
+        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(liveSaveTs) };
+        lsSet(LS_KEYS.lastUpdated, String(liveSaveTs));
+        _dirty = false;
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
+      }
+
+      const shouldNotify = (mode === 'save-and-update' || mode === 'update-only') && selectedSections.length > 0;
+      let delivery = {
+        ok: true,
+        skipped: !shouldNotify,
+        statusCode: null,
+        summary: summarizeNotificationResults({}),
       };
-      session._syncRequest(buildCurrentMenuPageRequest(pageRequest));
-      return session;
+      if (shouldNotify) {
+        delivery = await sessionPorts.dispatchNotification({
+          menuId: sessionPorts.getMenuId(),
+          patchMessage,
+        });
+      }
+
+      if (shouldNotify && delivery.partial) {
+        warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs attention.`,
+          snapshot: buildSnapshot('send-partial'),
+        };
+      }
+
+      if (shouldNotify && !delivery.ok) {
+        warnings.push(delivery.userMessage || 'Update could not be sent.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs to be sent.`,
+          snapshot: buildSnapshot('send-failed-live-saved'),
+        };
+      }
+
+      if (shouldNotify) warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+
+      if (mode === 'save-and-update' || mode === 'update-only') {
+        const ts = liveSaveTs || sessionPorts.now();
+        const lastSentState = sessionPorts.snapshotCurrentItemsAsLastSent();
+        const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
+        const restaurantId = sessionPorts.getRestaurantId();
+        const restaurantMenuIds = sessionPorts.canEditRestaurantSpecials(restaurantId)
+          ? sessionPorts.getRestaurantMenuIds(restaurantId)
+          : [];
+        const patchResults = await Promise.all([
+          sessionPorts.patchMenuMeta({
+            last_updated_ts: ts,
+            last_sent_ts: ts,
+            last_sent_state: lastSentState,
+            last_sent_categories: preview.diff.map(section => section.id),
+            last_sent_featured: currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== sessionPorts.getMenuId())
+            .map(menuId => sessionPorts.patchMenuMetaForMenu(menuId, {
+              last_sent_featured: currentFeaturedIds,
+            })),
+        ]);
+        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+        }
+
+        sessionPorts.commitPublished({
+          diff: preview.diff,
+          ts,
+          featuredIds: currentFeaturedIds,
+        });
+
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) {
+          warnings.push('This device could not refresh its local cache after the send.');
+        }
+
+        const logged = patchMessage ? await sessionPorts.logUpdate(serializeNotificationSectionsForLog(selectedSections), patchMessage) : true;
+        if (!logged) {
+          warnings.push('The recent-changes audit log could not be written for this send.');
+        }
+
+        const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          ts,
+          truncated: preview.truncated,
+          notificationStatus: shouldNotify ? delivery : null,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: shouldNotify
+            ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved and sent!`
+            : `✅ ${sessionPorts.getMenuName() || 'Menu'} update list cleared without notifying channels.`,
+          snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+        };
+      }
+
+      const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+      return {
+        ok: true,
+        preview,
+        ts: liveSaveTs || sessionPorts.now(),
+        truncated: preview.truncated,
+        notificationStatus: shouldNotify ? delivery : null,
+        warnings: finalWarnings,
+        warningMessage: finalWarnings[0] || '',
+        successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved to the live menu.`,
+        snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+      };
+    },
+    async save(options = {}) {
+      return session.saveDraft(options);
+    },
+    async sendUpdate(options = {}) {
+      return session.publishUpdate(options);
+    },
+    getSnapshot(source = 'live') {
+      return session.snapshot(source);
+    },
+    _syncRequest(nextRequest = {}) {
+      return syncRequest(nextRequest);
     },
   };
-}
 
-function getMenuLifecycleService() {
-  if (_menuLifecycleService) return _menuLifecycleService;
-  _menuLifecycleService = createMenuLifecycleService({
-    openPageState: options => _openCurrentMenuPageInternal(options),
-    loadPageState: options => _loadActiveMenuStateInternal(options),
-    pollPageState: options => _pollActiveMenuStateInternal(options),
-    savePageDraft: options => _saveActiveMenuDraftInternal(options),
-    publishPageUpdate: options => _publishActiveMenuUpdateInternal(options),
-  });
-  return _menuLifecycleService;
-}
-
-function getMenuRuntime() {
-  if (_menuRuntime) return _menuRuntime;
-  _menuRuntime = createMenuRuntime({ lifecycle: getMenuLifecycleService() });
-  return _menuRuntime;
+  return session;
 }
 
 function ensureCurrentMenuSession(overrides = {}) {
   if (!_currentMenuSession) {
-    _currentMenuSession = getMenuRuntime().openPage(buildCurrentMenuPageRequest(overrides));
+    _currentMenuSession = createMenuSessionLifecycle();
+    _currentMenuSession.syncRequest(overrides);
   } else {
-    _currentMenuSession._syncRequest(buildCurrentMenuPageRequest(overrides));
+    _currentMenuSession.syncRequest(overrides);
   }
   return _currentMenuSession;
-}
-
-function getMenuDraftSession() {
-  return createMenuDraftSession({
-    getSnapshot: source => buildMenuSessionSnapshot(source || 'draft-session'),
-    saveDraft: () => _saveActiveMenuDraftInternal(),
-  });
 }
 
 function resolveRequestedSettingsRoute(user = currentUser) {
@@ -1688,27 +2012,6 @@ function createRestaurantSpecialsService() {
       return { ok: true };
     },
 
-    needsConfirmation(restaurantId = RESTAURANT_ID) {
-      if (!currentUserCanEditRestaurantSpecials(restaurantId)) return false;
-      if (sessionStorage.getItem(getFeaturedConfirmationKey(restaurantId))) return false;
-      if (!_featuredGroups.some(group => group.slots.length)) return false;
-      return _featuredGroups.some(group => group.slots.some(slot => {
-        if (!slot.confirmedAt) return true;
-        const confirmed = new Date(slot.confirmedAt);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return confirmed < today;
-      }));
-    },
-
-    async confirmToday() {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('confirm');
-      sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-      return { ok: true, successMessage: 'Specials confirmed for today!' };
-    },
   };
 }
 
@@ -1720,56 +2023,6 @@ function getRestaurantSpecialsService() {
 
 async function refreshFeaturedForActiveMenu() {
   return getRestaurantSpecialsService().refreshForActiveMenu(RESTAURANT_ID);
-}
-
-async function _openCurrentMenuPageInternal(options = {}) {
-  const {
-    request = buildCurrentMenuPageRequest(),
-    resolveMenu = true,
-    fallbackToDefault = true,
-    includeFeatured = true,
-    persistCache = true,
-    expectedRestaurantId = request.siteRestaurantId || '',
-  } = options;
-
-  if (resolveMenu && SUPABASE_URL) await sbResolveMenu();
-
-  if (!SUPABASE_URL || !MENU_ID) {
-    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
-    return {
-      ok: true,
-      source: fallback.source,
-      usedFallback: fallback.usedFallback,
-      showLoadError: false,
-      snapshot: buildMenuSessionSnapshot(fallback.source),
-    };
-  }
-
-  try {
-    const snapshot = await _loadActiveMenuStateInternal({
-      fallbackToDefault,
-      includeFeatured,
-      persistCache,
-      source: 'network',
-    });
-    return {
-      ok: true,
-      source: snapshot.source || 'network',
-      usedFallback: false,
-      showLoadError: false,
-      snapshot,
-    };
-  } catch (error) {
-    const fallback = restoreMenuStateFromFallback(expectedRestaurantId);
-    return {
-      ok: false,
-      error,
-      source: fallback.source,
-      usedFallback: fallback.usedFallback,
-      showLoadError: true,
-      snapshot: buildMenuSessionSnapshot(fallback.source),
-    };
-  }
 }
 
 async function _loadActiveMenuStateInternal(options = {}) {
@@ -2683,15 +2936,9 @@ async function saveCategoryEdit(catId) {
   const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
   cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
   toggleCategoryEdit(catId);
-  markSaveOnlyDraftChange({
-    key: `category-edit:${catId}`,
-    label: `Updated category ${title}`,
-    message: `Updated category ${title}`,
-    sectionId: catId,
-    kind: 'category-edit',
-  });
+  await persistState();
   refreshAllViews();
-  showToast('Category update added to this draft.', 'info');
+  showToast('✅ Category updated!', 'success');
 }
 
 async function moveCategoryUp(catId) {
@@ -2699,14 +2946,7 @@ async function moveCategoryUp(catId) {
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
-  const cat = CATEGORY_DEFS[idx - 1];
-  markSaveOnlyDraftChange({
-    key: `category-order:${catId}`,
-    label: `Reordered category ${cat?.title || catId}`,
-    message: `Reordered category ${cat?.title || catId}`,
-    sectionId: catId,
-    kind: 'category-order',
-  });
+  await persistState();
   refreshAllViews();
 }
 
@@ -2715,14 +2955,7 @@ async function moveCategoryDown(catId) {
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
-  const cat = CATEGORY_DEFS[idx + 1];
-  markSaveOnlyDraftChange({
-    key: `category-order:${catId}`,
-    label: `Reordered category ${cat?.title || catId}`,
-    message: `Reordered category ${cat?.title || catId}`,
-    sectionId: catId,
-    kind: 'category-order',
-  });
+  await persistState();
   refreshAllViews();
 }
 
@@ -2742,18 +2975,42 @@ async function deleteCategory(catId) {
     const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
     if (!exists) pool.push({ ...item, onMenu: false });
   });
+  if (items.length > 0 && SUPABASE_URL) {
+    await sbEnsureUncategorized();
+    if (_uncatCategoryUuid) {
+      // Directly upsert the entire pool now — handles both DB-backed items
+      // (ON CONFLICT updates their category_id) and memory-only items (inserts them).
+      // This is explicit and doesn't rely on persistState() to handle orphaned items.
+      const rows = pool.map((item, idx) => ({
+        id:              item.id,
+        category_id:     _uncatCategoryUuid,
+        name:            item.name,
+        desc:            item.desc            || '',
+        recipe:          item.recipe          || [],
+        price:           item.price           || null,
+        is_eighty_sixed: item.eightySixed     || false,
+        on_menu:         false,
+        visibility:      item.visibility      || 'public',
+        upcharges:       item.upcharges       || [],
+        show_description:isItemDescriptionPublic(item),
+        show_recipe:     isItemRecipePublic(item),
+        display_order:   idx,
+      }));
+      await fetch(`${SUPABASE_URL}/rest/v1/items`, {
+        method:  'POST',
+        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body:    JSON.stringify(rows),
+      });
+    }
+  }
+  // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
+  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   delete menuState[catId];
   invalidateDiff();
-  markSaveOnlyDraftChange({
-    key: `category-delete:${catId}`,
-    label: `Deleted category ${cat.title}`,
-    message: `Deleted category ${cat.title}`,
-    sectionId: catId,
-    kind: 'category-delete',
-  });
+  await persistState();
   refreshAllViews();
-  showToast('Category deletion added to this draft.', 'info');
+  showToast('✅ Category deleted.', 'success');
 }
 
 function toggleAddCategoryForm() {
@@ -2786,15 +3043,9 @@ async function confirmAddCategory() {
   document.getElementById('catmgr-add-form').style.display = 'none';
   const btn = document.getElementById('show-add-cat-btn');
   if (btn) btn.textContent = '+ Add Category';
-  markSaveOnlyDraftChange({
-    key: `category-add:${id}`,
-    label: `Added category ${title}`,
-    message: `Added category ${title}`,
-    sectionId: id,
-    kind: 'category-add',
-  });
+  await persistState();
   refreshAllViews();
-  showToast(`Category "${title}" added to this draft.`, 'info');
+  showToast(`✅ Category "${title}" added!`, 'success');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -4170,7 +4421,8 @@ async function onSwitchMenuClick() {
     renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
-    checkFeaturedConfirmation();
+    updateManagerActionBar();
+    if (window.innerWidth <= 920) closeSettingsDrawer();
   }, { managerOnly: true });
 }
 
@@ -4472,7 +4724,7 @@ function enterManager() {
   _syncSettingsSectionFromLocation('manager-overview-section');
   updateDraftIndicator();
   updateSaveBtn();
-  checkFeaturedConfirmation();
+  updateManagerActionBar();
 }
 
 function exitManager() {
@@ -4828,6 +5080,30 @@ function buildRecipeListHtml(catId, itemId, ingredients) {
   ).join('');
 }
 
+function buildItemsRowHtml(item, catId, lastSentNames) {
+  const is86 = !!item.eightySixed;
+  const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
+  const badge = getItemStateBadge(item, catId, lastSentNames);
+  return `<div class="current-item items-row ${stateClass}">
+      <div class="item-row-main">
+        <button class="item-drag-handle" type="button" draggable="true"
+          ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
+          ondragend="endManagerItemDrag(event)"
+          title="Drag to reorder"
+          aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
+        ${badge.text ? `<div class="item-state-badge ${badge.className}" role="img" aria-label="${badge.label}" title="${badge.label}">${badge.text}</div>` : ''}
+        <div class="item-name"><input type="text" value="${escHtml(item.name)}"
+          aria-label="Item name for ${escHtml(item.name)}"
+          onblur="renameItem('${catId}','${item.id}',this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()"/></div>
+      </div>
+      <span class="item-actions-compact">
+        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
+        <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
+      </span>
+    </div>`;
+}
+
 function getDraftChangeLookup() {
   return {
     byItemId: new Set(getDraftSaveOnlyChanges().map(change => change.itemId).filter(Boolean)),
@@ -4865,30 +5141,6 @@ function getItemStateBadge(item, catId, lastSentNames = null) {
     return { className: 'item-state-badge--new', text: 'NEW', label: 'New' };
   }
   return { className: 'item-state-badge--active', text: '', label: 'Active' };
-}
-
-function buildItemsRowHtml(item, catId, lastSentNames) {
-  const is86 = !!item.eightySixed;
-  const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
-  const badge = getItemStateBadge(item, catId, lastSentNames);
-  return `<div class="current-item items-row ${stateClass}">
-      <div class="item-row-main">
-        <button class="item-drag-handle" type="button" draggable="true"
-          ondragstart="startManagerItemDrag(event,'${catId}','${item.id}')"
-          ondragend="endManagerItemDrag(event)"
-          title="Drag to reorder"
-          aria-label="Drag to reorder ${escHtml(item.name)}">⋮⋮</button>
-        ${badge.text ? `<div class="item-state-badge ${badge.className}" role="img" aria-label="${badge.label}" title="${badge.label}">${badge.text}</div>` : ''}
-        <div class="item-name"><input type="text" value="${escHtml(item.name)}"
-          aria-label="Item name for ${escHtml(item.name)}"
-          onblur="renameItem('${catId}','${item.id}',this.value)"
-          onkeydown="if(event.key==='Enter')this.blur()"/></div>
-      </div>
-      <span class="item-actions-compact">
-        <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
-        <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
-      </span>
-    </div>`;
 }
 
 function buildPricingRowHtml(item, catId) {
@@ -5161,19 +5413,12 @@ function handleManagerItemDrop(event, catId, targetItemId) {
       ...items.filter(item => item.onMenu === false),
     ];
 
-  markSaveOnlyDraftChange({
-    key: `item-order:${catId}`,
-    label: `Reordered items in ${CATEGORY_DEFS.find(cat => cat.id === catId)?.title || catId}`,
-    message: `Reordered items in ${CATEGORY_DEFS.find(cat => cat.id === catId)?.title || catId}`,
-    sectionId: catId,
-    itemId: _managerDraggedItemId,
-    kind: 'item-order',
-  });
+  invalidateDiff();
   renderManagerItems(catId);
   markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   renderManagerOverviewStats();
-  showToast('Item order added to this draft.', 'info');
+  showToast('Item order updated.', 'success');
 }
 
 function buildCategoryUpsertRows() {
@@ -5310,7 +5555,10 @@ async function persistState(options = {}) {
 
     await flushDeletedItems();
 
-    await sbPatchMenuMeta({ bot_id: BOT_ID });
+    await Promise.all([
+      sbPatchMenuMeta({ bot_id: BOT_ID }),
+      sbPatchRestaurantDesign(currentDesign),
+    ]);
 
     finalizePersistStatus(true);
     return true;
@@ -5358,7 +5606,7 @@ async function commitLiveMenuChanges() {
       warnings,
       snapshot: buildMenuSessionSnapshot(warnings.length ? 'saved-live-warning' : 'saved-live'),
     };
-  } catch(e) {
+  } catch (e) {
     finalizePersistStatus(false);
     return {
       ok: false,
@@ -5407,7 +5655,7 @@ async function _saveActiveMenuDraftInternal() {
 
 async function saveMenu() {
   try {
-    const result = await getMenuDraftSession().saveDraft();
+    const result = await ensureCurrentMenuSession().saveDraft();
     if (result?.noop) return;
     if (result?.ok) {
       showToast(`✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
@@ -5591,7 +5839,7 @@ function toggle86(catId, itemId) {
     wrapper.classList.add(cls);
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
-  showToast(item.eightySixed ? "🚫 Marked 86'd — send update to notify group" : `↩ Marked ${restoreLabel(catId)} — send update to notify group`, 'info');
+  showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
 }
 
 // ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
@@ -5619,14 +5867,7 @@ function addUpcharge(catId, itemId) {
   item.upcharges.push({ label, price: price || '+$0' });
   labelInput.value = '';
   priceInput.value = '';
-  markSaveOnlyDraftChange({
-    key: `upcharge:${catId}:${itemId}`,
-    label: `Updated upcharges for ${item.name}`,
-    message: `Updated upcharges for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'upcharge',
-  });
+  invalidateDiff();
   updateDraftIndicator();
   renderPricingSection();
   markSectionsStale('manager-pricing-section');
@@ -5636,14 +5877,7 @@ function updateUpcharge(catId, itemId, index, field, value) {
   const item = findItem(catId, itemId);
   if (!item || !item.upcharges || !item.upcharges[index]) return;
   item.upcharges[index][field] = value.trim();
-  markSaveOnlyDraftChange({
-    key: `upcharge:${catId}:${itemId}`,
-    label: `Updated upcharges for ${item.name}`,
-    message: `Updated upcharges for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'upcharge',
-  });
+  invalidateDiff();
   updateDraftIndicator();
   markSectionsStale('manager-pricing-section');
 }
@@ -5652,14 +5886,7 @@ function removeUpcharge(catId, itemId, index) {
   const item = findItem(catId, itemId);
   if (!item || !item.upcharges) return;
   item.upcharges.splice(index, 1);
-  markSaveOnlyDraftChange({
-    key: `upcharge:${catId}:${itemId}`,
-    label: `Updated upcharges for ${item.name}`,
-    message: `Updated upcharges for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'upcharge',
-  });
+  invalidateDiff();
   updateDraftIndicator();
   renderPricingSection();
   markSectionsStale('manager-pricing-section');
@@ -5870,14 +6097,7 @@ async function addIngredient(catId, itemId) {
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
   input.focus();
-  markSaveOnlyDraftChange({
-    key: `recipe:${catId}:${itemId}`,
-    label: `Updated recipe for ${item.name}`,
-    message: `Updated recipe for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'recipe',
-  });
+  await persistState();
 }
 
 async function removeIngredient(catId, itemId, idx) {
@@ -5887,14 +6107,7 @@ async function removeIngredient(catId, itemId, idx) {
   renderRecipeIngredients(catId, itemId);
   const btn = document.querySelector('#wrapper-' + itemId + ' .recipe-btn');
   if (btn) btn.classList.toggle('has-recipe', item.recipe.length > 0);
-  markSaveOnlyDraftChange({
-    key: `recipe:${catId}:${itemId}`,
-    label: `Updated recipe for ${item.name}`,
-    message: `Updated recipe for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'recipe',
-  });
+  await persistState();
 }
 
 function handleIngredientKeydown(event, catId, itemId) {
@@ -5911,14 +6124,7 @@ async function saveDesc(catId, itemId, val) {
     markSectionsStale(_activeManagerSection);
     const btn = document.querySelector('#wrapper-' + itemId + ' .desc-btn');
     if (btn) btn.classList.toggle('has-desc', !!desc);
-    markSaveOnlyDraftChange({
-      key: `description:${catId}:${itemId}`,
-      label: `Updated description for ${item.name}`,
-      message: `Updated description for ${item.name}`,
-      sectionId: catId,
-      itemId,
-      kind: 'description',
-    });
+    await persistState();
     _flashSaved(document.querySelector(`#desc-input-${itemId}`));
   }
 }
@@ -5931,14 +6137,7 @@ async function saveItemVisibilityFlag(catId, itemId, field, checked, sourceEl = 
   if (!!item[normalizedField] === nextValue) return;
   item[normalizedField] = nextValue;
   syncDescriptionSummary(itemId, item);
-  markSaveOnlyDraftChange({
-    key: `visibility:${normalizedField}:${catId}:${itemId}`,
-    label: `${normalizedField === 'showRecipe' ? 'Recipe' : 'Description'} visibility updated for ${item.name}`,
-    message: `${normalizedField === 'showRecipe' ? 'Recipe' : 'Description'} visibility updated for ${item.name}`,
-    sectionId: catId,
-    itemId,
-    kind: 'visibility',
-  });
+  await persistState();
   if (sourceEl?.closest) _flashSaved(sourceEl.closest('.desc-visibility-toggle'));
 }
 
@@ -6074,26 +6273,14 @@ function renameItem(catId, itemId, newName) {
     return;
   }
   const item = findItem(catId, itemId);
-  if (item && item.name !== name) {
-    item.name = name;
-    markSaveOnlyDraftChange({
-      key: `rename:${catId}:${itemId}`,
-      label: `Renamed ${name}`,
-      message: `Renamed ${name}`,
-      sectionId: catId,
-      itemId,
-      kind: 'rename',
-    });
-    renderManagerItems(catId);
-    markSectionsStale(_activeManagerSection);
-    updateDraftIndicator();
-  }
+  if (item && item.name !== name) { item.name = name; invalidateDiff(); renderManagerItems(catId); markSectionsStale(_activeManagerSection); updateDraftIndicator(); }
 }
 
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
   if (!btn) return;
+  btn.textContent = 'Save';
   btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
   renderManagerOverviewStats();
   updateManagerActionBar();
@@ -6197,46 +6384,51 @@ function computeDiff() {
 }
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
-function createPreviewChangeId(sectionId, kind, name) {
-  return `${sectionId}::${kind}::${encodeURIComponent(String(name || '').trim().toLowerCase())}`;
-}
-
-function buildNotificationPreviewSections(diff = []) {
-  return (diff || []).map(section => {
-    const changes = [];
-    (section.added || []).forEach(name => {
-      changes.push({ id: createPreviewChangeId(section.id, 'added', name), kind: 'added', text: `+ ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
+function openPreview() {
+  const preview = ensureCurrentMenuSession().preview();
+  const content = document.getElementById('preview-content');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const subtitle = document.getElementById('modal-subtitle');
+  const modal = document.getElementById('modal-bg');
+  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
+  _previewModalState = preview;
+  _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
+  content.innerHTML = '';
+  if (subtitle) {
+    subtitle.textContent = preview.mode === 'update-only'
+      ? 'These lines are already live. Choose which ones to send now.'
+      : 'Review the changes before publishing them to the live menu.';
+  }
+  saveMenuBtn.style.display = preview.mode === 'update-only' ? 'none' : '';
+  saveMenuBtn.disabled = !(preview.hasLocalDraft || preview.hasSharedDraft);
+  saveMenuBtn.textContent = 'Save Menu';
+  saveSendBtn.textContent = preview.mode === 'update-only' ? 'Send Update' : 'Save & Update';
+  saveSendBtn.disabled = !preview.hasNotificationChanges;
+  if (!preview.hasChanges) {
+    content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
+    saveMenuBtn.disabled = true;
+    saveSendBtn.disabled = true;
+  } else {
+    preview.sections.forEach(s => {
+      const block = document.createElement('div');
+      block.className = 'preview-block';
+      block.innerHTML = buildPreviewBlockHtml(s, { selectable: true });
+      content.appendChild(block);
     });
-    (section.removed || []).forEach(name => {
-      changes.push({ id: createPreviewChangeId(section.id, 'removed', name), kind: 'removed', text: `− ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
-    });
-    (section.eightySixed || []).forEach(name => {
-      changes.push({ id: createPreviewChangeId(section.id, 'eightySixed', name), kind: 'eightySixed', text: `86'd: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
-    });
-    (section.restored || []).forEach(name => {
-      changes.push({ id: createPreviewChangeId(section.id, 'restored', name), kind: 'restored', text: `${restoreLabel(section.id)}: ${name}`, name, sectionId: section.id, sectionLabel: section.label, icon: section.icon });
-    });
-    return { ...section, changes };
-  }).filter(section => section.changes.length > 0);
-}
-
-function groupNotificationChangesBySection(changes = []) {
-  const sections = new Map();
-  (changes || []).forEach(change => {
-    if (!sections.has(change.sectionId)) {
-      sections.set(change.sectionId, {
-        id: change.sectionId,
-        icon: change.icon,
-        label: change.sectionLabel,
-        changes: [],
-      });
+    if (preview.saveOnlyChanges?.length) {
+      const saveOnlyBlock = document.createElement('div');
+      saveOnlyBlock.className = 'preview-block';
+      saveOnlyBlock.innerHTML = buildSaveOnlyPreviewBlockHtml(preview.saveOnlyChanges);
+      content.appendChild(saveOnlyBlock);
     }
-    sections.get(change.sectionId).changes.push(change);
-  });
-  return Array.from(sections.values());
+  }
+  modal.classList.add('open');
 }
+function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
 
-function buildPatchMessage(sections = []) {
+// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
+function buildPatchMessage(sections) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
   const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
@@ -6245,12 +6437,19 @@ function buildPatchMessage(sections = []) {
   const lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
   (sections || []).forEach(section => {
     lines.push(`${section.icon} ${section.label.toUpperCase()}`);
-    (section.changes || []).forEach(change => {
-      if (change.kind === 'added') lines.push(`  ✅ + ${cleanName(change.name)}`);
-      if (change.kind === 'removed') lines.push(`  ❌ - ${cleanName(change.name)}`);
-      if (change.kind === 'eightySixed') lines.push(`  🚫 86'd: ${cleanName(change.name)}`);
-      if (change.kind === 'restored') lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(change.name)}`);
-    });
+    if (Array.isArray(section.changes)) {
+      section.changes.forEach(change => {
+        if (change.kind === 'added') lines.push(`  ✅ + ${cleanName(change.name)}`);
+        if (change.kind === 'removed') lines.push(`  ❌ - ${cleanName(change.name)}`);
+        if (change.kind === 'eightySixed') lines.push(`  🚫 86'd: ${cleanName(change.name)}`);
+        if (change.kind === 'restored') lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(change.name)}`);
+      });
+    } else {
+      (section.added || []).forEach(n => lines.push(`  ✅ + ${cleanName(n)}`));
+      (section.removed || []).forEach(n => lines.push(`  ❌ - ${cleanName(n)}`));
+      (section.eightySixed || []).forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
+      (section.restored || []).forEach(n => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
+    }
     lines.push('');
   });
   if (MENU_URL) lines.push(`📋 Full menu: ${MENU_URL}`);
@@ -6282,14 +6481,21 @@ function getSelectedPreviewChangeIds() {
 function buildPreviewBlockHtml(section, options = {}) {
   const { selectable = false } = options;
   let html = `<div class="preview-cat">${escHtml(section.icon)} ${escHtml(section.label)}</div>`;
-  (section.changes || []).forEach(change => {
-    const lineClass = change.kind === 'removed' || change.kind === 'eightySixed' ? 'remove' : 'add';
-    if (selectable) {
-      html += `<label class="preview-line ${lineClass}"><input type="checkbox" checked onchange="setPreviewChangeSelected('${escHtml(change.id)}',this.checked)"/><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</label>`;
-    } else {
-      html += `<div class="preview-line ${lineClass}"><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</div>`;
-    }
-  });
+  if (Array.isArray(section.changes)) {
+    (section.changes || []).forEach(change => {
+      const lineClass = change.kind === 'removed' || change.kind === 'eightySixed' ? 'remove' : 'add';
+      if (selectable) {
+        html += `<label class="preview-line ${lineClass}"><input type="checkbox" checked onchange="setPreviewChangeSelected('${escHtml(change.id)}',this.checked)"/><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</label>`;
+      } else {
+        html += `<div class="preview-line ${lineClass}"><span>${change.kind === 'eightySixed' ? '🚫' : change.kind === 'removed' ? '❌' : change.kind === 'restored' ? '↩' : '✅'}</span> ${escHtml(change.text)}</div>`;
+      }
+    });
+    return html;
+  }
+  (section.added || []).forEach(n => { html += `<div class="preview-line add"><span>✅</span> + ${escHtml(n)}</div>`; });
+  (section.removed || []).forEach(n => { html += `<div class="preview-line remove"><span>❌</span> − ${escHtml(n)}</div>`; });
+  (section.eightySixed || []).forEach(n => { html += `<div class="preview-line remove"><span>🚫</span> 86'd: ${escHtml(n)}</div>`; });
+  (section.restored || []).forEach(n => { html += `<div class="preview-line add"><span>↩</span> ${escHtml(restoreLabel(section.id))}: ${escHtml(n)}</div>`; });
   return html;
 }
 
@@ -6299,258 +6505,6 @@ function buildSaveOnlyPreviewBlockHtml(changes = []) {
     `<div class="preview-line"><span>•</span> ${escHtml(change.message || change.label || 'Saved change')}</div>`
   )).join('')}`;
 }
-
-function openPreview() {
-  const preview = getUpdatePublisher().preview();
-  const content = document.getElementById('preview-content');
-  const saveMenuBtn = document.getElementById('save-menu-btn');
-  const saveSendBtn = document.getElementById('save-send-btn');
-  const subtitle = document.getElementById('modal-subtitle');
-  const modal = document.getElementById('modal-bg');
-  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
-  _previewModalState = preview;
-  _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
-  content.innerHTML = '';
-  if (subtitle) {
-    subtitle.textContent = preview.mode === 'update-only'
-      ? 'These lines are already live. Choose which ones to send now.'
-      : 'Review the changes before publishing them to the live menu.';
-  }
-  saveMenuBtn.style.display = preview.mode === 'update-only' ? 'none' : '';
-  saveMenuBtn.disabled = !(preview.hasLocalDraft || preview.hasSharedDraft);
-  saveMenuBtn.textContent = 'Save Menu';
-  saveSendBtn.textContent = preview.mode === 'update-only' ? 'Send Update' : 'Save & Update';
-  saveSendBtn.disabled = !preview.hasNotificationChanges;
-  if (!preview.hasChanges) {
-    content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
-    saveMenuBtn.disabled = true;
-    saveSendBtn.disabled = true;
-  } else {
-    preview.sections.forEach(section => {
-      const block = document.createElement('div');
-      block.className = 'preview-block';
-      block.innerHTML = buildPreviewBlockHtml(section, { selectable: true });
-      content.appendChild(block);
-    });
-    if (preview.saveOnlyChanges?.length) {
-      const saveOnlyBlock = document.createElement('div');
-      saveOnlyBlock.className = 'preview-block';
-      saveOnlyBlock.innerHTML = buildSaveOnlyPreviewBlockHtml(preview.saveOnlyChanges);
-      content.appendChild(saveOnlyBlock);
-    }
-  }
-  modal.classList.add('open');
-}
-function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
-
-// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
-function getUpdatePublisher() {
-  if (_updatePublisher) return _updatePublisher;
-  _updatePublisher = createUpdatePublisher();
-  return _updatePublisher;
-}
-
-function createMenuPublishTransaction() {
-  return {
-    preview(snapshot = buildMenuSessionSnapshot('preview')) {
-      const diff = snapshot.notifyDiff || getCachedDiff();
-      const sections = buildNotificationPreviewSections(diff);
-      const notificationChanges = sections.flatMap(section => section.changes);
-      const saveOnlyChanges = snapshot.saveOnlyChanges || getDraftSaveOnlyChanges();
-      const patchMessage = notificationChanges.length ? buildPatchMessage(sections) : '';
-      const hasLocalDraft = !!snapshot.dirty;
-      const hasSharedDraft = !!snapshot.hasSharedDraft;
-      const mode = (hasLocalDraft || hasSharedDraft) ? 'save' : (notificationChanges.length ? 'update-only' : 'save');
-      return {
-        hasChanges: notificationChanges.length > 0 || saveOnlyChanges.length > 0,
-        hasLocalDraft,
-        hasSharedDraft,
-        hasNotificationChanges: notificationChanges.length > 0,
-        hasSaveOnlyChanges: saveOnlyChanges.length > 0,
-        diff,
-        sections,
-        notificationChanges,
-        saveOnlyChanges,
-        patchMessage,
-        truncated: patchMessage.length > 1000,
-        snapshot,
-        mode,
-      };
-    },
-    async commit(options = {}) {
-      const preview = options.preview?.sections ? options.preview : this.preview(options.snapshot);
-      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
-      const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
-      const selectedSections = groupNotificationChangesBySection(selectedChanges);
-      const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
-      const mode = options.mode || preview.mode;
-      if (!preview.hasChanges) {
-        return {
-          ok: false,
-          noop: true,
-          preview,
-          snapshot: buildMenuSessionSnapshot('publish-noop'),
-        };
-      }
-      const warnings = [];
-      let liveSave = { ok: true, warnings: [], ts: null };
-      if (preview.hasLocalDraft || preview.hasSharedDraft) {
-        liveSave = await commitLiveMenuChanges();
-        if (!liveSave?.ok) {
-          return {
-            ok: false,
-            preview,
-            userHandled: liveSave?.userHandled,
-            snapshot: buildMenuSessionSnapshot('publish-live-save-failed'),
-          };
-        }
-        warnings.push(...(liveSave.warnings || []));
-      }
-      const ts = liveSave?.ts || Date.now();
-
-      const shouldNotify = (mode === 'save-and-update' || mode === 'update-only') && selectedSections.length > 0;
-      let delivery = {
-        ok: true,
-        skipped: !shouldNotify,
-        statusCode: null,
-        summary: summarizeNotificationResults({}),
-      };
-
-      if (shouldNotify) {
-        delivery = await dispatchMenuUpdateNotification({
-          menuId: MENU_ID,
-          patchMessage,
-        });
-      }
-
-      if (shouldNotify && delivery.partial) {
-        warnings.push(...collectNotificationWarnings(delivery.summary));
-        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: dedupePublisherWarnings(warnings),
-          warningMessage: dedupePublisherWarnings(warnings)[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Update still needs attention.`,
-          snapshot: buildMenuSessionSnapshot('send-partial'),
-        };
-      }
-
-      if (shouldNotify && !delivery.ok) {
-        warnings.push(delivery.userMessage || 'Update could not be sent.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: dedupePublisherWarnings(warnings),
-          warningMessage: dedupePublisherWarnings(warnings)[0] || '',
-          successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Update still needs to be sent.`,
-          snapshot: buildMenuSessionSnapshot('send-failed-live-saved'),
-        };
-      }
-
-      if (shouldNotify) warnings.push(...collectNotificationWarnings(delivery.summary));
-
-      if (mode === 'save-and-update' || mode === 'update-only') {
-        const lastSentState = snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = getCurrentFeaturedIds();
-        const restaurantMenuIds = currentUserCanEditRestaurantSpecials(RESTAURANT_ID)
-          ? (getRestaurantSpecialConfig(RESTAURANT_ID)?.menuIds || [])
-          : [];
-        try {
-          const patchResults = await Promise.all([
-            patchMenuMetaWithCompatibility({
-              last_updated_ts: ts,
-              last_sent_ts: ts,
-              last_sent_state: lastSentState,
-              last_sent_categories: preview.diff.map(section => section.id),
-              last_sent_featured: currentFeaturedIds,
-            }),
-            ...restaurantMenuIds
-              .filter(menuId => menuId && menuId !== MENU_ID)
-              .map(menuId => patchMenuMetaForMenuWithCompatibility(menuId, {
-                last_sent_featured: currentFeaturedIds,
-              })),
-          ]);
-          if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
-            warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
-          }
-        } catch (_) {
-          warnings.push('Update delivery finished, but send metadata could not be finalized.');
-          return {
-            ok: true,
-            preview,
-            ts,
-            truncated: preview.truncated,
-            notificationStatus: shouldNotify ? delivery : null,
-            warnings: dedupePublisherWarnings(warnings),
-            warningMessage: dedupePublisherWarnings(warnings)[0] || '',
-            successMessage: `✅ ${_activeMenuName || 'Menu'} saved live. Refresh before sending again.`,
-            snapshot: buildMenuSessionSnapshot('send-metadata-warning'),
-          };
-        }
-
-        _lastSentFeaturedIds = new Set(currentFeaturedIds);
-        applySentState(preview.diff, ts);
-        clearDraftSaveOnlyChanges();
-        _dirty = false;
-        updateSaveBtn();
-        updateLastUpdatedLabel();
-
-        const cacheSynced = syncLocalMenuCache({ silent: true });
-        if (!cacheSynced) {
-          warnings.push('This device could not refresh its local cache after the send.');
-        }
-
-        const logged = patchMessage ? await logUpdate(serializeNotificationSectionsForLog(selectedSections), patchMessage) : true;
-        if (!logged) {
-          warnings.push('The recent-changes audit log could not be written for this send.');
-        }
-      }
-
-      const finalWarnings = dedupePublisherWarnings(warnings);
-      return {
-        ok: true,
-        preview,
-        ts: liveSave?.ts || Date.now(),
-        truncated: preview.truncated,
-        notificationStatus: shouldNotify ? delivery : null,
-        warnings: finalWarnings,
-        warningMessage: finalWarnings[0] || '',
-        successMessage: mode === 'save-and-update' || mode === 'update-only'
-          ? (shouldNotify
-            ? `✅ ${_activeMenuName || 'Menu'} saved and sent!`
-            : `✅ ${_activeMenuName || 'Menu'} update list cleared without notifying channels.`)
-          : `✅ ${_activeMenuName || 'Menu'} saved to the live menu.`,
-        snapshot: buildMenuSessionSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
-      };
-    },
-  };
-}
-
-function createUpdatePublisher() {
-  const transaction = createMenuPublishTransaction();
-  return {
-    preview() {
-      return transaction.preview();
-    },
-    async publish(options = {}) {
-      const preview = options.preview?.sections ? options.preview : transaction.preview(options.snapshot);
-      let mode = options.mode;
-      if (!mode) {
-        if (preview.mode === 'update-only') mode = options.notify === false ? 'save' : 'update-only';
-        else mode = options.notify === false ? 'save' : 'save-and-update';
-      }
-      return transaction.commit({
-        ...options,
-        preview,
-        mode,
-      });
-    },
-  };
-}
-
 function dedupePublisherWarnings(warnings = []) {
   return Array.from(new Set((warnings || []).filter(Boolean)));
 }
@@ -6734,10 +6688,6 @@ async function logUpdate(diff, patchMessage) {
   }
 }
 
-async function _publishActiveMenuUpdateInternal(options = {}) {
-  return getUpdatePublisher().publish(options);
-}
-
 function setPreviewModalActionState(mode = '') {
   const cancelBtn = document.getElementById('cancel-preview-btn');
   const saveMenuBtn = document.getElementById('save-menu-btn');
@@ -6757,7 +6707,7 @@ function setPreviewModalActionState(mode = '') {
 }
 
 async function sendUpdate(options = {}) {
-  const preview = options.preview?.sections ? options.preview : (_previewModalState || getUpdatePublisher().preview());
+  const preview = options.preview?.sections ? options.preview : (_previewModalState || ensureCurrentMenuSession().preview());
   if (!preview.hasChanges) { closeModal(); return; }
 
   if (preview.truncated) {
@@ -6771,7 +6721,7 @@ async function sendUpdate(options = {}) {
   setPreviewModalActionState(mode === 'save' ? 'save-menu' : (mode === 'update-only' ? 'send-update' : 'save-send'));
 
   try {
-    const result = await ensureCurrentMenuSession().sendUpdate({ preview, mode, selectedChangeIds });
+    const result = await ensureCurrentMenuSession().publishUpdate({ preview, mode, selectedChangeIds });
     if (result?.noop) {
       closeModal();
       return;
@@ -7347,32 +7297,8 @@ async function moveFeaturedSlot(groupId, slotId, direction) {
   } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
 }
 
-// ─── FEATURED DAILY CONFIRMATION ─────────────────────────────────────────────
-
-function _needsFeaturedConfirmation() {
-  return getRestaurantSpecialsService().needsConfirmation();
-}
-
-function checkFeaturedConfirmation() {
-  updateManagerActionBar();
-}
-
-async function confirmFeaturedToday() {
-  try {
-    const result = await getRestaurantSpecialsService().confirmToday();
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    updateManagerActionBar();
-    showToast(result.successMessage || 'Specials confirmed for today!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to confirm.', 'error'); }
-}
-
-function editFeaturedFromBanner() {
+function focusFeaturedManagerCard() {
   if (!currentUserCanEditRestaurantSpecials()) return;
-  sessionStorage.setItem(getFeaturedConfirmationKey(), '1');
-  updateManagerActionBar();
   const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
   focusSettingsSection('manager-overview-section', overviewTrigger || null);
   requestAnimationFrame(() => {
