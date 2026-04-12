@@ -134,3 +134,13 @@ Vercel is required for full functionality. Static-only hosting will not support 
 - Use CSS custom properties for new colors in [`style.css`](style.css).
 - Put schema changes in [`supabase/migrations/`](supabase/migrations), not ad hoc dashboard edits.
 - For public page redesigns, update the route files directly. Stitch is the design source, but the route files are the implementation destination.
+
+## Architecture Guardrails
+
+- Ownership map and module labels: [`docs/architecture-ownership-map.md`](docs/architecture-ownership-map.md)
+- Migration plan: [`docs/architecture-file-map-migration-plan.md`](docs/architecture-file-map-migration-plan.md)
+- HTML script-load order check:
+
+```bash
+node scripts/check-html-script-order.cjs
+```

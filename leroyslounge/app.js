@@ -305,12 +305,7 @@
   }
 
   function renderHeaderState(sharedState) {
-    const signInButton = document.querySelector('[data-route-signin]');
     const userChip = document.querySelector('[data-route-user-chip]');
-
-    if (signInButton) {
-      signInButton.style.display = 'none';
-    }
     if (userChip) userChip.style.display = sharedState.currentUser ? '' : 'none';
   }
 
