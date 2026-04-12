@@ -307,12 +307,11 @@
   function renderHeaderState(sharedState) {
     const signInButton = document.querySelector('[data-route-signin]');
     const userChip = document.querySelector('[data-route-user-chip]');
-    const isAuthed = !!sharedState.currentUser;
 
     if (signInButton) {
-      signInButton.style.display = isAuthed ? 'none' : '';
+      signInButton.style.display = 'none';
     }
-    if (userChip) userChip.style.display = isAuthed ? '' : 'none';
+    if (userChip) userChip.style.display = sharedState.currentUser ? '' : 'none';
   }
 
   function addMediaListener(mql, handler) {
@@ -466,6 +465,7 @@
     renderSwapDropdown(contract);
     renderSettingsDropdown(contract);
     bindMenuToggles(contract);
+    window.syncPublicStaffFooterActions?.(sharedState.publicFooter);
     bindMobileHeader(container.querySelector('.ll-board-page'));
 
     return true;
