@@ -39,22 +39,13 @@
         <a class="erc-skip-link" href="#erc-route-main">Skip to menu content</a>
         <header class="erc-topbar">
           <div class="erc-topbar-inner">
-            <div class="erc-brand-group">
+            <a
+              class="erc-brand-group erc-brand-link"
+              href="/"
+              aria-label="Return to the homepage"
+            >
               <h1 class="erc-brand">El Roy's Cantina</h1>
-              <a
-                class="erc-sister-link"
-                href="/leroyslounge"
-                aria-label="Open Leroy's Lounge menu"
-              >
-                <img
-                  class="erc-sister-badge"
-                  src="/assets/el-roys-cantina/cantina-badge.png"
-                  alt="Leroy's Lounge"
-                  width="495"
-                  height="335"
-                />
-              </a>
-            </div>
+            </a>
 
             <nav class="erc-menu-toggle" aria-label="Swap menu">
               <button
@@ -76,6 +67,19 @@
             </nav>
 
             <div class="erc-actions">
+              <a
+                class="erc-sister-link"
+                href="/leroyslounge"
+                aria-label="Open Leroy's Lounge menu"
+              >
+                <img
+                  class="erc-sister-badge"
+                  src="/assets/el-roys-cantina/cantina-badge.png"
+                  alt="Leroy's Lounge"
+                  width="495"
+                  height="335"
+                />
+              </a>
               <button
                 class="erc-login-btn"
                 data-route-signin
@@ -223,6 +227,12 @@
                 >
               </p>
               <p id="erc-route-footer-version" class="erc-footer-version"></p>
+              <div class="erc-footer-actions" data-route-footer-actions>
+                <button class="erc-footer-action" type="button" data-route-footer-signin>Staff Sign-In</button>
+                <button class="erc-footer-action" type="button" data-route-footer-manager style="display:none">Manager</button>
+                <button class="erc-footer-action" type="button" data-route-footer-admin style="display:none">Admin</button>
+                <button class="erc-footer-action" type="button" data-route-footer-signout style="display:none">Sign Out</button>
+              </div>
             </div>
           </div>
         </footer>
@@ -324,6 +334,12 @@
           <footer id="menu-footer">
             <span id="footer-version"></span>
             <span id="footer-last-updated"></span>
+            <div class="public-staff-actions" data-route-staff-actions>
+              <button class="public-staff-action" type="button" data-route-staff-signin>Staff Sign-In</button>
+              <button class="public-staff-action" type="button" data-route-staff-manager style="display:none">Manager</button>
+              <button class="public-staff-action" type="button" data-route-staff-admin style="display:none">Admin</button>
+              <button class="public-staff-action" type="button" data-route-staff-signout style="display:none">Sign Out</button>
+            </div>
           </footer>
         </div>
       </div>

@@ -102,6 +102,11 @@ body.route-restaurant.route-restaurant--elroy {
   min-width: 0;
 }
 
+#restaurant-site-wrapper .erc-brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+
 #restaurant-site-wrapper .erc-brand {
   margin: 0;
   color: var(--erc-primary);
@@ -177,6 +182,12 @@ body.route-restaurant.route-restaurant--elroy {
   align-items: center;
   gap: 0.75rem;
   transition: gap 0.22s ease, transform 0.22s ease;
+}
+
+#restaurant-site-wrapper .erc-brand-link:hover,
+#restaurant-site-wrapper .erc-brand-link:focus-visible {
+  opacity: 0.88;
+  outline: none;
 }
 
 #restaurant-site-wrapper .erc-login-btn,
@@ -576,6 +587,21 @@ body.route-restaurant.route-restaurant--elroy {
   width: min(68%, 14rem);
 }
 
+#restaurant-site-wrapper .erc-page.is-menu-switching .erc-main {
+  cursor: progress;
+}
+
+#restaurant-site-wrapper .erc-page.is-menu-switching .erc-route-switch-section {
+  min-height: 10rem;
+}
+
+#restaurant-site-wrapper .erc-page.is-menu-switching .erc-route-switch-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
 #restaurant-site-wrapper .erc-footer {
   margin-top: auto;
   background:
@@ -638,6 +664,37 @@ body.route-restaurant.route-restaurant--elroy {
   border-color: rgb(122 119 107 / 0.3);
 }
 
+#restaurant-site-wrapper .erc-footer-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+#restaurant-site-wrapper .erc-footer-action {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  color: var(--erc-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 0.22em;
+  padding: 0;
+}
+
+#restaurant-site-wrapper .erc-footer-action:hover,
+#restaurant-site-wrapper .erc-footer-action:focus-visible {
+  color: var(--erc-primary);
+  outline: none;
+}
+
 @keyframes erc-route-boot-sheen {
   from {
     background-position: 200% 0;
@@ -672,6 +729,10 @@ body.route-restaurant.route-restaurant--elroy {
   #restaurant-site-wrapper .erc-timestamp,
   #restaurant-site-wrapper .erc-footer-meta {
     text-align: left;
+  }
+
+  #restaurant-site-wrapper .erc-footer-actions {
+    justify-content: flex-start;
   }
 }
 

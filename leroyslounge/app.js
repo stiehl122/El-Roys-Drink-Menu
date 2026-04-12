@@ -100,10 +100,73 @@
       .filter(menu => menu.restaurantId === restaurantId)
       .sort((a, b) => {
         if (a.type === b.type) return a.name.localeCompare(b.name);
-        if (a.type === 'drinks') return -1;
-        if (b.type === 'drinks') return 1;
+        if (a.type === 'food') return -1;
+        if (b.type === 'food') return 1;
         return a.type.localeCompare(b.type);
       });
+  }
+
+  function buildMenuSwitchPlaceholder() {
+    return `
+      <section class="ll-slat-section ll-route-switch-section" aria-hidden="true">
+        <div class="ll-slat-section-head">
+          <h2 class="ll-slat-section-title">Loading menu</h2>
+        </div>
+        <div class="ll-route-boot-rows ll-route-switch-rows">
+          <span class="ll-route-boot-line ll-route-boot-line--wide"></span>
+          <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
+          <span class="ll-route-boot-line ll-route-boot-line--narrow"></span>
+        </div>
+      </section>
+    `;
+  }
+
+  function setRouteMenuSwitchState(sharedState, targetType) {
+    const page = document.querySelector('.ll-board-page');
+    const main = document.getElementById('ll-route-main');
+    const sections = document.getElementById('ll-route-sections');
+    const targetMenuType = String(targetType || '').toLowerCase();
+
+    if (page) {
+      page.classList.add('is-menu-switching');
+      page.dataset.routeSwitchingMenu = targetMenuType;
+    }
+    if (main) main.setAttribute('aria-busy', 'true');
+    document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
+      const isActive = button.getAttribute('data-route-menu-toggle') === targetMenuType;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+    if (sections) sections.innerHTML = buildMenuSwitchPlaceholder(sharedState);
+  }
+
+  function clearRouteMenuSwitchState() {
+    const page = document.querySelector('.ll-board-page');
+    const main = document.getElementById('ll-route-main');
+    if (page) {
+      page.classList.remove('is-menu-switching');
+      delete page.dataset.routeSwitchingMenu;
+    }
+    if (main) main.removeAttribute('aria-busy');
+  }
+
+  function resetRouteScrollPosition() {
+    const main = document.getElementById('ll-route-main');
+    if (main) main.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+
+  async function switchRouteMenu(contract, menu) {
+    if (!menu?.id) return { ok: false, userHandled: true };
+    setRouteMenuSwitchState(contract.snapshot, menu.type);
+    resetRouteScrollPosition();
+    try {
+      return await contract.actions.switchMenu(menu);
+    } catch (error) {
+      clearRouteMenuSwitchState();
+      renderRoute(contract);
+      throw error;
+    }
   }
 
   function createLegacyRouteActions(sharedState) {
@@ -221,7 +284,7 @@
         const menu = menus.find(entry => entry.id === menuId);
         if (!menu) return;
         contract.actions.closeDropdowns?.();
-        await contract.actions.switchMenu(menu);
+        await switchRouteMenu(contract, menu);
       };
     });
   }
@@ -234,7 +297,7 @@
         const targetType = button.getAttribute('data-route-menu-toggle');
         const menu = menus.find(entry => entry.type === targetType);
         if (!menu || menu.id === sharedState.menuId) return;
-        await contract.actions.switchMenu(menu);
+        await switchRouteMenu(contract, menu);
       };
     });
 
@@ -247,10 +310,7 @@
     const isAuthed = !!sharedState.currentUser;
 
     if (signInButton) {
-      signInButton.disabled = isAuthed;
-      signInButton.setAttribute('aria-hidden', isAuthed ? 'true' : 'false');
-      signInButton.setAttribute('aria-label', isAuthed ? "Leroy's Lounge" : 'Sign in');
-      signInButton.classList.toggle('is-inert', isAuthed);
+      signInButton.style.display = isAuthed ? 'none' : '';
     }
     if (userChip) userChip.style.display = isAuthed ? '' : 'none';
   }
@@ -353,16 +413,7 @@
 
     const categoryWrap = document.getElementById('ll-route-sections');
     if (categoryWrap) {
-      categoryWrap.innerHTML = `
-        <section class="ll-slat-section ll-route-boot-section" aria-hidden="true">
-          <div class="ll-slat-section-head"><h2 class="ll-slat-section-title">On The Board</h2></div>
-          <div class="ll-route-boot-rows">
-            <span class="ll-route-boot-line ll-route-boot-line--wide"></span>
-            <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
-            <span class="ll-route-boot-line ll-route-boot-line--narrow"></span>
-          </div>
-        </section>
-      `;
+      categoryWrap.innerHTML = buildMenuSwitchPlaceholder();
     }
 
     bindMobileHeader(container.querySelector('.ll-board-page'));
@@ -410,6 +461,7 @@
       categoryWrap.innerHTML = categoriesHtml || '<p class="ll-route-empty">Nothing on the menu yet.</p>';
     }
 
+    clearRouteMenuSwitchState();
     renderHeaderState(sharedState);
     renderSwapDropdown(contract);
     renderSettingsDropdown(contract);

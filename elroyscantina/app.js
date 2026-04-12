@@ -93,6 +93,70 @@
       });
   }
 
+  function buildMenuSwitchPlaceholder() {
+    return `
+      <section class="erc-section erc-route-switch-section" aria-hidden="true">
+        <div class="erc-section-head">
+          <h3 class="erc-section-title">Loading menu</h3>
+          <div class="erc-section-line"></div>
+        </div>
+        <div class="erc-route-boot-rows erc-route-switch-rows">
+          <span class="erc-route-boot-line erc-route-boot-line--wide"></span>
+          <span class="erc-route-boot-line erc-route-boot-line--mid"></span>
+          <span class="erc-route-boot-line erc-route-boot-line--narrow"></span>
+        </div>
+      </section>
+    `;
+  }
+
+  function setRouteMenuSwitchState(sharedState, targetType) {
+    const page = document.querySelector('.erc-page');
+    const main = document.getElementById('erc-route-main');
+    const sections = document.getElementById('erc-route-sections');
+    const targetMenuType = String(targetType || '').toLowerCase();
+
+    if (page) {
+      page.classList.add('is-menu-switching');
+      page.dataset.routeSwitchingMenu = targetMenuType;
+    }
+    if (main) main.setAttribute('aria-busy', 'true');
+    document.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
+      const isActive = button.getAttribute('data-route-menu-toggle') === targetMenuType;
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
+    if (sections) sections.innerHTML = buildMenuSwitchPlaceholder(sharedState);
+  }
+
+  function clearRouteMenuSwitchState() {
+    const page = document.querySelector('.erc-page');
+    const main = document.getElementById('erc-route-main');
+    if (page) {
+      page.classList.remove('is-menu-switching');
+      delete page.dataset.routeSwitchingMenu;
+    }
+    if (main) main.removeAttribute('aria-busy');
+  }
+
+  function resetRouteScrollPosition() {
+    const main = document.getElementById('erc-route-main');
+    if (main) main.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }
+
+  async function switchRouteMenu(contract, menu) {
+    if (!menu?.id) return { ok: false, userHandled: true };
+    setRouteMenuSwitchState(contract.snapshot, menu.type);
+    resetRouteScrollPosition();
+    try {
+      return await contract.actions.switchMenu(menu);
+    } catch (error) {
+      clearRouteMenuSwitchState();
+      renderRoute(contract);
+      throw error;
+    }
+  }
+
   function createLegacyRouteActions(sharedState) {
     return {
       closeDropdowns: () => window.closeRouteDropdowns?.(),
@@ -192,7 +256,7 @@
         const targetType = button.getAttribute('data-route-menu-toggle');
         const menu = menus.find(entry => entry.type === targetType);
         if (!menu || menu.id === sharedState.menuId) return;
-        await contract.actions.switchMenu(menu);
+        await switchRouteMenu(contract, menu);
       };
     });
 
@@ -306,19 +370,7 @@
 
     const categoryWrap = document.getElementById('erc-route-sections');
     if (categoryWrap) {
-      categoryWrap.innerHTML = `
-        <section class="erc-section erc-route-boot-section" aria-hidden="true">
-          <div class="erc-section-head">
-            <h3 class="erc-section-title">Preparing The Menu</h3>
-            <div class="erc-section-line"></div>
-          </div>
-          <div class="erc-route-boot-rows">
-            <span class="erc-route-boot-line erc-route-boot-line--wide"></span>
-            <span class="erc-route-boot-line erc-route-boot-line--mid"></span>
-            <span class="erc-route-boot-line erc-route-boot-line--narrow"></span>
-          </div>
-        </section>
-      `;
+      categoryWrap.innerHTML = buildMenuSwitchPlaceholder();
     }
 
     bindMobileHeader(container.querySelector('.erc-page'));
@@ -365,6 +417,7 @@
       categoryWrap.innerHTML = categoriesHtml || '<p class="erc-route-empty">Nothing on the menu yet.</p>';
     }
 
+    clearRouteMenuSwitchState();
     renderHeaderState(sharedState);
     renderSettingsDropdown(contract);
     bindMenuToggles(contract);
