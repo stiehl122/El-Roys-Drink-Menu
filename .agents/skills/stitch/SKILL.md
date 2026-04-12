@@ -158,7 +158,9 @@ Requirements:
 - remove imported scripts
 - link the shared `/style.css`
 - link the route `style.css`
+- link `/core/auth/auth-overlay-unified.css`
 - link the route `app.js`
+- include shared auth module scripts used by entry shells (`/core/auth/auth-api.js`, `/core/auth/auth-session-service.js`, `/core/auth/auth-overlay-template.js`, `/core/auth/auth-overlay-controller.js`)
 - include the site picker at the top, hidden by default
 - include only the shared app shell elements that are still required for auth, modals, toasts, or manager handoff
 - add semantic hooks only where needed for runtime binding, such as:
@@ -270,6 +272,7 @@ Required functionality to preserve:
 Missing-control rule:
 - if a required capability needs a control that Stitch does not include, ask the user before adding it
 - only skip that question when the user already directed the control pattern
+- do not inline auth overlay markup into route HTML; auth overlay source must remain centralized in `core/auth/auth-overlay-template.js`
 
 9. Repository rules.
 

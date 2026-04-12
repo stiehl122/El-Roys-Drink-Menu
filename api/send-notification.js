@@ -1,4 +1,5 @@
 import { authorizeNotificationRequest } from './_notification-gateway.js';
+import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -13,8 +14,13 @@ export default async function handler(req, res) {
   const menu_id = payload.menuId;
   const safeText = payload.text;
 
-  const sbUrl     = process.env.SUPABASE_URL;
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let sbUrl;
+  let sbService;
+  try {
+    ({ sbUrl, sbService } = getSupabaseServerConfig());
+  } catch (error) {
+    return res.status(error?.status || 500).json({ error: error?.message || 'Server misconfigured' });
+  }
 
   // Fetch per-menu enabled flags from menu_meta.notifications
   let notifications = {};
@@ -22,20 +28,20 @@ export default async function handler(req, res) {
   try {
     const r = await fetch(
       `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menu_id}&select=notifications`,
-      { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+      { headers: serviceHeaders({}, sbService) }
     );
     if (r.ok) {
       const [meta] = await r.json();
       notifications = meta?.notifications || {};
     }
-  } catch(e) {}
+  } catch (e) {}
 
   // Look up the restaurant_id for this menu, then fetch per-restaurant env var config
   let notifConfig = {};
   try {
     const menuR = await fetch(
       `${sbUrl}/rest/v1/menus?id=eq.${menu_id}&select=restaurant_id`,
-      { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+      { headers: serviceHeaders({}, sbService) }
     );
     if (menuR.ok) {
       const [menu] = await menuR.json();
@@ -44,14 +50,14 @@ export default async function handler(req, res) {
     if (restaurantId) {
       const restR = await fetch(
         `${sbUrl}/rest/v1/restaurants?id=eq.${restaurantId}&select=notifications_config`,
-        { headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` } }
+        { headers: serviceHeaders({}, sbService) }
       );
       if (restR.ok) {
         const [rest] = await restR.json();
         notifConfig = rest?.notifications_config || {};
       }
     }
-  } catch(e) {}
+  } catch (e) {}
 
   // Helper: resolve an env var key from per-restaurant config, falling back to the global default
   const envVal = (channelKey, field, globalDefault) => {
@@ -67,16 +73,16 @@ export default async function handler(req, res) {
 
   // ── GroupMe ──────────────────────────────────────────────────────────────────
   const gmEnabled = notifications.groupme?.enabled;
-  const gmBotId   = envVal('groupme', 'env_key', 'GROUPME_BOT_ID');
+  const gmBotId = envVal('groupme', 'env_key', 'GROUPME_BOT_ID');
   if (gmEnabled && gmBotId) {
     try {
       const r = await fetch('https://api.groupme.com/v3/bots/post', {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ bot_id: gmBotId, text: safeText }),
+        body: JSON.stringify({ bot_id: gmBotId, text: safeText }),
       });
       results.groupme = (r.ok || r.status === 202) ? 'ok' : `error:${r.status}`;
-    } catch(e) {
+    } catch (e) {
       results.groupme = `error:${e.message}`;
     }
   } else {
@@ -86,10 +92,10 @@ export default async function handler(req, res) {
   // ── Twilio SMS ────────────────────────────────────────────────────────────────
   const smsEnabled = notifications.sms?.enabled;
   if (smsEnabled) {
-    const sid      = envVal('sms', 'env_key_sid',   'TWILIO_ACCOUNT_SID');
-    const authTok  = envVal('sms', 'env_key_token', 'TWILIO_AUTH_TOKEN');
-    const fromNum  = envVal('sms', 'env_key_from',  'TWILIO_FROM_NUMBER');
-    const toNums   = (envVal('sms', 'env_key_to',   'TWILIO_TO_NUMBERS') || '')
+    const sid = envVal('sms', 'env_key_sid', 'TWILIO_ACCOUNT_SID');
+    const authTok = envVal('sms', 'env_key_token', 'TWILIO_AUTH_TOKEN');
+    const fromNum = envVal('sms', 'env_key_from', 'TWILIO_FROM_NUMBER');
+    const toNums = (envVal('sms', 'env_key_to', 'TWILIO_TO_NUMBERS') || '')
       .split(',').map(s => s.trim()).filter(Boolean);
     if (!sid || !authTok || !fromNum) {
       results.sms = 'error:TWILIO env vars not configured';
@@ -97,21 +103,21 @@ export default async function handler(req, res) {
       results.sms = 'error:TWILIO_TO_NUMBERS not configured';
     } else {
       const basicAuth = Buffer.from(`${sid}:${authTok}`).toString('base64');
-      const apiUrl    = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
-      const errors    = [];
+      const apiUrl = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
+      const errors = [];
       for (const to of toNums) {
         try {
           const body = new URLSearchParams({ From: fromNum, To: to, Body: safeText });
           const r = await fetch(apiUrl, {
-            method:  'POST',
+            method: 'POST',
             headers: {
-              'Authorization': `Basic ${basicAuth}`,
-              'Content-Type':  'application/x-www-form-urlencoded',
+              Authorization: `Basic ${basicAuth}`,
+              'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: body.toString(),
           });
           if (!r.ok) errors.push(`${to}:${r.status}`);
-        } catch(e) {
+        } catch (e) {
           errors.push(`${to}:${e.message}`);
         }
       }
@@ -122,17 +128,17 @@ export default async function handler(req, res) {
   }
 
   // ── Discord ───────────────────────────────────────────────────────────────────
-  const discEnabled    = notifications.discord?.enabled;
+  const discEnabled = notifications.discord?.enabled;
   const discWebhookUrl = envVal('discord', 'env_key', 'DISCORD_WEBHOOK_URL');
   if (discEnabled && discWebhookUrl) {
     try {
       const r = await fetch(discWebhookUrl, {
-        method:  'POST',
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ content: safeText }),
+        body: JSON.stringify({ content: safeText }),
       });
       results.discord = r.ok ? 'ok' : `error:${r.status}`;
-    } catch(e) {
+    } catch (e) {
       results.discord = `error:${e.message}`;
     }
   } else {
@@ -141,19 +147,19 @@ export default async function handler(req, res) {
 
   // ── Generic Webhook ───────────────────────────────────────────────────────────
   const whEnabled = notifications.webhook?.enabled;
-  const whUrl     = envVal('webhook', 'env_key_url',    'GENERIC_WEBHOOK_URL');
+  const whUrl = envVal('webhook', 'env_key_url', 'GENERIC_WEBHOOK_URL');
   if (whEnabled && whUrl) {
     try {
       const headers = { 'Content-Type': 'application/json' };
-      const secret  = envVal('webhook', 'env_key_secret', 'GENERIC_WEBHOOK_SECRET');
+      const secret = envVal('webhook', 'env_key_secret', 'GENERIC_WEBHOOK_SECRET');
       if (secret) headers['X-Webhook-Secret'] = secret;
       const r = await fetch(whUrl, {
-        method:  'POST',
+        method: 'POST',
         headers,
-        body:    JSON.stringify({ text: safeText, menu_id }),
+        body: JSON.stringify({ text: safeText, menu_id }),
       });
       results.webhook = r.ok ? 'ok' : `error:${r.status}`;
-    } catch(e) {
+    } catch (e) {
       results.webhook = `error:${e.message}`;
     }
   } else {
@@ -161,14 +167,14 @@ export default async function handler(req, res) {
   }
 
   // 202 = at least one ok or all skipped; 207 = partial; 500 = all enabled channels failed
-  const values     = Object.values(results);
-  const anyOk      = values.some(v => v === 'ok');
+  const values = Object.values(results);
+  const anyOk = values.some(v => v === 'ok');
   const allSkipped = values.every(v => v === 'skipped');
-  const anyError   = values.some(v => v.startsWith('error'));
+  const anyError = values.some(v => v.startsWith('error'));
 
   let status = 202;
   if (!allSkipped && !anyOk && anyError) status = 500;
-  else if (anyOk && anyError)            status = 207;
+  else if (anyOk && anyError) status = 207;
 
   res.status(status).json({ results });
 }

@@ -1,0 +1,30 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const ROOT = path.join(__dirname, '..');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
+
+test('phase 5 shared api transport helper exports config, headers, and response helpers', () => {
+  const source = read('api/_supabase.js');
+  assert.match(source, /export\s+function\s+getSupabaseServerConfig/);
+  assert.match(source, /export\s+function\s+serviceHeaders/);
+  assert.match(source, /export\s+async\s+function\s+readJsonSafe/);
+  assert.match(source, /export\s+function\s+getApiErrorMessage/);
+});
+
+test('api routes consume shared supabase transport helper', () => {
+  const users = read('api/users.js');
+  const specials = read('api/specials.js');
+  const notify = read('api/send-notification.js');
+
+  assert.match(users, /from '\.\/_supabase\.js'/);
+  assert.match(specials, /from '\.\/_supabase\.js'/);
+  assert.match(notify, /from '\.\/_supabase\.js'/);
+  assert.doesNotMatch(specials, /function\s+serviceHeaders\s*\(/);
+  assert.doesNotMatch(specials, /function\s+readJsonSafe\s*\(/);
+});

@@ -1,6 +1,6 @@
 ---
 name: manager-ui-maintainer
-description: Maintain the shared manager and admin UI in `app.js`, `index.html`, and `style.css`. Use when work touches editing flows, categories, featured items, notifications, previews, admin switchers, or save/send behavior across the four fixed menus.
+description: Maintain the shared manager and admin UI in `app.js`, `manager/index.html`, `admin/index.html`, `style.css`, and `core/ui/*`. Use when work touches editing flows, categories, featured items, notifications, previews, admin switchers, or save/send behavior across the four fixed menus.
 ---
 
 # Manager UI Maintainer
@@ -11,7 +11,9 @@ experience.
 ## Ownership
 
 - root `app.js`
-- root `index.html`
+- `core/ui/manager/*` and `core/ui/admin/*`
+- `manager/index.html`
+- `admin/index.html`
 - root `style.css`
 - manager and admin panels, overlays, tabs, and preview flows
 
@@ -41,6 +43,7 @@ experience.
    changing JavaScript assumptions.
 4. Prefer small helper extractions and targeted fixes over broad rewrites.
 5. Reason through all four menus, not just the currently visible one.
+6. Keep auth overlay concerns centralized in `core/auth/*`; do not add manager/admin-only auth markup or styling overrides.
 
 ## Useful Anchors
 
@@ -50,6 +53,8 @@ experience.
 - `sendUpdate()`
 - `loadAdminSwitcherData()`
 - `renderFeaturedAdmin()`
+- `renderManagerWorkspace()`
+- `renderAdminWorkspace()`
 
 ## Output
 

@@ -1,0 +1,62 @@
+/* ── PUBLIC FOOTER ── */
+#menu-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 16px 4px 8px;
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--font-body, sans-serif);
+  gap: 8px;
+}
+#footer-version {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+#footer-last-updated {
+  text-align: right;
+  flex: 1;
+}
+.public-staff-actions {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.public-staff-action {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  padding: 0;
+}
+.public-staff-action:hover,
+.public-staff-action:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+.footer-preview-badge {
+  display: inline-block;
+  background: var(--fire, #e86a3f);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+}

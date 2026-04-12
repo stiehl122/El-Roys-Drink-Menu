@@ -10,8 +10,14 @@ menu permissions.
 
 ## Ownership
 
-- auth and recovery flow in root `app.js`
-- auth wizard markup in root `index.html`
+- auth and recovery orchestration in root `app.js`
+- shared auth module boundaries in `core/auth/*`:
+  - `auth-api.js`
+  - `auth-session-service.js`
+  - `auth-overlay-template.js`
+  - `auth-overlay-controller.js`
+  - `auth-overlay-unified.css`
+- auth script/style includes in entry shells (`index.html`, `manager/index.html`, `admin/index.html`, `leroyslounge/index.html`, `elroyscantina/index.html`)
 - `api/_auth.js`
 - `api/role.js`
 - `api/users.js`
@@ -22,6 +28,7 @@ menu permissions.
 - managers only access assigned menus
 - admins can access all menus
 - `_recoverySessionData` must stay out of `localStorage`
+- do not reintroduce per-shell auth overlay markup or inline auth overlay CSS
 - do not leak tokens, secrets, or role data through logs or storage shortcuts
 
 ## Workflow
@@ -42,6 +49,7 @@ menu permissions.
 - `_tryHandleRecoveryCallback()`
 - `_tryRestoreSession()`
 - `_applySession()`
+- `requestSignIn()`
 - `/api/role`
 - `/api/users`
 - `requireRole()`

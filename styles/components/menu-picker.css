@@ -1,0 +1,30 @@
+/* ─── MENU PICKER OVERLAY ────────────────────────────────────────────────── */
+#menu-picker-overlay { display: none; background: rgba(0,0,0,0.6); position: fixed; inset: 0; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+#menu-picker-overlay.open { display: flex; }
+.picker-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 36px 28px; text-align: center; width: 100%; max-width: 400px; }
+.picker-title { font-family: var(--font-heading); font-size: 22px; letter-spacing: 1px; color: var(--text); margin-bottom: 5px; }
+.picker-subtitle { color: var(--muted); font-size: 12px; margin-bottom: 24px; }
+.picker-menu-list { display: flex; flex-direction: column; gap: 10px; }
+.picker-actions { display: flex; justify-content: center; margin-top: 18px; }
+.picker-close-btn { min-width: 180px; }
+.picker-menu-card { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; font-family: var(--font-body); transition: border-color 0.15s, box-shadow 0.15s; text-align: left; width: 100%; }
+.picker-menu-card:hover, .picker-menu-card:focus { border-color: var(--ember); box-shadow: 0 2px 8px rgba(0,0,0,0.1); outline: none; }
+.picker-menu-name { font-size: 15px; font-weight: 600; color: var(--text); }
+.picker-menu-type { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 5px; padding: 2px 7px; }
+.picker-loading, .picker-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
+
+body.manager-stitch-shell .modal-bg,
+body.manager-stitch-shell #menu-picker-overlay {
+  overscroll-behavior: contain;
+}
+
+/* Menu picker — match manager shell */
+body.manager-stitch-shell .picker-box {
+  background: var(--manager-shell-surface);
+  border-color: var(--manager-shell-border);
+}
+
+body.manager-stitch-shell .picker-title {
+  font-family: 'Noto Serif', serif;
+  color: var(--manager-shell-primary);
+}

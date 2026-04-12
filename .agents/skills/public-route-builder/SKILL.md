@@ -41,7 +41,7 @@ public restaurant routes.
    - featured groups
    - last-updated labels
    - footer version and preview state
-   - auth or manager-entry affordances
+   - auth or manager-entry affordances (footer staff actions first)
 4. Make the smallest route-owned changes that restore both design fidelity and
    live behavior.
 5. Sanity-check mobile and desktop assumptions.
@@ -54,6 +54,8 @@ public restaurant routes.
 - footer `APP_VERSION` output
 - `PREVIEW` badge behavior on preview deployments
 - last-updated output
+- footer staff sign-in/manager/admin/sign-out controls
+- shared auth overlay script/style includes in route shells
 - route fallback behavior
 
 ## Output

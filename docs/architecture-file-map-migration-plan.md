@@ -23,15 +23,47 @@ Constraints preserved:
 - Phase 1: Complete
 - Phase 1.5: Complete
 - Phase 2: Complete
-- Phase 3: In Progress (manager/admin/public UI boundaries established, deeper handler extraction pending)
+- Phase 3: Complete
+- Phase 4: Complete
+- Phase 5: Complete
+- Phase 6: Complete
 
-## Current Hotspots (Baseline)
+## Implemented Module Snapshot
 
-- `app.js` (~8.4k lines): mixed concerns across domain constants, app state, data, auth, routing, manager/admin UI, publishing, notifications.
-- `style.css` (~6.3k lines): shared manager/admin/public styles in one high-churn file.
-- Public route runtime duplication between `leroyslounge/app.js` and `elroyscantina/app.js`.
-- Auth overlay markup duplicated in every entry shell (`/`, route pages, `/manager`, `/admin`) with shared controller logic in `app.js`.
-- Client/server domain IDs duplicated (menu/restaurant constants in `app.js` and `api/_auth.js`).
+- `core/domain/constants.js`
+- `core/domain/category-defaults.js`
+- `core/auth/auth-api.js`
+- `core/auth/auth-session-service.js`
+- `core/auth/auth-overlay-template.js`
+- `core/auth/auth-overlay-controller.js`
+- `core/auth/auth-overlay-unified.css`
+- `core/data/menu-state-loader.js`
+- `core/session/menu-session.js`
+- `core/session/publish-service.js`
+- `core/session/poll-scheduler.js`
+- `core/ui/manager/workspace.js`
+- `core/ui/manager/sections.js`
+- `core/ui/manager/editors.js`
+- `core/ui/admin/workspace.js`
+- `core/ui/admin/switcher.js`
+- `core/ui/public/footer-actions.js`
+- `core/ui/public/renderer-default.js`
+- `routes/shared/public-route-core.js`
+- `api/_supabase.js`
+- `styles/tokens.css`
+- `styles/shared-shell.css`
+- `styles/public-fallback.css`
+- `styles/manager.css`
+- `styles/admin.css`
+- `styles/components/auth-overlay.css`
+- `styles/components/menu-picker.css`
+- `styles/components/toast.css`
+
+## Current Hotspots (Post-Phase-2 Snapshot)
+
+- `app.js` (~9.0k lines): still carries orchestration plus large legacy clusters across routing/UI/data/auth.
+- `style.css` (~5.5k lines): now a compatibility entrypoint with layered imports, but additional manager/admin slices can still move into `styles/`.
+- Route app adapters are now thin wrappers over `routes/shared/public-route-core.js`; renderer markup/theme generation still lives per-route by design.
 
 ## Target File Map
 
@@ -62,12 +94,11 @@ core/
     settings-policy.js       # createSettingsRoutePolicyService
     public-render-coordinator.js
   auth/
-    auth-entrypoint.js       # requestSignIn({ origin, screen, reason, returnTo }) gateway
+    auth-api.js              # sbSignIn/sbSignUp/sbRefresh/sbUpdatePassword/sbGetProfile
+    auth-session-service.js  # createAccessSessionService, _applySession, refresh scheduling
     auth-overlay-template.js # single injected auth overlay markup source
     auth-overlay-controller.js
-    supabase-auth.js         # sbSignIn/sbSignUp/sbRefresh/sbUpdatePassword/sbGetProfile
-    auth-session.js          # createAccessSessionService, _applySession, refresh scheduling
-    auth-ui.js               # compatibility wrappers during migration
+    auth-overlay-unified.css # single shared overlay style source
   ui/
     shell-visibility.js      # showAppShell/showPicker/public shell toggles
     user-header.js           # renderUserHeader/applyRole/user chip/dropdowns
@@ -214,6 +245,7 @@ Expected merge-conflict reduction: medium. Large payoff because many features cu
 6. Replace inline `openAuthOverlay()` handlers with delegated auth triggers (`data-auth-trigger`), all routed to `requestSignIn()`.
 7. Unify API auth boundary by enhancing `api/_auth.js` and making `api/role.js` a thin adapter over shared helpers.
 8. Remove route-specific hard-hiding of topbar sign-in so shared auth visibility policy owns behavior consistently.
+9. Keep public route sign-in entry in footer staff actions; avoid route topbar login duplication.
 
 Boundary tests to add/update in this phase:
 - Auth-required settings flow asserts `requestSignIn()` invocation.
@@ -269,18 +301,20 @@ Expected reduction: medium. Reduces unrelated style merge collisions.
 
 ## Auth Architecture Readiness
 
-- Current readiness for unified sign-in origin: **45-50%**
-- Expected after Phase 1.5 completion: **80-85%**
+- Current readiness for unified sign-in origin: **90-95%** (Phase 1.5 implemented + post-implementation regressions resolved)
+- Remaining risk before “done”: **future shell imports reintroducing inline auth markup/styles**
 
-Primary gaps this phase closes:
-- 5 duplicated auth overlay markup sources
-- inconsistent sign-in entry origins across routes/settings/header/footer
-- duplicated API token/profile verification paths
+What is now in place:
+- one shared auth overlay template (`core/auth/auth-overlay-template.js`) mounted across all five entry shells
+- one shared auth overlay controller/session boundary (`core/auth/auth-overlay-controller.js`, `core/auth/auth-session-service.js`)
+- one shared auth overlay stylesheet (`core/auth/auth-overlay-unified.css`)
+- delegated auth triggers routed through `requestSignIn()`
+- regression tests guarding shell drift and duplicate auth styling ownership
 
 ## Proposed KPIs
 
-- `app.js` reduced from 8.4k lines to <2k orchestrator shim.
+- `app.js` reduced from ~9.0k lines to <2k orchestrator shim.
 - No single runtime module over 800 lines.
 - Average PR touching only one runtime area (session/data OR manager OR admin OR public OR auth).
 - Duplicate public route logic reduced to shared core + thin adapters.
-- Auth entrypoints reduced to one request gateway.
+- Auth entrypoints reduced to one request gateway + one shared overlay template/controller/style source.

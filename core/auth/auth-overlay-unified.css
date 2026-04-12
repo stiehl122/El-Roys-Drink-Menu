@@ -135,6 +135,11 @@ body.admin-console-page .auth-hint-msg {
   border-radius: 8px;
 }
 
+.auth-screen-form {
+  display: block;
+  margin: 0;
+}
+
 .auth-field {
   margin-bottom: 10px;
   text-align: left;
@@ -272,6 +277,17 @@ body.admin-console-page .pin-cancel {
   width: 100%;
   padding: 6px;
   margin-top: 10px;
+}
+
+.auth-link-btn:hover,
+.auth-link-btn:focus-visible,
+.auth-toggle-btn:hover,
+.auth-toggle-btn:focus-visible,
+.auth-back-btn:hover,
+.auth-back-btn:focus-visible,
+.pin-cancel:hover,
+.pin-cancel:focus-visible {
+  color: #1a202c;
 }
 
 .auth-username-assist {

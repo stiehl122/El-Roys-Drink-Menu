@@ -69,8 +69,15 @@ let _authOverlayController = null;
 let _authTriggerDelegated = false;
 const _uiModuleDelegationStack = new Set();
 let _managerWorkspaceService = null;
+let _managerSectionService = null;
+let _managerEditorsService = null;
 let _adminWorkspaceService = null;
+let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
+let _publicRendererService = null;
+const _managerEditorsLegacy = {};
+const _adminSwitcherLegacy = {};
+const _publicRendererLegacy = {};
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -1454,11 +1461,39 @@ function buildManagerWorkspaceModuleDeps() {
   };
 }
 
+function buildManagerSectionModuleDeps() {
+  return {
+    document,
+    editSectionIds: MANAGER_EDIT_SECTION_IDS.slice(),
+    renderManagerCategories: () => renderManagerCategories(),
+    renderPricingSection: () => renderPricingSection(),
+    renderDescriptionSection: () => renderDescriptionSection(),
+  };
+}
+
+function buildManagerEditorsModuleDeps() {
+  return {
+    renderManagerCategories: (...args) => _managerEditorsLegacy.renderManagerCategories?.(...args),
+    renderManagerItems: (...args) => _managerEditorsLegacy.renderManagerItems?.(...args),
+    renderPricingSection: (...args) => _managerEditorsLegacy.renderPricingSection?.(...args),
+    renderDescriptionSection: (...args) => _managerEditorsLegacy.renderDescriptionSection?.(...args),
+  };
+}
+
 function buildAdminWorkspaceModuleDeps() {
   return {
     renderMenusPanel: () => renderMenusPanel(),
     initAdminSwitcherTab: tab => initAdminSwitcherTab(tab),
     loadUsers: () => loadUsers(),
+  };
+}
+
+function buildAdminSwitcherModuleDeps() {
+  return {
+    loadAdminSwitcherData: (...args) => _adminSwitcherLegacy.loadAdminSwitcherData?.(...args),
+    initAdminSwitcherTab: (...args) => _adminSwitcherLegacy.initAdminSwitcherTab?.(...args),
+    onAdminSwitcherRestaurantChange: (...args) => _adminSwitcherLegacy.onAdminSwitcherRestaurantChange?.(...args),
+    onAdminSwitcherMenuChange: (...args) => _adminSwitcherLegacy.onAdminSwitcherMenuChange?.(...args),
   };
 }
 
@@ -1477,12 +1512,35 @@ function buildPublicFooterActionsModuleDeps() {
   };
 }
 
+function buildPublicRendererModuleDeps() {
+  return {
+    renderPublicView: (...args) => _publicRendererLegacy.renderPublicView?.(...args),
+    renderPublicViews: (...args) => _publicRendererLegacy.renderPublicViews?.(...args),
+  };
+}
+
 function getManagerWorkspaceService() {
   if (_managerWorkspaceService) return _managerWorkspaceService;
   const boundary = getUiModuleBoundary();
   if (typeof boundary?.createManagerWorkspaceService !== 'function') return null;
   _managerWorkspaceService = boundary.createManagerWorkspaceService(buildManagerWorkspaceModuleDeps());
   return _managerWorkspaceService;
+}
+
+function getManagerSectionService() {
+  if (_managerSectionService) return _managerSectionService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerSectionService !== 'function') return null;
+  _managerSectionService = boundary.createManagerSectionService(buildManagerSectionModuleDeps());
+  return _managerSectionService;
+}
+
+function getManagerEditorsService() {
+  if (_managerEditorsService) return _managerEditorsService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerEditorsService !== 'function') return null;
+  _managerEditorsService = boundary.createManagerEditorsService(buildManagerEditorsModuleDeps());
+  return _managerEditorsService;
 }
 
 function getAdminWorkspaceService() {
@@ -1493,12 +1551,28 @@ function getAdminWorkspaceService() {
   return _adminWorkspaceService;
 }
 
+function getAdminSwitcherService() {
+  if (_adminSwitcherService) return _adminSwitcherService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createAdminSwitcherService !== 'function') return null;
+  _adminSwitcherService = boundary.createAdminSwitcherService(buildAdminSwitcherModuleDeps());
+  return _adminSwitcherService;
+}
+
 function getPublicFooterActionsService() {
   if (_publicFooterActionsService) return _publicFooterActionsService;
   const boundary = getUiModuleBoundary();
   if (typeof boundary?.createPublicFooterActionsService !== 'function') return null;
   _publicFooterActionsService = boundary.createPublicFooterActionsService(buildPublicFooterActionsModuleDeps());
   return _publicFooterActionsService;
+}
+
+function getPublicRendererService() {
+  if (_publicRendererService) return _publicRendererService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createPublicRendererService !== 'function') return null;
+  _publicRendererService = boundary.createPublicRendererService(buildPublicRendererModuleDeps());
+  return _publicRendererService;
 }
 
 function buildAccessSessionModuleDeps() {
@@ -5326,15 +5400,10 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
   const behavior = options.behavior || 'smooth';
   const shouldScroll = options.scroll !== false;
   // Track active manager section and re-render if stale
-  if (MANAGER_EDIT_SECTION_IDS.includes(sectionId)) {
+  if (isManagerEditSection(sectionId)) {
     _activeManagerSection = sectionId;
     setManagerEditSectionVisibility(sectionId);
-    if (_staleSections.has(sectionId)) {
-      if (sectionId === 'manager-items-section') renderManagerCategories();
-      else if (sectionId === 'manager-pricing-section') renderPricingSection();
-      else if (sectionId === 'manager-description-section') renderDescriptionSection();
-      _staleSections.delete(sectionId);
-    }
+    refreshStaleManagerSection(sectionId);
   }
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
@@ -6398,34 +6467,118 @@ async function _loadAdminTabData(context) {
 
 // ─── MANAGER SECTION TRACKING ────────────────────────────────────────────────
 let _activeManagerSection = 'manager-overview-section';
-let _staleSections = new Set();
 const MANAGER_EDIT_SECTION_IDS = ['manager-items-section', 'manager-pricing-section', 'manager-description-section'];
+let _managerStaleSections = new Set();
 
-function markSectionsStale(except) {
+function markSectionsStaleLegacy(except) {
   MANAGER_EDIT_SECTION_IDS
     .filter(s => s !== except)
     .forEach(sectionId => {
-      _staleSections.add(sectionId);
+      _managerStaleSections.add(sectionId);
       const section = document.getElementById(sectionId);
       if (!section || section.style.display === 'none') return;
       if (sectionId === 'manager-items-section') renderManagerCategories();
       else if (sectionId === 'manager-pricing-section') renderPricingSection();
       else if (sectionId === 'manager-description-section') renderDescriptionSection();
-      _staleSections.delete(sectionId);
+      _managerStaleSections.delete(sectionId);
     });
 }
 
-function setManagerEditSectionVisibility(activeSectionId) {
+function setManagerEditSectionVisibilityLegacy(activeSectionId) {
   MANAGER_EDIT_SECTION_IDS.forEach(sectionId => {
     const section = document.getElementById(sectionId);
     if (section) section.style.display = '';
   });
 }
 
-function renderActiveManagerSection() {
+function renderActiveManagerSectionLegacy() {
   renderManagerCategories();
   renderPricingSection();
   renderDescriptionSection();
+}
+
+function refreshStaleManagerSectionLegacy(sectionId) {
+  if (!_managerStaleSections.has(sectionId)) return false;
+  if (sectionId === 'manager-items-section') renderManagerCategories();
+  else if (sectionId === 'manager-pricing-section') renderPricingSection();
+  else if (sectionId === 'manager-description-section') renderDescriptionSection();
+  _managerStaleSections.delete(sectionId);
+  return true;
+}
+
+function isManagerEditSection(sectionId) {
+  if (!_uiModuleDelegationStack.has('isManagerEditSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.isManagerEditSection === 'function') {
+      _uiModuleDelegationStack.add('isManagerEditSection');
+      try {
+        return service.isManagerEditSection(sectionId);
+      } finally {
+        _uiModuleDelegationStack.delete('isManagerEditSection');
+      }
+    }
+  }
+  return MANAGER_EDIT_SECTION_IDS.includes(sectionId);
+}
+
+function markSectionsStale(except) {
+  if (!_uiModuleDelegationStack.has('markSectionsStale')) {
+    const service = getManagerSectionService();
+    if (typeof service?.markSectionsStale === 'function') {
+      _uiModuleDelegationStack.add('markSectionsStale');
+      try {
+        return service.markSectionsStale(except);
+      } finally {
+        _uiModuleDelegationStack.delete('markSectionsStale');
+      }
+    }
+  }
+  return markSectionsStaleLegacy(except);
+}
+
+function refreshStaleManagerSection(sectionId) {
+  if (!_uiModuleDelegationStack.has('refreshStaleManagerSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.refreshStaleSection === 'function') {
+      _uiModuleDelegationStack.add('refreshStaleManagerSection');
+      try {
+        return service.refreshStaleSection(sectionId);
+      } finally {
+        _uiModuleDelegationStack.delete('refreshStaleManagerSection');
+      }
+    }
+  }
+  return refreshStaleManagerSectionLegacy(sectionId);
+}
+
+function setManagerEditSectionVisibility(activeSectionId) {
+  if (!_uiModuleDelegationStack.has('setManagerEditSectionVisibility')) {
+    const service = getManagerSectionService();
+    if (typeof service?.setManagerEditSectionVisibility === 'function') {
+      _uiModuleDelegationStack.add('setManagerEditSectionVisibility');
+      try {
+        return service.setManagerEditSectionVisibility(activeSectionId);
+      } finally {
+        _uiModuleDelegationStack.delete('setManagerEditSectionVisibility');
+      }
+    }
+  }
+  return setManagerEditSectionVisibilityLegacy(activeSectionId);
+}
+
+function renderActiveManagerSection() {
+  if (!_uiModuleDelegationStack.has('renderActiveManagerSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.renderActiveManagerSection === 'function') {
+      _uiModuleDelegationStack.add('renderActiveManagerSection');
+      try {
+        return service.renderActiveManagerSection();
+      } finally {
+        _uiModuleDelegationStack.delete('renderActiveManagerSection');
+      }
+    }
+  }
+  return renderActiveManagerSectionLegacy();
 }
 
 // ─── MANAGER CATEGORY EDIT (EDIT ITEMS) ─────────────────────────────────────
@@ -9005,5 +9158,178 @@ async function renderMenusPanel() {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
   }
 }
+
+function installDeepUiDelegationShims() {
+  if (!_managerEditorsLegacy.renderManagerCategories) {
+    _managerEditorsLegacy.renderManagerCategories = renderManagerCategories;
+    _managerEditorsLegacy.renderManagerItems = renderManagerItems;
+    _managerEditorsLegacy.renderPricingSection = renderPricingSection;
+    _managerEditorsLegacy.renderDescriptionSection = renderDescriptionSection;
+
+    renderManagerCategories = function delegatedRenderManagerCategories(...args) {
+      if (!_uiModuleDelegationStack.has('renderManagerCategories')) {
+        const service = getManagerEditorsService();
+        if (typeof service?.renderManagerCategories === 'function') {
+          _uiModuleDelegationStack.add('renderManagerCategories');
+          try {
+            return service.renderManagerCategories(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderManagerCategories');
+          }
+        }
+      }
+      return _managerEditorsLegacy.renderManagerCategories(...args);
+    };
+
+    renderManagerItems = function delegatedRenderManagerItems(...args) {
+      if (!_uiModuleDelegationStack.has('renderManagerItems')) {
+        const service = getManagerEditorsService();
+        if (typeof service?.renderManagerItems === 'function') {
+          _uiModuleDelegationStack.add('renderManagerItems');
+          try {
+            return service.renderManagerItems(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderManagerItems');
+          }
+        }
+      }
+      return _managerEditorsLegacy.renderManagerItems(...args);
+    };
+
+    renderPricingSection = function delegatedRenderPricingSection(...args) {
+      if (!_uiModuleDelegationStack.has('renderPricingSection')) {
+        const service = getManagerEditorsService();
+        if (typeof service?.renderPricingSection === 'function') {
+          _uiModuleDelegationStack.add('renderPricingSection');
+          try {
+            return service.renderPricingSection(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderPricingSection');
+          }
+        }
+      }
+      return _managerEditorsLegacy.renderPricingSection(...args);
+    };
+
+    renderDescriptionSection = function delegatedRenderDescriptionSection(...args) {
+      if (!_uiModuleDelegationStack.has('renderDescriptionSection')) {
+        const service = getManagerEditorsService();
+        if (typeof service?.renderDescriptionSection === 'function') {
+          _uiModuleDelegationStack.add('renderDescriptionSection');
+          try {
+            return service.renderDescriptionSection(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderDescriptionSection');
+          }
+        }
+      }
+      return _managerEditorsLegacy.renderDescriptionSection(...args);
+    };
+  }
+
+  if (!_adminSwitcherLegacy.loadAdminSwitcherData) {
+    _adminSwitcherLegacy.loadAdminSwitcherData = loadAdminSwitcherData;
+    _adminSwitcherLegacy.initAdminSwitcherTab = initAdminSwitcherTab;
+    _adminSwitcherLegacy.onAdminSwitcherRestaurantChange = onAdminSwitcherRestaurantChange;
+    _adminSwitcherLegacy.onAdminSwitcherMenuChange = onAdminSwitcherMenuChange;
+
+    loadAdminSwitcherData = async function delegatedLoadAdminSwitcherData(...args) {
+      if (!_uiModuleDelegationStack.has('loadAdminSwitcherData')) {
+        const service = getAdminSwitcherService();
+        if (typeof service?.loadAdminSwitcherData === 'function') {
+          _uiModuleDelegationStack.add('loadAdminSwitcherData');
+          try {
+            return await service.loadAdminSwitcherData(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('loadAdminSwitcherData');
+          }
+        }
+      }
+      return await _adminSwitcherLegacy.loadAdminSwitcherData(...args);
+    };
+
+    initAdminSwitcherTab = async function delegatedInitAdminSwitcherTab(...args) {
+      if (!_uiModuleDelegationStack.has('initAdminSwitcherTab')) {
+        const service = getAdminSwitcherService();
+        if (typeof service?.initAdminSwitcherTab === 'function') {
+          _uiModuleDelegationStack.add('initAdminSwitcherTab');
+          try {
+            return await service.initAdminSwitcherTab(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('initAdminSwitcherTab');
+          }
+        }
+      }
+      return await _adminSwitcherLegacy.initAdminSwitcherTab(...args);
+    };
+
+    onAdminSwitcherRestaurantChange = async function delegatedOnAdminSwitcherRestaurantChange(...args) {
+      if (!_uiModuleDelegationStack.has('onAdminSwitcherRestaurantChange')) {
+        const service = getAdminSwitcherService();
+        if (typeof service?.onAdminSwitcherRestaurantChange === 'function') {
+          _uiModuleDelegationStack.add('onAdminSwitcherRestaurantChange');
+          try {
+            return await service.onAdminSwitcherRestaurantChange(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('onAdminSwitcherRestaurantChange');
+          }
+        }
+      }
+      return await _adminSwitcherLegacy.onAdminSwitcherRestaurantChange(...args);
+    };
+
+    onAdminSwitcherMenuChange = async function delegatedOnAdminSwitcherMenuChange(...args) {
+      if (!_uiModuleDelegationStack.has('onAdminSwitcherMenuChange')) {
+        const service = getAdminSwitcherService();
+        if (typeof service?.onAdminSwitcherMenuChange === 'function') {
+          _uiModuleDelegationStack.add('onAdminSwitcherMenuChange');
+          try {
+            return await service.onAdminSwitcherMenuChange(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('onAdminSwitcherMenuChange');
+          }
+        }
+      }
+      return await _adminSwitcherLegacy.onAdminSwitcherMenuChange(...args);
+    };
+  }
+
+  if (!_publicRendererLegacy.renderPublicView) {
+    _publicRendererLegacy.renderPublicView = renderPublicView;
+    _publicRendererLegacy.renderPublicViews = renderPublicViews;
+
+    renderPublicView = async function delegatedRenderPublicView(...args) {
+      if (!_uiModuleDelegationStack.has('renderPublicView')) {
+        const service = getPublicRendererService();
+        if (typeof service?.renderPublicView === 'function') {
+          _uiModuleDelegationStack.add('renderPublicView');
+          try {
+            return await service.renderPublicView(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderPublicView');
+          }
+        }
+      }
+      return await _publicRendererLegacy.renderPublicView(...args);
+    };
+
+    renderPublicViews = async function delegatedRenderPublicViews(...args) {
+      if (!_uiModuleDelegationStack.has('renderPublicViews')) {
+        const service = getPublicRendererService();
+        if (typeof service?.renderPublicViews === 'function') {
+          _uiModuleDelegationStack.add('renderPublicViews');
+          try {
+            return await service.renderPublicViews(...args);
+          } finally {
+            _uiModuleDelegationStack.delete('renderPublicViews');
+          }
+        }
+      }
+      return await _publicRendererLegacy.renderPublicViews(...args);
+    };
+  }
+}
+
+installDeepUiDelegationShims();
 
 init();

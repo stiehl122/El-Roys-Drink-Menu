@@ -3,27 +3,12 @@ import {
   requireRestaurantSpecialsAccess,
   requireRole,
 } from './_auth.js';
-
-function serviceHeaders(extra = {}) {
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return {
-    apikey: sbService,
-    Authorization: `Bearer ${sbService}`,
-    ...extra,
-  };
-}
-
-async function readJsonSafe(response) {
-  try {
-    return await response.json();
-  } catch (_) {
-    return null;
-  }
-}
-
-function getApiErrorMessage(payload, fallback) {
-  return payload?.error || payload?.message || payload?.hint || payload?.details || fallback;
-}
+import {
+  getApiErrorMessage,
+  getSupabaseServerConfig,
+  readJsonSafe,
+  serviceHeaders,
+} from './_supabase.js';
 
 function isMissingColumnIssue(payload, columnName) {
   const message = `${payload?.error || payload?.message || payload?.hint || payload?.details || ''}`.toLowerCase();
@@ -412,9 +397,12 @@ export default async function handler(req, res) {
     return res.status(e.status).json({ error: e.message });
   }
 
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!sbUrl || !sbService) return res.status(500).json({ error: 'Server misconfigured' });
+  let sbUrl;
+  try {
+    ({ sbUrl } = getSupabaseServerConfig());
+  } catch (error) {
+    return res.status(error?.status || 500).json({ error: error?.message || 'Server misconfigured' });
+  }
 
   const queryAction = typeof req.query?.action === 'string' ? req.query.action : '';
   const { action: bodyAction, direction, itemId, note, restaurantId, slotId } = req.body || {};

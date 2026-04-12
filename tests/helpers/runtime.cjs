@@ -11,12 +11,17 @@ const DEFAULT_RUNTIME_SCRIPTS = [
   'core/auth/auth-overlay-template.js',
   'core/auth/auth-overlay-controller.js',
   'core/ui/manager/workspace.js',
+  'core/ui/manager/sections.js',
+  'core/ui/manager/editors.js',
   'core/ui/admin/workspace.js',
+  'core/ui/admin/switcher.js',
   'core/ui/public/footer-actions.js',
+  'core/ui/public/renderer-default.js',
   'core/session/publish-service.js',
   'core/session/menu-session.js',
   'core/data/menu-state-loader.js',
   'core/session/poll-scheduler.js',
+  'routes/shared/public-route-core.js',
   'app.js',
 ];
 
@@ -96,6 +101,7 @@ function createElement(tagName = 'div', id = '') {
       this.children.push(child);
       return child;
     },
+    remove() {},
     removeChild(child) {
       this.children = this.children.filter(entry => entry !== child);
       return child;

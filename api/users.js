@@ -1,9 +1,14 @@
 import { requireRole } from './_auth.js';
+import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
 
 export default async function handler(req, res) {
-  const sbUrl     = process.env.SUPABASE_URL;
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!sbUrl || !sbService) return res.status(500).json({ error: 'Server misconfigured' });
+  let sbUrl;
+  let sbService;
+  try {
+    ({ sbUrl, sbService } = getSupabaseServerConfig());
+  } catch (error) {
+    return res.status(error?.status || 500).json({ error: error?.message || 'Server misconfigured' });
+  }
 
   let caller;
   try {
@@ -15,21 +20,21 @@ export default async function handler(req, res) {
   if (req.method === 'GET') {
     // Fetch all auth users (for emails)
     const authRes = await fetch(`${sbUrl}/auth/v1/admin/users?per_page=200`, {
-      headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` }
+      headers: serviceHeaders({}, sbService),
     });
     if (!authRes.ok) return res.status(500).json({ error: 'Failed to fetch users' });
     const { users: authUsers } = await authRes.json();
 
     // Fetch all profiles (name + role)
     const profilesRes = await fetch(`${sbUrl}/rest/v1/profiles?select=id,role,name`, {
-      headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` }
+      headers: serviceHeaders({}, sbService),
     });
     if (!profilesRes.ok) return res.status(500).json({ error: 'Failed to fetch profiles' });
     const profiles = await profilesRes.json();
 
     // Fetch all menu_access rows
     const accessRes = await fetch(`${sbUrl}/rest/v1/menu_access?select=user_id,menu_id`, {
-      headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` }
+      headers: serviceHeaders({}, sbService),
     });
     if (!accessRes.ok) return res.status(500).json({ error: 'Failed to fetch menu access' });
     const accessRows = await accessRes.json();
@@ -43,11 +48,11 @@ export default async function handler(req, res) {
     }
 
     const users = (authUsers || []).map(u => ({
-      id:         u.id,
-      email:      u.email,
-      name:       profileMap[u.id]?.name  || '',
-      role:       profileMap[u.id]?.role  || 'none',
-      menuAccess: accessMap[u.id]         || [],
+      id: u.id,
+      email: u.email,
+      name: profileMap[u.id]?.name || '',
+      role: profileMap[u.id]?.role || 'none',
+      menuAccess: accessMap[u.id] || [],
     }));
 
     return res.json(users);
@@ -75,12 +80,10 @@ export default async function handler(req, res) {
     if (Object.keys(profileUpdate).length) {
       const updateRes = await fetch(`${sbUrl}/rest/v1/profiles?id=eq.${userId}`, {
         method: 'PATCH',
-        headers: {
-          'apikey': sbService,
-          'Authorization': `Bearer ${sbService}`,
+        headers: serviceHeaders({
           'Content-Type': 'application/json',
-          'Prefer': 'return=minimal',
-        },
+          Prefer: 'return=minimal',
+        }, sbService),
         body: JSON.stringify(profileUpdate),
       });
       if (!updateRes.ok) return res.status(500).json({ error: 'Failed to update profile' });
@@ -91,7 +94,7 @@ export default async function handler(req, res) {
       // Delete all existing access rows for this user
       const delRes = await fetch(`${sbUrl}/rest/v1/menu_access?user_id=eq.${userId}`, {
         method: 'DELETE',
-        headers: { 'apikey': sbService, 'Authorization': `Bearer ${sbService}` },
+        headers: serviceHeaders({}, sbService),
       });
       if (!delRes.ok) return res.status(500).json({ error: 'Failed to update menu access' });
 
@@ -100,12 +103,10 @@ export default async function handler(req, res) {
         const rows = menuAccess.map(menuId => ({ user_id: userId, menu_id: menuId }));
         const insRes = await fetch(`${sbUrl}/rest/v1/menu_access`, {
           method: 'POST',
-          headers: {
-            'apikey': sbService,
-            'Authorization': `Bearer ${sbService}`,
+          headers: serviceHeaders({
             'Content-Type': 'application/json',
-            'Prefer': 'return=minimal',
-          },
+            Prefer: 'return=minimal',
+          }, sbService),
           body: JSON.stringify(rows),
         });
         if (!insRes.ok) return res.status(500).json({ error: 'Failed to insert menu access' });

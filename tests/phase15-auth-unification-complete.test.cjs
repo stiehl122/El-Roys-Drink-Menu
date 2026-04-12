@@ -128,6 +128,13 @@ test('shared auth overlay stylesheet normalizes manager and admin shell auth vis
   assert.equal(authCss.includes('body.admin-console-page .auth-box'), true, 'auth overlay css must normalize admin shell auth box');
 });
 
+test('style.css no longer owns auth overlay styles after unification', () => {
+  const sharedCss = read('style.css');
+  assert.equal(sharedCss.includes('#auth-overlay'), false, 'style.css should not define auth overlay container styles');
+  assert.equal(sharedCss.includes('.auth-box'), false, 'style.css should not define auth modal box styles');
+  assert.equal(sharedCss.includes('.auth-submit-btn'), false, 'style.css should not define auth submit button styles');
+});
+
 test('route adapters no longer hard-hide route sign-in controls', () => {
   const leroysRoute = read('leroyslounge/app.js');
   const elroysRoute = read('elroyscantina/app.js');

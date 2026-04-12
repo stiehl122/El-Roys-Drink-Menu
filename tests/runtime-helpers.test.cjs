@@ -15,6 +15,7 @@ test('resolveRuntimeScriptPath resolves repo-relative script paths', () => {
 test('loadSandboxWithScripts evaluates runtime files in explicit order', () => {
   const sandbox = loadSandboxWithScripts([
     'app.js',
+    'routes/shared/public-route-core.js',
     'leroyslounge/app.js',
   ]);
   const restaurantId = getState(sandbox, 'window.__publicRouteRenderer?.restaurantId || ""');
