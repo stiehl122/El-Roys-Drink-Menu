@@ -25,19 +25,3 @@ export async function readJsonSafe(response) {
 export function getApiErrorMessage(payload, fallback = 'Server error') {
   return payload?.error || payload?.message || payload?.hint || payload?.details || fallback;
 }
-
-export async function fetchSupabase(pathname, options = {}) {
-  const { sbUrl, sbService } = getSupabaseServerConfig();
-  const url = /^https?:\/\//i.test(pathname || '') ? pathname : `${sbUrl}${pathname}`;
-  const headers = serviceHeaders(options.headers || {}, sbService);
-  return await fetch(url, {
-    ...options,
-    headers,
-  });
-}
-
-export async function fetchSupabaseJson(pathname, options = {}) {
-  const response = await fetchSupabase(pathname, options);
-  const payload = await readJsonSafe(response);
-  return { response, payload };
-}

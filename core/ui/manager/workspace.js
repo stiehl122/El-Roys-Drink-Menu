@@ -133,10 +133,7 @@
     };
   }
 
-  modules.createManagerWorkspaceService = function createManagerWorkspaceServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createManagerWorkspaceService = function createManagerWorkspaceServiceBoundary(deps = {}) {
     return createManagerWorkspaceServiceImpl(deps);
   };
 

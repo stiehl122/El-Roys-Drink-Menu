@@ -3,12 +3,32 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const SHARED_RUNTIME_SCRIPTS = [
+  '/core/domain/constants.js',
+  '/core/domain/category-defaults.js',
+  '/core/auth/auth-api.js',
+  '/core/auth/auth-session-service.js',
+  '/core/auth/auth-overlay-template.js',
+  '/core/auth/auth-overlay-controller.js',
+  '/core/ui/manager/workspace.js',
+  '/core/ui/manager/sections.js',
+  '/core/ui/manager/editors.js',
+  '/core/ui/admin/workspace.js',
+  '/core/ui/admin/switcher.js',
+  '/core/ui/public/footer-actions.js',
+  '/core/ui/public/renderer-default.js',
+  '/core/session/publish-service.js',
+  '/core/session/menu-session.js',
+  '/core/data/menu-state-loader.js',
+  '/core/session/poll-scheduler.js',
+];
+
 const EXPECTED_SCRIPT_ORDER = {
-  'index.html': ['/core/domain/constants.js', '/core/domain/category-defaults.js', '/core/auth/auth-api.js', '/core/auth/auth-session-service.js', '/core/auth/auth-overlay-template.js', '/core/auth/auth-overlay-controller.js', '/core/ui/manager/workspace.js', '/core/ui/manager/sections.js', '/core/ui/manager/editors.js', '/core/ui/admin/workspace.js', '/core/ui/admin/switcher.js', '/core/ui/public/footer-actions.js', '/core/ui/public/renderer-default.js', '/core/session/publish-service.js', '/core/session/menu-session.js', '/core/data/menu-state-loader.js', '/core/session/poll-scheduler.js', '/app.js'],
-  'manager/index.html': ['/core/domain/constants.js', '/core/domain/category-defaults.js', '/core/auth/auth-api.js', '/core/auth/auth-session-service.js', '/core/auth/auth-overlay-template.js', '/core/auth/auth-overlay-controller.js', '/core/ui/manager/workspace.js', '/core/ui/manager/sections.js', '/core/ui/manager/editors.js', '/core/ui/admin/workspace.js', '/core/ui/admin/switcher.js', '/core/ui/public/footer-actions.js', '/core/ui/public/renderer-default.js', '/core/session/publish-service.js', '/core/session/menu-session.js', '/core/data/menu-state-loader.js', '/core/session/poll-scheduler.js', '/app.js'],
-  'admin/index.html': ['/core/domain/constants.js', '/core/domain/category-defaults.js', '/core/auth/auth-api.js', '/core/auth/auth-session-service.js', '/core/auth/auth-overlay-template.js', '/core/auth/auth-overlay-controller.js', '/core/ui/manager/workspace.js', '/core/ui/manager/sections.js', '/core/ui/manager/editors.js', '/core/ui/admin/workspace.js', '/core/ui/admin/switcher.js', '/core/ui/public/footer-actions.js', '/core/ui/public/renderer-default.js', '/core/session/publish-service.js', '/core/session/menu-session.js', '/core/data/menu-state-loader.js', '/core/session/poll-scheduler.js', '/app.js'],
-  'leroyslounge/index.html': ['/core/domain/constants.js', '/core/domain/category-defaults.js', '/core/auth/auth-api.js', '/core/auth/auth-session-service.js', '/core/auth/auth-overlay-template.js', '/core/auth/auth-overlay-controller.js', '/core/ui/manager/workspace.js', '/core/ui/manager/sections.js', '/core/ui/manager/editors.js', '/core/ui/admin/workspace.js', '/core/ui/admin/switcher.js', '/core/ui/public/footer-actions.js', '/core/ui/public/renderer-default.js', '/core/session/publish-service.js', '/core/session/menu-session.js', '/core/data/menu-state-loader.js', '/core/session/poll-scheduler.js', '/routes/shared/public-route-core.js', '/leroyslounge/app.js', '/app.js'],
-  'elroyscantina/index.html': ['/core/domain/constants.js', '/core/domain/category-defaults.js', '/core/auth/auth-api.js', '/core/auth/auth-session-service.js', '/core/auth/auth-overlay-template.js', '/core/auth/auth-overlay-controller.js', '/core/ui/manager/workspace.js', '/core/ui/manager/sections.js', '/core/ui/manager/editors.js', '/core/ui/admin/workspace.js', '/core/ui/admin/switcher.js', '/core/ui/public/footer-actions.js', '/core/ui/public/renderer-default.js', '/core/session/publish-service.js', '/core/session/menu-session.js', '/core/data/menu-state-loader.js', '/core/session/poll-scheduler.js', '/routes/shared/public-route-core.js', '/elroyscantina/app.js', '/app.js'],
+  'index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
+  'manager/index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
+  'admin/index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
+  'leroyslounge/index.html': [...SHARED_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/leroyslounge/app.js', '/app.js'],
+  'elroyscantina/index.html': [...SHARED_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/elroyscantina/app.js', '/app.js'],
 };
 
 function readScriptSources(filePath) {
@@ -21,12 +41,14 @@ function readScriptSources(filePath) {
   return sources;
 }
 
-function sameOrder(actual, expected) {
-  if (actual.length !== expected.length) return false;
-  for (let i = 0; i < expected.length; i += 1) {
-    if (actual[i] !== expected[i]) return false;
+function findOutOfOrderScript(actual, expected) {
+  let cursor = 0;
+  for (const source of expected) {
+    const index = actual.indexOf(source, cursor);
+    if (index === -1) return source;
+    cursor = index + 1;
   }
-  return true;
+  return '';
 }
 
 function run() {
@@ -46,12 +68,14 @@ function run() {
     }
 
     const actualSources = readScriptSources(absolutePath);
-    if (!sameOrder(actualSources, expectedSources)) {
+    const missingOrOutOfOrder = findOutOfOrderScript(actualSources, expectedSources);
+    if (missingOrOutOfOrder) {
       failures.push({
         relativePath,
         reason: 'unexpected-order',
         expectedSources,
         actualSources,
+        missingOrOutOfOrder,
       });
     }
   });
@@ -69,6 +93,7 @@ function run() {
       console.error(`- ${failure.relativePath}`);
       console.error(`  expected: ${failure.expectedSources.join(' -> ')}`);
       console.error(`  actual:   ${failure.actualSources.join(' -> ') || '(none)'}`);
+      console.error(`  first missing/out-of-order script: ${failure.missingOrOutOfOrder}`);
     }
   });
 

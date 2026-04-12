@@ -55,7 +55,7 @@ test('app manager section functions delegate through shared ui module boundary',
           calls.push(['refreshStaleSection', sectionId]);
           return true;
         },
-        setManagerEditSectionVisibility: sectionId => calls.push(['setManagerEditSectionVisibility', sectionId]),
+        setManagerEditSectionVisibility: () => calls.push(['setManagerEditSectionVisibility']),
         renderActiveManagerSection: () => calls.push(['renderActiveManagerSection']),
         isManagerEditSection: sectionId => {
           calls.push(['isManagerEditSection', sectionId]);
@@ -67,7 +67,7 @@ test('app manager section functions delegate through shared ui module boundary',
 
   sandbox.markSectionsStale('manager-overview-section');
   const wasRendered = sandbox.refreshStaleManagerSection('manager-items-section');
-  sandbox.setManagerEditSectionVisibility('manager-items-section');
+  sandbox.setManagerEditSectionVisibility();
   sandbox.renderActiveManagerSection();
   const isEdit = sandbox.isManagerEditSection('manager-items-section');
 
@@ -76,7 +76,7 @@ test('app manager section functions delegate through shared ui module boundary',
   assert.deepEqual(calls, [
     ['markSectionsStale', 'manager-overview-section'],
     ['refreshStaleSection', 'manager-items-section'],
-    ['setManagerEditSectionVisibility', 'manager-items-section'],
+    ['setManagerEditSectionVisibility'],
     ['renderActiveManagerSection'],
     ['isManagerEditSection', 'manager-items-section'],
   ]);

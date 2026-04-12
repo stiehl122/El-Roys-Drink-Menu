@@ -20,14 +20,15 @@ Route rewrites live in [`vercel.json`](vercel.json).
 ## Architecture
 
 - Shared runtime: [`app.js`](app.js) for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
-- Shared styles: [`style.css`](style.css)
+- Shared styles entrypoint: [`style.css`](style.css) layering [`styles/tokens.css`](styles/tokens.css), [`styles/shared-shell.css`](styles/shared-shell.css), [`styles/public-fallback.css`](styles/public-fallback.css), [`styles/components/menu-picker.css`](styles/components/menu-picker.css), [`styles/components/toast.css`](styles/components/toast.css)
 - Shared auth boundary modules: [`core/auth/auth-api.js`](core/auth/auth-api.js), [`core/auth/auth-session-service.js`](core/auth/auth-session-service.js), [`core/auth/auth-overlay-template.js`](core/auth/auth-overlay-template.js), [`core/auth/auth-overlay-controller.js`](core/auth/auth-overlay-controller.js), [`core/auth/auth-overlay-unified.css`](core/auth/auth-overlay-unified.css)
 - Shared domain constants/defaults: [`core/domain/constants.js`](core/domain/constants.js), [`core/domain/category-defaults.js`](core/domain/category-defaults.js)
 - Shared deep session/data modules: [`core/session/menu-session.js`](core/session/menu-session.js), [`core/session/publish-service.js`](core/session/publish-service.js), [`core/session/poll-scheduler.js`](core/session/poll-scheduler.js), [`core/data/menu-state-loader.js`](core/data/menu-state-loader.js)
-- Shared Phase 3 UI boundaries (in progress): [`core/ui/manager/workspace.js`](core/ui/manager/workspace.js), [`core/ui/admin/workspace.js`](core/ui/admin/workspace.js), [`core/ui/public/footer-actions.js`](core/ui/public/footer-actions.js)
+- Shared Phase 3 UI boundaries: [`core/ui/manager/workspace.js`](core/ui/manager/workspace.js), [`core/ui/manager/sections.js`](core/ui/manager/sections.js), [`core/ui/manager/editors.js`](core/ui/manager/editors.js), [`core/ui/admin/workspace.js`](core/ui/admin/workspace.js), [`core/ui/admin/switcher.js`](core/ui/admin/switcher.js), [`core/ui/public/footer-actions.js`](core/ui/public/footer-actions.js), [`core/ui/public/renderer-default.js`](core/ui/public/renderer-default.js)
+- Shared Phase 4 route boundary: [`routes/shared/public-route-core.js`](routes/shared/public-route-core.js)
 - Route-owned public shells: [`leroyslounge/index.html`](leroyslounge/index.html), [`leroyslounge/style.css`](leroyslounge/style.css), [`leroyslounge/app.js`](leroyslounge/app.js), [`elroyscantina/index.html`](elroyscantina/index.html), [`elroyscantina/style.css`](elroyscantina/style.css), [`elroyscantina/app.js`](elroyscantina/app.js)
 - Shared settings shells: [`manager/index.html`](manager/index.html), [`admin/index.html`](admin/index.html)
-- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js)
+- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/specials.js`](api/specials.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js), [`api/_supabase.js`](api/_supabase.js), [`api/_notification-gateway.js`](api/_notification-gateway.js)
 
 Supabase is the source of truth for menus, categories, items, featured groups, history, notification config, and auth-backed access. Local storage is still used for session/cache support, but live menu state is database-backed.
 

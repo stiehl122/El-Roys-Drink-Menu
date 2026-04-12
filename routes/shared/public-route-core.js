@@ -109,56 +109,6 @@
       }
     }
 
-    function createLegacyRouteActions(sharedState) {
-      return {
-        closeDropdowns: () => windowRef.closeRouteDropdowns?.(),
-        openManager: () => windowRef.onActionBtnClick?.(),
-        openAdmin: () => windowRef.onAdminBtnClick?.(),
-        canManageMenu: (menuId, user = sharedState.currentUser) => (
-          typeof windowRef.currentUserCanManageMenu === 'function'
-            ? windowRef.currentUserCanManageMenu(menuId, user)
-            : ((user?.role || 'none') === 'admin')
-        ),
-        switchMenu: async menu => {
-          if (!menu?.id) return { ok: false, userHandled: true };
-          windowRef.selectMenu?.(menu.id, menu.slug, menu.name, menu.type, menu.restaurantId);
-          const targetHref = windowRef.getPublicHrefForCurrentMenu?.();
-          const currentHref = `${windowRef.location.pathname}${windowRef.location.search}`;
-          if (targetHref && targetHref !== currentHref) {
-            windowRef.navigateToPage?.(targetHref);
-            return { ok: true, navigated: true, targetHref };
-          }
-          await windowRef.loadActiveMenuState?.();
-          if (typeof windowRef.applyDesign === 'function' && typeof currentDesign !== 'undefined') {
-            windowRef.applyDesign(currentDesign);
-          }
-          await windowRef.renderPublicViews?.();
-          return { ok: true, navigated: false };
-        },
-      };
-    }
-
-    function resolveRouteContract(contractOrMenuState, legacyState) {
-      if (typeof windowRef.createPublicRouteAdapter === 'function') {
-        return windowRef.createPublicRouteAdapter(contractOrMenuState, legacyState);
-      }
-      if (contractOrMenuState?.snapshot && contractOrMenuState?.actions) return contractOrMenuState;
-      const snapshot = {
-        menuState: contractOrMenuState,
-        ...(legacyState || {}),
-      };
-      return {
-        version: 0,
-        snapshot,
-        helpers: {
-          escHtml: typeof windowRef.escHtml === 'function' ? windowRef.escHtml : esc,
-          formatUpdatedAt: typeof windowRef.formatUpdatedAt === 'function' ? windowRef.formatUpdatedAt : (() => ''),
-          getMenuTypeLabel: typeof windowRef.getMenuTypeLabel === 'function' ? windowRef.getMenuTypeLabel : (value => value || ''),
-        },
-        actions: createLegacyRouteActions(snapshot),
-      };
-    }
-
     function updateToggleState(sharedState) {
       documentRef.querySelectorAll('[data-route-menu-toggle]').forEach(button => {
         const isActive = button.getAttribute('data-route-menu-toggle') === sharedState.menuType;
@@ -339,9 +289,9 @@
       return true;
     }
 
-    function renderRoute(contractOrMenuState, legacyState) {
+    function renderRoute(contract) {
       if (!templateId) return false;
-      const contract = resolveRouteContract(contractOrMenuState, legacyState);
+      if (!contract?.snapshot || !contract?.actions) return false;
       const sharedState = contract.snapshot;
 
       if (typeof adapter.shouldRender === 'function' && adapter.shouldRender(sharedState) === false) {
@@ -412,9 +362,6 @@
     } else {
       windowRef.__pendingPublicRouteRenderer = renderer;
     }
-
-    windowRef.renderRouteBootShell = renderBootShell;
-    windowRef.initializeRoute = renderRoute;
 
     return renderer;
   }

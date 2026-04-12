@@ -35,10 +35,7 @@
     };
   }
 
-  modules.createAdminSwitcherService = function createAdminSwitcherServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createAdminSwitcherService = function createAdminSwitcherServiceBoundary(deps = {}) {
     return createAdminSwitcherServiceImpl(deps);
   };
 

@@ -13,9 +13,10 @@ Each restaurant has two fixed menus, Drinks and Food. Do not generalize this int
 
 - `/` is a site picker only.
 - `/leroyslounge` and `/elroyscantina` are route-owned public pages. Each route ships its own `index.html`, `style.css`, and `app.js`, alongside the shared runtime in `/app.js`.
+- Shared route wiring lives in `routes/shared/public-route-core.js`; route `app.js` files are adapters into that contract.
 - `/manager` and `/admin` are separate HTML shells that load the shared runtime from `/app.js` and shared styles from `/style.css`.
 - `app.js` is the shared runtime for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
-- `style.css` is the shared stylesheet for manager/admin shells and shared public behavior. Restaurant folders layer their own styles on top.
+- `style.css` is a shared compatibility entrypoint that layers `styles/*` for shared manager/admin/public fallback behavior. Restaurant folders layer their own styles on top.
 - Shared auth modules live in `core/auth/*`; all five entry shells load the shared auth template/controller/session scripts.
 - Shared auth overlay visuals live in `core/auth/auth-overlay-unified.css`; do not duplicate auth overlay styles in entry shells.
 - Shared domain constants/defaults live in `core/domain/*` and are consumed by `app.js` and `api/_auth.js`.
@@ -55,7 +56,7 @@ Each restaurant has two fixed menus, Drinks and Food. Do not generalize this int
 
 - No dependencies, no bundler, no build step.
 - Preserve Supabase auth, live polling, database-backed menu state, and per-menu access control.
-- Use CSS custom properties for new colors in `style.css`; avoid hardcoded hex values there.
+- Use CSS custom properties for new colors in `styles/tokens.css` (or shared layered CSS); avoid hardcoded hex values in shared layers.
 - Keep auth overlay markup and base styling centralized (`core/auth/auth-overlay-template.js` + `core/auth/auth-overlay-unified.css`).
 - Keep accessibility intact: dialog behavior, keyboard flows, ARIA states, and live regions.
 - Prefer concise docs over drift-prone line maps or copied constants.

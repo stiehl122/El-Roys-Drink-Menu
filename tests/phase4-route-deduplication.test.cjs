@@ -13,6 +13,10 @@ test('phase 4 shared route core exists and exports a route factory', () => {
   const source = read('routes/shared/public-route-core.js');
   assert.match(source, /createPublicRouteCore/);
   assert.match(source, /__HF_ROUTE_MODULES__/);
+  assert.doesNotMatch(source, /function\s+createLegacyRouteActions\s*\(/);
+  assert.doesNotMatch(source, /function\s+resolveRouteContract\s*\(/);
+  assert.doesNotMatch(source, /windowRef\.initializeRoute\s*=/);
+  assert.doesNotMatch(source, /windowRef\.renderRouteBootShell\s*=/);
 });
 
 test('restaurant route app files are thin adapters over shared route core', () => {
@@ -23,4 +27,10 @@ test('restaurant route app files are thin adapters over shared route core', () =
   assert.match(elroys, /createPublicRouteCore/);
   assert.doesNotMatch(leroys, /function\s+resolveRouteContract\s*\(/);
   assert.doesNotMatch(elroys, /function\s+resolveRouteContract\s*\(/);
+});
+
+test('shared app route handoff no longer relies on legacy route globals', () => {
+  const app = read('app.js');
+  assert.doesNotMatch(app, /window\.initializeRoute/);
+  assert.doesNotMatch(app, /window\.renderRouteBootShell/);
 });

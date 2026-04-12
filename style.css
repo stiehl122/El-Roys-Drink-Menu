@@ -1,9 +1,6 @@
 @import url('/styles/tokens.css');
 @import url('/styles/shared-shell.css');
 @import url('/styles/public-fallback.css');
-@import url('/styles/manager.css');
-@import url('/styles/admin.css');
-@import url('/styles/components/auth-overlay.css');
 @import url('/styles/components/menu-picker.css');
 @import url('/styles/components/toast.css');
 

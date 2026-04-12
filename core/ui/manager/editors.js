@@ -35,10 +35,7 @@
     };
   }
 
-  modules.createManagerEditorsService = function createManagerEditorsServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createManagerEditorsService = function createManagerEditorsServiceBoundary(deps = {}) {
     return createManagerEditorsServiceImpl(deps);
   };
 

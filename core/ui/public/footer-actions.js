@@ -111,10 +111,7 @@
     };
   }
 
-  modules.createPublicFooterActionsService = function createPublicFooterActionsServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createPublicFooterActionsService = function createPublicFooterActionsServiceBoundary(deps = {}) {
     return createPublicFooterActionsServiceImpl(deps);
   };
 

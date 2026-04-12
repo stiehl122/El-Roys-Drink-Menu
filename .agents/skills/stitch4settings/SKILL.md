@@ -4,8 +4,9 @@ description: >
   Import or refresh a Google Stitch design for the shared `/manager` or `/admin`
   settings routes. Treat Stitch as the visual source of truth for the selected
   settings page, rebuild the route shell in `manager/index.html` or
-  `admin/index.html`, and integrate it into the shared `app.js` and `style.css`
-  runtime without breaking auth, role gating, or save-vs-send behavior.
+  `admin/index.html`, and integrate it into the shared `app.js` plus shared
+  style layers (`style.css`/`styles/*`) without breaking auth, role gating, or
+  save-vs-send behavior.
 ---
 
 # Stitch4Settings
@@ -52,7 +53,7 @@ Only these routes are valid:
 
 Supporting shared files:
 - `app.js`
-- `style.css`
+- `style.css` and `styles/*`
 
 Do not use this skill for:
 - `leroyslounge/`
@@ -97,7 +98,7 @@ the removed History tab unless the user explicitly asks for it.
 Every successful run must update the selected settings route and any shared
 files needed to integrate it:
 - `manager/index.html` or `admin/index.html`
-- `style.css` when new shared settings-shell styles are needed
+- `style.css` and/or `styles/*` when new shared settings-shell styles are needed
 - `app.js` when DOM hooks, section targeting, or route-specific guards need adjustment
 
 Do not add dependencies, a build step, or generated framework output.
@@ -234,7 +235,7 @@ Do not change business behavior unless the user asked for it.
 
 8. Integrate into shared styles.
 
-Update `style.css` only as needed to support the imported shell:
+Update shared style layers (`style.css` and/or `styles/*`) only as needed to support the imported shell:
 - use CSS custom properties for any new colors
 - keep changes scoped to settings-route UI
 - avoid leaking route-specific public-menu styling into the settings shell

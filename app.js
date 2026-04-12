@@ -75,9 +75,9 @@ let _adminWorkspaceService = null;
 let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
 let _publicRendererService = null;
-const _managerEditorsLegacy = {};
-const _adminSwitcherLegacy = {};
-const _publicRendererLegacy = {};
+let _managerEditorsBase = null;
+let _adminSwitcherBase = null;
+let _publicRendererBase = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -1472,11 +1472,12 @@ function buildManagerSectionModuleDeps() {
 }
 
 function buildManagerEditorsModuleDeps() {
+  const base = _managerEditorsBase || {};
   return {
-    renderManagerCategories: (...args) => _managerEditorsLegacy.renderManagerCategories?.(...args),
-    renderManagerItems: (...args) => _managerEditorsLegacy.renderManagerItems?.(...args),
-    renderPricingSection: (...args) => _managerEditorsLegacy.renderPricingSection?.(...args),
-    renderDescriptionSection: (...args) => _managerEditorsLegacy.renderDescriptionSection?.(...args),
+    renderManagerCategories: (...args) => (base.renderManagerCategories || renderManagerCategories)(...args),
+    renderManagerItems: (...args) => (base.renderManagerItems || renderManagerItems)(...args),
+    renderPricingSection: (...args) => (base.renderPricingSection || renderPricingSection)(...args),
+    renderDescriptionSection: (...args) => (base.renderDescriptionSection || renderDescriptionSection)(...args),
   };
 }
 
@@ -1489,11 +1490,12 @@ function buildAdminWorkspaceModuleDeps() {
 }
 
 function buildAdminSwitcherModuleDeps() {
+  const base = _adminSwitcherBase || {};
   return {
-    loadAdminSwitcherData: (...args) => _adminSwitcherLegacy.loadAdminSwitcherData?.(...args),
-    initAdminSwitcherTab: (...args) => _adminSwitcherLegacy.initAdminSwitcherTab?.(...args),
-    onAdminSwitcherRestaurantChange: (...args) => _adminSwitcherLegacy.onAdminSwitcherRestaurantChange?.(...args),
-    onAdminSwitcherMenuChange: (...args) => _adminSwitcherLegacy.onAdminSwitcherMenuChange?.(...args),
+    loadAdminSwitcherData: (...args) => (base.loadAdminSwitcherData || loadAdminSwitcherData)(...args),
+    initAdminSwitcherTab: (...args) => (base.initAdminSwitcherTab || initAdminSwitcherTab)(...args),
+    onAdminSwitcherRestaurantChange: (...args) => (base.onAdminSwitcherRestaurantChange || onAdminSwitcherRestaurantChange)(...args),
+    onAdminSwitcherMenuChange: (...args) => (base.onAdminSwitcherMenuChange || onAdminSwitcherMenuChange)(...args),
   };
 }
 
@@ -1513,9 +1515,10 @@ function buildPublicFooterActionsModuleDeps() {
 }
 
 function buildPublicRendererModuleDeps() {
+  const base = _publicRendererBase || {};
   return {
-    renderPublicView: (...args) => _publicRendererLegacy.renderPublicView?.(...args),
-    renderPublicViews: (...args) => _publicRendererLegacy.renderPublicViews?.(...args),
+    renderPublicView: (...args) => (base.renderPublicView || renderPublicView)(...args),
+    renderPublicViews: (...args) => (base.renderPublicViews || renderPublicViews)(...args),
   };
 }
 
@@ -4236,12 +4239,6 @@ function showRouteBootView() {
       _togglePublicShellMode('site');
       return;
     }
-  } else if (typeof window.renderRouteBootShell === 'function') {
-    const didRender = window.renderRouteBootShell();
-    if (didRender !== false) {
-      _togglePublicShellMode('site');
-      return;
-    }
   }
   _togglePublicShellMode('site');
 }
@@ -4959,12 +4956,6 @@ async function _renderCustomDesignView() {
   const renderer = renderIntoSiteWrapper ? getRegisteredPublicRouteRenderer() : null;
   if (renderer?.render) {
     const didRender = renderer.render(routeContract);
-    if (didRender !== false) {
-      _togglePublicShellMode('site');
-      return;
-    }
-  } else if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
-    const didRender = window.initializeRoute(routeContract.snapshot.menuState, routeContract.snapshot);
     if (didRender !== false) {
       _togglePublicShellMode('site');
       return;
@@ -6484,7 +6475,7 @@ function markSectionsStaleLegacy(except) {
     });
 }
 
-function setManagerEditSectionVisibilityLegacy(activeSectionId) {
+function setManagerEditSectionVisibilityLegacy() {
   MANAGER_EDIT_SECTION_IDS.forEach(sectionId => {
     const section = document.getElementById(sectionId);
     if (section) section.style.display = '';
@@ -6551,19 +6542,19 @@ function refreshStaleManagerSection(sectionId) {
   return refreshStaleManagerSectionLegacy(sectionId);
 }
 
-function setManagerEditSectionVisibility(activeSectionId) {
+function setManagerEditSectionVisibility() {
   if (!_uiModuleDelegationStack.has('setManagerEditSectionVisibility')) {
     const service = getManagerSectionService();
     if (typeof service?.setManagerEditSectionVisibility === 'function') {
       _uiModuleDelegationStack.add('setManagerEditSectionVisibility');
       try {
-        return service.setManagerEditSectionVisibility(activeSectionId);
+        return service.setManagerEditSectionVisibility();
       } finally {
         _uiModuleDelegationStack.delete('setManagerEditSectionVisibility');
       }
     }
   }
-  return setManagerEditSectionVisibilityLegacy(activeSectionId);
+  return setManagerEditSectionVisibilityLegacy();
 }
 
 function renderActiveManagerSection() {
@@ -9160,174 +9151,172 @@ async function renderMenusPanel() {
 }
 
 function installDeepUiDelegationShims() {
-  if (!_managerEditorsLegacy.renderManagerCategories) {
-    _managerEditorsLegacy.renderManagerCategories = renderManagerCategories;
-    _managerEditorsLegacy.renderManagerItems = renderManagerItems;
-    _managerEditorsLegacy.renderPricingSection = renderPricingSection;
-    _managerEditorsLegacy.renderDescriptionSection = renderDescriptionSection;
+  _managerEditorsBase = {
+    renderManagerCategories,
+    renderManagerItems,
+    renderPricingSection,
+    renderDescriptionSection,
+  };
+  _adminSwitcherBase = {
+    loadAdminSwitcherData,
+    initAdminSwitcherTab,
+    onAdminSwitcherRestaurantChange,
+    onAdminSwitcherMenuChange,
+  };
+  _publicRendererBase = {
+    renderPublicView,
+    renderPublicViews,
+  };
 
-    renderManagerCategories = function delegatedRenderManagerCategories(...args) {
-      if (!_uiModuleDelegationStack.has('renderManagerCategories')) {
-        const service = getManagerEditorsService();
-        if (typeof service?.renderManagerCategories === 'function') {
-          _uiModuleDelegationStack.add('renderManagerCategories');
-          try {
-            return service.renderManagerCategories(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderManagerCategories');
-          }
+  renderManagerCategories = function delegatedRenderManagerCategories(...args) {
+    if (!_uiModuleDelegationStack.has('renderManagerCategories')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderManagerCategories === 'function') {
+        _uiModuleDelegationStack.add('renderManagerCategories');
+        try {
+          return service.renderManagerCategories(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderManagerCategories');
         }
       }
-      return _managerEditorsLegacy.renderManagerCategories(...args);
-    };
+    }
+    return _managerEditorsBase.renderManagerCategories(...args);
+  };
 
-    renderManagerItems = function delegatedRenderManagerItems(...args) {
-      if (!_uiModuleDelegationStack.has('renderManagerItems')) {
-        const service = getManagerEditorsService();
-        if (typeof service?.renderManagerItems === 'function') {
-          _uiModuleDelegationStack.add('renderManagerItems');
-          try {
-            return service.renderManagerItems(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderManagerItems');
-          }
+  renderManagerItems = function delegatedRenderManagerItems(...args) {
+    if (!_uiModuleDelegationStack.has('renderManagerItems')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderManagerItems === 'function') {
+        _uiModuleDelegationStack.add('renderManagerItems');
+        try {
+          return service.renderManagerItems(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderManagerItems');
         }
       }
-      return _managerEditorsLegacy.renderManagerItems(...args);
-    };
+    }
+    return _managerEditorsBase.renderManagerItems(...args);
+  };
 
-    renderPricingSection = function delegatedRenderPricingSection(...args) {
-      if (!_uiModuleDelegationStack.has('renderPricingSection')) {
-        const service = getManagerEditorsService();
-        if (typeof service?.renderPricingSection === 'function') {
-          _uiModuleDelegationStack.add('renderPricingSection');
-          try {
-            return service.renderPricingSection(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderPricingSection');
-          }
+  renderPricingSection = function delegatedRenderPricingSection(...args) {
+    if (!_uiModuleDelegationStack.has('renderPricingSection')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderPricingSection === 'function') {
+        _uiModuleDelegationStack.add('renderPricingSection');
+        try {
+          return service.renderPricingSection(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPricingSection');
         }
       }
-      return _managerEditorsLegacy.renderPricingSection(...args);
-    };
+    }
+    return _managerEditorsBase.renderPricingSection(...args);
+  };
 
-    renderDescriptionSection = function delegatedRenderDescriptionSection(...args) {
-      if (!_uiModuleDelegationStack.has('renderDescriptionSection')) {
-        const service = getManagerEditorsService();
-        if (typeof service?.renderDescriptionSection === 'function') {
-          _uiModuleDelegationStack.add('renderDescriptionSection');
-          try {
-            return service.renderDescriptionSection(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderDescriptionSection');
-          }
+  renderDescriptionSection = function delegatedRenderDescriptionSection(...args) {
+    if (!_uiModuleDelegationStack.has('renderDescriptionSection')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderDescriptionSection === 'function') {
+        _uiModuleDelegationStack.add('renderDescriptionSection');
+        try {
+          return service.renderDescriptionSection(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderDescriptionSection');
         }
       }
-      return _managerEditorsLegacy.renderDescriptionSection(...args);
-    };
-  }
+    }
+    return _managerEditorsBase.renderDescriptionSection(...args);
+  };
 
-  if (!_adminSwitcherLegacy.loadAdminSwitcherData) {
-    _adminSwitcherLegacy.loadAdminSwitcherData = loadAdminSwitcherData;
-    _adminSwitcherLegacy.initAdminSwitcherTab = initAdminSwitcherTab;
-    _adminSwitcherLegacy.onAdminSwitcherRestaurantChange = onAdminSwitcherRestaurantChange;
-    _adminSwitcherLegacy.onAdminSwitcherMenuChange = onAdminSwitcherMenuChange;
-
-    loadAdminSwitcherData = async function delegatedLoadAdminSwitcherData(...args) {
-      if (!_uiModuleDelegationStack.has('loadAdminSwitcherData')) {
-        const service = getAdminSwitcherService();
-        if (typeof service?.loadAdminSwitcherData === 'function') {
-          _uiModuleDelegationStack.add('loadAdminSwitcherData');
-          try {
-            return await service.loadAdminSwitcherData(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('loadAdminSwitcherData');
-          }
+  loadAdminSwitcherData = async function delegatedLoadAdminSwitcherData(...args) {
+    if (!_uiModuleDelegationStack.has('loadAdminSwitcherData')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.loadAdminSwitcherData === 'function') {
+        _uiModuleDelegationStack.add('loadAdminSwitcherData');
+        try {
+          return await service.loadAdminSwitcherData(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('loadAdminSwitcherData');
         }
       }
-      return await _adminSwitcherLegacy.loadAdminSwitcherData(...args);
-    };
+    }
+    return await _adminSwitcherBase.loadAdminSwitcherData(...args);
+  };
 
-    initAdminSwitcherTab = async function delegatedInitAdminSwitcherTab(...args) {
-      if (!_uiModuleDelegationStack.has('initAdminSwitcherTab')) {
-        const service = getAdminSwitcherService();
-        if (typeof service?.initAdminSwitcherTab === 'function') {
-          _uiModuleDelegationStack.add('initAdminSwitcherTab');
-          try {
-            return await service.initAdminSwitcherTab(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('initAdminSwitcherTab');
-          }
+  initAdminSwitcherTab = async function delegatedInitAdminSwitcherTab(...args) {
+    if (!_uiModuleDelegationStack.has('initAdminSwitcherTab')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.initAdminSwitcherTab === 'function') {
+        _uiModuleDelegationStack.add('initAdminSwitcherTab');
+        try {
+          return await service.initAdminSwitcherTab(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('initAdminSwitcherTab');
         }
       }
-      return await _adminSwitcherLegacy.initAdminSwitcherTab(...args);
-    };
+    }
+    return await _adminSwitcherBase.initAdminSwitcherTab(...args);
+  };
 
-    onAdminSwitcherRestaurantChange = async function delegatedOnAdminSwitcherRestaurantChange(...args) {
-      if (!_uiModuleDelegationStack.has('onAdminSwitcherRestaurantChange')) {
-        const service = getAdminSwitcherService();
-        if (typeof service?.onAdminSwitcherRestaurantChange === 'function') {
-          _uiModuleDelegationStack.add('onAdminSwitcherRestaurantChange');
-          try {
-            return await service.onAdminSwitcherRestaurantChange(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('onAdminSwitcherRestaurantChange');
-          }
+  onAdminSwitcherRestaurantChange = async function delegatedOnAdminSwitcherRestaurantChange(...args) {
+    if (!_uiModuleDelegationStack.has('onAdminSwitcherRestaurantChange')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.onAdminSwitcherRestaurantChange === 'function') {
+        _uiModuleDelegationStack.add('onAdminSwitcherRestaurantChange');
+        try {
+          return await service.onAdminSwitcherRestaurantChange(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('onAdminSwitcherRestaurantChange');
         }
       }
-      return await _adminSwitcherLegacy.onAdminSwitcherRestaurantChange(...args);
-    };
+    }
+    return await _adminSwitcherBase.onAdminSwitcherRestaurantChange(...args);
+  };
 
-    onAdminSwitcherMenuChange = async function delegatedOnAdminSwitcherMenuChange(...args) {
-      if (!_uiModuleDelegationStack.has('onAdminSwitcherMenuChange')) {
-        const service = getAdminSwitcherService();
-        if (typeof service?.onAdminSwitcherMenuChange === 'function') {
-          _uiModuleDelegationStack.add('onAdminSwitcherMenuChange');
-          try {
-            return await service.onAdminSwitcherMenuChange(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('onAdminSwitcherMenuChange');
-          }
+  onAdminSwitcherMenuChange = async function delegatedOnAdminSwitcherMenuChange(...args) {
+    if (!_uiModuleDelegationStack.has('onAdminSwitcherMenuChange')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.onAdminSwitcherMenuChange === 'function') {
+        _uiModuleDelegationStack.add('onAdminSwitcherMenuChange');
+        try {
+          return await service.onAdminSwitcherMenuChange(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('onAdminSwitcherMenuChange');
         }
       }
-      return await _adminSwitcherLegacy.onAdminSwitcherMenuChange(...args);
-    };
-  }
+    }
+    return await _adminSwitcherBase.onAdminSwitcherMenuChange(...args);
+  };
 
-  if (!_publicRendererLegacy.renderPublicView) {
-    _publicRendererLegacy.renderPublicView = renderPublicView;
-    _publicRendererLegacy.renderPublicViews = renderPublicViews;
-
-    renderPublicView = async function delegatedRenderPublicView(...args) {
-      if (!_uiModuleDelegationStack.has('renderPublicView')) {
-        const service = getPublicRendererService();
-        if (typeof service?.renderPublicView === 'function') {
-          _uiModuleDelegationStack.add('renderPublicView');
-          try {
-            return await service.renderPublicView(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderPublicView');
-          }
+  renderPublicView = async function delegatedRenderPublicView(...args) {
+    if (!_uiModuleDelegationStack.has('renderPublicView')) {
+      const service = getPublicRendererService();
+      if (typeof service?.renderPublicView === 'function') {
+        _uiModuleDelegationStack.add('renderPublicView');
+        try {
+          return await service.renderPublicView(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPublicView');
         }
       }
-      return await _publicRendererLegacy.renderPublicView(...args);
-    };
+    }
+    return await _publicRendererBase.renderPublicView(...args);
+  };
 
-    renderPublicViews = async function delegatedRenderPublicViews(...args) {
-      if (!_uiModuleDelegationStack.has('renderPublicViews')) {
-        const service = getPublicRendererService();
-        if (typeof service?.renderPublicViews === 'function') {
-          _uiModuleDelegationStack.add('renderPublicViews');
-          try {
-            return await service.renderPublicViews(...args);
-          } finally {
-            _uiModuleDelegationStack.delete('renderPublicViews');
-          }
+  renderPublicViews = async function delegatedRenderPublicViews(...args) {
+    if (!_uiModuleDelegationStack.has('renderPublicViews')) {
+      const service = getPublicRendererService();
+      if (typeof service?.renderPublicViews === 'function') {
+        _uiModuleDelegationStack.add('renderPublicViews');
+        try {
+          return await service.renderPublicViews(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPublicViews');
         }
       }
-      return await _publicRendererLegacy.renderPublicViews(...args);
-    };
-  }
+    }
+    return await _publicRendererBase.renderPublicViews(...args);
+  };
 }
 
 installDeepUiDelegationShims();

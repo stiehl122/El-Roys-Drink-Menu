@@ -52,7 +52,7 @@
       return true;
     }
 
-    function setManagerEditSectionVisibility(activeSectionId) {
+    function setManagerEditSectionVisibility() {
       editSectionIds.forEach(sectionId => {
         const section = documentRef.getElementById(sectionId);
         if (section) section.style.display = '';
@@ -74,10 +74,7 @@
     };
   }
 
-  modules.createManagerSectionService = function createManagerSectionServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createManagerSectionService = function createManagerSectionServiceBoundary(deps = {}) {
     return createManagerSectionServiceImpl(deps);
   };
 

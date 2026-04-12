@@ -1,6 +1,6 @@
 ---
 name: auth-and-access-guard
-description: Guard authentication, recovery, role enforcement, and per-menu access control. Use when work touches the auth wizard, session restoration, reset-password handling, `api/_auth.js`, `api/role.js`, `api/users.js`, or menu-access bugs.
+description: Guard authentication, recovery, role enforcement, and per-menu access control. Use when work touches the auth wizard, session restoration, reset-password handling, `api/_auth.js`, `api/_supabase.js`, `api/role.js`, `api/users.js`, or menu-access bugs.
 ---
 
 # Auth And Access Guard
@@ -19,6 +19,7 @@ menu permissions.
   - `auth-overlay-unified.css`
 - auth script/style includes in entry shells (`index.html`, `manager/index.html`, `admin/index.html`, `leroyslounge/index.html`, `elroyscantina/index.html`)
 - `api/_auth.js`
+- `api/_supabase.js` for shared transport used by auth-adjacent routes
 - `api/role.js`
 - `api/users.js`
 

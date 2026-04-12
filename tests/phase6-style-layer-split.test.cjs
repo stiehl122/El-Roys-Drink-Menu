@@ -14,9 +14,6 @@ test('phase 6 style layer files exist', () => {
     'styles/tokens.css',
     'styles/shared-shell.css',
     'styles/public-fallback.css',
-    'styles/manager.css',
-    'styles/admin.css',
-    'styles/components/auth-overlay.css',
     'styles/components/menu-picker.css',
     'styles/components/toast.css',
   ];
@@ -31,9 +28,9 @@ test('style.css uses layered imports as compatibility entrypoint', () => {
   assert.match(source, /@import\s+url\('\/styles\/tokens\.css'\);/);
   assert.match(source, /@import\s+url\('\/styles\/shared-shell\.css'\);/);
   assert.match(source, /@import\s+url\('\/styles\/public-fallback\.css'\);/);
-  assert.match(source, /@import\s+url\('\/styles\/manager\.css'\);/);
-  assert.match(source, /@import\s+url\('\/styles\/admin\.css'\);/);
-  assert.match(source, /@import\s+url\('\/styles\/components\/auth-overlay\.css'\);/);
   assert.match(source, /@import\s+url\('\/styles\/components\/menu-picker\.css'\);/);
   assert.match(source, /@import\s+url\('\/styles\/components\/toast\.css'\);/);
+  assert.doesNotMatch(source, /@import\s+url\('\/styles\/manager\.css'\);/);
+  assert.doesNotMatch(source, /@import\s+url\('\/styles\/admin\.css'\);/);
+  assert.doesNotMatch(source, /@import\s+url\('\/styles\/components\/auth-overlay\.css'\);/);
 });

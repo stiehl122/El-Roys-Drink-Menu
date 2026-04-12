@@ -53,19 +53,18 @@ Constraints preserved:
 - `styles/tokens.css`
 - `styles/shared-shell.css`
 - `styles/public-fallback.css`
-- `styles/manager.css`
-- `styles/admin.css`
-- `styles/components/auth-overlay.css`
 - `styles/components/menu-picker.css`
 - `styles/components/toast.css`
 
-## Current Hotspots (Post-Phase-2 Snapshot)
+## Current Hotspots (Post-Phase-6 Snapshot)
 
 - `app.js` (~9.0k lines): still carries orchestration plus large legacy clusters across routing/UI/data/auth.
 - `style.css` (~5.5k lines): now a compatibility entrypoint with layered imports, but additional manager/admin slices can still move into `styles/`.
 - Route app adapters are now thin wrappers over `routes/shared/public-route-core.js`; renderer markup/theme generation still lives per-route by design.
 
-## Target File Map
+## Target File Map (Backlog Direction)
+
+The map below is aspirational and not fully implemented yet. Use "Implemented Module Snapshot" for current ground truth.
 
 ### 1) Shared Runtime Modules
 
@@ -170,10 +169,7 @@ styles/
   tokens.css                 # CSS vars and semantic tokens
   shared-shell.css           # wrapper/loading/auth base and shared controls
   public-fallback.css        # non-route-owned public fallback shell
-  manager.css                # manager settings shell
-  admin.css                  # admin console shell
   components/
-    auth-overlay.css
     menu-picker.css
     toast.css
 ```
@@ -285,7 +281,7 @@ Expected reduction: medium-high. Same fix no longer requires twin route edits.
 ### Phase 5: API Transport Consolidation
 
 1. Add `api/_supabase.js` for headers, fetch wrappers, response parsing, and common error shaping.
-2. Refactor `role.js`, `users.js`, `specials.js`, `send-notification.js` to consume it.
+2. Refactor `users.js`, `specials.js`, and `send-notification.js` to consume it while keeping role auth lookups in `api/_auth.js`.
 3. Preserve `_auth.js` and `_notification-gateway.js` as guard boundaries.
 4. Add API boundary tests for auth + notification gateway + specials edge cases.
 
@@ -301,10 +297,10 @@ Expected reduction: medium. Reduces unrelated style merge collisions.
 
 ## Auth Architecture Readiness
 
-- Current readiness for unified sign-in origin: **90-95%** (Phase 1.5 implemented + post-implementation regressions resolved)
-- Remaining risk before “done”: **future shell imports reintroducing inline auth markup/styles**
+- Unified sign-in origin status: **complete**
+- Remaining risk to monitor: **future shell edits that bypass shared footer staff actions or shared auth overlay includes**
 
-What is now in place:
+What is in place:
 - one shared auth overlay template (`core/auth/auth-overlay-template.js`) mounted across all five entry shells
 - one shared auth overlay controller/session boundary (`core/auth/auth-overlay-controller.js`, `core/auth/auth-session-service.js`)
 - one shared auth overlay stylesheet (`core/auth/auth-overlay-unified.css`)

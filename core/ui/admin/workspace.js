@@ -19,10 +19,7 @@
     };
   }
 
-  modules.createAdminWorkspaceService = function createAdminWorkspaceServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createAdminWorkspaceService = function createAdminWorkspaceServiceBoundary(deps = {}) {
     return createAdminWorkspaceServiceImpl(deps);
   };
 

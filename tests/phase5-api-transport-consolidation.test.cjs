@@ -15,6 +15,8 @@ test('phase 5 shared api transport helper exports config, headers, and response 
   assert.match(source, /export\s+function\s+serviceHeaders/);
   assert.match(source, /export\s+async\s+function\s+readJsonSafe/);
   assert.match(source, /export\s+function\s+getApiErrorMessage/);
+  assert.doesNotMatch(source, /export\s+async\s+function\s+fetchSupabase/);
+  assert.doesNotMatch(source, /export\s+async\s+function\s+fetchSupabaseJson/);
 });
 
 test('api routes consume shared supabase transport helper', () => {
@@ -27,4 +29,6 @@ test('api routes consume shared supabase transport helper', () => {
   assert.match(notify, /from '\.\/_supabase\.js'/);
   assert.doesNotMatch(specials, /function\s+serviceHeaders\s*\(/);
   assert.doesNotMatch(specials, /function\s+readJsonSafe\s*\(/);
+  assert.doesNotMatch(specials, /queryAction/);
+  assert.doesNotMatch(specials, /action\s*===\s*'migrate'/);
 });

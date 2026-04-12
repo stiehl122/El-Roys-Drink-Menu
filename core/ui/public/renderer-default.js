@@ -23,10 +23,7 @@
     };
   }
 
-  modules.createPublicRendererService = function createPublicRendererServiceBoundary(deps = {}, options = {}) {
-    if (options && typeof options.fallback === 'function') {
-      return options.fallback();
-    }
+  modules.createPublicRendererService = function createPublicRendererServiceBoundary(deps = {}) {
     return createPublicRendererServiceImpl(deps);
   };
 
