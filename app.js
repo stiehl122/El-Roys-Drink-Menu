@@ -1666,7 +1666,7 @@ function showPickerPage() {
   if (appShell) appShell.style.display = 'none';
   document.getElementById('auth-overlay')?.classList.remove('open');
   closeMenuPicker({ skipOnClose: true });
-  document.title = 'Choose a Restaurant | Current Menu';
+  document.title = 'Leroy\'s Lounge & El Roy\'s Cantina';
 }
 
 function showAppShell() {
