@@ -3565,6 +3565,8 @@ async function init() {
     await loadSupabaseConfig();
     const handledRecovery = await _tryHandleRecoveryCallback();
     if (!handledRecovery) await _tryRestoreSession();
+    renderUserHeader({ skipPublicRender: true });
+    syncPublicStaffFooterActions();
     return;
   }
   showAppShell();

@@ -1502,6 +1502,12 @@ test('picker init bootstraps shared session state without requiring the app shel
       calls.push('restore');
       return { restored: true };
     },
+    renderUserHeader: () => {
+      calls.push('render-header');
+    },
+    syncPublicStaffFooterActions: () => {
+      calls.push('sync-footer');
+    },
     showAppShell: () => {
       calls.push('shell');
     },
@@ -1509,7 +1515,7 @@ test('picker init bootstraps shared session state without requiring the app shel
 
   await sandbox.init();
 
-  assert.deepEqual(calls, ['picker', 'local-config', 'config', 'recovery', 'restore']);
+  assert.deepEqual(calls, ['picker', 'local-config', 'config', 'recovery', 'restore', 'render-header', 'sync-footer']);
 });
 
 test('menu fallback store keys snapshots by menu identity and menu type', () => {
