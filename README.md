@@ -20,10 +20,15 @@ Route rewrites live in [`vercel.json`](vercel.json).
 ## Architecture
 
 - Shared runtime: [`app.js`](app.js) for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
-- Shared styles: [`style.css`](style.css)
+- Shared styles entrypoint: [`style.css`](style.css) layering [`styles/tokens.css`](styles/tokens.css), [`styles/shared-shell.css`](styles/shared-shell.css), [`styles/public-fallback.css`](styles/public-fallback.css), [`styles/components/menu-picker.css`](styles/components/menu-picker.css), [`styles/components/toast.css`](styles/components/toast.css)
+- Shared auth boundary modules: [`core/auth/auth-api.js`](core/auth/auth-api.js), [`core/auth/auth-session-service.js`](core/auth/auth-session-service.js), [`core/auth/auth-overlay-template.js`](core/auth/auth-overlay-template.js), [`core/auth/auth-overlay-controller.js`](core/auth/auth-overlay-controller.js), [`core/auth/auth-overlay-unified.css`](core/auth/auth-overlay-unified.css)
+- Shared domain constants/defaults: [`core/domain/constants.js`](core/domain/constants.js), [`core/domain/category-defaults.js`](core/domain/category-defaults.js)
+- Shared deep session/data modules: [`core/session/menu-session.js`](core/session/menu-session.js), [`core/session/publish-service.js`](core/session/publish-service.js), [`core/session/poll-scheduler.js`](core/session/poll-scheduler.js), [`core/data/menu-state-loader.js`](core/data/menu-state-loader.js)
+- Shared Phase 3 UI boundaries: [`core/ui/manager/workspace.js`](core/ui/manager/workspace.js), [`core/ui/manager/sections.js`](core/ui/manager/sections.js), [`core/ui/manager/editors.js`](core/ui/manager/editors.js), [`core/ui/admin/workspace.js`](core/ui/admin/workspace.js), [`core/ui/admin/switcher.js`](core/ui/admin/switcher.js), [`core/ui/public/footer-actions.js`](core/ui/public/footer-actions.js), [`core/ui/public/renderer-default.js`](core/ui/public/renderer-default.js)
+- Shared Phase 4 route boundary: [`routes/shared/public-route-core.js`](routes/shared/public-route-core.js)
 - Route-owned public shells: [`leroyslounge/index.html`](leroyslounge/index.html), [`leroyslounge/style.css`](leroyslounge/style.css), [`leroyslounge/app.js`](leroyslounge/app.js), [`elroyscantina/index.html`](elroyscantina/index.html), [`elroyscantina/style.css`](elroyscantina/style.css), [`elroyscantina/app.js`](elroyscantina/app.js)
 - Shared settings shells: [`manager/index.html`](manager/index.html), [`admin/index.html`](admin/index.html)
-- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js)
+- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/specials.js`](api/specials.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js), [`api/_supabase.js`](api/_supabase.js), [`api/_notification-gateway.js`](api/_notification-gateway.js)
 
 Supabase is the source of truth for menus, categories, items, featured groups, history, notification config, and auth-backed access. Local storage is still used for session/cache support, but live menu state is database-backed.
 
@@ -31,7 +36,7 @@ Supabase is the source of truth for menus, categories, items, featured groups, h
 
 This app is intentionally centered on four known menus, not arbitrary multi-restaurant CRUD: Leroy's Lounge Drinks, Leroy's Lounge Food, El Roy's Cantina Drinks, and El Roy's Cantina Food.
 
-The canonical constants live in [`app.js`](app.js) under `RESTAURANTS` and `MENUS`. Legacy `?menu=el-roys` links still normalize to El Roy's Cantina Drinks.
+The canonical constants live in [`core/domain/constants.js`](core/domain/constants.js) and are consumed by both client and API boundaries. Legacy `?menu=el-roys` links still normalize to El Roy's Cantina Drinks.
 
 ## Behaviors To Preserve
 
@@ -70,6 +75,9 @@ Categories stay admin-configurable at runtime. Deleting a category moves its ite
 ## Auth And Access
 
 - Client auth uses Supabase Auth email/password flows.
+- Auth overlay markup and behavior are centralized through `core/auth/*`; entry shells should not inline auth overlay markup.
+- Auth overlay styling is centralized in [`core/auth/auth-overlay-unified.css`](core/auth/auth-overlay-unified.css); shared root [`style.css`](style.css) no longer owns auth overlay styles.
+- Public route staff sign-in entry uses footer staff actions (`data-route-footer-signin` / `data-route-staff-signin`), not route header login buttons.
 - Role and per-menu access checks are enforced through [`api/role.js`](api/role.js) and [`api/users.js`](api/users.js).
 - New accounts start with `role: none`.
 - Managers can edit only their assigned menus.
@@ -132,5 +140,16 @@ Vercel is required for full functionality. Static-only hosting will not support 
 - Keep the app working as plain HTML, CSS, and JavaScript.
 - Preserve Supabase auth, live polling, database-backed menu updates, and per-menu access control.
 - Use CSS custom properties for new colors in [`style.css`](style.css).
+- Do not reintroduce per-shell auth overlay markup/styles; keep auth overlay source in `core/auth/*`.
 - Put schema changes in [`supabase/migrations/`](supabase/migrations), not ad hoc dashboard edits.
 - For public page redesigns, update the route files directly. Stitch is the design source, but the route files are the implementation destination.
+
+## Architecture Guardrails
+
+- Ownership map and module labels: [`docs/architecture-ownership-map.md`](docs/architecture-ownership-map.md)
+- Migration plan: [`docs/architecture-file-map-migration-plan.md`](docs/architecture-file-map-migration-plan.md)
+- HTML script-load order check:
+
+```bash
+node scripts/check-html-script-order.cjs
+```

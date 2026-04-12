@@ -3,27 +3,12 @@ import {
   requireRestaurantSpecialsAccess,
   requireRole,
 } from './_auth.js';
-
-function serviceHeaders(extra = {}) {
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return {
-    apikey: sbService,
-    Authorization: `Bearer ${sbService}`,
-    ...extra,
-  };
-}
-
-async function readJsonSafe(response) {
-  try {
-    return await response.json();
-  } catch (_) {
-    return null;
-  }
-}
-
-function getApiErrorMessage(payload, fallback) {
-  return payload?.error || payload?.message || payload?.hint || payload?.details || fallback;
-}
+import {
+  getApiErrorMessage,
+  getSupabaseServerConfig,
+  readJsonSafe,
+  serviceHeaders,
+} from './_supabase.js';
 
 function isMissingColumnIssue(payload, columnName) {
   const message = `${payload?.error || payload?.message || payload?.hint || payload?.details || ''}`.toLowerCase();
@@ -45,95 +30,6 @@ async function itemBelongsToRestaurantMenus(sbUrl, menuIds, itemId) {
   if (!categoriesRes.ok) throw new Error('Failed to validate special item');
   const categories = await categoriesRes.json();
   return categories.some(category => (category.items || []).some(item => item.id === itemId));
-}
-
-async function fetchLegacyRestaurantSeedRows(sbUrl, menuIds) {
-  const menuGroupsRes = await fetch(
-    `${sbUrl}/rest/v1/menu_featured_groups?menu_id=in.(${menuIds.join(',')})&select=menu_id,display_order,featured_groups(id)&order=display_order.asc`,
-    { headers: serviceHeaders() }
-  );
-  if (!menuGroupsRes.ok) throw new Error('Failed to load legacy specials');
-  const menuGroups = await menuGroupsRes.json();
-  if (!menuGroups.length) return [];
-
-  const groupIds = [...new Set(menuGroups.map(group => group.featured_groups?.id).filter(Boolean))];
-  if (!groupIds.length) return [];
-
-  const slotsRes = await fetch(
-    `${sbUrl}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=featured_group_id,item_id,sell_note,display_order&order=display_order.asc`,
-    { headers: serviceHeaders() }
-  );
-  if (!slotsRes.ok) throw new Error('Failed to load legacy special slots');
-  const slots = await slotsRes.json();
-  const menuIndex = new Map(menuIds.map((menuId, index) => [menuId, index]));
-  const groupIndex = new Map(menuGroups.map(group => [group.featured_groups.id, group]));
-  const seenItemIds = new Set();
-
-  return slots
-    .sort((a, b) => {
-      const groupA = groupIndex.get(a.featured_group_id);
-      const groupB = groupIndex.get(b.featured_group_id);
-      const menuDiff = (menuIndex.get(groupA?.menu_id) || 0) - (menuIndex.get(groupB?.menu_id) || 0);
-      if (menuDiff !== 0) return menuDiff;
-      const groupDiff = (groupA?.display_order || 0) - (groupB?.display_order || 0);
-      if (groupDiff !== 0) return groupDiff;
-      return (a.display_order || 0) - (b.display_order || 0);
-    })
-    .filter(slot => {
-      if (seenItemIds.has(slot.item_id)) return false;
-      seenItemIds.add(slot.item_id);
-      return true;
-    })
-    .map((slot, index) => ({
-      item_id: slot.item_id,
-      sell_note: slot.sell_note || '',
-      display_order: index,
-    }));
-}
-
-async function insertRestaurantSpecialSeedRows(sbUrl, groupId, seedRows) {
-  if (!seedRows.length) return;
-  const insertRes = await fetch(`${sbUrl}/rest/v1/featured_slots`, {
-    method: 'POST',
-    headers: serviceHeaders({
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    }),
-    body: JSON.stringify(seedRows.map(row => ({
-      featured_group_id: groupId,
-      item_id: row.item_id,
-      sell_note: row.sell_note,
-      display_order: row.display_order,
-    }))),
-  });
-  if (!insertRes.ok) throw new Error('Failed to seed specials');
-}
-
-async function migrateRestaurantSpecialGroup(sbUrl, restaurantId) {
-  const config = getRestaurantSpecialConfig(restaurantId);
-  if (!config?.menuIds?.length) return null;
-  const existingGroup = await fetchRestaurantSpecialGroup(sbUrl, restaurantId);
-  const group = existingGroup || await fetchRestaurantSpecialGroup(sbUrl, restaurantId, { createIfMissing: true });
-  if (!group?.id) throw new Error('Failed to resolve specials group');
-
-  const seedRows = await fetchLegacyRestaurantSeedRows(sbUrl, config.menuIds);
-  if (!seedRows.length) return group;
-
-  const existingSlots = await fetchGroupSlots(sbUrl, group.id);
-  const existingItemIds = new Set(existingSlots.map(slot => slot.item_id));
-  const nextDisplayOrder = existingSlots.reduce((maxOrder, slot) => {
-    const displayOrder = Number(slot.display_order);
-    return Number.isFinite(displayOrder) ? Math.max(maxOrder, displayOrder) : maxOrder;
-  }, -1) + 1;
-  const rowsToInsert = seedRows
-    .filter(row => !existingItemIds.has(row.item_id))
-    .map((row, index) => ({
-      ...row,
-      display_order: existingSlots.length ? nextDisplayOrder + index : row.display_order,
-    }));
-
-  await insertRestaurantSpecialSeedRows(sbUrl, group.id, rowsToInsert);
-  return group;
 }
 
 async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
@@ -277,11 +173,6 @@ function createRestaurantSpecialsMutationService({ sbUrl, caller, config }) {
       return { status: group ? 204 : 404 };
     },
 
-    async migrate(restaurantId) {
-      await migrateRestaurantSpecialGroup(sbUrl, restaurantId);
-      return { status: 204 };
-    },
-
     async add({ restaurantId, itemId }) {
       if (!itemId) return { status: 400, body: { error: 'Missing itemId' } };
       if (!(await itemBelongsToRestaurantMenus(sbUrl, config.menuIds, itemId))) {
@@ -412,13 +303,15 @@ export default async function handler(req, res) {
     return res.status(e.status).json({ error: e.message });
   }
 
-  const sbUrl = process.env.SUPABASE_URL;
-  const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!sbUrl || !sbService) return res.status(500).json({ error: 'Server misconfigured' });
+  let sbUrl;
+  try {
+    ({ sbUrl } = getSupabaseServerConfig());
+  } catch (error) {
+    return res.status(error?.status || 500).json({ error: error?.message || 'Server misconfigured' });
+  }
 
-  const queryAction = typeof req.query?.action === 'string' ? req.query.action : '';
   const { action: bodyAction, direction, itemId, note, restaurantId, slotId } = req.body || {};
-  const action = queryAction || bodyAction;
+  const action = bodyAction;
   if (!restaurantId) return res.status(400).json({ error: 'Missing restaurantId' });
   if (!action) return res.status(400).json({ error: 'Missing action' });
 
@@ -434,10 +327,6 @@ export default async function handler(req, res) {
   try {
     if (action === 'ensure') {
       return respondWithServiceResult(res, await service.ensureForRestaurant(restaurantId));
-    }
-
-    if (action === 'migrate') {
-      return respondWithServiceResult(res, await service.migrate(restaurantId));
     }
 
     if (action === 'add') {

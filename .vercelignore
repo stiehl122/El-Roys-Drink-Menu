@@ -1,6 +1,7 @@
 .agents/
 .claude/
 .vercel/
+design-loop/
 docs/
 investigators/
 refactor-issues/
@@ -8,6 +9,12 @@ scripts/
 supabase/
 tests/
 ux-investigation/
+.playwright-cli/
+.playwright-mcp/
+output/
+screenshots/
+*.log
+.DS_Store
 AGENTS.md
 CLAUDE.md
 CLAUDE.local.md

@@ -754,6 +754,35 @@ test('access session service restores sessions and resolves settings access', as
   assert.equal(adminDecision.kind, 'admin-denied');
 });
 
+test('settings auth gate routes unauthenticated users through requestSignIn boundary', async () => {
+  const sandbox = loadAppSandbox({
+    location: {
+      origin: 'https://example.com',
+      protocol: 'https:',
+      hostname: 'example.com',
+      pathname: '/manager',
+      search: '',
+      hash: '',
+      assign() {},
+    },
+  });
+  const signInRequests = [];
+
+  setState(sandbox, {
+    currentUser: null,
+    _appPageMode: 'manager',
+    requestSignIn: options => { signInRequests.push(options || {}); },
+  });
+
+  const service = sandbox.getAccessSessionService();
+  const result = await service.syncRequestedPageMode();
+
+  assert.equal(result.handled, true);
+  assert.equal(result.status, 'auth-required');
+  assert.equal(signInRequests.length, 1);
+  assert.equal(signInRequests[0].screen, 'signin');
+});
+
 test('settings route policy service centralizes manager and admin access decisions', () => {
   const sandbox = loadAppSandbox();
   const service = sandbox.createSettingsRoutePolicyService({
@@ -1719,4 +1748,13 @@ test('notification routes rely on the shared notification gateway authorization 
   assert.match(notifySource, /authorizeNotificationRequest/);
   assert.doesNotMatch(groupmeSource, /requireMenuAccess, requireRole/);
   assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
+});
+
+test('role route relies on shared auth helper boundaries for identity and profile reads', () => {
+  const roleSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'role.js'), 'utf8');
+
+  assert.match(roleSource, /requireAuthenticatedUser/);
+  assert.match(roleSource, /readProfile/);
+  assert.doesNotMatch(roleSource, /auth\/v1\/user/);
+  assert.doesNotMatch(roleSource, /profiles\?id=eq\.\$\{uid\}/);
 });

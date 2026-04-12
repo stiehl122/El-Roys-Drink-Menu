@@ -1,6 +1,29 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const ROOT_DIR = path.join(__dirname, '..', '..');
+const ROOT_APP_PATH = path.join(ROOT_DIR, 'app.js');
+const DEFAULT_RUNTIME_SCRIPTS = [
+  'core/domain/constants.js',
+  'core/domain/category-defaults.js',
+  'core/auth/auth-api.js',
+  'core/auth/auth-session-service.js',
+  'core/auth/auth-overlay-template.js',
+  'core/auth/auth-overlay-controller.js',
+  'core/ui/manager/workspace.js',
+  'core/ui/manager/sections.js',
+  'core/ui/manager/editors.js',
+  'core/ui/admin/workspace.js',
+  'core/ui/admin/switcher.js',
+  'core/ui/public/footer-actions.js',
+  'core/ui/public/renderer-default.js',
+  'core/session/publish-service.js',
+  'core/session/menu-session.js',
+  'core/data/menu-state-loader.js',
+  'core/session/poll-scheduler.js',
+  'routes/shared/public-route-core.js',
+  'app.js',
+];
 
 function createStorage(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -78,6 +101,7 @@ function createElement(tagName = 'div', id = '') {
       this.children.push(child);
       return child;
     },
+    remove() {},
     removeChild(child) {
       this.children = this.children.filter(entry => entry !== child);
       return child;
@@ -311,6 +335,32 @@ function loadScript(filePath, sandbox, options = {}) {
   return sandbox;
 }
 
+function resolveRuntimeScriptPath(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    throw new Error('Script path must be a non-empty string.');
+  }
+  return path.isAbsolute(filePath) ? filePath : path.join(ROOT_DIR, filePath);
+}
+
+function loadScriptsInOrder(scriptPaths = [], sandbox, options = {}) {
+  const { stripInitRootApp = true } = options;
+  if (!sandbox?.__vmContext) {
+    throw new Error('Sandbox must be created before loading scripts.');
+  }
+  if (!Array.isArray(scriptPaths)) {
+    throw new Error('scriptPaths must be an array.');
+  }
+
+  scriptPaths.forEach(scriptPath => {
+    const resolvedPath = resolveRuntimeScriptPath(scriptPath);
+    const shouldStripInit = stripInitRootApp &&
+      path.resolve(resolvedPath) === path.resolve(ROOT_APP_PATH);
+    loadScript(resolvedPath, sandbox, { stripInit: shouldStripInit });
+  });
+
+  return sandbox;
+}
+
 function getState(sandbox, expression) {
   return vm.runInContext(expression, sandbox.__vmContext);
 }
@@ -326,14 +376,17 @@ function setState(sandbox, updates = {}) {
 
 function loadAppSandbox(overrides = {}) {
   const sandbox = createSandbox(overrides);
-  loadScript(path.join(__dirname, '..', '..', 'app.js'), sandbox, { stripInit: true });
-  return sandbox;
+  return loadScriptsInOrder(DEFAULT_RUNTIME_SCRIPTS, sandbox);
 }
 
 function loadRouteSandbox(routePath, overrides = {}) {
-  const sandbox = loadAppSandbox(overrides);
-  loadScript(routePath, sandbox);
-  return sandbox;
+  const sandbox = createSandbox(overrides);
+  return loadScriptsInOrder([...DEFAULT_RUNTIME_SCRIPTS, routePath], sandbox);
+}
+
+function loadSandboxWithScripts(scriptPaths = [], overrides = {}, options = {}) {
+  const sandbox = createSandbox(overrides);
+  return loadScriptsInOrder(scriptPaths, sandbox, options);
 }
 
 module.exports = {
@@ -346,6 +399,9 @@ module.exports = {
   getState,
   loadAppSandbox,
   loadRouteSandbox,
+  loadSandboxWithScripts,
   loadScript,
+  loadScriptsInOrder,
+  resolveRuntimeScriptPath,
   setState,
 };

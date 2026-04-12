@@ -4,8 +4,9 @@ description: >
   Import or refresh a Google Stitch design for the shared `/manager` or `/admin`
   settings routes. Treat Stitch as the visual source of truth for the selected
   settings page, rebuild the route shell in `manager/index.html` or
-  `admin/index.html`, and integrate it into the shared `app.js` and `style.css`
-  runtime without breaking auth, role gating, or save-vs-send behavior.
+  `admin/index.html`, and integrate it into the shared `app.js` plus shared
+  style layers (`style.css`/`styles/*`) without breaking auth, role gating, or
+  save-vs-send behavior.
 ---
 
 # Stitch4Settings
@@ -52,7 +53,7 @@ Only these routes are valid:
 
 Supporting shared files:
 - `app.js`
-- `style.css`
+- `style.css` and `styles/*`
 
 Do not use this skill for:
 - `leroyslounge/`
@@ -76,7 +77,7 @@ The manager route must continue to support:
 - `Recent Changes` for the last 7 days of sent updates
 - database search/filter/prune tools
 - off-menu items tray
-- auth overlay and back-to-menu exit
+- shared auth overlay module wiring and back-to-menu exit
 
 ### Admin
 
@@ -87,7 +88,7 @@ The admin route must continue to support:
 - menu URL save
 - users list and invite flow
 - featured groups management
-- auth overlay and back-to-menu exit
+- shared auth overlay module wiring and back-to-menu exit
 
 The admin route must not regress into a manager editor and must not reintroduce
 the removed History tab unless the user explicitly asks for it.
@@ -97,7 +98,7 @@ the removed History tab unless the user explicitly asks for it.
 Every successful run must update the selected settings route and any shared
 files needed to integrate it:
 - `manager/index.html` or `admin/index.html`
-- `style.css` when new shared settings-shell styles are needed
+- `style.css` and/or `styles/*` when new shared settings-shell styles are needed
 - `app.js` when DOM hooks, section targeting, or route-specific guards need adjustment
 
 Do not add dependencies, a build step, or generated framework output.
@@ -210,7 +211,7 @@ minimum missing UI in the same design language.
 
 Requirements:
 - manager-only shell; no admin-only sections
-- include auth overlay and send-preview modal
+- include shared auth module/style includes (do not inline auth overlay markup) and send-preview modal
 - keep public/menu-view handoff elements required by shared runtime
 - prefer section-based or rail-based workspace navigation over generic tab markup
 
@@ -218,7 +219,7 @@ Requirements:
 
 Requirements:
 - admin-only shell; no manager-editing sections
-- include auth overlay and invite modal
+- include shared auth module/style includes (do not inline auth overlay markup) and invite modal
 - keep public/menu-view handoff elements required by shared runtime
 - preserve restaurants, notifications, users, and featured sections only
 
@@ -234,7 +235,7 @@ Do not change business behavior unless the user asked for it.
 
 8. Integrate into shared styles.
 
-Update `style.css` only as needed to support the imported shell:
+Update shared style layers (`style.css` and/or `styles/*`) only as needed to support the imported shell:
 - use CSS custom properties for any new colors
 - keep changes scoped to settings-route UI
 - avoid leaking route-specific public-menu styling into the settings shell

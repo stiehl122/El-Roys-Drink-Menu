@@ -1,15 +1,11 @@
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const APP_VERSION = 'v0.8.8';
-const RESTAURANTS = {
-  LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
-  ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
-};
-const MENUS = {
-  LEROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000020', restaurantId: RESTAURANTS.LEROYS.id, type: 'drinks', slug: 'leroys-lounge-drinks', name: "Leroy's Lounge Drinks" },
-  LEROYS_FOOD: { id: '00000000-0000-0000-0000-000000000021', restaurantId: RESTAURANTS.LEROYS.id, type: 'food', slug: 'leroys-lounge-food', name: "Leroy's Lounge Food" },
-  ELROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000002', restaurantId: RESTAURANTS.ELROYS.id, type: 'drinks', slug: 'el-roys-cantina-drinks', name: "El Roy's Cantina Drinks" },
-  ELROYS_FOOD: { id: '00000000-0000-0000-0000-000000000003', restaurantId: RESTAURANTS.ELROYS.id, type: 'food', slug: 'el-roys-cantina-food', name: "El Roy's Cantina Food" },
-};
+const FALLBACK_DOMAIN_CONSTANTS = buildFallbackDomainConstants();
+const DOMAIN_CONSTANTS = (globalThis.__HF_DOMAIN_CONSTANTS__ && typeof globalThis.__HF_DOMAIN_CONSTANTS__ === 'object')
+  ? globalThis.__HF_DOMAIN_CONSTANTS__
+  : FALLBACK_DOMAIN_CONSTANTS;
+const APP_VERSION = DOMAIN_CONSTANTS.APP_VERSION || FALLBACK_DOMAIN_CONSTANTS.APP_VERSION;
+const RESTAURANTS = DOMAIN_CONSTANTS.RESTAURANTS || FALLBACK_DOMAIN_CONSTANTS.RESTAURANTS;
+const MENUS = DOMAIN_CONSTANTS.MENUS || FALLBACK_DOMAIN_CONSTANTS.MENUS;
 const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
@@ -67,6 +63,21 @@ let _menuPollScheduler = null;
 let _menuFallbackStore = null;
 let _menuLinkResolver = null;
 let _featuredViewPolicy = null;
+const _sessionModuleDelegationStack = new Set();
+const _authModuleDelegationStack = new Set();
+let _authOverlayController = null;
+let _authTriggerDelegated = false;
+const _uiModuleDelegationStack = new Set();
+let _managerWorkspaceService = null;
+let _managerSectionService = null;
+let _managerEditorsService = null;
+let _adminWorkspaceService = null;
+let _adminSwitcherService = null;
+let _publicFooterActionsService = null;
+let _publicRendererService = null;
+let _managerEditorsBase = null;
+let _adminSwitcherBase = null;
+let _publicRendererBase = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -75,7 +86,7 @@ let _restaurantSpecialsCatalogKey = '';
 let _restaurantSpecialsCatalogPromise = null;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
-const ICON_COLOR_PALETTE = [
+const FALLBACK_ICON_COLOR_PALETTE = [
   'rgba(245,210,66,0.22)',
   'rgba(18,133,120,0.15)',
   'rgba(100,180,255,0.18)',
@@ -85,57 +96,100 @@ const ICON_COLOR_PALETTE = [
   'rgba(255,150,100,0.18)',
   'rgba(100,200,220,0.18)',
 ];
-
-const DEFAULT_CATEGORY_DEFS = [
-  { id:'beer',      icon:'🍺', color:ICON_COLOR_PALETTE[0], title:'Beers on Tap',    sub:'Current draft offerings',         placeholder:'e.g. Modelo Especial...' },
-  { id:'canned',    icon:'🍻', color:ICON_COLOR_PALETTE[4], title:'Canned & Bottled', sub:'Canned & bottled offerings',     placeholder:'e.g. Modelo Especial (can), Topo Chico...' },
-  { id:'cocktails', icon:'🍹', color:ICON_COLOR_PALETTE[5], title:'Cocktails',        sub:'Craft cocktail offerings',       placeholder:'e.g. Paloma, Spicy Margarita...' },
-  { id:'tequila',   icon:'🌶️', color:ICON_COLOR_PALETTE[1], title:'Infused Tequila',  sub:'Rotating infused marg tequila',  placeholder:'e.g. Jalapeño-Pineapple Blanco...' },
-  { id:'frozen',    icon:'🧊', color:ICON_COLOR_PALETTE[2], title:'Frozen Marg',      sub:'Current frozen margarita flavor',placeholder:'e.g. Strawberry Basil...' },
-  { id:'special',   icon:'⭐', color:ICON_COLOR_PALETTE[3], title:'Monthly Specials', sub:'Featured cocktails & promos',   placeholder:'e.g. The Valentina — raspberry, grapefruit...' },
-];
-
-const DEFAULT_FOOD_CATEGORY_DEFS = [
-  { key: 'starters', label: '🥗 Starters', icon: '🥗', color: ICON_COLOR_PALETTE[4], sub: '', placeholder: 'e.g. Chips & Salsa...' },
-  { key: 'tacos',    label: '🌮 Tacos',     icon: '🌮', color: ICON_COLOR_PALETTE[0], sub: '', placeholder: 'e.g. Al Pastor...'    },
-  { key: 'entrees',  label: '🍽 Entrees',   icon: '🍽', color: ICON_COLOR_PALETTE[1], sub: '', placeholder: 'e.g. Enchiladas...'   },
-  { key: 'sides',    label: '🫘 Sides',     icon: '🫘', color: ICON_COLOR_PALETTE[2], sub: '', placeholder: 'e.g. Mexican Rice...' },
-  { key: 'desserts', label: '🍮 Desserts',  icon: '🍮', color: ICON_COLOR_PALETTE[3], sub: '', placeholder: 'e.g. Flan...'         },
-];
+const CATEGORY_DEFAULTS = (globalThis.__HF_CATEGORY_DEFAULTS__ && typeof globalThis.__HF_CATEGORY_DEFAULTS__ === 'object')
+  ? globalThis.__HF_CATEGORY_DEFAULTS__
+  : {};
+const ICON_COLOR_PALETTE = Array.isArray(CATEGORY_DEFAULTS.ICON_COLOR_PALETTE) && CATEGORY_DEFAULTS.ICON_COLOR_PALETTE.length
+  ? CATEGORY_DEFAULTS.ICON_COLOR_PALETTE.map(String)
+  : FALLBACK_ICON_COLOR_PALETTE.slice();
+const DEFAULT_CATEGORY_DEFS = Array.isArray(CATEGORY_DEFAULTS.DEFAULT_CATEGORY_DEFS) && CATEGORY_DEFAULTS.DEFAULT_CATEGORY_DEFS.length
+  ? CATEGORY_DEFAULTS.DEFAULT_CATEGORY_DEFS.map(def => ({ ...def }))
+  : buildDefaultCategoryDefs(ICON_COLOR_PALETTE);
+const DEFAULT_FOOD_CATEGORY_DEFS = Array.isArray(CATEGORY_DEFAULTS.DEFAULT_FOOD_CATEGORY_DEFS) && CATEGORY_DEFAULTS.DEFAULT_FOOD_CATEGORY_DEFS.length
+  ? CATEGORY_DEFAULTS.DEFAULT_FOOD_CATEGORY_DEFS.map(def => ({ ...def }))
+  : buildDefaultFoodCategoryDefs(ICON_COLOR_PALETTE);
 
 let CATEGORY_DEFS = DEFAULT_CATEGORY_DEFS.map(c => ({...c}));
 
-const KNOWN_RESTAURANT_ORDER = [RESTAURANTS.LEROYS.id, RESTAURANTS.ELROYS.id];
-const KNOWN_MENU_ORDER = [
-  MENUS.LEROYS_DRINKS.id,
-  MENUS.LEROYS_FOOD.id,
-  MENUS.ELROYS_DRINKS.id,
-  MENUS.ELROYS_FOOD.id,
-];
-const RESTAURANT_SPECIALS = {
-  [RESTAURANTS.LEROYS.id]: {
-    canonicalId: 'leroyslounge-specials',
-    name: "Leroy's Specials",
-    menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id],
-  },
-  [RESTAURANTS.ELROYS.id]: {
-    canonicalId: 'elroyscantina-specials',
-    name: "El Roy's Specials",
-    menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id],
-  },
-};
-const LEGACY_MENU_SLUG_ALIASES = {
-  'el-roys': MENUS.ELROYS_DRINKS.slug,
-};
-const SITE_PATHS = {
-  [RESTAURANTS.LEROYS.id]: '/leroyslounge',
-  [RESTAURANTS.ELROYS.id]: '/elroyscantina',
-};
-const SHARED_PAGE_PATHS = {
-  manager: '/manager',
-  admin: '/admin',
-};
+const KNOWN_RESTAURANT_ORDER = Array.isArray(DOMAIN_CONSTANTS.KNOWN_RESTAURANT_ORDER) && DOMAIN_CONSTANTS.KNOWN_RESTAURANT_ORDER.length
+  ? DOMAIN_CONSTANTS.KNOWN_RESTAURANT_ORDER.slice()
+  : FALLBACK_DOMAIN_CONSTANTS.KNOWN_RESTAURANT_ORDER.slice();
+const KNOWN_MENU_ORDER = Array.isArray(DOMAIN_CONSTANTS.KNOWN_MENU_ORDER) && DOMAIN_CONSTANTS.KNOWN_MENU_ORDER.length
+  ? DOMAIN_CONSTANTS.KNOWN_MENU_ORDER.slice()
+  : FALLBACK_DOMAIN_CONSTANTS.KNOWN_MENU_ORDER.slice();
+const RESTAURANT_SPECIALS = DOMAIN_CONSTANTS.RESTAURANT_SPECIALS || FALLBACK_DOMAIN_CONSTANTS.RESTAURANT_SPECIALS;
+const LEGACY_MENU_SLUG_ALIASES = DOMAIN_CONSTANTS.LEGACY_MENU_SLUG_ALIASES || FALLBACK_DOMAIN_CONSTANTS.LEGACY_MENU_SLUG_ALIASES;
+const SITE_PATHS = DOMAIN_CONSTANTS.SITE_PATHS || FALLBACK_DOMAIN_CONSTANTS.SITE_PATHS;
+const SHARED_PAGE_PATHS = DOMAIN_CONSTANTS.SHARED_PAGE_PATHS || FALLBACK_DOMAIN_CONSTANTS.SHARED_PAGE_PATHS;
 const REDIRECT_NOTICE_KEY = 'hf_redirect_notice';
+
+function buildFallbackDomainConstants() {
+  const restaurants = {
+    LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
+    ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
+  };
+  const menus = {
+    LEROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000020', restaurantId: restaurants.LEROYS.id, type: 'drinks', slug: 'leroys-lounge-drinks', name: "Leroy's Lounge Drinks" },
+    LEROYS_FOOD: { id: '00000000-0000-0000-0000-000000000021', restaurantId: restaurants.LEROYS.id, type: 'food', slug: 'leroys-lounge-food', name: "Leroy's Lounge Food" },
+    ELROYS_DRINKS: { id: '00000000-0000-0000-0000-000000000002', restaurantId: restaurants.ELROYS.id, type: 'drinks', slug: 'el-roys-cantina-drinks', name: "El Roy's Cantina Drinks" },
+    ELROYS_FOOD: { id: '00000000-0000-0000-0000-000000000003', restaurantId: restaurants.ELROYS.id, type: 'food', slug: 'el-roys-cantina-food', name: "El Roy's Cantina Food" },
+  };
+  return {
+    APP_VERSION: 'v0.8.9',
+    RESTAURANTS: restaurants,
+    MENUS: menus,
+    KNOWN_RESTAURANT_ORDER: [restaurants.LEROYS.id, restaurants.ELROYS.id],
+    KNOWN_MENU_ORDER: [menus.LEROYS_DRINKS.id, menus.LEROYS_FOOD.id, menus.ELROYS_DRINKS.id, menus.ELROYS_FOOD.id],
+    RESTAURANT_SPECIALS: {
+      [restaurants.LEROYS.id]: {
+        canonicalId: 'leroyslounge-specials',
+        name: "Leroy's Specials",
+        menuIds: [menus.LEROYS_DRINKS.id, menus.LEROYS_FOOD.id],
+      },
+      [restaurants.ELROYS.id]: {
+        canonicalId: 'elroyscantina-specials',
+        name: "El Roy's Specials",
+        menuIds: [menus.ELROYS_DRINKS.id, menus.ELROYS_FOOD.id],
+      },
+    },
+    LEGACY_MENU_SLUG_ALIASES: {
+      'el-roys': menus.ELROYS_DRINKS.slug,
+    },
+    SITE_PATHS: {
+      [restaurants.LEROYS.id]: '/leroyslounge',
+      [restaurants.ELROYS.id]: '/elroyscantina',
+    },
+    SHARED_PAGE_PATHS: {
+      manager: '/manager',
+      admin: '/admin',
+    },
+  };
+}
+
+function colorAt(palette, index) {
+  return palette[index] || FALLBACK_ICON_COLOR_PALETTE[index] || FALLBACK_ICON_COLOR_PALETTE[0];
+}
+
+function buildDefaultCategoryDefs(palette) {
+  return [
+    { id: 'beer', icon: '🍺', color: colorAt(palette, 0), title: 'Beers on Tap', sub: 'Current draft offerings', placeholder: 'e.g. Modelo Especial...' },
+    { id: 'canned', icon: '🍻', color: colorAt(palette, 4), title: 'Canned & Bottled', sub: 'Canned & bottled offerings', placeholder: 'e.g. Modelo Especial (can), Topo Chico...' },
+    { id: 'cocktails', icon: '🍹', color: colorAt(palette, 5), title: 'Cocktails', sub: 'Craft cocktail offerings', placeholder: 'e.g. Paloma, Spicy Margarita...' },
+    { id: 'tequila', icon: '🌶️', color: colorAt(palette, 1), title: 'Infused Tequila', sub: 'Rotating infused marg tequila', placeholder: 'e.g. Jalapeño-Pineapple Blanco...' },
+    { id: 'frozen', icon: '🧊', color: colorAt(palette, 2), title: 'Frozen Marg', sub: 'Current frozen margarita flavor', placeholder: 'e.g. Strawberry Basil...' },
+    { id: 'special', icon: '⭐', color: colorAt(palette, 3), title: 'Monthly Specials', sub: 'Featured cocktails & promos', placeholder: 'e.g. The Valentina — raspberry, grapefruit...' },
+  ];
+}
+
+function buildDefaultFoodCategoryDefs(palette) {
+  return [
+    { key: 'starters', label: '🥗 Starters', icon: '🥗', color: colorAt(palette, 4), sub: '', placeholder: 'e.g. Chips & Salsa...' },
+    { key: 'tacos', label: '🌮 Tacos', icon: '🌮', color: colorAt(palette, 0), sub: '', placeholder: 'e.g. Al Pastor...' },
+    { key: 'entrees', label: '🍽 Entrees', icon: '🍽', color: colorAt(palette, 1), sub: '', placeholder: 'e.g. Enchiladas...' },
+    { key: 'sides', label: '🫘 Sides', icon: '🫘', color: colorAt(palette, 2), sub: '', placeholder: 'e.g. Mexican Rice...' },
+    { key: 'desserts', label: '🍮 Desserts', icon: '🍮', color: colorAt(palette, 3), sub: '', placeholder: 'e.g. Flan...' },
+  ];
+}
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
@@ -166,6 +220,16 @@ function defaultState() {
   const s = {};
   CATEGORY_DEFS.forEach(c => { s[c.id] = s[c.id] || { items:[], lastSent:[] }; });
   return s;
+}
+
+function resetMenuStateToDefaults() {
+  menuState = defaultState();
+  currentDesign = { ...DESIGN_DEFAULTS };
+  _restaurantCustomDesignEnabled = true;
+}
+
+function setMenuDirtyFlag(value) {
+  _dirty = !!value;
 }
 
 function uid() { return crypto.randomUUID(); }
@@ -859,6 +923,15 @@ function getMenuSessionPorts() {
       setSharedDraftState(ts);
       updateSaveBtn();
     },
+    commitLiveSave(ts) {
+      menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
+      lsSet(LS_KEYS.lastUpdated, String(ts));
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
+      updateSaveBtn();
+      updateLastUpdatedLabel();
+    },
     buildPreview(snapshot) {
       return buildMenuSessionPreview(snapshot);
     },
@@ -910,7 +983,28 @@ function getMenuSessionPorts() {
   };
 }
 
+function getSessionModuleBoundary() {
+  if (globalThis.__HF_SESSION_MODULES__ && typeof globalThis.__HF_SESSION_MODULES__ === 'object') {
+    return globalThis.__HF_SESSION_MODULES__;
+  }
+  return null;
+}
+
 function createMenuPublishService(sessionPorts, runtime = {}) {
+  if (!_sessionModuleDelegationStack.has('createMenuPublishService')) {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuPublishService === 'function') {
+      _sessionModuleDelegationStack.add('createMenuPublishService');
+      try {
+        return boundary.createMenuPublishService(sessionPorts, runtime, {
+          fallback: () => createMenuPublishService(sessionPorts, runtime),
+        });
+      } finally {
+        _sessionModuleDelegationStack.delete('createMenuPublishService');
+      }
+    }
+  }
+
   const buildSnapshot = typeof runtime.buildSnapshot === 'function'
     ? runtime.buildSnapshot
     : (() => ({ source: 'unknown' }));
@@ -985,13 +1079,7 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
         } catch (_) {
           warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
         }
-        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(liveSaveTs) };
-        lsSet(LS_KEYS.lastUpdated, String(liveSaveTs));
-        _dirty = false;
-        clearDraftSaveOnlyChanges();
-        clearSharedDraftState();
-        updateSaveBtn();
-        updateLastUpdatedLabel();
+        sessionPorts.commitLiveSave?.(liveSaveTs);
         const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
         if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
       }
@@ -1114,6 +1202,20 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
 }
 
 function createMenuSessionLifecycle(ports) {
+  if (!_sessionModuleDelegationStack.has('createMenuSessionLifecycle')) {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuSessionLifecycle === 'function') {
+      _sessionModuleDelegationStack.add('createMenuSessionLifecycle');
+      try {
+        return boundary.createMenuSessionLifecycle(ports, {
+          fallback: () => createMenuSessionLifecycle(ports),
+        });
+      } finally {
+        _sessionModuleDelegationStack.delete('createMenuSessionLifecycle');
+      }
+    }
+  }
+
   const sessionPorts = ports || getMenuSessionPorts();
   let request = sessionPorts.buildRequest();
 
@@ -1318,7 +1420,243 @@ function resolveRequestedSettingsRoute(user = currentUser) {
   return createSettingsRoutePolicyService().decide(user);
 }
 
+function getAuthModuleBoundary() {
+  if (globalThis.__HF_AUTH_MODULES__ && typeof globalThis.__HF_AUTH_MODULES__ === 'object') {
+    return globalThis.__HF_AUTH_MODULES__;
+  }
+  return null;
+}
+
+function getUiModuleBoundary() {
+  if (globalThis.__HF_UI_MODULES__ && typeof globalThis.__HF_UI_MODULES__ === 'object') {
+    return globalThis.__HF_UI_MODULES__;
+  }
+  return null;
+}
+
+function buildManagerWorkspaceModuleDeps() {
+  return {
+    document,
+    window,
+    getCategoryDefs: () => CATEGORY_DEFS,
+    getMenuState: () => menuState,
+    getDraftChangeCount: () => getDraftChangeCount(),
+    isDirty: () => !!_dirty,
+    hasSharedDraft: () => hasSharedDraftState(),
+    countDiffLines: () => countDiffLines(),
+    createDraftLedgerService: () => createDraftLedgerService(),
+    renderManagerCategories: () => renderManagerCategories(),
+    renderPricingSection: () => renderPricingSection(),
+    renderDescriptionSection: () => renderDescriptionSection(),
+    renderFeaturedTab: () => renderFeaturedTab(),
+    renderCategoriesTab: () => renderCategoriesTab(),
+    updateManagerToolsContext: () => updateManagerToolsContext(),
+    renderDatabaseTab: () => renderDatabaseTab(),
+    renderPruneSection: () => renderPruneSection(),
+    updateActiveMenuBar: () => updateActiveMenuBar(),
+    renderRecentChanges: () => renderRecentChanges(),
+    renderFooter: () => renderFooter(),
+    initCollapsingHeader: () => initCollapsingHeader(),
+    initDrawerSwipe: () => initDrawerSwipe(),
+  };
+}
+
+function buildManagerSectionModuleDeps() {
+  return {
+    document,
+    editSectionIds: MANAGER_EDIT_SECTION_IDS.slice(),
+    renderManagerCategories: () => renderManagerCategories(),
+    renderPricingSection: () => renderPricingSection(),
+    renderDescriptionSection: () => renderDescriptionSection(),
+  };
+}
+
+function buildManagerEditorsModuleDeps() {
+  const base = _managerEditorsBase || {};
+  return {
+    renderManagerCategories: (...args) => (base.renderManagerCategories || renderManagerCategories)(...args),
+    renderManagerItems: (...args) => (base.renderManagerItems || renderManagerItems)(...args),
+    renderPricingSection: (...args) => (base.renderPricingSection || renderPricingSection)(...args),
+    renderDescriptionSection: (...args) => (base.renderDescriptionSection || renderDescriptionSection)(...args),
+  };
+}
+
+function buildAdminWorkspaceModuleDeps() {
+  return {
+    renderMenusPanel: () => renderMenusPanel(),
+    initAdminSwitcherTab: tab => initAdminSwitcherTab(tab),
+    loadUsers: () => loadUsers(),
+  };
+}
+
+function buildAdminSwitcherModuleDeps() {
+  const base = _adminSwitcherBase || {};
+  return {
+    loadAdminSwitcherData: (...args) => (base.loadAdminSwitcherData || loadAdminSwitcherData)(...args),
+    initAdminSwitcherTab: (...args) => (base.initAdminSwitcherTab || initAdminSwitcherTab)(...args),
+    onAdminSwitcherRestaurantChange: (...args) => (base.onAdminSwitcherRestaurantChange || onAdminSwitcherRestaurantChange)(...args),
+    onAdminSwitcherMenuChange: (...args) => (base.onAdminSwitcherMenuChange || onAdminSwitcherMenuChange)(...args),
+  };
+}
+
+function buildPublicFooterActionsModuleDeps() {
+  return {
+    document,
+    getCurrentUser: () => currentUser,
+    getMenuId: () => MENU_ID,
+    getRestaurantId: () => RESTAURANT_ID,
+    currentUserCanManageMenu: (menuId, user) => currentUserCanManageMenu(menuId, user),
+    getManagerHrefForMenuId: menuId => getManagerHrefForMenuId(menuId),
+    getAdminHrefForMenuId: menuId => getAdminHrefForMenuId(menuId),
+    requestSignIn: options => requestSignIn(options),
+    navigateToPage: href => navigateToPage(href),
+    signOut: () => signOut(),
+  };
+}
+
+function buildPublicRendererModuleDeps() {
+  const base = _publicRendererBase || {};
+  return {
+    renderPublicView: (...args) => (base.renderPublicView || renderPublicView)(...args),
+    renderPublicViews: (...args) => (base.renderPublicViews || renderPublicViews)(...args),
+  };
+}
+
+function getManagerWorkspaceService() {
+  if (_managerWorkspaceService) return _managerWorkspaceService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerWorkspaceService !== 'function') return null;
+  _managerWorkspaceService = boundary.createManagerWorkspaceService(buildManagerWorkspaceModuleDeps());
+  return _managerWorkspaceService;
+}
+
+function getManagerSectionService() {
+  if (_managerSectionService) return _managerSectionService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerSectionService !== 'function') return null;
+  _managerSectionService = boundary.createManagerSectionService(buildManagerSectionModuleDeps());
+  return _managerSectionService;
+}
+
+function getManagerEditorsService() {
+  if (_managerEditorsService) return _managerEditorsService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerEditorsService !== 'function') return null;
+  _managerEditorsService = boundary.createManagerEditorsService(buildManagerEditorsModuleDeps());
+  return _managerEditorsService;
+}
+
+function getAdminWorkspaceService() {
+  if (_adminWorkspaceService) return _adminWorkspaceService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createAdminWorkspaceService !== 'function') return null;
+  _adminWorkspaceService = boundary.createAdminWorkspaceService(buildAdminWorkspaceModuleDeps());
+  return _adminWorkspaceService;
+}
+
+function getAdminSwitcherService() {
+  if (_adminSwitcherService) return _adminSwitcherService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createAdminSwitcherService !== 'function') return null;
+  _adminSwitcherService = boundary.createAdminSwitcherService(buildAdminSwitcherModuleDeps());
+  return _adminSwitcherService;
+}
+
+function getPublicFooterActionsService() {
+  if (_publicFooterActionsService) return _publicFooterActionsService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createPublicFooterActionsService !== 'function') return null;
+  _publicFooterActionsService = boundary.createPublicFooterActionsService(buildPublicFooterActionsModuleDeps());
+  return _publicFooterActionsService;
+}
+
+function getPublicRendererService() {
+  if (_publicRendererService) return _publicRendererService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createPublicRendererService !== 'function') return null;
+  _publicRendererService = boundary.createPublicRendererService(buildPublicRendererModuleDeps());
+  return _publicRendererService;
+}
+
+function buildAccessSessionModuleDeps() {
+  return {
+    getSupabaseConfig: () => ({ supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }),
+    getStorageValue(key) {
+      const map = {
+        accessToken: LS_KEYS.accessToken,
+        refreshToken: LS_KEYS.refreshToken,
+        expiresAt: LS_KEYS.expiresAt,
+        uid: LS_KEYS.uid,
+        email: LS_KEYS.email,
+      };
+      return localStorage.getItem(map[key] || key);
+    },
+    clearStorageValue(key) {
+      const map = {
+        accessToken: LS_KEYS.accessToken,
+        refreshToken: LS_KEYS.refreshToken,
+        expiresAt: LS_KEYS.expiresAt,
+        uid: LS_KEYS.uid,
+        email: LS_KEYS.email,
+      };
+      localStorage.removeItem(map[key] || key);
+    },
+    now: () => Date.now(),
+    fetchProfile: token => sbGetProfile(token),
+    refreshToken: refresh => sbRefreshToken(refresh),
+    applySession: (data, role, name, accessibleMenuIds) => _applySession(data, role, name, accessibleMenuIds),
+    applyRole: role => applyRole(role),
+    closeAuthOverlay: () => closeAuthOverlay(),
+    getLocationHash: () => window.location.hash || '',
+    clearLocationHash: () => history.replaceState({}, '', window.location.pathname),
+    setRecoverySessionData: value => { _recoverySessionData = value; },
+    setCurrentUser: value => { currentUser = value; },
+    scheduleTokenRefresh: expiresAt => _scheduleTokenRefresh(expiresAt),
+    syncRequestedPageModeImpl: () => syncRequestedPageModeLegacy(),
+    scheduleRetry: (callback, delayMs) => setTimeout(callback, delayMs),
+    retryDelayMs: 2000,
+  };
+}
+
+function buildAuthOverlayControllerDeps() {
+  return {
+    getDocument: () => document,
+    getWindow: () => window,
+    getSupabaseConfig: () => ({ supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }),
+    setSettingsShellPending: value => _setSettingsShellPending(value),
+    getRecoverySessionData: () => _recoverySessionData,
+    setRecoverySessionData: value => { _recoverySessionData = value; },
+    setAuthScreen: value => { _authScreen = value; },
+    mountAuthOverlayTemplate: targetDocument => getAuthModuleBoundary()?.mountAuthOverlayTemplate?.(targetDocument),
+    setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+    handleSignIn: () => handleSignIn(),
+    handleSignUp: () => handleSignUp(),
+    handleForgotPassword: () => handleForgotPassword(),
+    handleResetPassword: () => handleResetPassword(),
+  };
+}
+
+function getAuthOverlayController() {
+  if (_authOverlayController) return _authOverlayController;
+  const boundary = getAuthModuleBoundary();
+  if (typeof boundary?.createAuthOverlayController !== 'function') return null;
+  _authOverlayController = boundary.createAuthOverlayController(buildAuthOverlayControllerDeps());
+  return _authOverlayController;
+}
+
 function createAccessSessionService() {
+  if (!_authModuleDelegationStack.has('createAccessSessionService')) {
+    const boundary = getAuthModuleBoundary();
+    if (typeof boundary?.createAccessSessionService === 'function') {
+      _authModuleDelegationStack.add('createAccessSessionService');
+      try {
+        return boundary.createAccessSessionService(buildAccessSessionModuleDeps());
+      } finally {
+        _authModuleDelegationStack.delete('createAccessSessionService');
+      }
+    }
+  }
+
   return {
     async applyAuthenticatedSession(data, options = {}) {
       const { closeOverlay = false } = options;
@@ -1415,130 +1753,134 @@ function createAccessSessionService() {
     },
 
     async syncRequestedPageMode() {
-      if (!isSettingsPage()) return { handled: false };
+      return syncRequestedPageModeLegacy();
+    },
+  };
+}
 
-      const publicView = document.getElementById('public-view');
-      const managerView = document.getElementById('manager-view');
-      if (!publicView || !managerView) return { handled: false };
+async function syncRequestedPageModeLegacy() {
+  if (!isSettingsPage()) return { handled: false };
 
-      _clearSettingsRedirectPrompt();
-      renderUserHeader();
+  const publicView = document.getElementById('public-view');
+  const managerView = document.getElementById('manager-view');
+  if (!publicView || !managerView) return { handled: false };
 
-      const requireAuth = () => {
-        isManagerMode = false;
-        isAdminMode = false;
-        document.body.classList.remove('manager-mode');
-        publicView.style.display = 'none';
-        managerView.style.display = 'none';
-        _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
-        openAuthOverlay('signin');
-        return {
-          handled: true,
-          status: 'auth-required',
-          pageMode: _appPageMode,
-        };
-      };
+  _clearSettingsRedirectPrompt();
+  renderUserHeader();
 
-      if (!currentUser) return requireAuth();
-      const authOverlay = document.getElementById('auth-overlay');
-      if (authOverlay?.classList.contains('open')) closeAuthOverlay();
+  const requireAuth = () => {
+    isManagerMode = false;
+    isAdminMode = false;
+    document.body.classList.remove('manager-mode');
+    publicView.style.display = 'none';
+    managerView.style.display = 'none';
+    _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
+    requestSignIn({ screen: 'signin', origin: 'settings-gate', reason: 'settings-auth-required' });
+    return {
+      handled: true,
+      status: 'auth-required',
+      pageMode: _appPageMode,
+    };
+  };
 
-      if (_appPageMode === 'manager') {
-        _setLoadingMessage('Checking manager access…');
-        await refreshCurrentUserProfile();
-      }
+  if (!currentUser) return requireAuth();
+  const authOverlay = document.getElementById('auth-overlay');
+  if (authOverlay?.classList.contains('open')) closeAuthOverlay();
 
-      const routeDecision = resolveRequestedSettingsRoute();
+  if (_appPageMode === 'manager') {
+    _setLoadingMessage('Checking manager access…');
+    await refreshCurrentUserProfile();
+  }
 
-      if (routeDecision.kind === 'auth-required') {
-        return requireAuth();
-      }
+  const routeDecision = resolveRequestedSettingsRoute();
 
-      if (routeDecision.kind === 'admin-denied') {
-        showAdminAccessDenied(routeDecision.message);
-        return {
-          handled: true,
-          status: 'access-denied',
-          pageMode: 'admin',
-        };
-      }
+  if (routeDecision.kind === 'auth-required') {
+    return requireAuth();
+  }
 
-      if (routeDecision.kind === 'admin') {
-        _setLoadingMessage('Loading settings…');
-        if (!routeDecision.targetMenuId) {
-          showAdminAccessDenied('No menu context available for this page.');
-          return {
-            handled: true,
-            status: 'context-missing',
-            pageMode: 'admin',
-          };
-        }
-        const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
-        if (!hasMenuContext) {
-          showAdminAccessDenied('No menu context available for this page.');
-          return {
-            handled: true,
-            status: 'context-missing',
-            pageMode: 'admin',
-          };
-        }
-        enterAdmin();
-        return {
-          handled: true,
-          status: 'entered',
-          pageMode: 'admin',
-          menuId: routeDecision.targetMenuId,
-        };
-      }
+  if (routeDecision.kind === 'admin-denied') {
+    showAdminAccessDenied(routeDecision.message);
+    return {
+      handled: true,
+      status: 'access-denied',
+      pageMode: 'admin',
+    };
+  }
 
-      if (routeDecision.kind === 'manager-redirect') {
-        navigateToPage(routeDecision.targetPath);
-        return {
-          handled: true,
-          status: 'redirected',
-          pageMode: 'manager',
-          menuId: routeDecision.menuId,
-          targetPath: routeDecision.targetPath,
-        };
-      }
-
-      if (routeDecision.kind === 'manager-denied') {
-        showManagerAccessDenied(routeDecision.message, {
-          targetPath: routeDecision.targetPath,
-          redirectLabel: routeDecision.redirectLabel,
-          actionLabel: routeDecision.actionLabel,
-        });
-        return {
-          handled: true,
-          status: 'access-denied',
-          pageMode: 'manager',
-        };
-      }
-
-      _managerMenuPicked = true;
-      _setLoadingMessage('Loading settings…');
-      const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
-      if (!hasMenuContext) {
-        showManagerAccessDenied('Selected menu is no longer available for this account.', {
-          targetPath: getPublicHrefForMenuId(routeDecision.targetMenuId),
-          redirectLabel: 'the public menu',
-          actionLabel: 'Return to the public menu',
-        });
-        return {
-          handled: true,
-          status: 'context-missing',
-          pageMode: 'manager',
-          menuId: routeDecision.targetMenuId,
-        };
-      }
-      enterManager();
+  if (routeDecision.kind === 'admin') {
+    _setLoadingMessage('Loading settings…');
+    if (!routeDecision.targetMenuId) {
+      showAdminAccessDenied('No menu context available for this page.');
       return {
         handled: true,
-        status: 'entered',
-        pageMode: 'manager',
-        menuId: routeDecision.targetMenuId,
+        status: 'context-missing',
+        pageMode: 'admin',
       };
-    },
+    }
+    const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
+    if (!hasMenuContext) {
+      showAdminAccessDenied('No menu context available for this page.');
+      return {
+        handled: true,
+        status: 'context-missing',
+        pageMode: 'admin',
+      };
+    }
+    enterAdmin();
+    return {
+      handled: true,
+      status: 'entered',
+      pageMode: 'admin',
+      menuId: routeDecision.targetMenuId,
+    };
+  }
+
+  if (routeDecision.kind === 'manager-redirect') {
+    navigateToPage(routeDecision.targetPath);
+    return {
+      handled: true,
+      status: 'redirected',
+      pageMode: 'manager',
+      menuId: routeDecision.menuId,
+      targetPath: routeDecision.targetPath,
+    };
+  }
+
+  if (routeDecision.kind === 'manager-denied') {
+    showManagerAccessDenied(routeDecision.message, {
+      targetPath: routeDecision.targetPath,
+      redirectLabel: routeDecision.redirectLabel,
+      actionLabel: routeDecision.actionLabel,
+    });
+    return {
+      handled: true,
+      status: 'access-denied',
+      pageMode: 'manager',
+    };
+  }
+
+  _managerMenuPicked = true;
+  _setLoadingMessage('Loading settings…');
+  const hasMenuContext = await _loadSettingsPageMenuContext(routeDecision.targetMenuId);
+  if (!hasMenuContext) {
+    showManagerAccessDenied('Selected menu is no longer available for this account.', {
+      targetPath: getPublicHrefForMenuId(routeDecision.targetMenuId),
+      redirectLabel: 'the public menu',
+      actionLabel: 'Return to the public menu',
+    });
+    return {
+      handled: true,
+      status: 'context-missing',
+      pageMode: 'manager',
+      menuId: routeDecision.targetMenuId,
+    };
+  }
+  enterManager();
+  return {
+    handled: true,
+    status: 'entered',
+    pageMode: 'manager',
+    menuId: routeDecision.targetMenuId,
   };
 }
 
@@ -2320,47 +2662,80 @@ async function refreshFeaturedForActiveMenu() {
   return getRestaurantSpecialsService().refreshForActiveMenu(RESTAURANT_ID);
 }
 
+function withMenuStateLoaderDefaults(deps = {}) {
+  return {
+    readState: typeof deps.readState === 'function' ? deps.readState : (() => sbRead()),
+    hydrateFromState: typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data)),
+    applyPersistedDraftState: typeof deps.applyPersistedDraftState === 'function'
+      ? deps.applyPersistedDraftState
+      : (draftState => applyPersistedDraftState(draftState)),
+    setDefaultState: typeof deps.setDefaultState === 'function'
+      ? deps.setDefaultState
+      : (() => {
+          menuState = defaultState();
+          currentDesign = { ...DESIGN_DEFAULTS };
+          _restaurantCustomDesignEnabled = true;
+        }),
+    setDirty: typeof deps.setDirty === 'function' ? deps.setDirty : (value => { _dirty = !!value; }),
+    clearDraftChanges: typeof deps.clearDraftChanges === 'function'
+      ? deps.clearDraftChanges
+      : (() => {
+          clearDraftSaveOnlyChanges();
+          clearSharedDraftState();
+        }),
+    writeMenuCache: typeof deps.writeMenuCache === 'function'
+      ? deps.writeMenuCache
+      : (data => lsSet(LS_KEYS.menuCache, JSON.stringify(data))),
+    refreshFeatured: typeof deps.refreshFeatured === 'function'
+      ? deps.refreshFeatured
+      : (() => refreshFeaturedForActiveMenu()),
+    buildSnapshot: typeof deps.buildSnapshot === 'function'
+      ? deps.buildSnapshot
+      : (source => buildMenuSessionSnapshot(source)),
+    getLastUpdatedTs: typeof deps.getLastUpdatedTs === 'function'
+      ? deps.getLastUpdatedTs
+      : (() => menuState._meta?.lastUpdatedTs),
+    getCategorySnapshot: typeof deps.getCategorySnapshot === 'function'
+      ? deps.getCategorySnapshot
+      : (() => getCategoryStateSnapshot()),
+    getDesignSnapshot: typeof deps.getDesignSnapshot === 'function'
+      ? deps.getDesignSnapshot
+      : (() => getDesignSnapshot()),
+    getFeaturedSnapshot: typeof deps.getFeaturedSnapshot === 'function'
+      ? deps.getFeaturedSnapshot
+      : (() => getFeaturedSnapshot()),
+  };
+}
+
 function createMenuStateLoaderService(deps = {}) {
-  const readState = typeof deps.readState === 'function' ? deps.readState : (() => sbRead());
-  const hydrateFromState = typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data));
-  const applyDraftState = typeof deps.applyPersistedDraftState === 'function'
-    ? deps.applyPersistedDraftState
-    : (draftState => applyPersistedDraftState(draftState));
-  const setDefaultState = typeof deps.setDefaultState === 'function'
-    ? deps.setDefaultState
-    : (() => {
-        menuState = defaultState();
-        currentDesign = { ...DESIGN_DEFAULTS };
-        _restaurantCustomDesignEnabled = true;
-      });
-  const setDirty = typeof deps.setDirty === 'function' ? deps.setDirty : (value => { _dirty = !!value; });
-  const clearDraftChanges = typeof deps.clearDraftChanges === 'function'
-    ? deps.clearDraftChanges
-    : (() => {
-        clearDraftSaveOnlyChanges();
-        clearSharedDraftState();
-      });
-  const writeMenuCache = typeof deps.writeMenuCache === 'function'
-    ? deps.writeMenuCache
-    : (data => lsSet(LS_KEYS.menuCache, JSON.stringify(data)));
-  const refreshFeatured = typeof deps.refreshFeatured === 'function'
-    ? deps.refreshFeatured
-    : (() => refreshFeaturedForActiveMenu());
-  const buildSnapshot = typeof deps.buildSnapshot === 'function'
-    ? deps.buildSnapshot
-    : (source => buildMenuSessionSnapshot(source));
-  const getLastUpdatedTs = typeof deps.getLastUpdatedTs === 'function'
-    ? deps.getLastUpdatedTs
-    : (() => menuState._meta?.lastUpdatedTs);
-  const getCategorySnapshot = typeof deps.getCategorySnapshot === 'function'
-    ? deps.getCategorySnapshot
-    : (() => getCategoryStateSnapshot());
-  const getDesignSnapshotValue = typeof deps.getDesignSnapshot === 'function'
-    ? deps.getDesignSnapshot
-    : (() => getDesignSnapshot());
-  const getFeaturedSnapshotValue = typeof deps.getFeaturedSnapshot === 'function'
-    ? deps.getFeaturedSnapshot
-    : (() => getFeaturedSnapshot());
+  const resolvedDeps = withMenuStateLoaderDefaults(deps);
+  if (!_sessionModuleDelegationStack.has('createMenuStateLoaderService')) {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuStateLoaderService === 'function') {
+      _sessionModuleDelegationStack.add('createMenuStateLoaderService');
+      try {
+        return boundary.createMenuStateLoaderService(resolvedDeps, {
+          fallback: () => createMenuStateLoaderService(deps),
+        });
+      } finally {
+        _sessionModuleDelegationStack.delete('createMenuStateLoaderService');
+      }
+    }
+  }
+
+  const readState = resolvedDeps.readState;
+  const hydrateFromState = resolvedDeps.hydrateFromState;
+  const applyDraftState = resolvedDeps.applyPersistedDraftState;
+  const setDefaultState = resolvedDeps.setDefaultState;
+  const setDirty = resolvedDeps.setDirty;
+  const clearDraftChanges = resolvedDeps.clearDraftChanges;
+  const writeMenuCache = resolvedDeps.writeMenuCache;
+  const refreshFeatured = resolvedDeps.refreshFeatured;
+  const buildSnapshot = resolvedDeps.buildSnapshot;
+  const getLastUpdatedTs = resolvedDeps.getLastUpdatedTs;
+  const getCategorySnapshot = resolvedDeps.getCategorySnapshot;
+  const getDesignSnapshotValue = resolvedDeps.getDesignSnapshot;
+  const getFeaturedSnapshotValue = resolvedDeps.getFeaturedSnapshot;
 
   return {
     async load(options = {}) {
@@ -2950,6 +3325,18 @@ function updateManagerToolsContext() {
 }
 
 function renderManagerOverviewStats() {
+  if (!_uiModuleDelegationStack.has('renderManagerOverviewStats')) {
+    const service = getManagerWorkspaceService();
+    if (typeof service?.renderManagerOverviewStats === 'function') {
+      _uiModuleDelegationStack.add('renderManagerOverviewStats');
+      try {
+        return service.renderManagerOverviewStats();
+      } finally {
+        _uiModuleDelegationStack.delete('renderManagerOverviewStats');
+      }
+    }
+  }
+
   const activeItems = CATEGORY_DEFS.reduce((total, cat) => (
     total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
   ), 0);
@@ -3068,6 +3455,18 @@ function createDraftLedgerService(deps = {}) {
 }
 
 function updateManagerActionBar() {
+  if (!_uiModuleDelegationStack.has('updateManagerActionBar')) {
+    const service = getManagerWorkspaceService();
+    if (typeof service?.updateManagerActionBar === 'function') {
+      _uiModuleDelegationStack.add('updateManagerActionBar');
+      try {
+        return service.updateManagerActionBar();
+      } finally {
+        _uiModuleDelegationStack.delete('updateManagerActionBar');
+      }
+    }
+  }
+
   const bar = document.getElementById('manager-action-bar');
   if (!bar) return;
   const primaryGroup = document.getElementById('manager-primary-action-group');
@@ -3092,12 +3491,36 @@ function updateManagerActionBar() {
 }
 
 function syncManagerActionBarStatus(syncEl = document.getElementById('sync-status')) {
+  if (!_uiModuleDelegationStack.has('syncManagerActionBarStatus')) {
+    const service = getManagerWorkspaceService();
+    if (typeof service?.syncManagerActionBarStatus === 'function') {
+      _uiModuleDelegationStack.add('syncManagerActionBarStatus');
+      try {
+        return service.syncManagerActionBarStatus(syncEl);
+      } finally {
+        _uiModuleDelegationStack.delete('syncManagerActionBarStatus');
+      }
+    }
+  }
+
   const statusWrap = syncEl?.closest('.manager-shell-actionbar-status');
   if (!statusWrap) return;
   statusWrap.hidden = !((syncEl.textContent || '').trim());
 }
 
 function renderManagerWorkspace(options = {}) {
+  if (!_uiModuleDelegationStack.has('renderManagerWorkspace')) {
+    const service = getManagerWorkspaceService();
+    if (typeof service?.renderManagerWorkspace === 'function') {
+      _uiModuleDelegationStack.add('renderManagerWorkspace');
+      try {
+        return service.renderManagerWorkspace(options);
+      } finally {
+        _uiModuleDelegationStack.delete('renderManagerWorkspace');
+      }
+    }
+  }
+
   renderManagerCategories();
   renderPricingSection();
   renderDescriptionSection();
@@ -3116,12 +3539,36 @@ function renderManagerWorkspace(options = {}) {
 }
 
 function renderAdminWorkspace() {
+  if (!_uiModuleDelegationStack.has('renderAdminWorkspace')) {
+    const service = getAdminWorkspaceService();
+    if (typeof service?.renderAdminWorkspace === 'function') {
+      _uiModuleDelegationStack.add('renderAdminWorkspace');
+      try {
+        return service.renderAdminWorkspace();
+      } finally {
+        _uiModuleDelegationStack.delete('renderAdminWorkspace');
+      }
+    }
+  }
+
   renderMenusPanel();
   initAdminSwitcherTab('notif');
   loadUsers();
 }
 
 function refreshManagerViews() {
+  if (!_uiModuleDelegationStack.has('refreshManagerViews')) {
+    const service = getManagerWorkspaceService();
+    if (typeof service?.refreshManagerViews === 'function') {
+      _uiModuleDelegationStack.add('refreshManagerViews');
+      try {
+        return service.refreshManagerViews();
+      } finally {
+        _uiModuleDelegationStack.delete('refreshManagerViews');
+      }
+    }
+  }
+
   renderManagerWorkspace({ includeRecentChanges: false });
 }
 
@@ -3617,7 +4064,9 @@ async function init() {
 
 async function _tryHandleRecoveryCallback() {
   const result = await getAccessSessionService().handleRecoveryCallback();
-  if (result?.handled) openAuthOverlay(result.screen || 'reset');
+  if (result?.handled) {
+    requestSignIn({ screen: result.screen || 'reset', origin: 'recovery-callback', reason: 'password-recovery' });
+  }
   return !!result?.handled;
 }
 
@@ -3750,7 +4199,7 @@ function createPublicRouteContract() {
       closeDropdowns: () => closeRouteDropdowns(),
       openManager: () => onActionBtnClick(),
       openAdmin: () => onAdminBtnClick(),
-      openAuthOverlay: () => openAuthOverlay('signin'),
+      openAuthOverlay: () => requestSignIn({ screen: 'signin', origin: 'public-route-contract' }),
       signOut: () => signOut(),
       canManageMenu: (menuId, user = actor) => currentUserCanManageMenu(menuId, user),
       switchMenu: menu => switchPublicRouteMenu(menu),
@@ -3786,12 +4235,6 @@ function showRouteBootView() {
   const renderer = getRegisteredPublicRouteRenderer();
   if (renderer?.boot) {
     const didRender = renderer.boot(createPublicRouteContract());
-    if (didRender !== false) {
-      _togglePublicShellMode('site');
-      return;
-    }
-  } else if (typeof window.renderRouteBootShell === 'function') {
-    const didRender = window.renderRouteBootShell();
     if (didRender !== false) {
       _togglePublicShellMode('site');
       return;
@@ -3961,6 +4404,20 @@ function handlePollError() {
 }
 
 function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
+  if (!_sessionModuleDelegationStack.has('createMenuPollScheduler')) {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuPollScheduler === 'function') {
+      _sessionModuleDelegationStack.add('createMenuPollScheduler');
+      try {
+        return boundary.createMenuPollScheduler({ loader, onResult, onError, getContextKey }, {
+          fallback: () => createMenuPollScheduler({ loader, onResult, onError, getContextKey }),
+        });
+      } finally {
+        _sessionModuleDelegationStack.delete('createMenuPollScheduler');
+      }
+    }
+  }
+
   let activeToken = 0;
   let inFlight = null;
   let queuedReason = '';
@@ -4175,6 +4632,18 @@ function renderFooter() {
 }
 
 function buildPublicStaffFooterState(user = currentUser, options = {}) {
+  if (!_uiModuleDelegationStack.has('buildPublicStaffFooterState')) {
+    const service = getPublicFooterActionsService();
+    if (typeof service?.buildPublicStaffFooterState === 'function') {
+      _uiModuleDelegationStack.add('buildPublicStaffFooterState');
+      try {
+        return service.buildPublicStaffFooterState(user, options);
+      } finally {
+        _uiModuleDelegationStack.delete('buildPublicStaffFooterState');
+      }
+    }
+  }
+
   const menuId = options.menuId || MENU_ID;
   const restaurantId = options.restaurantId || RESTAURANT_ID;
   const signedIn = !!user;
@@ -4228,6 +4697,18 @@ function buildPublicStaffFooterState(user = currentUser, options = {}) {
 }
 
 function syncPublicStaffFooterActions(state = buildPublicStaffFooterState()) {
+  if (!_uiModuleDelegationStack.has('syncPublicStaffFooterActions')) {
+    const service = getPublicFooterActionsService();
+    if (typeof service?.syncPublicStaffFooterActions === 'function') {
+      _uiModuleDelegationStack.add('syncPublicStaffFooterActions');
+      try {
+        return service.syncPublicStaffFooterActions(state);
+      } finally {
+        _uiModuleDelegationStack.delete('syncPublicStaffFooterActions');
+      }
+    }
+  }
+
   const footerWraps = document.querySelectorAll('[data-route-footer-actions], [data-route-staff-actions]');
   const signInEls = document.querySelectorAll('[data-route-footer-signin], [data-route-staff-signin]');
   const managerEls = document.querySelectorAll('[data-route-footer-manager], [data-route-staff-manager]');
@@ -4243,7 +4724,7 @@ function syncPublicStaffFooterActions(state = buildPublicStaffFooterState()) {
   signInEls.forEach(signInEl => {
     signInEl.style.display = state.signIn ? '' : 'none';
     signInEl.textContent = state.signIn?.label || '';
-    signInEl.onclick = state.signIn ? () => openAuthOverlay('signin') : null;
+    signInEl.onclick = state.signIn ? () => requestSignIn({ screen: 'signin', origin: 'public-footer' }) : null;
   });
   managerEls.forEach(managerEl => {
     managerEl.style.display = managerLink ? '' : 'none';
@@ -4479,12 +4960,6 @@ async function _renderCustomDesignView() {
       _togglePublicShellMode('site');
       return;
     }
-  } else if (renderIntoSiteWrapper && typeof window.initializeRoute === 'function') {
-    const didRender = window.initializeRoute(routeContract.snapshot.menuState, routeContract.snapshot);
-    if (didRender !== false) {
-      _togglePublicShellMode('site');
-      return;
-    }
   }
 
   _togglePublicShellMode('default');
@@ -4528,42 +5003,92 @@ function updateCollapseAllBtn() {
 
 // ─── SUPABASE AUTH (REST — no SDK) ───────────────────────────────────────────
 
+function getAuthApiBoundary() {
+  if (globalThis.__HF_AUTH_API__ && typeof globalThis.__HF_AUTH_API__ === 'object') {
+    return globalThis.__HF_AUTH_API__;
+  }
+  return {
+    signUp: ({ supabaseUrl = '', anonKey = '', email = '', password = '', name = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey },
+      body: JSON.stringify({ email, password, data: { name } }),
+    }).then(async response => {
+      if (!response.ok) throw await response.json();
+      return response.json();
+    }),
+    signIn: ({ supabaseUrl = '', anonKey = '', email = '', password = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey },
+      body: JSON.stringify({ email, password }),
+    }).then(async response => {
+      if (!response.ok) throw await response.json();
+      return response.json();
+    }),
+    refreshToken: ({ supabaseUrl = '', anonKey = '', refreshToken = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    }).then(async response => {
+      if (!response.ok) throw await response.json();
+      return response.json();
+    }),
+    getProfile: ({ accessToken = '' } = {}) => fetch('/api/role', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).then(async response => {
+      if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
+      return response.json();
+    }),
+    resetPasswordForEmail: ({ supabaseUrl = '', anonKey = '', email = '', redirectTo = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/recover`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey },
+      body: JSON.stringify({ email, redirect_to: redirectTo }),
+    }).then(async response => {
+      if (!response.ok) throw await response.json();
+      return null;
+    }),
+    updatePassword: ({ supabaseUrl = '', anonKey = '', accessToken = '', newPassword = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ password: newPassword }),
+    }).then(async response => {
+      if (!response.ok) throw await response.json();
+      return response.json();
+    }),
+  };
+}
+
 async function sbSignUp(email, password, name) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ email, password, data: { name } })
+  return getAuthApiBoundary().signUp({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    email,
+    password,
+    name,
   });
-  if (!r.ok) throw await r.json();
-  return await r.json();
 }
 
 async function sbSignIn(email, password) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ email, password })
+  return getAuthApiBoundary().signIn({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    email,
+    password,
   });
-  if (!r.ok) throw await r.json();
-  return await r.json();
 }
 
 async function sbRefreshToken(refreshToken) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ refresh_token: refreshToken })
+  return getAuthApiBoundary().refreshToken({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    refreshToken,
   });
-  if (!r.ok) throw await r.json();
-  return await r.json();
 }
 
 async function sbGetProfile(accessToken) {
-  const r = await fetch('/api/role', {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
+  const profile = await getAuthApiBoundary().getProfile({
+    accessToken,
   });
-  if (!r.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
-  const { role, name, accessibleMenuIds } = await r.json();
+  const { role, name, accessibleMenuIds } = profile || {};
   return { role: role || 'none', name: name || '', accessibleMenuIds: normalizeAccessibleMenuIds(accessibleMenuIds) };
 }
 
@@ -4588,25 +5113,55 @@ async function refreshCurrentUserProfile() {
 
 async function sbResetPasswordForEmail(email) {
   const redirectTo = window.location.origin + window.location.pathname;
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
-    body: JSON.stringify({ email, redirect_to: redirectTo })
+  return getAuthApiBoundary().resetPasswordForEmail({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    email,
+    redirectTo,
   });
-  if (!r.ok) throw await r.json();
 }
 
 async function sbUpdatePassword(newPassword, accessToken) {
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${accessToken}` },
-    body: JSON.stringify({ password: newPassword })
+  return getAuthApiBoundary().updatePassword({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    accessToken,
+    newPassword,
   });
-  if (!r.ok) throw await r.json();
-  return await r.json();
 }
 
 function _scheduleTokenRefresh(expiresAt) {
+  if (!_authModuleDelegationStack.has('scheduleTokenRefresh')) {
+    const boundary = getAuthModuleBoundary();
+    if (typeof boundary?.scheduleTokenRefresh === 'function') {
+      _authModuleDelegationStack.add('scheduleTokenRefresh');
+      try {
+        return boundary.scheduleTokenRefresh(expiresAt, {
+          now: () => Date.now(),
+          clearExistingTimer: () => {
+            if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
+          },
+          setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+          setTimerRef: timer => { _tokenRefreshTimer = timer; },
+          getCurrentUser: () => currentUser,
+          refreshToken: refreshToken => sbRefreshToken(refreshToken),
+          writeRefreshedTokens: ({ accessToken, refreshToken, expiresAt: nextExpiresAt }) => {
+            if (!currentUser) return;
+            currentUser.accessToken = accessToken;
+            currentUser.refreshToken = refreshToken;
+            currentUser.expiresAt = nextExpiresAt;
+            lsSet(LS_KEYS.accessToken, currentUser.accessToken);
+            lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
+            lsSet(LS_KEYS.expiresAt, String(currentUser.expiresAt));
+          },
+          onRefreshFailure: () => signOut(),
+        });
+      } finally {
+        _authModuleDelegationStack.delete('scheduleTokenRefresh');
+      }
+    }
+  }
+
   if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
   const msUntilRefresh = Math.max(0, expiresAt - Date.now() - 5 * 60 * 1000);
   _tokenRefreshTimer = setTimeout(async () => {
@@ -4629,6 +5184,29 @@ function _scheduleTokenRefresh(expiresAt) {
 }
 
 function _applySession(data, role, name, accessibleMenuIds = []) {
+  if (!_authModuleDelegationStack.has('applySession')) {
+    const boundary = getAuthModuleBoundary();
+    if (typeof boundary?.applySession === 'function') {
+      _authModuleDelegationStack.add('applySession');
+      try {
+        return boundary.applySession(data, role, name, accessibleMenuIds, {
+          now: () => Date.now(),
+          setCurrentUser: user => { currentUser = user; },
+          writeStorage: user => {
+            lsSet(LS_KEYS.accessToken, user.accessToken);
+            lsSet(LS_KEYS.refreshToken, user.refreshToken);
+            lsSet(LS_KEYS.expiresAt, String(user.expiresAt));
+            lsSet(LS_KEYS.uid, user.uid);
+            lsSet(LS_KEYS.email, user.email);
+          },
+          scheduleTokenRefresh: expiresAt => _scheduleTokenRefresh(expiresAt),
+        });
+      } finally {
+        _authModuleDelegationStack.delete('applySession');
+      }
+    }
+  }
+
   const expiresIn = (data.expires_in || 3600) * 1000;
   const userId = data.user?.id || data.user_id || '';
   const email = data.user?.email || data.email || '';
@@ -4813,15 +5391,10 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
   const behavior = options.behavior || 'smooth';
   const shouldScroll = options.scroll !== false;
   // Track active manager section and re-render if stale
-  if (MANAGER_EDIT_SECTION_IDS.includes(sectionId)) {
+  if (isManagerEditSection(sectionId)) {
     _activeManagerSection = sectionId;
     setManagerEditSectionVisibility(sectionId);
-    if (_staleSections.has(sectionId)) {
-      if (sectionId === 'manager-items-section') renderManagerCategories();
-      else if (sectionId === 'manager-pricing-section') renderPricingSection();
-      else if (sectionId === 'manager-description-section') renderDescriptionSection();
-      _staleSections.delete(sectionId);
-    }
+    refreshStaleManagerSection(sectionId);
   }
   if (trigger) setActiveSettingsSection(trigger.dataset.target || sectionId);
   else setActiveSettingsSection(sectionId);
@@ -5218,6 +5791,35 @@ async function onPublicSwitchMenuClick() {
 
 let _authFocusBefore = null;
 
+function initAuthTriggerDelegation() {
+  if (_authTriggerDelegated) return;
+  _authTriggerDelegated = true;
+  document.addEventListener('click', event => {
+    const trigger = event.target?.closest?.('[data-auth-trigger]');
+    if (!trigger) return;
+    const screen = trigger.getAttribute('data-auth-trigger') || 'signin';
+    const origin = trigger.getAttribute('data-auth-origin') || 'ui-trigger';
+    requestSignIn({ screen, origin });
+  });
+}
+
+function requestSignIn(options = {}) {
+  const controller = getAuthOverlayController();
+  if (controller?.requestSignIn && !_authModuleDelegationStack.has('requestSignIn')) {
+    _authModuleDelegationStack.add('requestSignIn');
+    try {
+      return controller.requestSignIn(options);
+    } finally {
+      _authModuleDelegationStack.delete('requestSignIn');
+    }
+  }
+
+  const normalized = (typeof options === 'string')
+    ? { screen: options }
+    : (options || {});
+  return openAuthOverlay(normalized.screen || 'signin');
+}
+
 function _authFocusTrap(e) {
   if (e.key === 'Escape') { closeAuthOverlay(); return; }
   if (e.key !== 'Tab') return;
@@ -5236,6 +5838,16 @@ function _authFocusTrap(e) {
 }
 
 function openAuthOverlay(screen) {
+  const controller = getAuthOverlayController();
+  if (controller?.openAuthOverlay && !_authModuleDelegationStack.has('openAuthOverlay')) {
+    _authModuleDelegationStack.add('openAuthOverlay');
+    try {
+      return controller.openAuthOverlay(screen);
+    } finally {
+      _authModuleDelegationStack.delete('openAuthOverlay');
+    }
+  }
+
   _setSettingsShellPending(false);
   _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
@@ -5251,6 +5863,16 @@ function openAuthOverlay(screen) {
 }
 
 function closeAuthOverlay() {
+  const controller = getAuthOverlayController();
+  if (controller?.closeAuthOverlay && !_authModuleDelegationStack.has('closeAuthOverlay')) {
+    _authModuleDelegationStack.add('closeAuthOverlay');
+    try {
+      return controller.closeAuthOverlay();
+    } finally {
+      _authModuleDelegationStack.delete('closeAuthOverlay');
+    }
+  }
+
   document.getElementById('auth-overlay')?.classList.remove('open');
   document.removeEventListener('keydown', _authFocusTrap);
   if (_authFocusBefore && typeof _authFocusBefore.focus === 'function') _authFocusBefore.focus();
@@ -5259,6 +5881,16 @@ function closeAuthOverlay() {
 }
 
 function renderAuthScreen(screen) {
+  const controller = getAuthOverlayController();
+  if (controller?.renderAuthScreen && !_authModuleDelegationStack.has('renderAuthScreen')) {
+    _authModuleDelegationStack.add('renderAuthScreen');
+    try {
+      return controller.renderAuthScreen(screen);
+    } finally {
+      _authModuleDelegationStack.delete('renderAuthScreen');
+    }
+  }
+
   _authScreen = screen;
   ['signin', 'signup', 'forgot', 'reset'].forEach(s => {
     const el = document.getElementById(`auth-screen-${s}`);
@@ -5310,6 +5942,16 @@ function ensureAuthUsernameAssistField(form, preferredIds = []) {
 }
 
 function syncAuthUsernameAssistFields() {
+  const controller = getAuthOverlayController();
+  if (controller?.syncAuthUsernameAssistFields && !_authModuleDelegationStack.has('syncAuthUsernameAssistFields')) {
+    _authModuleDelegationStack.add('syncAuthUsernameAssistFields');
+    try {
+      return controller.syncAuthUsernameAssistFields();
+    } finally {
+      _authModuleDelegationStack.delete('syncAuthUsernameAssistFields');
+    }
+  }
+
   const configs = [
     { screenName: 'signup', preferredIds: ['signup-email'] },
     { screenName: 'reset', preferredIds: ['forgot-email', 'signin-email', 'signup-email'] },
@@ -5321,6 +5963,16 @@ function syncAuthUsernameAssistFields() {
 }
 
 function initAuthForms() {
+  const controller = getAuthOverlayController();
+  if (controller?.initAuthForms && !_authModuleDelegationStack.has('initAuthForms')) {
+    _authModuleDelegationStack.add('initAuthForms');
+    try {
+      return controller.initAuthForms();
+    } finally {
+      _authModuleDelegationStack.delete('initAuthForms');
+    }
+  }
+
   ['signin', 'signup', 'forgot', 'reset'].forEach(screenName => {
     const screen = document.getElementById(`auth-screen-${screenName}`);
     if (!screen || screen.querySelector('.auth-screen-form')) return;
@@ -5448,14 +6100,32 @@ async function handleResetPassword() {
 }
 
 function signOut() {
-  currentUser = null;
+  const boundary = getAuthModuleBoundary();
+  if (typeof boundary?.clearStoredSession === 'function') {
+    boundary.clearStoredSession({
+      clearExistingTimer: () => {
+        if (_tokenRefreshTimer) clearTimeout(_tokenRefreshTimer);
+      },
+      setTimerRef: value => { _tokenRefreshTimer = value; },
+      setCurrentUser: value => { currentUser = value; },
+      clearStorage: () => {
+        localStorage.removeItem(LS_KEYS.accessToken);
+        localStorage.removeItem(LS_KEYS.refreshToken);
+        localStorage.removeItem(LS_KEYS.expiresAt);
+        localStorage.removeItem(LS_KEYS.uid);
+        localStorage.removeItem(LS_KEYS.email);
+      },
+    });
+  } else {
+    currentUser = null;
+    if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
+    localStorage.removeItem(LS_KEYS.accessToken);
+    localStorage.removeItem(LS_KEYS.refreshToken);
+    localStorage.removeItem(LS_KEYS.expiresAt);
+    localStorage.removeItem(LS_KEYS.uid);
+    localStorage.removeItem(LS_KEYS.email);
+  }
   _managerMenuPicked = false;
-  if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
-  localStorage.removeItem(LS_KEYS.accessToken);
-  localStorage.removeItem(LS_KEYS.refreshToken);
-  localStorage.removeItem(LS_KEYS.expiresAt);
-  localStorage.removeItem(LS_KEYS.uid);
-  localStorage.removeItem(LS_KEYS.email);
   if (isManagerMode || isAdminMode) exitView();
   renderUserHeader();
   _syncRequestedPageMode();
@@ -5788,34 +6458,118 @@ async function _loadAdminTabData(context) {
 
 // ─── MANAGER SECTION TRACKING ────────────────────────────────────────────────
 let _activeManagerSection = 'manager-overview-section';
-let _staleSections = new Set();
 const MANAGER_EDIT_SECTION_IDS = ['manager-items-section', 'manager-pricing-section', 'manager-description-section'];
+let _managerStaleSections = new Set();
 
-function markSectionsStale(except) {
+function markSectionsStaleLegacy(except) {
   MANAGER_EDIT_SECTION_IDS
     .filter(s => s !== except)
     .forEach(sectionId => {
-      _staleSections.add(sectionId);
+      _managerStaleSections.add(sectionId);
       const section = document.getElementById(sectionId);
       if (!section || section.style.display === 'none') return;
       if (sectionId === 'manager-items-section') renderManagerCategories();
       else if (sectionId === 'manager-pricing-section') renderPricingSection();
       else if (sectionId === 'manager-description-section') renderDescriptionSection();
-      _staleSections.delete(sectionId);
+      _managerStaleSections.delete(sectionId);
     });
 }
 
-function setManagerEditSectionVisibility(activeSectionId) {
+function setManagerEditSectionVisibilityLegacy() {
   MANAGER_EDIT_SECTION_IDS.forEach(sectionId => {
     const section = document.getElementById(sectionId);
     if (section) section.style.display = '';
   });
 }
 
-function renderActiveManagerSection() {
+function renderActiveManagerSectionLegacy() {
   renderManagerCategories();
   renderPricingSection();
   renderDescriptionSection();
+}
+
+function refreshStaleManagerSectionLegacy(sectionId) {
+  if (!_managerStaleSections.has(sectionId)) return false;
+  if (sectionId === 'manager-items-section') renderManagerCategories();
+  else if (sectionId === 'manager-pricing-section') renderPricingSection();
+  else if (sectionId === 'manager-description-section') renderDescriptionSection();
+  _managerStaleSections.delete(sectionId);
+  return true;
+}
+
+function isManagerEditSection(sectionId) {
+  if (!_uiModuleDelegationStack.has('isManagerEditSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.isManagerEditSection === 'function') {
+      _uiModuleDelegationStack.add('isManagerEditSection');
+      try {
+        return service.isManagerEditSection(sectionId);
+      } finally {
+        _uiModuleDelegationStack.delete('isManagerEditSection');
+      }
+    }
+  }
+  return MANAGER_EDIT_SECTION_IDS.includes(sectionId);
+}
+
+function markSectionsStale(except) {
+  if (!_uiModuleDelegationStack.has('markSectionsStale')) {
+    const service = getManagerSectionService();
+    if (typeof service?.markSectionsStale === 'function') {
+      _uiModuleDelegationStack.add('markSectionsStale');
+      try {
+        return service.markSectionsStale(except);
+      } finally {
+        _uiModuleDelegationStack.delete('markSectionsStale');
+      }
+    }
+  }
+  return markSectionsStaleLegacy(except);
+}
+
+function refreshStaleManagerSection(sectionId) {
+  if (!_uiModuleDelegationStack.has('refreshStaleManagerSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.refreshStaleSection === 'function') {
+      _uiModuleDelegationStack.add('refreshStaleManagerSection');
+      try {
+        return service.refreshStaleSection(sectionId);
+      } finally {
+        _uiModuleDelegationStack.delete('refreshStaleManagerSection');
+      }
+    }
+  }
+  return refreshStaleManagerSectionLegacy(sectionId);
+}
+
+function setManagerEditSectionVisibility() {
+  if (!_uiModuleDelegationStack.has('setManagerEditSectionVisibility')) {
+    const service = getManagerSectionService();
+    if (typeof service?.setManagerEditSectionVisibility === 'function') {
+      _uiModuleDelegationStack.add('setManagerEditSectionVisibility');
+      try {
+        return service.setManagerEditSectionVisibility();
+      } finally {
+        _uiModuleDelegationStack.delete('setManagerEditSectionVisibility');
+      }
+    }
+  }
+  return setManagerEditSectionVisibilityLegacy();
+}
+
+function renderActiveManagerSection() {
+  if (!_uiModuleDelegationStack.has('renderActiveManagerSection')) {
+    const service = getManagerSectionService();
+    if (typeof service?.renderActiveManagerSection === 'function') {
+      _uiModuleDelegationStack.add('renderActiveManagerSection');
+      try {
+        return service.renderActiveManagerSection();
+      } finally {
+        _uiModuleDelegationStack.delete('renderActiveManagerSection');
+      }
+    }
+  }
+  return renderActiveManagerSectionLegacy();
 }
 
 // ─── MANAGER CATEGORY EDIT (EDIT ITEMS) ─────────────────────────────────────
@@ -8267,7 +9021,18 @@ setInterval(() => {
 }, 60000);
 
 // ─── AUTH OVERLAY KEYBOARD SUPPORT ───────────────────────────────────────────
-(function() {
+function initAuthOverlayKeyboardSupport() {
+  const controller = getAuthOverlayController();
+  if (controller?.initKeyboardSupport && !_authModuleDelegationStack.has('initAuthOverlayKeyboardSupport')) {
+    _authModuleDelegationStack.add('initAuthOverlayKeyboardSupport');
+    try {
+      controller.initKeyboardSupport();
+      return;
+    } finally {
+      _authModuleDelegationStack.delete('initAuthOverlayKeyboardSupport');
+    }
+  }
+
   initAuthForms();
   ['signin-email', 'signup-email', 'forgot-email'].forEach(id => {
     const field = document.getElementById(id);
@@ -8307,7 +9072,10 @@ setInterval(() => {
       if (e.key === 'Enter') handleResetPassword();
     });
   }
-})();
+}
+
+initAuthTriggerDelegation();
+initAuthOverlayKeyboardSupport();
 
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
 
@@ -8381,5 +9149,176 @@ async function renderMenusPanel() {
     listEl.innerHTML = `<p class="db-empty db-error">Failed to load restaurants: ${escHtml(String(e))}</p>`;
   }
 }
+
+function installDeepUiDelegationShims() {
+  _managerEditorsBase = {
+    renderManagerCategories,
+    renderManagerItems,
+    renderPricingSection,
+    renderDescriptionSection,
+  };
+  _adminSwitcherBase = {
+    loadAdminSwitcherData,
+    initAdminSwitcherTab,
+    onAdminSwitcherRestaurantChange,
+    onAdminSwitcherMenuChange,
+  };
+  _publicRendererBase = {
+    renderPublicView,
+    renderPublicViews,
+  };
+
+  renderManagerCategories = function delegatedRenderManagerCategories(...args) {
+    if (!_uiModuleDelegationStack.has('renderManagerCategories')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderManagerCategories === 'function') {
+        _uiModuleDelegationStack.add('renderManagerCategories');
+        try {
+          return service.renderManagerCategories(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderManagerCategories');
+        }
+      }
+    }
+    return _managerEditorsBase.renderManagerCategories(...args);
+  };
+
+  renderManagerItems = function delegatedRenderManagerItems(...args) {
+    if (!_uiModuleDelegationStack.has('renderManagerItems')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderManagerItems === 'function') {
+        _uiModuleDelegationStack.add('renderManagerItems');
+        try {
+          return service.renderManagerItems(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderManagerItems');
+        }
+      }
+    }
+    return _managerEditorsBase.renderManagerItems(...args);
+  };
+
+  renderPricingSection = function delegatedRenderPricingSection(...args) {
+    if (!_uiModuleDelegationStack.has('renderPricingSection')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderPricingSection === 'function') {
+        _uiModuleDelegationStack.add('renderPricingSection');
+        try {
+          return service.renderPricingSection(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPricingSection');
+        }
+      }
+    }
+    return _managerEditorsBase.renderPricingSection(...args);
+  };
+
+  renderDescriptionSection = function delegatedRenderDescriptionSection(...args) {
+    if (!_uiModuleDelegationStack.has('renderDescriptionSection')) {
+      const service = getManagerEditorsService();
+      if (typeof service?.renderDescriptionSection === 'function') {
+        _uiModuleDelegationStack.add('renderDescriptionSection');
+        try {
+          return service.renderDescriptionSection(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderDescriptionSection');
+        }
+      }
+    }
+    return _managerEditorsBase.renderDescriptionSection(...args);
+  };
+
+  loadAdminSwitcherData = async function delegatedLoadAdminSwitcherData(...args) {
+    if (!_uiModuleDelegationStack.has('loadAdminSwitcherData')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.loadAdminSwitcherData === 'function') {
+        _uiModuleDelegationStack.add('loadAdminSwitcherData');
+        try {
+          return await service.loadAdminSwitcherData(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('loadAdminSwitcherData');
+        }
+      }
+    }
+    return await _adminSwitcherBase.loadAdminSwitcherData(...args);
+  };
+
+  initAdminSwitcherTab = async function delegatedInitAdminSwitcherTab(...args) {
+    if (!_uiModuleDelegationStack.has('initAdminSwitcherTab')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.initAdminSwitcherTab === 'function') {
+        _uiModuleDelegationStack.add('initAdminSwitcherTab');
+        try {
+          return await service.initAdminSwitcherTab(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('initAdminSwitcherTab');
+        }
+      }
+    }
+    return await _adminSwitcherBase.initAdminSwitcherTab(...args);
+  };
+
+  onAdminSwitcherRestaurantChange = async function delegatedOnAdminSwitcherRestaurantChange(...args) {
+    if (!_uiModuleDelegationStack.has('onAdminSwitcherRestaurantChange')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.onAdminSwitcherRestaurantChange === 'function') {
+        _uiModuleDelegationStack.add('onAdminSwitcherRestaurantChange');
+        try {
+          return await service.onAdminSwitcherRestaurantChange(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('onAdminSwitcherRestaurantChange');
+        }
+      }
+    }
+    return await _adminSwitcherBase.onAdminSwitcherRestaurantChange(...args);
+  };
+
+  onAdminSwitcherMenuChange = async function delegatedOnAdminSwitcherMenuChange(...args) {
+    if (!_uiModuleDelegationStack.has('onAdminSwitcherMenuChange')) {
+      const service = getAdminSwitcherService();
+      if (typeof service?.onAdminSwitcherMenuChange === 'function') {
+        _uiModuleDelegationStack.add('onAdminSwitcherMenuChange');
+        try {
+          return await service.onAdminSwitcherMenuChange(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('onAdminSwitcherMenuChange');
+        }
+      }
+    }
+    return await _adminSwitcherBase.onAdminSwitcherMenuChange(...args);
+  };
+
+  renderPublicView = async function delegatedRenderPublicView(...args) {
+    if (!_uiModuleDelegationStack.has('renderPublicView')) {
+      const service = getPublicRendererService();
+      if (typeof service?.renderPublicView === 'function') {
+        _uiModuleDelegationStack.add('renderPublicView');
+        try {
+          return await service.renderPublicView(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPublicView');
+        }
+      }
+    }
+    return await _publicRendererBase.renderPublicView(...args);
+  };
+
+  renderPublicViews = async function delegatedRenderPublicViews(...args) {
+    if (!_uiModuleDelegationStack.has('renderPublicViews')) {
+      const service = getPublicRendererService();
+      if (typeof service?.renderPublicViews === 'function') {
+        _uiModuleDelegationStack.add('renderPublicViews');
+        try {
+          return await service.renderPublicViews(...args);
+        } finally {
+          _uiModuleDelegationStack.delete('renderPublicViews');
+        }
+      }
+    }
+    return await _publicRendererBase.renderPublicViews(...args);
+  };
+}
+
+installDeepUiDelegationShims();
 
 init();

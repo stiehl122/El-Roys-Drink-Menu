@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/leroyslounge/style.css">
+<link rel="stylesheet" href="/core/auth/auth-overlay-unified.css">
 </head>
 <body class="route-restaurant route-restaurant--leroy route-shell-pending">
 <main id="site-picker-view" class="site-picker-view" hidden>
@@ -57,13 +58,6 @@
              aria-label="Open El Roy's Cantina menu">
             El Roy's
           </a>
-          <button class="ll-board-jump-link ll-board-login-btn"
-                  data-route-signin
-                  type="button"
-                  onclick="openAuthOverlay()"
-                  aria-label="Sign in">
-            Sign In
-          </button>
           <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
             <button id="ll-route-swap-trigger"
                     class="ll-board-swap-trigger"
@@ -170,7 +164,7 @@
       <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">⚙ Manager</button>
       <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
     </div>
-    <button class="header-signin-btn" id="signin-btn" onclick="openAuthOverlay()">Sign In</button>
+    <button class="header-signin-btn" id="signin-btn" data-auth-trigger="signin" data-auth-origin="route-header">Sign In</button>
     <div class="user-chip" id="user-chip" style="display:none"
          onclick="toggleUserDropdown()"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
@@ -484,103 +478,6 @@
 </div>
 
 <!-- AUTH OVERLAY -->
-<div id="auth-overlay">
-  <div class="auth-box" id="auth-box" role="dialog" aria-modal="true" aria-label="Sign In">
-    <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
-    <div id="auth-form-wrap">
-
-      <!-- SIGN IN -->
-      <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title">SIGN IN</h2>
-        <p class="auth-screen-subtitle">Sign in to your account</p>
-        <div class="auth-field">
-          <input type="email" id="signin-email" placeholder="Email address" autocomplete="email" aria-describedby="signin-error"/>
-        </div>
-        <div class="auth-field">
-          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" aria-describedby="signin-error"/>
-        </div>
-        <div class="auth-error" id="signin-error"></div>
-        <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
-        <button class="auth-link-btn" onclick="renderAuthScreen('forgot')">Forgot password?</button>
-        <div class="auth-toggle">
-          <span>Don't have an account?</span>
-          <button class="auth-toggle-btn" onclick="renderAuthScreen('signup')">Sign Up</button>
-        </div>
-      </div>
-
-      <!-- SIGN UP -->
-      <div id="auth-screen-signup" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">CREATE ACCOUNT</h2>
-        <p class="auth-screen-subtitle">Sign up with your work email</p>
-        <div class="auth-field">
-          <input type="text" id="signup-firstname" placeholder="First name" autocomplete="given-name"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-lastname').focus();}"/>
-        </div>
-        <div class="auth-field">
-          <input type="text" id="signup-lastname" placeholder="Last name" autocomplete="family-name"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-email').focus();}"/>
-        </div>
-        <div class="auth-field">
-          <input type="email" id="signup-email" placeholder="Email address" autocomplete="email"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('signup-password').focus();}"/>
-        </div>
-        <div class="auth-field">
-          <input type="password" id="signup-password" placeholder="Password" autocomplete="new-password"
-                 aria-describedby="signup-error"
-                 onkeydown="if(event.key==='Enter'){event.preventDefault();handleSignUp();}"/>
-        </div>
-        <div class="auth-error" id="signup-error"></div>
-        <button class="auth-submit-btn" id="signup-submit-btn" onclick="handleSignUp()">Create Account</button>
-        <p class="auth-approval-notice">New accounts require admin approval before menu access is granted.</p>
-        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
-      </div>
-
-      <!-- FORGOT PASSWORD -->
-      <div id="auth-screen-forgot" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">RESET PASSWORD</h2>
-        <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
-        <div class="auth-field">
-          <input type="email" id="forgot-email" placeholder="Email address" autocomplete="email" aria-describedby="forgot-error"/>
-        </div>
-        <div class="auth-error" id="forgot-error"></div>
-        <button class="auth-submit-btn" id="forgot-submit-btn" onclick="handleForgotPassword()">Send Reset Link</button>
-        <button class="auth-back-btn" onclick="renderAuthScreen('signin')">← Back to Sign In</button>
-      </div>
-
-      <!-- RESET PASSWORD -->
-      <div id="auth-screen-reset" class="auth-screen" style="display:none">
-        <h2 class="auth-screen-title">SET NEW PASSWORD</h2>
-        <p class="auth-screen-subtitle">Choose a new password for your account</p>
-        <div class="auth-field">
-          <input type="password" id="reset-password" placeholder="New password" autocomplete="new-password" aria-describedby="reset-error"/>
-        </div>
-        <div class="auth-field">
-          <input type="password" id="reset-confirm" placeholder="Confirm new password" autocomplete="new-password" aria-describedby="reset-error"/>
-        </div>
-        <div class="auth-error" id="reset-error"></div>
-        <button class="auth-submit-btn" id="reset-submit-btn" onclick="handleResetPassword()">Set Password</button>
-      </div>
-
-    </div>
-    <button class="pin-cancel" onclick="closeAuthOverlay()">Cancel</button>
-  </div>
-</div>
-
-<!-- CONFIG JSON MODAL -->
-<div class="modal-bg" id="config-modal-bg">
-  <div class="modal">
-    <h2>UPDATE CONFIG FILE</h2>
-    <div class="modal-sub">Copy this into <code>lib/config/notifications.json</code> and reload the page.</div>
-    <textarea id="config-json-output" class="config-json-textarea" readonly spellcheck="false"></textarea>
-    <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeConfigModal()">Done</button>
-      <button class="btn-confirm" onclick="copyConfigJson()">COPY JSON</button>
-    </div>
-  </div>
-</div>
 
 <!-- PREVIEW MODAL -->
 <div class="modal-bg" id="modal-bg">
@@ -619,6 +516,24 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
+<script src="/core/domain/constants.js"></script>
+<script src="/core/domain/category-defaults.js"></script>
+<script src="/core/auth/auth-api.js"></script>
+<script src="/core/auth/auth-session-service.js"></script>
+<script src="/core/auth/auth-overlay-template.js"></script>
+<script src="/core/auth/auth-overlay-controller.js"></script>
+<script src="/core/ui/manager/workspace.js"></script>
+<script src="/core/ui/manager/sections.js"></script>
+<script src="/core/ui/manager/editors.js"></script>
+<script src="/core/ui/admin/workspace.js"></script>
+<script src="/core/ui/admin/switcher.js"></script>
+<script src="/core/ui/public/footer-actions.js"></script>
+<script src="/core/ui/public/renderer-default.js"></script>
+<script src="/core/session/publish-service.js"></script>
+<script src="/core/session/menu-session.js"></script>
+<script src="/core/data/menu-state-loader.js"></script>
+<script src="/core/session/poll-scheduler.js"></script>
+<script src="/routes/shared/public-route-core.js"></script>
 <script src="/leroyslounge/app.js"></script>
 <script src="/app.js"></script>
 </body>

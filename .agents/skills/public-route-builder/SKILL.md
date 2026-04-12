@@ -18,9 +18,11 @@ public restaurant routes.
 - `elroyscantina/style.css`
 - `elroyscantina/app.js`
 - `elroyscantina/DESIGN.md`
+- `routes/shared/public-route-core.js`
 - route assets used by those pages
 - shared public handoff points in root `app.js` such as `renderPublicView()`
   and `_renderCustomDesignView()`
+- shared fallback renderer boundary `core/ui/public/renderer-default.js`
 
 ## Goals
 
@@ -35,13 +37,14 @@ public restaurant routes.
 1. Read the target route's `index.html`, `style.css`, `app.js`, and
    `DESIGN.md`.
 2. If the issue touches integration, read the related shared public-render code
-   in root `app.js`.
+   in root `app.js`, `routes/shared/public-route-core.js`, and
+   `core/ui/public/renderer-default.js`.
 3. Identify the runtime contract the route depends on:
    - categories and items
    - featured groups
    - last-updated labels
    - footer version and preview state
-   - auth or manager-entry affordances
+   - auth or manager-entry affordances (footer staff actions first)
 4. Make the smallest route-owned changes that restore both design fidelity and
    live behavior.
 5. Sanity-check mobile and desktop assumptions.
@@ -51,9 +54,12 @@ public restaurant routes.
 - Stitch-driven design fidelity
 - `renderPublicView()` route selection
 - `_renderCustomDesignView()` handoff behavior
+- `createPublicRouteCore(...)` adapter contract
 - footer `APP_VERSION` output
 - `PREVIEW` badge behavior on preview deployments
 - last-updated output
+- footer staff sign-in/manager/admin/sign-out controls
+- shared auth overlay script/style includes in route shells
 - route fallback behavior
 
 ## Output

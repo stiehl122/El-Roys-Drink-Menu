@@ -158,7 +158,10 @@ Requirements:
 - remove imported scripts
 - link the shared `/style.css`
 - link the route `style.css`
+- link `/core/auth/auth-overlay-unified.css`
+- link `/routes/shared/public-route-core.js` before the route `app.js` script
 - link the route `app.js`
+- include shared auth module scripts used by entry shells (`/core/auth/auth-api.js`, `/core/auth/auth-session-service.js`, `/core/auth/auth-overlay-template.js`, `/core/auth/auth-overlay-controller.js`)
 - include the site picker at the top, hidden by default
 - include only the shared app shell elements that are still required for auth, modals, toasts, or manager handoff
 - add semantic hooks only where needed for runtime binding, such as:
@@ -195,16 +198,14 @@ Project rule:
 
 ### `app.js`
 
-Generate route-specific client logic that binds live app data into the Stitch DOM
-without duplicating shared application behavior.
+Generate route-specific adapter logic that registers the route with
+`/routes/shared/public-route-core.js` without duplicating shared application behavior.
 
-The route script must expose:
-
-```js
-window.initializeRoute = function initializeRoute(menuState, authState) {
-  // route-specific Stitch DOM binding
-};
-```
+The route script must call `createPublicRouteCore(...)` through
+`window.__HF_ROUTE_MODULES__` and provide adapter hooks for:
+- route selectors and template IDs
+- category and featured markup builders
+- route-specific swap dropdown behavior
 
 Responsibilities:
 - bind live menu categories and items into the Stitch structure
@@ -270,6 +271,7 @@ Required functionality to preserve:
 Missing-control rule:
 - if a required capability needs a control that Stitch does not include, ask the user before adding it
 - only skip that question when the user already directed the control pattern
+- do not inline auth overlay markup into route HTML; auth overlay source must remain centralized in `core/auth/auth-overlay-template.js`
 
 9. Repository rules.
 

@@ -18,6 +18,7 @@ implementation.
 - 86'd item behavior
 - descriptions and pricing
 - auth and menu-access gating
+- unified auth overlay source across all five entry shells
 - featured items
 - notifications
 - footer version and preview badge behavior
@@ -31,6 +32,7 @@ implementation.
 - food menus remain behaviorally distinct from drink menus where required
 - managers only operate assigned menus
 - route-owned public pages still show last-updated, version, and preview metadata
+- public route sign-in entry remains footer-based (no duplicated top-header login buttons)
 
 ## Review Method
 
