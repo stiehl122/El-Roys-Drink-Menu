@@ -86,10 +86,27 @@ test('all entry shells source auth overlay from one shared template script', () 
     const html = read(file);
     assert.equal(html.includes('id="auth-overlay"'), false, `${file} still contains inline auth overlay markup`);
     assert.equal(html.includes('onclick="requestSignIn('), false, `${file} still has inline requestSignIn handler`);
+    assert.equal(html.includes('/core/auth/auth-overlay-unified.css'), true, `${file} must load shared auth overlay stylesheet`);
     assert.equal(html.includes('/core/auth/auth-overlay-template.js'), true, `${file} must load shared auth overlay template`);
     assert.equal(html.includes('/core/auth/auth-overlay-controller.js'), true, `${file} must load shared auth overlay controller`);
     assert.equal(html.includes('/core/auth/auth-session-service.js'), true, `${file} must load shared auth session service`);
   });
+});
+
+test('site picker shell no longer defines inline auth overlay styling', () => {
+  const landingHtml = read('index.html');
+  assert.equal(/\n\s*#auth-overlay\s*\{/.test(landingHtml), false, 'index.html must not define inline #auth-overlay styles');
+  assert.equal(/\n\s*\.auth-box\s*\{/.test(landingHtml), false, 'index.html must not define inline .auth-box styles');
+});
+
+test('restaurant route templates rely on footer staff sign-in only', () => {
+  const leroysRoute = read('leroyslounge/index.html');
+  const elroysRoute = read('elroyscantina/index.html');
+
+  assert.equal(leroysRoute.includes('data-route-signin'), false, 'leroyslounge route template should not render top sign-in button');
+  assert.equal(elroysRoute.includes('data-route-signin'), false, 'elroyscantina route template should not render top sign-in button');
+  assert.equal(leroysRoute.includes('data-route-footer-signin'), true, 'leroyslounge route footer sign-in must remain');
+  assert.equal(elroysRoute.includes('data-route-footer-signin'), true, 'elroyscantina route footer sign-in must remain');
 });
 
 test('route adapters no longer hard-hide route sign-in controls', () => {

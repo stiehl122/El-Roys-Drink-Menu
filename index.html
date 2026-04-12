@@ -255,110 +255,6 @@
     outline: none;
   }
 
-  #auth-overlay {
-    display: none;
-    background: rgba(0, 0, 0, 0.6);
-    position: fixed;
-    inset: 0;
-    align-items: center;
-    justify-content: center;
-    z-index: 60;
-    padding: 16px;
-  }
-  #auth-overlay.open { display: flex; }
-  .auth-box {
-    background: #f7fafc;
-    border: 1px solid rgba(45, 55, 72, 0.12);
-    border-radius: 16px;
-    padding: 36px 28px;
-    text-align: center;
-    width: 100%;
-    max-width: 340px;
-    position: relative;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
-  }
-  .auth-box h2 {
-    font-family: 'Epilogue', sans-serif;
-    font-size: 22px;
-    letter-spacing: 0.08em;
-    margin-bottom: 5px;
-    color: #1a202c;
-  }
-  .auth-box p,
-  .auth-toggle,
-  .auth-approval-notice,
-  .auth-back-btn,
-  .pin-cancel {
-    color: #718096;
-    font-size: 12px;
-  }
-  .auth-screen-subtitle { margin-bottom: 20px; }
-  .auth-hint-msg {
-    color: #718096;
-    font-size: 12px;
-    margin-bottom: 16px;
-    padding: 10px;
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: 8px;
-    line-height: 1.5;
-  }
-  .auth-field { margin-bottom: 10px; text-align: left; }
-  .auth-field input {
-    width: 100%;
-    padding: 11px 13px;
-    border: 1px solid rgba(45, 55, 72, 0.2);
-    border-radius: 9px;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14px;
-    background: #fff;
-    color: #1a202c;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-  .auth-field input:focus { border-color: #2d3748; }
-  .auth-error {
-    color: #e74c3c;
-    font-size: 12px;
-    margin-bottom: 10px;
-    min-height: 18px;
-    text-align: left;
-  }
-  .auth-submit-btn {
-    width: 100%;
-    padding: 13px;
-    background: #2d3748;
-    color: #f7fafc;
-    border: none;
-    border-radius: 9px;
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    cursor: pointer;
-    transition: background 0.15s;
-    margin-bottom: 12px;
-  }
-  .auth-submit-btn:hover { background: #1a202c; }
-  .auth-submit-btn:disabled { opacity: 0.6; cursor: default; }
-  .auth-toggle-btn,
-  .auth-link-btn,
-  .auth-back-btn,
-  .pin-cancel {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-family: 'Space Grotesk', sans-serif;
-  }
-  .auth-toggle-btn,
-  .auth-link-btn {
-    color: #2d3748;
-    text-decoration: underline;
-  }
-  .auth-link-btn { display: block; width: 100%; padding: 4px 0; margin-bottom: 12px; }
-  .auth-approval-notice { margin: -4px 0 10px; line-height: 1.5; opacity: 0.85; }
-  .auth-back-btn,
-  .pin-cancel { display: block; width: 100%; padding: 6px; margin-top: 10px; }
-
   /* ── Entrance animation ── */
   @keyframes lp-fade-up {
     from { opacity: 0; transform: translateY(20px); }
@@ -461,6 +357,7 @@
     .lp-footer { padding: 0.75rem 2rem 1rem; }
   }
 </style>
+<link rel="stylesheet" href="/core/auth/auth-overlay-unified.css">
 </head>
 <body>
 
