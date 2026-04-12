@@ -29,80 +29,88 @@
   <div class="ll-board-page">
     <a class="ll-skip-link" href="#ll-route-main">Skip to menu content</a>
     <header class="ll-board-topbar neon-header-full">
-      <div class="ll-board-topbar-left" aria-hidden="true"></div>
-      <div class="ll-board-topbar-center">
-        <button class="ll-board-logo-btn ll-board-logo-btn--center" data-route-signin data-route-signin-persistent type="button" onclick="openAuthOverlay()" aria-label="Sign in">
+      <div class="ll-board-topbar-left">
+        <a class="ll-board-logo-btn ll-board-logo-btn--home" href="/" aria-label="Return to the homepage">
           <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge" width="495" height="335">
-        </button>
+        </a>
       </div>
-      <div class="ll-board-topbar-right">
+      <div class="ll-board-topbar-center">
         <nav class="ll-menu-toggle" aria-label="Swap menu">
-          <button id="ll-nav-drinks"
-                  class="ll-menu-toggle-btn"
-                  type="button"
-                  data-route-menu-toggle="drinks">
-            Drinks
-          </button>
           <button id="ll-nav-food"
                   class="ll-menu-toggle-btn"
                   type="button"
                   data-route-menu-toggle="food">
             Food
           </button>
+          <button id="ll-nav-drinks"
+                  class="ll-menu-toggle-btn"
+                  type="button"
+                  data-route-menu-toggle="drinks">
+            Drinks
+          </button>
         </nav>
+      </div>
+      <div class="ll-board-topbar-right">
         <div class="ll-board-action-cluster">
-        <a class="ll-board-jump-link"
-           href="/elroyscantina"
-           aria-label="Open El Roy's Cantina menu">
-          El Roy's
-        </a>
-        <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
-          <button id="ll-route-swap-trigger"
-                  class="ll-board-swap-trigger"
+          <a class="ll-board-jump-link"
+             href="/elroyscantina"
+             aria-label="Open El Roy's Cantina menu">
+            El Roy's
+          </a>
+          <button class="ll-board-jump-link ll-board-login-btn"
+                  data-route-signin
                   type="button"
-                  data-route-dropdown-trigger
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-controls="ll-route-swap-dropdown"
-                  onclick="toggleRouteDropdown('ll-route-swap-trigger', 'll-route-swap-dropdown')">
-            Swap Menu
+                  onclick="openAuthOverlay()"
+                  aria-label="Sign in">
+            Sign In
           </button>
-          <div id="ll-route-swap-dropdown"
-               class="ll-board-route-dropdown"
-               data-route-dropdown-panel
-               hidden></div>
-        </div>
-        <div class="ll-board-action-dropdown" data-route-dropdown data-route-settings style="display:none">
-          <button id="ll-route-settings-trigger"
-                  class="ll-board-settings-trigger"
+          <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
+            <button id="ll-route-swap-trigger"
+                    class="ll-board-swap-trigger"
+                    type="button"
+                    data-route-dropdown-trigger
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="ll-route-swap-dropdown"
+                    onclick="toggleRouteDropdown('ll-route-swap-trigger', 'll-route-swap-dropdown')">
+              Swap Menu
+            </button>
+            <div id="ll-route-swap-dropdown"
+                 class="ll-board-route-dropdown"
+                 data-route-dropdown-panel
+                 hidden></div>
+          </div>
+          <div class="ll-board-action-dropdown" data-route-dropdown data-route-settings style="display:none">
+            <button id="ll-route-settings-trigger"
+                    class="ll-board-settings-trigger"
+                    type="button"
+                    data-route-dropdown-trigger
+                    aria-label="Manager and admin actions"
+                    aria-haspopup="true"
+                    aria-expanded="false"
+                    aria-controls="ll-route-settings-dropdown"
+                    onclick="toggleRouteDropdown('ll-route-settings-trigger', 'll-route-settings-dropdown')">
+              <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+            </button>
+            <div id="ll-route-settings-dropdown"
+                 class="ll-board-route-dropdown"
+                 data-route-dropdown-panel
+                 hidden></div>
+          </div>
+          <button class="ll-board-swap-trigger ll-route-exit-btn"
                   type="button"
-                  data-route-dropdown-trigger
-                  aria-label="Manager and admin actions"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-controls="ll-route-settings-dropdown"
-                  onclick="toggleRouteDropdown('ll-route-settings-trigger', 'll-route-settings-dropdown')">
-            <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+                  data-route-manager
+                  onclick="exitView()"
+                  aria-label="Exit manager view">
+            Exit
           </button>
-          <div id="ll-route-settings-dropdown"
-               class="ll-board-route-dropdown"
-               data-route-dropdown-panel
-               hidden></div>
-        </div>
-        <button class="ll-board-swap-trigger ll-route-exit-btn"
-                type="button"
-                data-route-manager
-                onclick="exitView()"
-                aria-label="Exit manager view">
-          Exit
-        </button>
-        <button class="ll-board-swap-trigger ll-route-exit-btn"
-                type="button"
-                data-route-admin
-                onclick="exitView()"
-                aria-label="Exit admin view">
-          Exit
-        </button>
+          <button class="ll-board-swap-trigger ll-route-exit-btn"
+                  type="button"
+                  data-route-admin
+                  onclick="exitView()"
+                  aria-label="Exit admin view">
+            Exit
+          </button>
         </div>
         <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
              onclick="toggleUserDropdown('ll-user-chip')"
@@ -142,6 +150,12 @@
     <footer class="ll-board-footer">
       <p class="ll-board-footer-updated">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
       <p id="ll-route-footer-version" class="ll-board-footer-version"></p>
+      <div class="ll-board-footer-actions" data-route-footer-actions>
+        <button class="ll-board-footer-action" type="button" data-route-footer-signin>Staff Sign-In</button>
+        <button class="ll-board-footer-action" type="button" data-route-footer-manager style="display:none">Manager</button>
+        <button class="ll-board-footer-action" type="button" data-route-footer-admin style="display:none">Admin</button>
+        <button class="ll-board-footer-action" type="button" data-route-footer-signout style="display:none">Sign Out</button>
+      </div>
     </footer>
   </div>
 </template>
@@ -196,6 +210,12 @@
       <footer id="menu-footer">
         <span id="footer-version"></span>
         <span id="footer-last-updated"></span>
+        <div class="public-staff-actions" data-route-staff-actions>
+          <button class="public-staff-action" type="button" data-route-staff-signin>Staff Sign-In</button>
+          <button class="public-staff-action" type="button" data-route-staff-manager style="display:none">Manager</button>
+          <button class="public-staff-action" type="button" data-route-staff-admin style="display:none">Admin</button>
+          <button class="public-staff-action" type="button" data-route-staff-signout style="display:none">Sign Out</button>
+        </div>
       </footer>
     </div>
   </div>

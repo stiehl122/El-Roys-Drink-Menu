@@ -1099,6 +1099,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   padding: 16px 4px 8px;
   margin-top: 24px;
   border-top: 1px solid var(--border);
@@ -1115,6 +1116,33 @@
 #footer-last-updated {
   text-align: right;
   flex: 1;
+}
+.public-staff-actions {
+  width: 100%;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+.public-staff-action {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  padding: 0;
+}
+.public-staff-action:hover,
+.public-staff-action:focus-visible {
+  color: var(--text);
+  outline: none;
 }
 .footer-preview-badge {
   display: inline-block;
@@ -2283,6 +2311,9 @@ body.admin-console-page .picker-box {
   #footer-last-updated {
     text-align: left;
     width: 100%;
+  }
+  .public-staff-actions {
+    justify-content: flex-start;
   }
   .picker-box,
   .auth-box,

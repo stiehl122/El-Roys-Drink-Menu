@@ -795,6 +795,165 @@ test('settings route policy service centralizes manager and admin access decisio
   assert.equal(adminDenied.kind, 'admin-denied');
 });
 
+test('public href generation uses bare restaurant routes for food and ?menu=drinks for drinks', () => {
+  const sandbox = loadAppSandbox();
+
+  assert.equal(
+    sandbox.getPublicHrefForMenuId('00000000-0000-0000-0000-000000000021'),
+    '/leroyslounge'
+  );
+  assert.equal(
+    sandbox.getPublicHrefForMenuId('00000000-0000-0000-0000-000000000020'),
+    '/leroyslounge?menu=drinks'
+  );
+  assert.equal(
+    sandbox.getPublicHrefForMenuId('00000000-0000-0000-0000-000000000003'),
+    '/elroyscantina'
+  );
+  assert.equal(
+    sandbox.getPublicHrefForMenuId('00000000-0000-0000-0000-000000000002'),
+    '/elroyscantina?menu=drinks'
+  );
+});
+
+test('sbResolveMenu defaults bare restaurant routes to that restaurant food menu', async () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const restaurants = getState(sandbox, 'RESTAURANTS');
+  const replaceCalls = [];
+  const assigned = [];
+
+  sandbox.location.pathname = '/elroyscantina';
+  sandbox.location.search = '';
+  sandbox.location.href = 'https://example.com/elroyscantina';
+  sandbox.location.assign = url => assigned.push(url);
+  sandbox.history.replaceState = (_, __, url) => replaceCalls.push(url);
+  sandbox.fetch = async url => {
+    if (String(url).includes('/rest/v1/menus?id=in.(')) {
+      return {
+        ok: true,
+        json: async () => [
+          { ...menus.LEROYS_DRINKS, restaurant_id: menus.LEROYS_DRINKS.restaurantId, archived: false },
+          { ...menus.LEROYS_FOOD, restaurant_id: menus.LEROYS_FOOD.restaurantId, archived: false },
+          { ...menus.ELROYS_DRINKS, restaurant_id: menus.ELROYS_DRINKS.restaurantId, archived: false },
+          { ...menus.ELROYS_FOOD, restaurant_id: menus.ELROYS_FOOD.restaurantId, archived: false },
+        ],
+      };
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  sandbox.window.fetch = sandbox.fetch;
+
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    _siteRestaurant: restaurants.ELROYS,
+    MENU_ID: '',
+    RESTAURANT_ID: '',
+    MENU_TYPE: 'drinks',
+  });
+
+  await sandbox.sbResolveMenu();
+
+  assert.equal(getState(sandbox, 'MENU_ID'), menus.ELROYS_FOOD.id);
+  assert.equal(getState(sandbox, 'RESTAURANT_ID'), restaurants.ELROYS.id);
+  assert.equal(getState(sandbox, 'MENU_TYPE'), 'food');
+  assert.deepEqual(assigned, []);
+  assert.equal(replaceCalls.at(-1), 'https://example.com/elroyscantina');
+});
+
+test('sbResolveMenu treats ?menu=drinks as restaurant-relative public state', async () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const restaurants = getState(sandbox, 'RESTAURANTS');
+  const replaceCalls = [];
+
+  sandbox.location.pathname = '/elroyscantina';
+  sandbox.location.search = '?menu=drinks';
+  sandbox.location.href = 'https://example.com/elroyscantina?menu=drinks';
+  sandbox.history.replaceState = (_, __, url) => replaceCalls.push(url);
+  sandbox.fetch = async url => {
+    const text = String(url);
+    if (text.includes(`slug=eq.${encodeURIComponent(menus.ELROYS_DRINKS.slug)}`)) {
+      return {
+        ok: true,
+        json: async () => [{
+          id: menus.ELROYS_DRINKS.id,
+          name: menus.ELROYS_DRINKS.name,
+          type: menus.ELROYS_DRINKS.type,
+          restaurant_id: menus.ELROYS_DRINKS.restaurantId,
+        }],
+      };
+    }
+    if (text.includes('slug=eq.drinks')) {
+      return { ok: true, json: async () => [] };
+    }
+    if (text.includes('/rest/v1/menus?id=in.(')) {
+      return {
+        ok: true,
+        json: async () => [
+          { id: menus.LEROYS_DRINKS.id, archived: false },
+          { id: menus.LEROYS_FOOD.id, archived: false },
+          { id: menus.ELROYS_DRINKS.id, archived: false },
+          { id: menus.ELROYS_FOOD.id, archived: false },
+        ],
+      };
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  sandbox.window.fetch = sandbox.fetch;
+
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    _siteRestaurant: restaurants.ELROYS,
+    MENU_ID: '',
+    RESTAURANT_ID: '',
+    MENU_TYPE: 'food',
+  });
+
+  await sandbox.sbResolveMenu();
+
+  assert.equal(getState(sandbox, 'MENU_ID'), menus.ELROYS_DRINKS.id);
+  assert.equal(getState(sandbox, 'RESTAURANT_ID'), restaurants.ELROYS.id);
+  assert.equal(getState(sandbox, 'MENU_TYPE'), 'drinks');
+  assert.deepEqual(replaceCalls, []);
+});
+
+test('selectMenu uses replaceState with the canonical public menu url', () => {
+  const sandbox = loadAppSandbox();
+  const menus = getState(sandbox, 'MENUS');
+  const replaceCalls = [];
+  let pushCalls = 0;
+
+  sandbox.location.pathname = '/elroyscantina';
+  sandbox.location.search = '';
+  sandbox.location.href = 'https://example.com/elroyscantina';
+  sandbox.history.replaceState = (_, __, url) => replaceCalls.push(url);
+  sandbox.history.pushState = () => {
+    pushCalls += 1;
+  };
+
+  setState(sandbox, {
+    _appPageMode: 'public',
+    closeMenuPicker: () => {},
+    updateActiveMenuBar: () => {},
+    renderUserHeader: () => {},
+    ensureCurrentMenuSession: () => {},
+  });
+
+  sandbox.selectMenu(
+    menus.ELROYS_DRINKS.id,
+    menus.ELROYS_DRINKS.slug,
+    menus.ELROYS_DRINKS.name,
+    menus.ELROYS_DRINKS.type,
+    menus.ELROYS_DRINKS.restaurantId
+  );
+
+  assert.equal(replaceCalls.at(-1), '/elroyscantina?menu=drinks');
+  assert.equal(pushCalls, 0);
+});
+
 test('menu state loader service applies fallback and featured refresh through one boundary', async () => {
   const sandbox = loadAppSandbox();
   let fallbackCalls = 0;
@@ -877,7 +1036,11 @@ test('public route contract exposes a stable snapshot and switchMenu action', as
   assert.equal(contract.snapshot.activeMenuName, "Leroy's Lounge Drinks");
   assert.equal(contract.snapshot.restaurantId, getState(sandbox, 'RESTAURANT_ID'));
   assert.equal(contract.snapshot.menuId, getState(sandbox, 'MENU_ID'));
+  assert.equal(contract.snapshot.publicFooter.signIn, null);
+  assert.equal(contract.snapshot.publicFooter.links.map(link => link.label).join(','), 'Manager,Sign Out');
   assert.equal(typeof contract.actions.switchMenu, 'function');
+  assert.equal(typeof contract.actions.openAuthOverlay, 'function');
+  assert.equal(typeof contract.actions.signOut, 'function');
 
   await contract.actions.switchMenu({
     id: getState(sandbox, 'MENU_ID'),
@@ -1263,6 +1426,98 @@ test('public route contract and route renderers register and hydrate both restau
   }
 });
 
+test('public staff footer state exposes sign-in and quiet utility links by role', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    MENU_ID: '00000000-0000-0000-0000-000000000020',
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+    currentUser: null,
+  });
+  const signedOut = sandbox.buildPublicStaffFooterState();
+  assert.equal(signedOut.signIn.label, 'Staff Sign-In');
+  assert.equal(signedOut.links.length, 0);
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+  });
+  const managerState = sandbox.buildPublicStaffFooterState();
+  assert.equal(managerState.links.map(link => link.label).join(','), 'Manager,Sign Out');
+  const pickerManagerState = sandbox.buildPublicStaffFooterState(getState(sandbox, 'currentUser'), {
+    menuId: '',
+    restaurantId: '',
+  });
+  assert.equal(pickerManagerState.links.map(link => link.label).join(','), 'Manager,Sign Out');
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'admin',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+  });
+  const adminState = sandbox.buildPublicStaffFooterState();
+  assert.equal(adminState.links.map(link => link.label).join(','), 'Manager,Admin,Sign Out');
+  const pickerAdminState = sandbox.buildPublicStaffFooterState(getState(sandbox, 'currentUser'), {
+    menuId: '',
+    restaurantId: '',
+  });
+  assert.equal(pickerAdminState.links.map(link => link.label).join(','), 'Manager,Admin,Sign Out');
+});
+
+test('picker init bootstraps shared session state without requiring the app shell', async () => {
+  const sandbox = loadAppSandbox();
+  const calls = [];
+
+  sandbox.fetch = async url => {
+    if (String(url) === '/api/config') {
+      calls.push('config');
+      return {
+        ok: true,
+        json: async () => ({
+          supabaseUrl: 'https://example.supabase.co',
+          supabaseAnonKey: 'anon-key',
+        }),
+      };
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+  sandbox.window.fetch = sandbox.fetch;
+
+  setState(sandbox, {
+    _appPageMode: 'picker',
+    showPickerPage: () => {
+      calls.push('picker');
+    },
+    loadLocalConfig: () => {
+      calls.push('local-config');
+    },
+    _tryHandleRecoveryCallback: async () => {
+      calls.push('recovery');
+      return false;
+    },
+    _tryRestoreSession: async () => {
+      calls.push('restore');
+      return { restored: true };
+    },
+    renderUserHeader: () => {
+      calls.push('render-header');
+    },
+    syncPublicStaffFooterActions: () => {
+      calls.push('sync-footer');
+    },
+    showAppShell: () => {
+      calls.push('shell');
+    },
+  });
+
+  await sandbox.init();
+
+  assert.deepEqual(calls, ['picker', 'local-config', 'config', 'recovery', 'restore', 'render-header', 'sync-footer']);
+});
+
 test('menu fallback store keys snapshots by menu identity and menu type', () => {
   const sandbox = loadAppSandbox();
   const menus = getState(sandbox, 'MENUS');
@@ -1337,7 +1592,7 @@ test('menu link resolver uses per-menu configuration with canonical route fallba
   });
   assert.equal(
     sandbox.getNotificationMenuLink(),
-    'https://example.com/elroyscantina?menu=el-roys-cantina-drinks'
+    'https://example.com/elroyscantina?menu=drinks'
   );
 });
 

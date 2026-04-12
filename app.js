@@ -298,8 +298,25 @@ function sortKnownMenus(menus) {
   return [...menus].sort((a, b) => KNOWN_MENU_ORDER.indexOf(a.id) - KNOWN_MENU_ORDER.indexOf(b.id));
 }
 
-function normalizeKnownMenuSlug(slug) {
-  return LEGACY_MENU_SLUG_ALIASES[slug] || slug;
+function getMenuSlugForRestaurantType(restaurantId, menuType = 'drinks') {
+  if (!isValidRestaurant(restaurantId)) return '';
+  const normalizedType = (menuType || 'drinks').toLowerCase();
+  return knownMenuList().find(menu => (
+    menu.restaurantId === restaurantId &&
+    (menu.type || '').toLowerCase() === normalizedType
+  ))?.slug || '';
+}
+
+function normalizeKnownMenuSlug(slug, options = {}) {
+  const normalized = LEGACY_MENU_SLUG_ALIASES[slug] || slug;
+  const restaurantId = typeof options === 'string'
+    ? options
+    : options.restaurantId;
+  if (!isValidRestaurant(restaurantId)) return normalized;
+  if (normalized === 'drinks' || normalized === 'food') {
+    return getMenuSlugForRestaurantType(restaurantId, normalized) || normalized;
+  }
+  return normalized;
 }
 
 function normalizeAccessibleMenuIds(menuIds) {
@@ -476,6 +493,14 @@ function redirectToRestaurantPath(restaurantId, slug = '', message = '') {
   const safeRestaurantId = isValidRestaurant(restaurantId) ? restaurantId : RESTAURANTS.LEROYS.id;
   const path = SITE_PATHS[safeRestaurantId] || SITE_PATHS[RESTAURANTS.LEROYS.id];
   const url = new URL(path, window.location.origin);
+  const menu = getMenuBySlug(slug);
+  const publicHref = menu?.id ? getPublicHrefForMenuId(menu.id) : '';
+  if (publicHref) {
+    _clearActiveMenuContext({ clearCache: !isValidRestaurant(restaurantId) });
+    queueRedirectNotice(message);
+    navigateToPage(publicHref);
+    return false;
+  }
   if (slug) url.searchParams.set('menu', slug);
   _clearActiveMenuContext({ clearCache: !isValidRestaurant(restaurantId) });
   queueRedirectNotice(message);
@@ -545,8 +570,9 @@ function getPublicHrefForMenuId(menuId) {
     ? SITE_PATHS[menu.restaurantId]
     : getDefaultPublicPath();
   if (!menu?.slug) return basePath;
+  if ((menu.type || '').toLowerCase() === 'food') return basePath;
   const url = new URL(basePath, window.location.origin);
-  url.searchParams.set('menu', menu.slug);
+  url.searchParams.set('menu', 'drinks');
   return `${url.pathname}${url.search}`;
 }
 
@@ -612,6 +638,14 @@ function getManagerHrefForMenuId(menuId) {
   return `${url.pathname}${url.search}`;
 }
 
+function getAdminHrefForMenuId(menuId) {
+  const menu = getMenuById(menuId);
+  if (!menu?.slug) return SHARED_PAGE_PATHS.admin;
+  const url = new URL(SHARED_PAGE_PATHS.admin, window.location.origin);
+  url.searchParams.set('menu', menu.slug);
+  return `${url.pathname}${url.search}`;
+}
+
 function navigateToPage(path) {
   window.location.assign(path);
 }
@@ -672,7 +706,7 @@ function buildCurrentMenuPageRequest(overrides = {}) {
     siteRestaurantId: isValidRestaurant(siteRestaurantId) ? siteRestaurantId : '',
     requestedMenuId: overrides.requestedMenuId ?? MENU_ID,
     requestedMenuSlug: overrides.requestedMenuSlug ??
-      normalizeKnownMenuSlug(new URLSearchParams(search).get('menu') || ''),
+      normalizeKnownMenuSlug(new URLSearchParams(search).get('menu') || '', { restaurantId: siteRestaurantId }),
   };
 }
 
@@ -1610,10 +1644,10 @@ function readCachedMenuState(expectedContext = '') {
 }
 
 function getDefaultMenuForRestaurant(restaurant) {
-  if (!isValidRestaurant(restaurant?.id)) return MENUS.LEROYS_DRINKS;
+  if (!isValidRestaurant(restaurant?.id)) return MENUS.LEROYS_FOOD;
   return knownMenuList().find(menu => (
-    menu.restaurantId === restaurant.id && menu.type === 'drinks'
-  )) || MENUS.LEROYS_DRINKS;
+    menu.restaurantId === restaurant.id && menu.type === 'food'
+  )) || MENUS.LEROYS_FOOD;
 }
 
 function primeSiteRestaurantMenu(restaurant) {
@@ -1621,9 +1655,8 @@ function primeSiteRestaurantMenu(restaurant) {
   MENU_ID = preferredMenu.id;
   lsSet(LS_KEYS.menuId, MENU_ID);
   setActiveMenuContext(preferredMenu.name, preferredMenu.type, preferredMenu.restaurantId);
-  const url = new URL(location.href);
-  url.searchParams.set('menu', preferredMenu.slug);
-  history.replaceState({}, '', url.toString());
+  const href = getPublicHrefForMenuId(preferredMenu.id);
+  if (href) history.replaceState({}, '', new URL(href, window.location.origin).toString());
 }
 
 function showPickerPage() {
@@ -1693,7 +1726,7 @@ async function sbReadJsonOrThrow(url, options = {}) {
 // the hardcoded default order. Sets MENU_ID and normalizes legacy slugs.
 async function sbResolveMenu() {
   const rawSlug = new URLSearchParams(location.search).get('menu');
-  const slug = normalizeKnownMenuSlug(rawSlug);
+  const slug = normalizeKnownMenuSlug(rawSlug, { restaurantId: _siteRestaurant?.id || '' });
 
   if (slug) {
     const [menuRes, allMenusRes] = await Promise.all([
@@ -1724,10 +1757,10 @@ async function sbResolveMenu() {
         MENU_ID          = menu.id;
         if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
         lsSet(LS_KEYS.menuId, MENU_ID);
-        if (rawSlug && rawSlug !== slug) {
-          const url = new URL(location.href);
-          url.searchParams.set('menu', slug);
-          history.replaceState({}, '', url.toString());
+        const publicHref = getPublicHrefForMenuId(menu.id);
+        const currentHref = `${window.location.pathname}${window.location.search}`;
+        if (publicHref && publicHref !== currentHref) {
+          history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
         }
         return;
       }
@@ -1761,10 +1794,10 @@ async function sbResolveMenu() {
           return;
         }
         if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
-        if (menu.slug) {
-          const url = new URL(location.href);
-          url.searchParams.set('menu', menu.slug);
-          history.replaceState({}, '', url.toString());
+        const publicHref = getPublicHrefForMenuId(MENU_ID);
+        const currentHref = `${window.location.pathname}${window.location.search}`;
+        if (publicHref && publicHref !== currentHref) {
+          history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
         }
       } else {
         _clearActiveMenuContext({ clearCache: true });
@@ -1785,10 +1818,17 @@ async function sbResolveMenu() {
   const menus = sortKnownMenus((await res.json()).filter(menu => !menu.archived));
   _hasMultipleMenus = menus.length > 1;
 
-  let defaultMenu = menus.find(menu => menu.id === MENUS.LEROYS_DRINKS.id);
+  let defaultMenu = null;
+  if (_siteRestaurant?.id) {
+    defaultMenu = menus.find(menu => (
+      menu.restaurant_id === _siteRestaurant.id &&
+      (menu.type || '').toLowerCase() === 'food'
+    ));
+  }
   if (!defaultMenu && currentUser?.role === 'manager') {
     defaultMenu = menus.find(menu => normalizeAccessibleMenuIds(currentUser.accessibleMenuIds).includes(menu.id));
   }
+  if (!defaultMenu) defaultMenu = menus.find(menu => menu.id === MENUS.LEROYS_FOOD.id);
   if (!defaultMenu) defaultMenu = menus[0];
 
   if (defaultMenu) {
@@ -1799,9 +1839,8 @@ async function sbResolveMenu() {
       redirectToRestaurantPath(defaultMenu.restaurant_id, defaultMenu.slug || '');
       return;
     }
-    const url = new URL(location.href);
-    url.searchParams.set('menu', defaultMenu.slug);
-    history.replaceState({}, '', url.toString());
+    const href = getPublicHrefForMenuId(defaultMenu.id);
+    if (href) history.replaceState({}, '', new URL(href, window.location.origin).toString());
   }
 }
 
@@ -3521,6 +3560,13 @@ async function init() {
   const isSettingsRoute = isSettingsPage();
   if (_appPageMode === 'picker') {
     showPickerPage();
+    migrateLocalStorage();
+    loadLocalConfig();
+    await loadSupabaseConfig();
+    const handledRecovery = await _tryHandleRecoveryCallback();
+    if (!handledRecovery) await _tryRestoreSession();
+    renderUserHeader({ skipPublicRender: true });
+    syncPublicStaffFooterActions();
     return;
   }
   showAppShell();
@@ -3626,6 +3672,10 @@ function buildPublicRouteRenderSnapshot(options = {}) {
     menuId: MENU_ID,
     menuState,
     menuType: MENU_TYPE,
+    publicFooter: buildPublicStaffFooterState(actor, {
+      menuId: MENU_ID,
+      restaurantId: RESTAURANT_ID,
+    }),
     restaurantId: RESTAURANT_ID,
     restaurantSpecials: featuredSnapshot.restaurantSpecials,
     siteRestaurant,
@@ -3686,6 +3736,8 @@ function createPublicRouteAdapter(contractOrMenuState, legacyState = {}, options
 }
 
 function createPublicRouteContract() {
+  const actor = currentUser;
+  const siteRestaurantId = _siteRestaurant?.id || '';
   return {
     version: 1,
     snapshot: buildPublicRouteRenderSnapshot({ actor, siteRestaurantId }),
@@ -3698,6 +3750,8 @@ function createPublicRouteContract() {
       closeDropdowns: () => closeRouteDropdowns(),
       openManager: () => onActionBtnClick(),
       openAdmin: () => onAdminBtnClick(),
+      openAuthOverlay: () => openAuthOverlay('signin'),
+      signOut: () => signOut(),
       canManageMenu: (menuId, user = actor) => currentUserCanManageMenu(menuId, user),
       switchMenu: menu => switchPublicRouteMenu(menu),
     },
@@ -4095,6 +4149,7 @@ function renderFooter() {
   const versionHtml = APP_VERSION +
     (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
+  const staffFooterState = buildPublicStaffFooterState();
   const publicVersionEl = document.getElementById('footer-version');
   const publicUpdatedEl = document.getElementById('footer-last-updated');
   const managerVersionEl = document.getElementById('manager-footer-version');
@@ -4115,6 +4170,95 @@ function renderFooter() {
       el.textContent = el === managerUpdatedEl ? 'Updated —' : '';
       el.title = '';
     }
+  });
+  syncPublicStaffFooterActions(staffFooterState);
+}
+
+function buildPublicStaffFooterState(user = currentUser, options = {}) {
+  const menuId = options.menuId || MENU_ID;
+  const restaurantId = options.restaurantId || RESTAURANT_ID;
+  const signedIn = !!user;
+  const canManageCurrentMenu = signedIn && (
+    menuId
+      ? currentUserCanManageMenu(menuId, user)
+      : (user?.role === 'manager' || user?.role === 'admin')
+  );
+  const isAdmin = user?.role === 'admin';
+  const links = [];
+
+  if (canManageCurrentMenu) {
+    links.push({
+      key: 'manager',
+      label: 'Manager',
+      href: getManagerHrefForMenuId(menuId),
+      action: 'navigate',
+    });
+  }
+  if (isAdmin) {
+    links.push({
+      key: 'admin',
+      label: 'Admin',
+      href: getAdminHrefForMenuId(menuId),
+      action: 'navigate',
+    });
+  }
+  if (signedIn) {
+    links.push({
+      key: 'signout',
+      label: 'Sign Out',
+      href: '',
+      action: 'signOut',
+    });
+  }
+
+  return {
+    signedIn,
+    menuId,
+    restaurantId,
+    signIn: signedIn
+      ? null
+      : {
+          key: 'signin',
+          label: 'Staff Sign-In',
+          href: '',
+          action: 'openAuthOverlay',
+        },
+    links,
+  };
+}
+
+function syncPublicStaffFooterActions(state = buildPublicStaffFooterState()) {
+  const footerWraps = document.querySelectorAll('[data-route-footer-actions], [data-route-staff-actions]');
+  const signInEls = document.querySelectorAll('[data-route-footer-signin], [data-route-staff-signin]');
+  const managerEls = document.querySelectorAll('[data-route-footer-manager], [data-route-staff-manager]');
+  const adminEls = document.querySelectorAll('[data-route-footer-admin], [data-route-staff-admin]');
+  const signOutEls = document.querySelectorAll('[data-route-footer-signout], [data-route-staff-signout]');
+  const managerLink = state.links.find(link => link.key === 'manager') || null;
+  const adminLink = state.links.find(link => link.key === 'admin') || null;
+  const signOutLink = state.links.find(link => link.key === 'signout') || null;
+
+  footerWraps.forEach(footerWrap => {
+    footerWrap.style.display = state.signedIn || state.signIn ? '' : 'none';
+  });
+  signInEls.forEach(signInEl => {
+    signInEl.style.display = state.signIn ? '' : 'none';
+    signInEl.textContent = state.signIn?.label || '';
+    signInEl.onclick = state.signIn ? () => openAuthOverlay('signin') : null;
+  });
+  managerEls.forEach(managerEl => {
+    managerEl.style.display = managerLink ? '' : 'none';
+    managerEl.textContent = managerLink?.label || '';
+    managerEl.onclick = managerLink ? () => navigateToPage(managerLink.href) : null;
+  });
+  adminEls.forEach(adminEl => {
+    adminEl.style.display = adminLink ? '' : 'none';
+    adminEl.textContent = adminLink?.label || '';
+    adminEl.onclick = adminLink ? () => navigateToPage(adminLink.href) : null;
+  });
+  signOutEls.forEach(signOutEl => {
+    signOutEl.style.display = signOutLink ? '' : 'none';
+    signOutEl.textContent = signOutLink?.label || '';
+    signOutEl.onclick = signOutLink ? () => signOut() : null;
   });
 }
 
@@ -4596,6 +4740,7 @@ function renderUserHeader(options = {}) {
       publicView?.style.display !== 'none') {
     renderPublicView();
   }
+  syncPublicStaffFooterActions();
 }
 
 function applyRole(role) {
@@ -4603,6 +4748,7 @@ function applyRole(role) {
   const pruneSection = document.getElementById('prune-section');
   if (pruneSection) pruneSection.style.display = isAdmin ? '' : 'none';
   renderUserHeader();
+  syncPublicStaffFooterActions();
 }
 
 function setActiveSettingsSection(sectionId) {
@@ -4995,9 +5141,14 @@ function selectMenu(menuId, slug, menuName, menuType, restaurantId) {
   MENU_ID       = menuId;
   setActiveMenuContext(menuName || '', menuType || 'drinks', restaurantId || '');
   lsSet(LS_KEYS.menuId, MENU_ID);
-  const url = new URL(location.href);
-  url.searchParams.set('menu', slug);
-  history.replaceState({}, '', url.toString());
+  const nextHref = _appPageMode === 'public'
+    ? getPublicHrefForMenuId(menuId)
+    : (() => {
+      const url = new URL(location.href);
+      url.searchParams.set('menu', slug);
+      return url.toString();
+    })();
+  if (nextHref) history.replaceState({}, '', nextHref);
   ensureCurrentMenuSession({
     requestedMenuId: menuId,
     requestedMenuSlug: slug,
@@ -5088,16 +5239,19 @@ function openAuthOverlay(screen) {
   _setSettingsShellPending(false);
   _authFocusBefore = document.activeElement;
   const overlay = document.getElementById('auth-overlay');
+  if (!overlay) return;
   overlay.classList.add('open');
   const noConfig = !SUPABASE_URL || !SUPABASE_ANON_KEY;
-  document.getElementById('auth-no-config').style.display = noConfig ? '' : 'none';
-  document.getElementById('auth-form-wrap').style.display = noConfig ? 'none' : '';
+  const noConfigEl = document.getElementById('auth-no-config');
+  const formWrapEl = document.getElementById('auth-form-wrap');
+  if (noConfigEl) noConfigEl.style.display = noConfig ? '' : 'none';
+  if (formWrapEl) formWrapEl.style.display = noConfig ? 'none' : '';
   if (!noConfig) renderAuthScreen(screen || 'signin');
   document.addEventListener('keydown', _authFocusTrap);
 }
 
 function closeAuthOverlay() {
-  document.getElementById('auth-overlay').classList.remove('open');
+  document.getElementById('auth-overlay')?.classList.remove('open');
   document.removeEventListener('keydown', _authFocusTrap);
   if (_authFocusBefore && typeof _authFocusBefore.focus === 'function') _authFocusBefore.focus();
   _authFocusBefore = null;
@@ -8120,24 +8274,39 @@ setInterval(() => {
     if (field) field.addEventListener('input', syncAuthUsernameAssistFields);
   });
   // Sign In: email Enter → focus password; password Enter → submit
-  document.getElementById('signin-email').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') document.getElementById('signin-password').focus();
-  });
-  document.getElementById('signin-password').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleSignIn();
-  });
+  const signinEmail = document.getElementById('signin-email');
+  const signinPassword = document.getElementById('signin-password');
+  const signupPassword = document.getElementById('signup-password');
+  const forgotEmail = document.getElementById('forgot-email');
+  const resetConfirm = document.getElementById('reset-confirm');
+  if (signinEmail) {
+    signinEmail.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') signinPassword?.focus();
+    });
+  }
+  if (signinPassword) {
+    signinPassword.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleSignIn();
+    });
+  }
   // Sign Up: password Enter → submit
-  document.getElementById('signup-password').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleSignUp();
-  });
+  if (signupPassword) {
+    signupPassword.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleSignUp();
+    });
+  }
   // Forgot: email Enter → submit
-  document.getElementById('forgot-email').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleForgotPassword();
-  });
+  if (forgotEmail) {
+    forgotEmail.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleForgotPassword();
+    });
+  }
   // Reset: confirm Enter → submit
-  document.getElementById('reset-confirm').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') handleResetPassword();
-  });
+  if (resetConfirm) {
+    resetConfirm.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') handleResetPassword();
+    });
+  }
 })();
 
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
