@@ -135,7 +135,7 @@ function buildFallbackDomainConstants() {
     ELROYS_FOOD: { id: '00000000-0000-0000-0000-000000000003', restaurantId: restaurants.ELROYS.id, type: 'food', slug: 'el-roys-cantina-food', name: "El Roy's Cantina Food" },
   };
   return {
-    APP_VERSION: 'v0.8.8',
+    APP_VERSION: 'v0.8.9',
     RESTAURANTS: restaurants,
     MENUS: menus,
     KNOWN_RESTAURANT_ORDER: [restaurants.LEROYS.id, restaurants.ELROYS.id],

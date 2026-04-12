@@ -35,7 +35,7 @@
   };
 
   const constants = {
-    APP_VERSION: 'v0.8.8',
+    APP_VERSION: 'v0.8.9',
     RESTAURANTS,
     MENUS,
     KNOWN_RESTAURANT_ORDER,
