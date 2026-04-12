@@ -109,6 +109,25 @@ test('restaurant route templates rely on footer staff sign-in only', () => {
   assert.equal(elroysRoute.includes('data-route-footer-signin'), true, 'elroyscantina route footer sign-in must remain');
 });
 
+test('settings shells do not render dedicated header sign-in buttons', () => {
+  const managerHtml = read('manager/index.html');
+  const adminHtml = read('admin/index.html');
+
+  assert.equal(managerHtml.includes('data-auth-origin="settings-header"'), false, 'manager shell should not render settings-header sign-in trigger');
+  assert.equal(adminHtml.includes('data-auth-origin="settings-header"'), false, 'admin shell should not render settings-header sign-in trigger');
+  assert.equal(managerHtml.includes('id="signin-btn"'), false, 'manager shell should not render signin-btn');
+  assert.equal(adminHtml.includes('id="signin-btn"'), false, 'admin shell should not render signin-btn');
+});
+
+test('shared auth overlay stylesheet normalizes manager and admin shell auth visuals', () => {
+  const authCss = read('core/auth/auth-overlay-unified.css');
+
+  assert.equal(authCss.includes('body.manager-stitch-shell #auth-overlay'), true, 'auth overlay css must normalize manager shell overlay');
+  assert.equal(authCss.includes('body.admin-console-page #auth-overlay'), true, 'auth overlay css must normalize admin shell overlay');
+  assert.equal(authCss.includes('body.manager-stitch-shell .auth-box'), true, 'auth overlay css must normalize manager shell auth box');
+  assert.equal(authCss.includes('body.admin-console-page .auth-box'), true, 'auth overlay css must normalize admin shell auth box');
+});
+
 test('route adapters no longer hard-hide route sign-in controls', () => {
   const leroysRoute = read('leroyslounge/app.js');
   const elroysRoute = read('elroyscantina/app.js');
