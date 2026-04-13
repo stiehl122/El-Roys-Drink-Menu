@@ -8,6 +8,8 @@ test('ui module scripts register manager/admin/public boundary factories', () =>
     'core/ui/manager/workspace.js',
     'core/ui/manager/sections.js',
     'core/ui/manager/editors.js',
+    'core/ui/manager/open-food-facts.js',
+    'core/ui/manager/barcode-scanner.js',
     'core/ui/admin/workspace.js',
     'core/ui/admin/switcher.js',
     'core/ui/public/footer-actions.js',
@@ -18,6 +20,8 @@ test('ui module scripts register manager/admin/public boundary factories', () =>
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerWorkspaceService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerSectionService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerEditorsService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createBarcodeScannerService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createAdminWorkspaceService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createAdminSwitcherService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createPublicFooterActionsService, 'function');

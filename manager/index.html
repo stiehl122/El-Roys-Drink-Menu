@@ -122,8 +122,9 @@
           <div class="manager-shell-drawer-meta">
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
             <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-            <button class="btn-small manager-shell-drawer-return" type="button" onclick="exitView()">Return to menu</button>
             <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
+            <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
+            <button class="btn-small manager-shell-drawer-return" id="drawer-return-btn" type="button" onclick="exitView()">Return to menu</button>
           </div>
         </div>
         <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>
@@ -196,7 +197,7 @@
               </div>
               <div class="manager-shell-section-actions">
                 <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
-                <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal()" style="display:none">Add Item(s)</button>
+                <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal({ mode: 'manual' })" style="display:none">Add Item(s)</button>
               </div>
             </div>
             <div id="manager-items-categories"></div>
@@ -386,6 +387,8 @@
 <script src="/core/ui/manager/workspace.js"></script>
 <script src="/core/ui/manager/sections.js"></script>
 <script src="/core/ui/manager/editors.js"></script>
+<script src="/core/ui/manager/open-food-facts.js"></script>
+<script src="/core/ui/manager/barcode-scanner.js"></script>
 <script src="/core/ui/admin/workspace.js"></script>
 <script src="/core/ui/admin/switcher.js"></script>
 <script src="/core/ui/public/footer-actions.js"></script>

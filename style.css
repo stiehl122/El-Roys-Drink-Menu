@@ -730,16 +730,30 @@
   .btn-confirm:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; }
   .config-json-textarea { width: 100%; min-height: 110px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: monospace; font-size: 13px; padding: 12px; resize: none; box-sizing: border-box; margin-top: 4px; }
   .add-item-modal { max-width: 640px; }
+  .add-item-mode-toggle { display: inline-flex; gap: 8px; margin: 14px 0 16px; padding: 4px; border-radius: 999px; background: rgba(72, 63, 54, 0.08); }
+  .add-item-mode-chip { border: none; background: transparent; color: var(--muted); font-family: var(--font-body); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 8px 12px; border-radius: 999px; cursor: pointer; transition: background-color 0.16s, color 0.16s; }
+  .add-item-mode-chip.is-active { background: var(--surface); color: var(--text); box-shadow: 0 8px 18px rgba(72, 63, 54, 0.12); }
+  .add-item-modal-note { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(18,133,120,0.09); border: 1px solid rgba(18,133,120,0.18); color: var(--text); font-size: 13px; }
   .add-item-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
   .add-item-field-block { display: flex; flex-direction: column; gap: 8px; }
   .add-item-field-block--full { grid-column: 1 / -1; }
   .add-item-field-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; }
   .add-item-inline-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 120px) auto; gap: 8px; align-items: center; }
+  .add-item-inline-row--barcode { grid-template-columns: minmax(0, 1fr) auto; }
   .add-item-inline-note { margin: 0; color: var(--muted); font-size: 12px; }
   .add-item-pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
   .add-item-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--text); }
   .add-item-pill-remove { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
   .add-item-modal-warning { margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(190,67,48,0.12); border: 1px solid rgba(190,67,48,0.26); color: var(--terra-dk); font-size: 13px; }
+  .add-item-scan-panel { display: flex; flex-direction: column; gap: 14px; }
+  .add-item-scan-panel--unsupported { padding: 14px; border-radius: 16px; background: rgba(72, 63, 54, 0.04); border: 1px dashed rgba(72, 63, 54, 0.2); }
+  .add-item-scan-copy { display: flex; flex-direction: column; gap: 6px; }
+  .add-item-scan-heading { margin: 0; color: var(--text); font-family: var(--font-heading); font-size: 18px; }
+  .add-item-scanner-frame { position: relative; min-height: 280px; border-radius: 18px; overflow: hidden; background: radial-gradient(circle at top, rgba(18,133,120,0.26), rgba(45,55,72,0.92)); border: 1px solid rgba(253,244,236,0.14); box-shadow: inset 0 0 0 1px rgba(253,244,236,0.08); }
+  .add-item-scanner-video { width: 100%; height: 100%; min-height: 280px; object-fit: cover; display: block; background: transparent; }
+  .add-item-scanner-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .add-item-scanner-overlay::before { content: ""; width: min(78%, 340px); aspect-ratio: 1.85 / 1; border: 2px solid rgba(253,244,236,0.85); border-radius: 16px; box-shadow: 0 0 0 999px rgba(14, 17, 21, 0.18); }
+  .add-item-scanner-overlay-copy { position: absolute; bottom: 18px; left: 18px; right: 18px; color: rgba(253,244,236,0.94); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; text-align: center; }
   .manager-category-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
   .logout-link { background: none; border: none; color: var(--muted); font-family: var(--font-body); font-size: 12px; cursor: pointer; margin-top: 20px; display: block; text-align: center; width: 100%; padding: 8px; transition: color 0.2s; }
@@ -4270,6 +4284,7 @@ body.manager-stitch-shell .manager-shell-drawer-admin {
 }
 
 body.manager-stitch-shell .manager-shell-drawer-switch,
+body.manager-stitch-shell .manager-shell-drawer-add-item,
 body.manager-stitch-shell .manager-shell-drawer-return,
 body.manager-stitch-shell .manager-shell-drawer-admin {
   width: 100%;

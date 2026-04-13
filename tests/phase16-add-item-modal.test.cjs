@@ -8,11 +8,24 @@ const {
   setState,
 } = require('./helpers/runtime.cjs');
 
+async function flushAsync() {
+  await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await Promise.resolve();
+}
+
 function setupManagerAddItemDom(sandbox) {
   const doc = sandbox.document;
   const categories = doc._registerElement('manager-items-categories', createElement('div', 'manager-items-categories'));
   const addButton = doc._registerElement('manager-add-item-btn', createElement('button', 'manager-add-item-btn'));
   const modalHost = doc._registerElement('manager-add-item-modal-host', createElement('div', 'manager-add-item-modal-host'));
+  const drawerAddButton = doc._registerElement('drawer-add-item-btn', createElement('button', 'drawer-add-item-btn'));
+  const drawerSwitchButton = doc._registerElement('drawer-switch-menu-btn', createElement('button', 'drawer-switch-menu-btn'));
+  const drawerAdminButton = doc._registerElement('admin-btn-drawer', createElement('button', 'admin-btn-drawer'));
+  const drawerReturnButton = doc._registerElement('drawer-return-btn', createElement('button', 'drawer-return-btn'));
+  const drawer = doc._registerElement('manager-settings-rail', createElement('aside', 'manager-settings-rail'));
+  const backdrop = doc._registerElement('settings-drawer-backdrop', createElement('div', 'settings-drawer-backdrop'));
+  const toggle = doc._registerElement('settings-drawer-toggle', createElement('button', 'settings-drawer-toggle'));
   const saveBtn = doc._registerElement('save-btn', createElement('button', 'save-btn'));
   const sendBtn = doc._registerElement('send-btn', createElement('button', 'send-btn'));
   const syncStatus = doc._registerElement('sync-status', createElement('div', 'sync-status'));
@@ -23,6 +36,11 @@ function setupManagerAddItemDom(sandbox) {
 
   categories.closest = () => null;
   syncStatus.closest = () => ({ hidden: false });
+  drawer.classList = {
+    contains() { return false; },
+    toggle() {},
+  };
+  drawer.querySelector = () => null;
   actionBar.classList = {
     toggle() {},
   };
@@ -32,6 +50,13 @@ function setupManagerAddItemDom(sandbox) {
     categories,
     addButton,
     modalHost,
+    drawerAddButton,
+    drawerSwitchButton,
+    drawerAdminButton,
+    drawerReturnButton,
+    drawer,
+    backdrop,
+    toggle,
     saveBtn,
     sendBtn,
     syncStatus,
@@ -154,6 +179,7 @@ test('confirm and add more keeps the modal open, resets the draft, and remembers
   assert.equal(result.ok, true);
   assert.equal(getState(sandbox, 'menuState.cocktails.items[0].name'), 'House Margarita');
   assert.equal(getState(sandbox, '_addItemModalState.isOpen'), true);
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'manual');
   assert.equal(getState(sandbox, '_addItemModalState.fields.name'), '');
   assert.equal(getState(sandbox, '_addItemModalState.fields.categoryId'), 'cocktails');
   assert.match(modalHost.innerHTML, /Confirm &amp; Add More/);
@@ -248,5 +274,218 @@ test('escape closes the add-item modal', () => {
     preventDefault() {},
   });
 
+  assert.equal(getState(sandbox, '_addItemModalState.isOpen'), false);
+});
+
+test('drawer add-item button is role-gated and ordered below switch or admin tools', () => {
+  const sandbox = loadAppSandbox();
+  const { drawerAddButton, drawerSwitchButton, drawerAdminButton, drawerReturnButton } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.renderUserHeader();
+  sandbox.updateActiveMenuBar();
+
+  assert.equal(drawerAddButton.style.display, '');
+  assert.equal(drawerAddButton.style.order, '3');
+  assert.equal(drawerSwitchButton.style.order, '2');
+  assert.equal(drawerAdminButton.style.order, '3');
+  assert.equal(drawerReturnButton.style.order, '5');
+
+  setState(sandbox, {
+    currentUser: {
+      role: 'admin',
+      name: 'Alex',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+  });
+
+  sandbox.renderUserHeader();
+  sandbox.updateActiveMenuBar();
+
+  assert.equal(drawerAddButton.style.display, '');
+  assert.equal(drawerAddButton.style.order, '4');
+
+  setState(sandbox, {
+    MENU_ID: '',
+    currentUser: {
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: [],
+    },
+  });
+
+  sandbox.renderUserHeader();
+  sandbox.updateActiveMenuBar();
+
+  assert.equal(drawerAddButton.style.display, 'none');
+});
+
+test('drawer add-item action closes the drawer and opens the shared add-item modal', () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let closeArgs = null;
+  const originalCloseSettingsDrawer = sandbox.closeSettingsDrawer;
+  sandbox.closeSettingsDrawer = options => {
+    closeArgs = options;
+    return originalCloseSettingsDrawer(options);
+  };
+
+  const result = sandbox.onDrawerAddItemClick();
+
+  assert.equal(result.ok, true);
+  assert.equal(JSON.stringify(closeArgs), JSON.stringify({ restoreFocus: false }));
+  assert.equal(getState(sandbox, '_addItemModalState.isOpen'), true);
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'scan');
+  assert.match(modalHost.innerHTML, /Add Item\(s\)/);
+});
+
+test('scan mode prefills the add-item form from a detected barcode and releases the scanner', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let detectBarcode = null;
+  let stopCount = 0;
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start(_videoEl, options = {}) {
+      detectBarcode = options.onDetect;
+      return { ok: true, mode: 'native' };
+    },
+    async stop() {
+      stopCount += 1;
+      return { ok: true };
+    },
+  });
+  sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct = async () => ({
+    name: 'Topo Chico',
+    description: 'Sparkling mineral water',
+  });
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+  await detectBarcode('02113642');
+  await flushAsync();
+
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'manual');
+  assert.equal(getState(sandbox, '_addItemModalState.entryMode'), 'scan');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), 'Topo Chico');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), 'Sparkling mineral water');
+  assert.ok(stopCount >= 1);
+  assert.match(modalHost.innerHTML, /Sparkling mineral water/);
+});
+
+test('scan mode shows a toast and blank form fields when a product lookup misses', async () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  const toasts = [];
+  seedManagerMenuState(sandbox, {
+    showToast: message => toasts.push(message),
+  });
+
+  let detectBarcode = null;
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start(_videoEl, options = {}) {
+      detectBarcode = options.onDetect;
+      return { ok: true, mode: 'native' };
+    },
+    async stop() { return { ok: true }; },
+  });
+  sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct = async () => null;
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+  await detectBarcode('99999999');
+  await flushAsync();
+
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'manual');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), '');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), '');
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], 'Product not found');
+});
+
+test('unsupported scan mode falls back to manual UPC lookup inside the modal', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start() { return { ok: false, reason: 'unsupported' }; },
+    async stop() { return { ok: true }; },
+  });
+  sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct = async barcode => ({
+    name: `Scanned ${barcode}`,
+    description: 'Manual UPC match',
+  });
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+  sandbox.updateAddItemModalManualBarcode('750000000001');
+  await sandbox.submitAddItemModalBarcodeLookup();
+  await flushAsync();
+
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'manual');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), 'Scanned 750000000001');
+  assert.match(modalHost.innerHTML, /Manual UPC match/);
+});
+
+test('confirm and add more after a scanned item restarts scan mode', async () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let detectBarcode = null;
+  let startCount = 0;
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start(_videoEl, options = {}) {
+      startCount += 1;
+      detectBarcode = options.onDetect;
+      return { ok: true, mode: 'native' };
+    },
+    async stop() { return { ok: true }; },
+  });
+  sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct = async () => ({
+    name: 'Jarritos',
+    description: 'Mandarin soda',
+  });
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+  await detectBarcode('12345678');
+  await flushAsync();
+  sandbox.updateAddItemModalField('categoryId', 'beer');
+
+  const result = sandbox.confirmAddItemModal({ addMore: true });
+  await flushAsync();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.mode, 'scan');
+  assert.equal(getState(sandbox, '_addItemModalState.mode'), 'scan');
+  assert.equal(getState(sandbox, 'menuState.beer.items[0].name'), 'Jarritos');
+  assert.equal(startCount, 2);
+});
+
+test('closing the scan modal stops the active scanner session', async () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let stopCount = 0;
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start() { return { ok: true, mode: 'native' }; },
+    async stop() {
+      stopCount += 1;
+      return { ok: true };
+    },
+  });
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+  sandbox.closeAddItemModal();
+  await flushAsync();
+
+  assert.ok(stopCount >= 1);
   assert.equal(getState(sandbox, '_addItemModalState.isOpen'), false);
 });

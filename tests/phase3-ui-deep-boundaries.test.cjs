@@ -13,12 +13,16 @@ function read(relativePath) {
 test('deep ui module scripts register manager/admin/public factories', () => {
   const sandbox = loadSandboxWithScripts([
     'core/ui/manager/editors.js',
+    'core/ui/manager/open-food-facts.js',
+    'core/ui/manager/barcode-scanner.js',
     'core/ui/admin/switcher.js',
     'core/ui/public/renderer-default.js',
   ]);
 
   assert.equal(typeof sandbox.__HF_UI_MODULES__, 'object');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerEditorsService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createBarcodeScannerService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createAdminSwitcherService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createPublicRendererService, 'function');
 });
