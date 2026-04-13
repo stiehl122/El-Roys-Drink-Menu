@@ -13,7 +13,16 @@
   display: flex;
 }
 
-body.manager-stitch-shell #auth-overlay,
+body.manager-stitch-shell #auth-overlay {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--manager-shell-overlay, rgba(0, 0, 0, 0.6));
+  z-index: 140;
+  backdrop-filter: none;
+  overflow-y: hidden;
+}
+
 body.admin-console-page #auth-overlay {
   align-items: center;
   justify-content: center;
@@ -37,7 +46,17 @@ body.admin-console-page #auth-overlay {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
 }
 
-body.manager-stitch-shell .auth-box,
+body.manager-stitch-shell .auth-box {
+  width: min(100%, 340px);
+  max-width: 340px;
+  padding: 36px 28px;
+  border: 1px solid var(--manager-shell-border-strong, rgba(45, 55, 72, 0.18));
+  border-radius: 16px;
+  background: var(--manager-shell-surface, #f7fafc);
+  color: var(--manager-shell-text, #1a202c);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+
 body.admin-console-page .auth-box {
   width: min(100%, 340px);
   max-width: 340px;
@@ -64,7 +83,14 @@ body.admin-console-page .auth-box::before {
   color: #1a202c;
 }
 
-body.manager-stitch-shell .auth-box h2,
+body.manager-stitch-shell .auth-box h2 {
+  font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--manager-shell-text, #1a202c);
+}
+
 body.admin-console-page .auth-box h2 {
   font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
@@ -86,7 +112,11 @@ body.manager-stitch-shell .auth-box p,
 body.manager-stitch-shell .auth-toggle,
 body.manager-stitch-shell .auth-approval-notice,
 body.manager-stitch-shell .auth-back-btn,
-body.manager-stitch-shell .pin-cancel,
+body.manager-stitch-shell .pin-cancel {
+  color: var(--manager-shell-muted, #718096);
+  font-size: 12px;
+}
+
 body.admin-console-page .auth-box p,
 body.admin-console-page .auth-toggle,
 body.admin-console-page .auth-approval-notice,
@@ -128,7 +158,12 @@ body.admin-console-page .auth-screen {
   line-height: 1.5;
 }
 
-body.manager-stitch-shell .auth-hint-msg,
+body.manager-stitch-shell .auth-hint-msg {
+  color: var(--manager-shell-muted, #718096);
+  background: var(--manager-shell-surface-muted, rgba(0, 0, 0, 0.05));
+  border-radius: 8px;
+}
+
 body.admin-console-page .auth-hint-msg {
   color: #718096;
   background: rgba(0, 0, 0, 0.05);
@@ -159,7 +194,15 @@ body.admin-console-page .auth-hint-msg {
   transition: border-color 0.15s;
 }
 
-body.manager-stitch-shell .auth-field input,
+body.manager-stitch-shell .auth-field input {
+  min-height: 44px;
+  border: 1px solid var(--manager-shell-border-strong, rgba(45, 55, 72, 0.2));
+  border-radius: 9px;
+  background: var(--manager-shell-surface, #fff);
+  color: var(--manager-shell-text, #1a202c);
+  box-shadow: none;
+}
+
 body.admin-console-page .auth-field input {
   min-height: 44px;
   border: 1px solid rgba(45, 55, 72, 0.2);
@@ -173,7 +216,11 @@ body.admin-console-page .auth-field input {
   border-color: #2d3748;
 }
 
-body.manager-stitch-shell .auth-field input:focus,
+body.manager-stitch-shell .auth-field input:focus {
+  border-color: var(--manager-shell-accent, #2d3748);
+  box-shadow: none;
+}
+
 body.admin-console-page .auth-field input:focus {
   border-color: #2d3748;
   box-shadow: none;
@@ -204,7 +251,18 @@ body.admin-console-page .auth-field input:focus {
   margin-bottom: 12px;
 }
 
-body.manager-stitch-shell .auth-submit-btn,
+body.manager-stitch-shell .auth-submit-btn {
+  min-height: 46px;
+  border-radius: 9px;
+  background: var(--manager-shell-primary, #2d3748);
+  color: var(--manager-shell-bg, #f7fafc);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  box-shadow: none;
+}
+
 body.admin-console-page .auth-submit-btn {
   min-height: 46px;
   border-radius: 9px;
@@ -221,7 +279,10 @@ body.admin-console-page .auth-submit-btn {
   background: #1a202c;
 }
 
-body.manager-stitch-shell .auth-submit-btn:hover,
+body.manager-stitch-shell .auth-submit-btn:hover {
+  background: var(--manager-shell-text, #1a202c);
+}
+
 body.admin-console-page .auth-submit-btn:hover {
   background: #1a202c;
 }
@@ -250,7 +311,10 @@ body.admin-console-page .auth-submit-btn:hover {
 body.manager-stitch-shell .auth-toggle-btn,
 body.manager-stitch-shell .auth-link-btn,
 body.manager-stitch-shell .auth-back-btn,
-body.manager-stitch-shell .pin-cancel,
+body.manager-stitch-shell .pin-cancel {
+  color: var(--manager-shell-muted, #2d3748);
+}
+
 body.admin-console-page .auth-toggle-btn,
 body.admin-console-page .auth-link-btn,
 body.admin-console-page .auth-back-btn,
@@ -290,6 +354,17 @@ body.admin-console-page .pin-cancel {
   color: #1a202c;
 }
 
+body.manager-stitch-shell .auth-link-btn:hover,
+body.manager-stitch-shell .auth-link-btn:focus-visible,
+body.manager-stitch-shell .auth-toggle-btn:hover,
+body.manager-stitch-shell .auth-toggle-btn:focus-visible,
+body.manager-stitch-shell .auth-back-btn:hover,
+body.manager-stitch-shell .auth-back-btn:focus-visible,
+body.manager-stitch-shell .pin-cancel:hover,
+body.manager-stitch-shell .pin-cancel:focus-visible {
+  color: var(--manager-shell-text, #1a202c);
+}
+
 .auth-username-assist {
   position: absolute;
   left: -9999px;
@@ -304,7 +379,10 @@ body.admin-console-page .pin-cancel {
     padding: 12px;
   }
 
-  body.manager-stitch-shell #auth-overlay,
+  body.manager-stitch-shell #auth-overlay {
+    padding: 12px;
+  }
+
   body.admin-console-page #auth-overlay {
     padding: 12px;
   }
@@ -319,14 +397,22 @@ body.admin-console-page .pin-cancel {
     font-size: 20px;
   }
 
-  body.manager-stitch-shell .auth-box,
+  body.manager-stitch-shell .auth-box {
+    width: min(100%, 360px);
+    padding: 24px 18px 20px;
+    border-radius: 14px;
+  }
+
   body.admin-console-page .auth-box {
     width: min(100%, 360px);
     padding: 24px 18px 20px;
     border-radius: 14px;
   }
 
-  body.manager-stitch-shell .auth-box h2,
+  body.manager-stitch-shell .auth-box h2 {
+    font-size: 20px;
+  }
+
   body.admin-console-page .auth-box h2 {
     font-size: 20px;
   }
@@ -337,7 +423,10 @@ body.admin-console-page .pin-cancel {
   }
 
   body.manager-stitch-shell .auth-submit-btn,
-  body.manager-stitch-shell .auth-field input,
+  body.manager-stitch-shell .auth-field input {
+    min-height: 44px;
+  }
+
   body.admin-console-page .auth-submit-btn,
   body.admin-console-page .auth-field input {
     min-height: 44px;
