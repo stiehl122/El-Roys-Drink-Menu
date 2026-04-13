@@ -484,6 +484,10 @@ function validateLandingHoursSection(section = {}) {
     issues,
   };
 }
+function getLandingHoursSectionForValidation(record = _landingPageState) {
+  const source = syncLandingHoursDraftFromDom() || record || createDefaultLandingPageRecord();
+  return normalizeLandingPageRecord(source).draftContent.hours;
+}
 function computeLandingStatusForRestaurant(section = {}, restaurantId = '', now = Date.now(), timeZone = RESTAURANT_TIME_ZONE) {
   const restaurantHours = getLandingHoursForRestaurant(section, restaurantId);
   const local = getRestaurantLocalParts(now, timeZone);
@@ -2483,7 +2487,7 @@ function getLandingSectionStatus(sectionId, record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const hasDraftDiff = landingSectionHasDiff(sectionId, normalized);
   const validation = sectionId === 'hours'
-    ? validateLandingHoursSection(normalized.draftContent.hours)
+    ? validateLandingHoursSection(getLandingHoursSectionForValidation(normalized))
     : { valid: true, issues: [] };
   return {
     sectionId,
@@ -2526,6 +2530,7 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                   ${day.closed ? 'disabled' : ''}
                   oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
+                  onblur="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                 >
                 <input
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-close"
@@ -2537,6 +2542,7 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                   ${day.closed ? 'disabled' : ''}
                   oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
+                  onblur="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                 >
               </div>
               <div class="landing-hours-day-footer">
@@ -2562,7 +2568,7 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
 function renderLandingOverview(record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const diffSectionIds = getLandingDraftDiffSectionIds(normalized);
-  const hoursValidation = validateLandingHoursSection(normalized.draftContent.hours);
+  const hoursValidation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
   const rootStatusEl = document.getElementById('landing-overview-root-status');
   const rootCopyEl = document.getElementById('landing-overview-root-copy');
   const draftSavedEl = document.getElementById('landing-overview-draft-saved');
@@ -2700,7 +2706,7 @@ function renderLandingHoursPanel(record = _landingPageState) {
   const gridEl = document.getElementById('landing-admin-hours-grid');
   const issuesEl = document.getElementById('landing-hours-issues');
   const badgeEl = document.getElementById('landing-hours-panel-badge');
-  const validation = validateLandingHoursSection(normalized.draftContent.hours);
+  const validation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
   if (gridEl) {
     gridEl.innerHTML = knownLandingRestaurants().map(restaurant => (
       renderLandingHoursRowsHtml(normalized.draftContent.hours, restaurant.id, restaurant.name)
