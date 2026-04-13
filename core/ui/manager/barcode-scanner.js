@@ -49,7 +49,7 @@
     _zxingLoadPromise = new Promise(resolve => {
       const script = documentRef.createElement('script');
       script.async = true;
-      script.src = 'https://unpkg.com/@zxing/browser@0.1.5/umd/index.min.js';
+      script.src = '/vendor/zxing-browser.min.js';
       script.onload = () => resolve(globalScope.ZXingBrowser || null);
       script.onerror = () => resolve(null);
       scriptHost.appendChild(script);
