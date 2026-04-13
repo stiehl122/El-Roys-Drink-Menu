@@ -1,10 +1,10 @@
-import { requireRole } from './_auth.js';
-import { getSupabaseServerConfig } from './_supabase.js';
+import { requireRole } from '../server/_auth.js';
+import { getSupabaseServerConfig } from '../server/_supabase.js';
 import {
   executeRestaurantSpecialsCommand,
   parseSpecialsCommand,
   respondWithSpecialsResult,
-} from './_specials-command.js';
+} from '../server/_specials-command.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();

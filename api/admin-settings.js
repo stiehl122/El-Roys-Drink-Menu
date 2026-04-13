@@ -1,7 +1,7 @@
 import {
   authorizeAdminSettingsRequest,
   executeAdminSettingsAction,
-} from './_admin-settings.js';
+} from '../server/_admin-settings.js';
 
 function parseRequestBody(req) {
   const incoming = req?.body;

@@ -565,12 +565,10 @@ test('save-only menu edits stay in the draft session until save', async () => {
 
 test('save draft persists a shared draft snapshot without publishing the live menu', async () => {
   const sandbox = loadAppSandbox();
-  const patches = [];
-  const persistCalls = [];
+  const requests = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
-    SUPABASE_URL: 'https://example.supabase.co',
     currentUser: { accessToken: 'token-1', uid: 'user-1' },
     _dirty: true,
     menuState: {
@@ -594,21 +592,22 @@ test('save draft persists a shared draft snapshot without publishing the live me
       },
       _meta: {},
     },
-    persistState: async options => {
-      persistCalls.push(options);
-      return true;
-    },
-    sbPatchMenuMetaForMenu: async (_menuId, update) => {
-      patches.push(update);
-    },
   });
+  sandbox.fetch = async (url, options = {}) => {
+    requests.push([url, JSON.parse(options.body || '{}')]);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, ts: 1712705100000, downgradedFields: [] }),
+    };
+  };
 
-  const result = await sandbox._saveActiveMenuDraftInternal();
+  const result = await sandbox.ensureCurrentMenuSession().saveDraft();
 
   assert.equal(result.ok, true);
-  assert.equal(persistCalls.length, 0);
-  assert.equal(patches.length, 1);
-  assert.ok(Array.isArray(patches[0].draft_state.cats));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0][0], '/api/menu-draft');
+  assert.ok(Array.isArray(requests[0][1].snapshot.cats));
   assert.equal(getState(sandbox, '_dirty'), false);
   assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
@@ -616,8 +615,7 @@ test('save draft persists a shared draft snapshot without publishing the live me
 
 test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
   const sandbox = loadAppSandbox();
-  const persistCalls = [];
-  const draftClears = [];
+  const requests = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
@@ -637,25 +635,23 @@ test('save menu publishes a shared draft to live and leaves unsent changes behin
       },
     ],
     currentUser: { accessToken: 'token-1', uid: 'user-1' },
-    persistState: async options => {
-      persistCalls.push(options);
-      return true;
-    },
-    patchMenuMetaWithCompatibility: async () => ({ downgradedFields: [] }),
-    patchMenuDraftState: async snapshot => {
-      draftClears.push(snapshot);
-      return { downgradedFields: [] };
-    },
-    syncLocalMenuCache: () => true,
   });
+  sandbox.fetch = async (url, options = {}) => {
+    requests.push([url, JSON.parse(options.body || '{}')]);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, ts: 1712705100000, successMessage: 'Saved to the live menu.' }),
+    };
+  };
 
   const session = sandbox.ensureCurrentMenuSession();
   const result = await session.publishUpdate({ preview: session.preview(), notify: false });
 
   assert.equal(result.ok, true);
-  assert.equal(persistCalls.length, 1);
-  assert.equal(draftClears.length, 1);
-  assert.equal(draftClears[0], null);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0][0], '/api/menu-publish');
+  assert.equal(requests[0][1].mode, 'save');
   assert.equal(getState(sandbox, '_hasSharedDraft'), false);
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
   assert.match(result.successMessage, /saved to the live menu/i);
@@ -1247,7 +1243,6 @@ test('manager menu switching closes the mobile drawer after the menu refresh com
     'picker',
     'refresh',
     'design',
-    'uncategorized',
     'render',
     'draft',
     'save',
@@ -1298,7 +1293,6 @@ test('manager menu switching closes the mobile drawer after the menu refresh com
     'picker',
     'refresh',
     'design',
-    'uncategorized',
     'render',
     'draft',
     'save',
@@ -1741,13 +1735,12 @@ test('featured view policy filters sell notes by explicit staff visibility', () 
 });
 
 test('notification routes rely on the shared notification gateway authorization boundary', () => {
-  const groupmeSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'send-groupme.js'), 'utf8');
   const notifySource = fs.readFileSync(path.join(__dirname, '..', 'api', 'send-notification.js'), 'utf8');
+  const vercelConfig = fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8');
 
-  assert.match(groupmeSource, /authorizeNotificationRequest/);
   assert.match(notifySource, /authorizeNotificationRequest/);
-  assert.doesNotMatch(groupmeSource, /requireMenuAccess, requireRole/);
   assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
+  assert.match(vercelConfig, /"source": "\/api\/send-groupme", "destination": "\/api\/send-notification"/);
 });
 
 test('role route relies on shared auth helper boundaries for identity and profile reads', () => {

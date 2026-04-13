@@ -1,5 +1,5 @@
-import { authorizeNotificationRequest } from './_notification-gateway.js';
-import { deliverMenuNotification } from './_notification-delivery.js';
+import { authorizeNotificationRequest } from '../server/_notification-gateway.js';
+import { deliverMenuNotification } from '../server/_notification-delivery.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();

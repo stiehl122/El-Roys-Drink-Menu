@@ -2,8 +2,8 @@ import {
   readMenuAccessForUser,
   readProfile,
   requireAuthenticatedUser,
-} from './_auth.js';
-import { createSessionBootstrapPayload } from './_menu-read.js';
+} from '../server/_auth.js';
+import { createSessionBootstrapPayload } from '../server/_menu-read.js';
 
 function hasAuthorizationHeader(req) {
   return !!String(req?.headers?.authorization || '').trim();

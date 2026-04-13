@@ -1,5 +1,5 @@
-import { requireRole } from './_auth.js';
-import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
+import { requireRole } from '../server/_auth.js';
+import { getSupabaseServerConfig, serviceHeaders } from '../server/_supabase.js';
 
 export default async function handler(req, res) {
   let sbUrl;

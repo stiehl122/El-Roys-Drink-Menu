@@ -1,4 +1,4 @@
-import { saveSharedDraftCommand } from './_menu-draft.js';
+import { saveSharedDraftCommand } from '../server/_menu-draft.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();

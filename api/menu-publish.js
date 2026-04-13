@@ -1,5 +1,5 @@
-import { readAuthorizedMenuActor } from './_menu-write.js';
-import { publishMenuUpdateForMenu } from './_menu-publish.js';
+import { readAuthorizedMenuActor } from '../server/_menu-write.js';
+import { publishMenuUpdateForMenu } from '../server/_menu-publish.js';
 
 function parseBody(req) {
   const body = req?.body;

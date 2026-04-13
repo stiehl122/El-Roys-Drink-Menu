@@ -20,24 +20,24 @@ test('wave 1 server read routes delegate through shared menu-read helpers', () =
   const publicSource = read('api/menu-public.js');
   const bootstrapSource = read('api/session-bootstrap.js');
 
-  assert.match(workspaceSource, /from '\.\/_menu-read\.js'/);
+  assert.match(workspaceSource, /from '\.\.\/server\/_menu-read\.js'/);
   assert.match(workspaceSource, /createMenuWorkspacePayload/);
   assert.match(workspaceSource, /readMenuStateBundle/);
   assert.match(workspaceSource, /requireAuthenticatedUser/);
   assert.match(workspaceSource, /requireMenuAccess/);
 
-  assert.match(publicSource, /from '\.\/_menu-read\.js'/);
+  assert.match(publicSource, /from '\.\.\/server\/_menu-read\.js'/);
   assert.match(publicSource, /createPublicMenuPayload/);
   assert.match(publicSource, /readMenuStateBundle/);
 
-  assert.match(bootstrapSource, /from '\.\/_menu-read\.js'/);
+  assert.match(bootstrapSource, /from '\.\.\/server\/_menu-read\.js'/);
   assert.match(bootstrapSource, /createSessionBootstrapPayload/);
   assert.match(bootstrapSource, /requireAuthenticatedUser/);
   assert.match(bootstrapSource, /readMenuAccessForUser/);
 });
 
 test('shared menu read helper exposes stable wave 1 contract builders', async () => {
-  const helper = await importApiModule('api/_menu-read.js');
+  const helper = await importApiModule('server/_menu-read.js');
 
   assert.equal(typeof helper.getKnownMenuById, 'function');
   assert.equal(typeof helper.getKnownMenus, 'function');
@@ -59,7 +59,7 @@ test('wave 1 server read routes export request handlers', async () => {
 });
 
 test('workspace payload preserves the live menu snapshot shape and adds staff context', async () => {
-  const helper = await importApiModule('api/_menu-read.js');
+  const helper = await importApiModule('server/_menu-read.js');
   const bundle = {
     menu: {
       id: '00000000-0000-0000-0000-000000000020',
@@ -102,7 +102,7 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
 });
 
 test('public payload strips staff-only menu metadata and filters non-public items', async () => {
-  const helper = await importApiModule('api/_menu-read.js');
+  const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createPublicMenuPayload({
     menu: {
       id: '00000000-0000-0000-0000-000000000020',
@@ -155,7 +155,7 @@ test('public payload strips staff-only menu metadata and filters non-public item
 });
 
 test('session bootstrap payload exposes actor capabilities against the fixed menu registry', async () => {
-  const helper = await importApiModule('api/_menu-read.js');
+  const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createSessionBootstrapPayload({
     actor: { id: 'user-1', role: 'manager', name: 'Alex' },
     accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],

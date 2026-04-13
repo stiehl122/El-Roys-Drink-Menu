@@ -24,14 +24,14 @@ test('wave 2 and 3 server write routes delegate through shared helpers', () => {
   const adminSettings = read('api/admin-settings.js');
   const notify = read('api/send-notification.js');
 
-  assert.match(menuDraft, /from '\.\/_menu-(write|draft)\.js'/);
+  assert.match(menuDraft, /from '\.\.\/server\/_menu-(write|draft)\.js'/);
   assert.match(menuDraft, /(saveDraftStateForMenu|saveSharedDraftCommand)/);
-  assert.match(menuLive, /from '\.\/_menu-(write|live)\.js'/);
+  assert.match(menuLive, /from '\.\.\/server\/_menu-(write|live)\.js'/);
   assert.match(menuLive, /(saveLiveMenuForMenu|saveLiveMenuCommand)/);
-  assert.match(menuPublish, /from '\.\/_menu-publish\.js'/);
+  assert.match(menuPublish, /from '\.\.\/server\/_menu-publish\.js'/);
   assert.match(menuPublish, /publishMenuUpdateForMenu/);
-  assert.match(adminSettings, /from '\.\/_admin-settings\.js'/);
-  assert.match(notify, /from '\.\/_notification-delivery\.js'/);
+  assert.match(adminSettings, /from '\.\.\/server\/_admin-settings\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_notification-delivery\.js'/);
 });
 
 test('wave 2 and 3 server write routes export request handlers', async () => {

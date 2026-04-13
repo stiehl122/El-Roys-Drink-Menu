@@ -16,7 +16,7 @@ async function importApiModule(relativePath) {
 }
 
 test('wave 4 revision guard returns structured 409 conflicts and tolerates empty revisions', async () => {
-  const menuWrite = await importApiModule('api/_menu-write.js');
+  const menuWrite = await importApiModule('server/_menu-write.js');
 
   assert.equal(typeof menuWrite.assertExpectedRevision, 'function');
   assert.equal(typeof menuWrite.readRevisionState, 'function');
@@ -71,9 +71,9 @@ test('wave 4 revision guard returns structured 409 conflicts and tolerates empty
 });
 
 test('wave 4 server modules harden actor authorization and check revisions before publish side effects', () => {
-  const menuWrite = read('api/_menu-write.js');
-  const menuPublish = read('api/_menu-publish.js');
-  const adminSettings = read('api/_admin-settings.js');
+  const menuWrite = read('server/_menu-write.js');
+  const menuPublish = read('server/_menu-publish.js');
+  const adminSettings = read('server/_admin-settings.js');
 
   assert.match(menuWrite, /from '\.\/_auth\.js'/);
   assert.match(menuWrite, /requireAuthenticatedUser/);

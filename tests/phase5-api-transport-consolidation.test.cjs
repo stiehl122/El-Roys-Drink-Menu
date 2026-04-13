@@ -10,7 +10,7 @@ function read(relativePath) {
 }
 
 test('phase 5 shared api transport helper exports config, headers, and response helpers', () => {
-  const source = read('api/_supabase.js');
+  const source = read('server/_supabase.js');
   assert.match(source, /export\s+function\s+getSupabaseServerConfig/);
   assert.match(source, /export\s+function\s+serviceHeaders/);
   assert.match(source, /export\s+async\s+function\s+readJsonSafe/);
@@ -23,8 +23,8 @@ test('api routes consume shared supabase transport helper', () => {
   const users = read('api/users.js');
   const specials = read('api/specials.js');
 
-  assert.match(users, /from '\.\/_supabase\.js'/);
-  assert.match(specials, /from '\.\/_supabase\.js'/);
+  assert.match(users, /from '\.\.\/server\/_supabase\.js'/);
+  assert.match(specials, /from '\.\.\/server\/_supabase\.js'/);
   assert.doesNotMatch(specials, /function\s+serviceHeaders\s*\(/);
   assert.doesNotMatch(specials, /function\s+readJsonSafe\s*\(/);
   assert.doesNotMatch(specials, /queryAction/);
@@ -34,10 +34,10 @@ test('api routes consume shared supabase transport helper', () => {
 test('notification route composes shared authorization and delivery boundaries', () => {
   const notify = read('api/send-notification.js');
 
-  assert.match(notify, /from '\.\/_notification-gateway\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_notification-gateway\.js'/);
   assert.match(notify, /authorizeNotificationRequest/);
-  assert.match(notify, /from '\.\/_notification-delivery\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_notification-delivery\.js'/);
   assert.match(notify, /deliverMenuNotification/);
-  assert.doesNotMatch(notify, /from '\.\/_supabase\.js'/);
+  assert.doesNotMatch(notify, /from '\.\.\/server\/_supabase\.js'/);
   assert.doesNotMatch(notify, /serviceHeaders\s*\(/);
 });
