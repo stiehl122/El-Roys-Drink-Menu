@@ -2,6 +2,7 @@
 @import url('/styles/shared-shell.css');
 @import url('/styles/public-fallback.css');
 @import url('/styles/components/menu-picker.css');
+@import url('/styles/components/landing-workspace.css');
 @import url('/styles/components/toast.css');
 
   #restaurant-site-wrapper .ll-site-page {

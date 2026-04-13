@@ -52,6 +52,16 @@ Each restaurant has two fixed menus, Drinks and Food. Do not generalize this int
 - Persistence/menu resolution/notifications: `sbResolveMenu()`, `loadActiveMenuState()`, `persistState()`, `sendUpdate()`, and related API routes.
 - Schema/data history: `supabase/migrations/*` only when the task is explicitly about schema or seed data.
 
+## Design References
+
+- For any design-facing work, read these docs first:
+  - `docs/design/README.md`
+  - `docs/design/leroys-lounge-vibe.md`
+  - `docs/design/el-roys-cantina-vibe.md`
+  - `docs/design/shared-landing-page-blend.md` when the task touches `/` or other shared public design
+- If a task-specific brief exists, such as `design-loop/root/landing-page-stitch-brief.md`, read it after the vibe docs and use both.
+- Do not invent an umbrella hospitality brand that flattens Leroy's Lounge and El Roy's Cantina into one generic aesthetic.
+
 ## Working Rules
 
 - No dependencies, no bundler, no build step.

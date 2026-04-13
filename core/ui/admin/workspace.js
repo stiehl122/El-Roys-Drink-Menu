@@ -9,12 +9,14 @@
     const renderMenusPanel = typeof deps.renderMenusPanel === 'function' ? deps.renderMenusPanel : (() => {});
     const initAdminSwitcherTab = typeof deps.initAdminSwitcherTab === 'function' ? deps.initAdminSwitcherTab : (() => {});
     const loadUsers = typeof deps.loadUsers === 'function' ? deps.loadUsers : (() => {});
+    const renderLandingWorkspace = typeof deps.renderLandingWorkspace === 'function' ? deps.renderLandingWorkspace : (() => {});
 
     return {
       renderAdminWorkspace() {
         renderMenusPanel();
         initAdminSwitcherTab('notif');
         loadUsers();
+        renderLandingWorkspace();
       },
     };
   }
