@@ -1,4 +1,6 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const {
@@ -9,7 +11,9 @@ const {
 
 test('resolveRuntimeScriptPath resolves repo-relative script paths', () => {
   const resolved = resolveRuntimeScriptPath('app.js');
-  assert.match(resolved, /El-Roys-Drink-Menu\/app\.js$/);
+  assert.equal(path.basename(resolved), 'app.js');
+  assert.ok(path.isAbsolute(resolved));
+  assert.ok(fs.existsSync(resolved));
 });
 
 test('loadSandboxWithScripts evaluates runtime files in explicit order', () => {
