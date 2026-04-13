@@ -6,6 +6,17 @@ import {
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
+  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+  const configMode = (url.searchParams.get('mode') || url.searchParams.get('kind') || '') === 'config'
+    || url.pathname.endsWith('/config');
+
+  if (configMode) {
+    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+    return res.json({
+      supabaseUrl: process.env.SUPABASE_URL,
+      supabaseAnonKey: process.env.SUPABASE_ANON_KEY,
+    });
+  }
 
   try {
     const { uid } = await requireAuthenticatedUser(req);
