@@ -86,8 +86,8 @@ let _landingPageLoadError = '';
 let _activeLandingAdminPanel = 'landing-admin-panel-overview';
 let _landingAdminFilters = null;
 let _landingReviewCarouselIndex = 0;
-let _previewAuditAvailability = null;
-let _previewAuditAvailabilityPromise = null;
+let _previewAuditAvailability = { manager: null, admin: null };
+let _previewAuditAvailabilityPromise = { manager: null, admin: null };
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -8647,38 +8647,42 @@ function setPreviewAuditButtonState({ visible = false, label = 'Use Preview Audi
   noteEl.textContent = note || 'Preview-only helper for design audits.';
 }
 
+function getPreviewAuditRequestedMode() {
+  return _appPageMode === 'admin' ? 'admin' : 'manager';
+}
+
 async function fetchPreviewAuditAvailability(options = {}) {
   const force = !!options.force;
-  const requestedMode = _appPageMode === 'admin' ? 'admin' : 'manager';
-  if (!IS_PREVIEW) {
-    _previewAuditAvailability = { available: false };
-    return _previewAuditAvailability;
+  const requestedMode = getPreviewAuditRequestedMode();
+  if (!IS_PREVIEW || !isSettingsPage()) {
+    _previewAuditAvailability[requestedMode] = { available: false };
+    return _previewAuditAvailability[requestedMode];
   }
-  if (!force && _previewAuditAvailability) return _previewAuditAvailability;
-  if (!force && _previewAuditAvailabilityPromise) return _previewAuditAvailabilityPromise;
+  if (!force && _previewAuditAvailability[requestedMode]) return _previewAuditAvailability[requestedMode];
+  if (!force && _previewAuditAvailabilityPromise[requestedMode]) return _previewAuditAvailabilityPromise[requestedMode];
 
-  _previewAuditAvailabilityPromise = (async () => {
+  _previewAuditAvailabilityPromise[requestedMode] = (async () => {
     try {
       const response = await fetch(`${PREVIEW_AUDIT_SESSION_ENDPOINT}?mode=${encodeURIComponent(requestedMode)}`);
       const payload = await response.json().catch(() => ({}));
-      _previewAuditAvailability = {
+      _previewAuditAvailability[requestedMode] = {
         available: !!payload?.loopAudit?.available,
         label: payload?.loopAudit?.label || 'Use Preview Audit Session',
         mode: payload?.loopAudit?.mode || requestedMode,
       };
     } catch (_) {
-      _previewAuditAvailability = { available: false };
+      _previewAuditAvailability[requestedMode] = { available: false };
     } finally {
-      _previewAuditAvailabilityPromise = null;
+      _previewAuditAvailabilityPromise[requestedMode] = null;
     }
-    return _previewAuditAvailability;
+    return _previewAuditAvailability[requestedMode];
   })();
 
-  return _previewAuditAvailabilityPromise;
+  return _previewAuditAvailabilityPromise[requestedMode];
 }
 
 async function syncPreviewAuditButton(options = {}) {
-  if (_authScreen !== 'signin' || !IS_PREVIEW) {
+  if (_authScreen !== 'signin' || !IS_PREVIEW || !isSettingsPage()) {
     setPreviewAuditButtonState({ visible: false });
     return;
   }
@@ -8708,7 +8712,7 @@ async function handlePreviewAuditSignIn() {
   const errEl = document.getElementById('signin-error');
   const submitBtn = document.getElementById('signin-submit-btn');
   const button = document.getElementById('preview-audit-btn');
-  const requestedMode = _appPageMode === 'admin' ? 'admin' : 'manager';
+  const requestedMode = getPreviewAuditRequestedMode();
   if (errEl) errEl.textContent = '';
 
   const status = await fetchPreviewAuditAvailability();
