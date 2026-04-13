@@ -758,21 +758,21 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-brand-group {
-    flex-wrap: wrap;
-    gap: 0.4rem 0.75rem;
+    min-width: 0;
+    gap: 0.35rem;
   }
 
   #restaurant-site-wrapper .erc-brand {
-    font-size: 2.2rem;
+    font-size: 1.95rem;
   }
 
   #restaurant-site-wrapper .erc-sister-link {
     margin-left: 0;
-    padding-left: 0.75rem;
+    padding-left: 0.6rem;
   }
 
   #restaurant-site-wrapper .erc-sister-badge {
-    height: 2rem;
+    height: 1.7rem;
   }
 
   #restaurant-site-wrapper .erc-item-row {
@@ -781,23 +781,38 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-topbar-inner {
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding-top: calc(0.7rem + var(--erc-safe-top));
+    padding-bottom: 0.7rem;
   }
 
-  #restaurant-site-wrapper .erc-menu-toggle,
+  #restaurant-site-wrapper .erc-menu-toggle {
+    grid-column: 1 / span 1;
+    justify-self: start;
+    width: fit-content;
+  }
+
   #restaurant-site-wrapper .erc-actions {
+    grid-column: 2;
+    justify-self: end;
+    align-self: center;
     width: auto;
-  }
-
-  #restaurant-site-wrapper .erc-actions {
     justify-content: flex-end;
     flex-wrap: nowrap;
-    gap: 0.5rem;
-    margin-left: auto;
+    gap: 0.35rem;
+    margin-left: 0;
   }
 
   #restaurant-site-wrapper .erc-login-btn {
     padding: 0.55rem 0.85rem;
+  }
+
+  #restaurant-site-wrapper .erc-menu-toggle-btn {
+    padding: 0.52rem 1rem;
+    font-size: 0.75rem;
   }
 
   #restaurant-site-wrapper .erc-section-title {
@@ -836,16 +851,15 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-topbar-inner {
-    flex-direction: row;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
     gap: 0.6rem;
-    padding-top: calc(0.55rem + var(--erc-safe-top));
-    padding-bottom: 0.55rem;
+    padding-top: calc(0.45rem + var(--erc-safe-top));
+    padding-bottom: 0.45rem;
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-brand {
-    font-size: 1.7rem;
+    font-size: 1.5rem;
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-sister-link {
@@ -858,14 +872,16 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-menu-toggle {
+    grid-column: 2;
+    justify-self: end;
     width: auto;
-    max-width: 13.5rem;
+    max-width: none;
     box-shadow: 0 10px 24px rgb(139 75 0 / 0.08);
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-menu-toggle-btn {
-    padding: 0.48rem 1.1rem;
-    font-size: 0.74rem;
+    padding: 0.42rem 0.9rem;
+    font-size: 0.71rem;
   }
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-actions {
