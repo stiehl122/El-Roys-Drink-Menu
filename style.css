@@ -729,6 +729,18 @@
   .btn-secondary:disabled,
   .btn-confirm:disabled { background: var(--border); box-shadow: none; cursor: not-allowed; }
   .config-json-textarea { width: 100%; min-height: 110px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-family: monospace; font-size: 13px; padding: 12px; resize: none; box-sizing: border-box; margin-top: 4px; }
+  .add-item-modal { max-width: 640px; }
+  .add-item-modal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .add-item-field-block { display: flex; flex-direction: column; gap: 8px; }
+  .add-item-field-block--full { grid-column: 1 / -1; }
+  .add-item-field-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; color: var(--muted); text-transform: uppercase; }
+  .add-item-inline-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 120px) auto; gap: 8px; align-items: center; }
+  .add-item-inline-note { margin: 0; color: var(--muted); font-size: 12px; }
+  .add-item-pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .add-item-pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: 12px; color: var(--text); }
+  .add-item-pill-remove { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0; }
+  .add-item-modal-warning { margin-bottom: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(190,67,48,0.12); border: 1px solid rgba(190,67,48,0.26); color: var(--terra-dk); font-size: 13px; }
+  .manager-category-note { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 
   .logout-link { background: none; border: none; color: var(--muted); font-family: var(--font-body); font-size: 12px; cursor: pointer; margin-top: 20px; display: block; text-align: center; width: 100%; padding: 8px; transition: color 0.2s; }
   .logout-link:hover { color: var(--text); }
@@ -2502,6 +2514,17 @@ body.manager-stitch-shell .hint {
   color: var(--manager-shell-muted);
   font-size: 14px;
   line-height: 1.7;
+}
+
+body.manager-stitch-shell .manager-shell-section-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+body.manager-stitch-shell .manager-add-item-launch {
+  white-space: nowrap;
 }
 
 body.manager-stitch-shell #setup-banner {

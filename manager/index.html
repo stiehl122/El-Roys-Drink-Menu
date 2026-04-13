@@ -209,9 +209,13 @@
                 <p class="settings-section-kicker">Edit Items</p>
                 <h2>Add, remove, and 86 items.</h2>
               </div>
-              <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
+              <div class="manager-shell-section-actions">
+                <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
+                <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal()" style="display:none">Add Item(s)</button>
+              </div>
             </div>
             <div id="manager-items-categories"></div>
+            <div id="manager-add-item-modal-host"></div>
           </section>
 
           <section class="settings-section manager-shell-pricing" id="manager-pricing-section">
