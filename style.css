@@ -4451,6 +4451,56 @@ body.manager-stitch-shell .manager-shell-overview-grid {
   gap: 18px;
 }
 
+body.manager-stitch-shell .manager-shell-overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  gap: 22px;
+  margin-bottom: 24px;
+  padding: 24px;
+  border: 1px solid var(--manager-shell-border);
+  background:
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 32%),
+    linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+}
+
+body.manager-stitch-shell .manager-shell-overview-hero-kicker {
+  margin: 0 0 10px;
+  color: var(--manager-shell-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-overview-hero h3 {
+  margin: 0 0 10px;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  line-height: 1.08;
+}
+
+body.manager-stitch-shell .manager-shell-overview-hero-text {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--manager-shell-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.manager-stitch-shell .manager-shell-overview-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+body.manager-stitch-shell .manager-shell-overview-chip {
+  min-height: 42px;
+  padding-inline: 14px;
+}
+
 body.manager-stitch-shell .manager-shell-overview-card--featured {
   min-height: 100%;
 }
@@ -5020,6 +5070,16 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   body.manager-stitch-shell .manager-shell-stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  body.manager-stitch-shell .manager-shell-overview-hero {
+    grid-template-columns: 1fr;
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  body.manager-stitch-shell .manager-shell-overview-hero-actions {
+    justify-content: flex-start;
   }
 
   body.manager-stitch-shell #loading-view.loading-view-locked {
