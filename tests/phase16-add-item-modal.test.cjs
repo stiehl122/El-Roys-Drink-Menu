@@ -213,3 +213,40 @@ test('food menus hide the recipe editor in the add-item modal', () => {
   assert.match(modalHost.innerHTML, /Description/i);
   assert.match(modalHost.innerHTML, /Price/i);
 });
+
+test('add-item modal focus helpers preserve the active text input selection across rerenders', () => {
+  const sandbox = loadAppSandbox();
+  const doc = sandbox.document;
+  const original = doc._registerElement('add-item-name-input', createElement('input', 'add-item-name-input'));
+  original.selectionStart = 2;
+  original.selectionEnd = 2;
+  doc.activeElement = original;
+
+  const snapshot = sandbox.captureAddItemModalFocusState();
+
+  const replacement = doc._registerElement('add-item-name-input', createElement('input', 'add-item-name-input'));
+  replacement.focus = () => {
+    doc.activeElement = replacement;
+  };
+
+  sandbox.restoreAddItemModalFocusState(snapshot);
+
+  assert.equal(snapshot.id, 'add-item-name-input');
+  assert.equal(doc.activeElement, replacement);
+  assert.equal(replacement.selectionStart, 2);
+  assert.equal(replacement.selectionEnd, 2);
+});
+
+test('escape closes the add-item modal', () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.openAddItemModal();
+  sandbox.handleAddItemModalKeydown({
+    key: 'Escape',
+    preventDefault() {},
+  });
+
+  assert.equal(getState(sandbox, '_addItemModalState.isOpen'), false);
+});

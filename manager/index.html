@@ -28,49 +28,21 @@
   <header class="manager-shell-topbar">
     <div class="manager-shell-topbar-inner">
       <div class="manager-shell-topbar-primary">
-        <div class="manager-shell-brand-wrap">
-          <button
-            class="manager-shell-menu-toggle"
-            id="settings-drawer-toggle"
-            type="button"
-            aria-label="Open section navigation"
-            aria-controls="manager-settings-rail"
-            aria-expanded="false"
-            onclick="toggleSettingsDrawer()"
-          >☰</button>
+        <button
+          class="manager-shell-menu-toggle"
+          id="settings-drawer-toggle"
+          type="button"
+          aria-label="Open section navigation"
+          aria-controls="manager-settings-rail"
+          aria-expanded="false"
+          onclick="toggleSettingsDrawer()"
+        >☰</button>
+        <h1 class="manager-shell-topbar-title">Manager Workspace</h1>
+      </div>
 
-          <div class="manager-shell-brand-copy">
-            <div class="manager-shell-brand-row">
-              <p class="manager-shell-brand-mark">Current Menu Control Room</p>
-              <div class="manager-shell-header-badges">
-                <span class="manager-shell-header-badge">Manager</span>
-                <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
-              </div>
-            </div>
-            <div class="manager-shell-title-row">
-              <div class="manager-shell-title-copy">
-                <h1>Manager Workspace</h1>
-                <p class="manager-shell-header-summary">Shape the live board, manage featured items, and publish service updates without leaving the floor.</p>
-              </div>
-              <div class="header-action-group">
-                <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Open Manager</button>
-                <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
-              </div>
-            </div>
-            <div class="manager-shell-header-meta">
-              <div class="manager-shell-meta-card">
-                <span class="manager-shell-meta-label">Last sync</span>
-                <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-              </div>
-              <div id="active-menu-bar" class="manager-shell-menu-bar" style="display:none;" aria-live="polite">
-                <span class="active-menu-label">Menu</span>
-                <span id="active-menu-name" class="active-menu-name-text"></span>
-                <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div class="manager-shell-topbar-actions">
+        <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Menu Switcher</button>
+        <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
         <div class="manager-shell-user-tools">
           <div class="user-chip" id="user-chip" style="display:none"
                onclick="toggleUserDropdown()"
@@ -138,7 +110,7 @@
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
             <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
             <button class="btn-small manager-shell-drawer-return" type="button" onclick="exitView()">Return to menu</button>
-            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Tools</button>
+            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
           </div>
         </div>
         <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>

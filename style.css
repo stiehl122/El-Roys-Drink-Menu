@@ -2170,7 +2170,7 @@ body.manager-stitch-shell #app-shell > header.manager-shell-topbar {
 body.manager-stitch-shell .manager-shell-topbar-inner {
   width: min(1320px, calc(100% - 48px));
   margin: 0 auto;
-  min-height: calc(88px + env(safe-area-inset-top));
+  min-height: calc(72px + env(safe-area-inset-top));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2178,11 +2178,11 @@ body.manager-stitch-shell .manager-shell-topbar-inner {
   padding-top: env(safe-area-inset-top);
 }
 
-body.manager-stitch-shell .manager-shell-brand-wrap {
-  min-width: 0;
+body.manager-stitch-shell .manager-shell-topbar-primary {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 body.manager-stitch-shell .manager-shell-menu-toggle {
@@ -2200,11 +2200,23 @@ body.manager-stitch-shell .manager-shell-menu-toggle {
   cursor: pointer;
 }
 
-body.manager-stitch-shell .manager-shell-brand-copy {
-  min-width: 0;
+body.manager-stitch-shell .manager-shell-topbar-title {
+  margin: 0;
+  color: var(--manager-shell-primary);
+  font-family: 'Public Sans', 'Inter', sans-serif;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+}
+
+body.manager-stitch-shell .manager-shell-topbar-actions {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  min-width: 0;
 }
 
 body.manager-stitch-shell .manager-shell-brand-mark,
@@ -2225,23 +2237,6 @@ body.manager-stitch-shell .manager-shell-brand-mark {
   color: var(--manager-shell-muted);
   font-size: 10px;
   font-weight: 700;
-}
-
-body.manager-stitch-shell .manager-shell-title-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-body.manager-stitch-shell #app-shell > header h1 {
-  margin: 0;
-  color: var(--manager-shell-primary);
-  font-family: 'Noto Serif', serif;
-  font-size: 34px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  text-shadow: none;
 }
 
 body.manager-stitch-shell .header-action-group {
@@ -2343,7 +2338,7 @@ body.manager-stitch-shell .btn-small:hover {
 body.manager-stitch-shell .manager-shell-user-tools {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
 }
 
 body.manager-stitch-shell .user-chip {
@@ -2353,6 +2348,12 @@ body.manager-stitch-shell .user-chip {
   border: 1px solid var(--manager-shell-border);
   color: var(--manager-shell-primary);
   padding: 10px 12px;
+}
+
+body.manager-stitch-shell .manager-shell-switch-btn,
+body.manager-stitch-shell #admin-btn,
+body.manager-stitch-shell .user-chip {
+  min-height: 42px;
 }
 
 body.manager-stitch-shell .user-chip:hover {
@@ -4866,9 +4867,9 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .manager-shell-topbar-primary {
-    grid-template-columns: minmax(0, 1fr) auto;
     gap: 10px;
-    align-items: start;
+    align-items: center;
+    min-width: 0;
   }
 
   body.manager-stitch-shell .manager-shell-layout {
@@ -4997,15 +4998,8 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   }
 
   body.manager-stitch-shell .manager-shell-user-tools {
-    align-items: flex-start;
-    justify-content: flex-start;
-    gap: 0;
-    flex-direction: row;
-  }
-
-  body.manager-stitch-shell .manager-shell-header-summary,
-  body.manager-stitch-shell .manager-shell-header-meta {
-    display: none;
+    align-items: center;
+    justify-content: flex-end;
   }
 
   body.manager-stitch-shell .manager-shell-menu-toggle {
@@ -5015,62 +5009,12 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     border-radius: 12px;
   }
 
-  body.manager-stitch-shell .manager-shell-brand-wrap {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: 10px;
-  }
-
-  body.manager-stitch-shell .manager-shell-brand-copy {
-    gap: 5px;
-    min-width: 0;
-  }
-
-  body.manager-stitch-shell .manager-shell-brand-row {
-    margin-bottom: 0;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-  }
-
-  body.manager-stitch-shell .manager-shell-brand-mark {
-    display: none;
-  }
-
-  body.manager-stitch-shell .manager-shell-header-badges {
-    gap: 6px;
-    min-width: 0;
-    max-width: 100%;
-  }
-
-  body.manager-stitch-shell .header-action-group {
-    display: none;
-  }
-
   body.manager-stitch-shell .manager-shell-drawer-admin {
     display: inline-flex;
   }
 
-  body.manager-stitch-shell #app-shell > header h1 {
-    font-size: 1.16rem;
-    line-height: 1.02;
-  }
-
-  body.manager-stitch-shell .manager-shell-title-row {
-    align-items: flex-start;
-    gap: 0;
-  }
-
-  body.manager-stitch-shell .manager-shell-title-copy {
-    gap: 4px;
-  }
-
-  body.manager-stitch-shell .manager-shell-header-badge--muted {
-    max-width: min(58vw, 270px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  body.manager-stitch-shell .manager-shell-topbar-title {
+    font-size: 1.06rem;
   }
 
   body.manager-stitch-shell.settings-drawer-open #app-shell > header.manager-shell-topbar {
@@ -5085,24 +5029,12 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
     min-height: calc(54px + env(safe-area-inset-top));
   }
 
-  body.manager-stitch-shell .manager-shell-title-row,
-  body.manager-stitch-shell .manager-shell-brand-row,
-  body.manager-stitch-shell .manager-shell-user-tools {
-    width: auto;
-  }
-
   body.manager-stitch-shell .manager-shell-topbar-primary {
     gap: 8px;
   }
 
-  body.manager-stitch-shell .manager-shell-brand-wrap {
-    gap: 10px;
-  }
-
-  body.manager-stitch-shell .manager-shell-header-badge {
-    font-size: 9px;
-    min-height: 20px;
-    padding: 0 7px;
+  body.manager-stitch-shell .manager-shell-topbar-actions {
+    gap: 8px;
   }
 
   body.manager-stitch-shell .desc-row-header {

@@ -575,7 +575,51 @@ function renderManagerAddItemLauncher() {
   }
 }
 
-function renderAddItemModal() {
+function captureAddItemModalFocusState() {
+  const activeEl = document.activeElement;
+  const activeId = activeEl?.id || '';
+  if (!activeId || !/^add-item-/.test(activeId)) return null;
+  const state = { id: activeId };
+  if (typeof activeEl.selectionStart === 'number') state.selectionStart = activeEl.selectionStart;
+  if (typeof activeEl.selectionEnd === 'number') state.selectionEnd = activeEl.selectionEnd;
+  return state;
+}
+
+function restoreAddItemModalFocusState(focusState) {
+  if (!focusState?.id) return;
+  const target = document.getElementById(focusState.id);
+  if (!target || typeof target.focus !== 'function') return;
+  target.focus();
+  if (typeof focusState.selectionStart === 'number' && typeof focusState.selectionEnd === 'number') {
+    if (typeof target.setSelectionRange === 'function') {
+      target.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+    } else {
+      try {
+        target.selectionStart = focusState.selectionStart;
+        target.selectionEnd = focusState.selectionEnd;
+      } catch (_) {
+        // Ignore selection restore failures on non-text inputs.
+      }
+    }
+  }
+}
+
+function focusAddItemModalField(fieldId) {
+  const target = document.getElementById(fieldId);
+  if (!target || typeof target.focus !== 'function') return;
+  target.focus();
+  if (typeof target.select === 'function' && (fieldId === 'add-item-name-input' || fieldId === 'add-item-price-input')) {
+    target.select();
+  }
+}
+
+function handleAddItemModalKeydown(event) {
+  if (event?.key !== 'Escape') return;
+  event.preventDefault();
+  closeAddItemModal();
+}
+
+function renderAddItemModal(options = {}) {
   const host = document.getElementById('manager-add-item-modal-host');
   if (!host) return;
   if (!_addItemModalState.isOpen || !canOpenAddItemModal()) {
@@ -620,8 +664,8 @@ function renderAddItemModal() {
       </div>`;
 
   host.innerHTML = `
-    <div class="modal-bg open" id="manager-add-item-overlay">
-      <div class="modal add-item-modal" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title">
+    <div class="modal-bg open" id="manager-add-item-overlay" onclick="if(event.target===this)closeAddItemModal()">
+      <div class="modal add-item-modal" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" onkeydown="handleAddItemModalKeydown(event)">
         <h2 id="add-item-modal-title">Add Item(s)</h2>
         <div class="modal-sub">${escHtml(modalSubtitle)}</div>
         ${view.duplicateWarning ? `<div class="add-item-modal-warning" role="alert">${escHtml(view.duplicateWarning)}</div>` : ''}
@@ -660,6 +704,12 @@ function renderAddItemModal() {
         </div>
       </div>
     </div>`;
+
+  if (options.focusState) {
+    requestAnimationFrame(() => restoreAddItemModalFocusState(options.focusState));
+  } else if (options.focusFieldId) {
+    requestAnimationFrame(() => focusAddItemModalField(options.focusFieldId));
+  }
 }
 
 function openAddItemModal() {
@@ -667,7 +717,7 @@ function openAddItemModal() {
   _addItemModalState.isOpen = true;
   _addItemModalState.fields = createAddItemModalFields();
   syncAddItemModalWarnings();
-  renderAddItemModal();
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
   return { ok: true };
 }
 
@@ -682,9 +732,10 @@ function updateAddItemModalField(field, value) {
   if (!_addItemModalState.isOpen) return;
   if (!_addItemModalState.fields) _addItemModalState.fields = createAddItemModalFields();
   if (!Object.prototype.hasOwnProperty.call(_addItemModalState.fields, field)) return;
+  const focusState = captureAddItemModalFocusState();
   _addItemModalState.fields[field] = field === 'categoryId' ? String(value || '') : String(value || '');
   syncAddItemModalWarnings();
-  renderAddItemModal();
+  renderAddItemModal({ focusState });
 }
 
 function addAddItemModalRecipeIngredient(rawValue) {
@@ -696,14 +747,14 @@ function addAddItemModalRecipeIngredient(rawValue) {
   _addItemModalState.fields.recipe = recipeArray(_addItemModalState.fields.recipe);
   _addItemModalState.fields.recipe.push(value);
   if (input) input.value = '';
-  renderAddItemModal();
+  renderAddItemModal({ focusFieldId: 'add-item-recipe-input' });
   return true;
 }
 
 function removeAddItemModalRecipeIngredient(index) {
   if (!_addItemModalState.fields || !Array.isArray(_addItemModalState.fields.recipe)) return;
   _addItemModalState.fields.recipe.splice(index, 1);
-  renderAddItemModal();
+  renderAddItemModal({ focusFieldId: 'add-item-recipe-input' });
 }
 
 function addAddItemModalUpcharge(rawLabel, rawPrice) {
@@ -718,14 +769,14 @@ function addAddItemModalUpcharge(rawLabel, rawPrice) {
   _addItemModalState.fields.upcharges.push({ label, price: price || '+$0' });
   if (labelInput) labelInput.value = '';
   if (priceInput) priceInput.value = '';
-  renderAddItemModal();
+  renderAddItemModal({ focusFieldId: 'add-item-upcharge-label' });
   return true;
 }
 
 function removeAddItemModalUpcharge(index) {
   if (!_addItemModalState.fields || !Array.isArray(_addItemModalState.fields.upcharges)) return;
   _addItemModalState.fields.upcharges.splice(index, 1);
-  renderAddItemModal();
+  renderAddItemModal({ focusFieldId: 'add-item-upcharge-label' });
 }
 
 function buildNewMenuItemFromAddModal(fields) {
@@ -749,11 +800,11 @@ function confirmAddItemModal(options = {}) {
   syncAddItemModalWarnings();
   const fields = _addItemModalState.fields;
   if (!String(fields.name || '').trim() || !String(fields.categoryId || '').trim()) {
-    renderAddItemModal();
+    renderAddItemModal({ focusFieldId: !String(fields.name || '').trim() ? 'add-item-name-input' : 'add-item-category-input' });
     return { ok: false, reason: 'required' };
   }
   if (_addItemModalState.duplicateWarning) {
-    renderAddItemModal();
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
     return { ok: false, reason: 'duplicate' };
   }
 
@@ -776,7 +827,7 @@ function confirmAddItemModal(options = {}) {
     _addItemModalState.isOpen = true;
     _addItemModalState.fields = createAddItemModalFields({ categoryId: _lastAddItemCategoryId });
     _addItemModalState.duplicateWarning = '';
-    renderAddItemModal();
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
     return { ok: true, keptOpen: true, item };
   }
 
