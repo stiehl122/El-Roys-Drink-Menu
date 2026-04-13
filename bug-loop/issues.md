@@ -8,6 +8,19 @@ _No open issues._
 
 ## Resolved
 
+### BUG-20260413-153840 — Wave 5 boundary tests fail due runtime direct-write signature drift
+- status: fixed
+- defcon: 2
+- surface: runtime
+- blocking: yes
+- fix_attempts: 1
+- last_seen: 2026-04-13T15:39:37-04:00
+- evidence:
+  - node --test tests/phase11-web-cutover-boundaries.test.cjs (pass)
+
+Notes:
+- Updated boundary test sentinels to current runtime structure while preserving API-command-only guarantees.
+
 ### BUG-20260413-153807 — Runtime helper test assumes fixed repo folder name in worktrees
 - status: fixed
 - defcon: 3

@@ -22,7 +22,7 @@ test('wave 5 shared runtime keeps server-owned manager and admin mutations on AP
   const patchDraftSource = sliceFunction(
     source,
     'async function patchMenuDraftState(',
-    'async function sbPatchRestaurantDesign('
+    'async function sbGetRestaurantSpecialGroup('
   );
   const persistSource = sliceFunction(
     source,
@@ -78,12 +78,20 @@ test('wave 5 shared runtime keeps server-owned manager and admin mutations on AP
   assert.doesNotMatch(saveDesignSource, /rest\/v1\/restaurants/);
 });
 
-test('wave 5 no longer calls the legacy live-save fallback from the authoritative runtime save path', () => {
+test('wave 5 authoritative runtime save path never invokes legacy live-save fallback', () => {
   const source = read('app.js');
-  const matches = source.match(/persistStateDirect\(/g) || [];
+  const legacyMentions = source.match(/persistStateDirect\(/g) || [];
+  const persistSource = sliceFunction(
+    source,
+    'async function persistState(',
+    'async function saveMenu('
+  );
 
-  assert.equal(matches.length, 1);
-  assert.match(source, /async function persistStateDirect\(/);
+  assert.ok(legacyMentions.length <= 1);
+  if (legacyMentions.length === 1) {
+    assert.match(source, /async function persistStateDirect\(/);
+  }
+  assert.doesNotMatch(persistSource, /persistStateDirect\(/);
 });
 
 test('wave 5 publish session boundary prefers the server-owned publish command before local side effects', () => {
