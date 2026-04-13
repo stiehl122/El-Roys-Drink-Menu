@@ -1175,6 +1175,26 @@ body.route-restaurant.route-restaurant--leroy {
     max-width: 42%;
   }
 
+  #restaurant-site-wrapper .ll-board-item--sold .ll-board-strike {
+    inset-inline-end: 4.9rem;
+    top: 1.05rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-item--sold .ll-board-item-side {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.22rem;
+    min-width: 4.35rem;
+    max-width: none;
+  }
+
+  #restaurant-site-wrapper .ll-board-item--sold .ll-board-stamp {
+    padding: 2px 5px;
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    transform: none;
+  }
+
   #restaurant-site-wrapper .ll-board-upcharges {
     margin-right: 0.25rem;
   }
