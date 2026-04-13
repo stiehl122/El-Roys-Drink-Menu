@@ -88,7 +88,7 @@ body.root-landing-page::before {
 }
 
 .landing-hero {
-  min-height: 100vh;
+  min-height: clamp(44rem, 82vh, 58rem);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -96,10 +96,10 @@ body.root-landing-page::before {
 .landing-hero-card {
   position: relative;
   isolation: isolate;
-  min-height: 100vh;
-  padding: clamp(72px, 10vw, 112px) clamp(24px, 4vw, 52px) 56px;
+  min-height: clamp(44rem, 82vh, 58rem);
+  padding: clamp(60px, 8vw, 92px) clamp(24px, 4vw, 52px) 44px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   overflow: hidden;
 }
@@ -149,14 +149,14 @@ body.root-landing-page::before {
   z-index: 2;
   width: min(32rem, 100%);
   display: grid;
-  gap: 18px;
+  gap: 14px;
   justify-items: center;
   text-align: center;
 }
 
 .landing-hero-sign {
   display: block;
-  width: min(300px, 72%);
+  width: min(264px, 64%);
   height: auto;
   filter: drop-shadow(0 22px 40px rgba(0, 0, 0, 0.42));
 }
@@ -197,10 +197,10 @@ body.root-landing-page::before {
 
 .landing-hero-copy {
   margin: 0;
-  max-width: 28rem;
+  max-width: 25rem;
   color: var(--landing-ink-dim);
-  font-size: clamp(1.15rem, 2vw, 1.35rem);
-  line-height: 1.45;
+  font-size: clamp(1.05rem, 1.5vw, 1.24rem);
+  line-height: 1.38;
 }
 
 .landing-status-pill {
@@ -816,17 +816,22 @@ body.root-landing-page::before {
 
   .landing-hero {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .landing-hero-card {
-    min-height: auto;
-    padding-top: 86px;
-    padding-bottom: 44px;
+    min-height: 31rem;
+    padding-top: 54px;
+    padding-bottom: 34px;
   }
 
   .landing-hero-card--leroys {
     border-right: 0;
     border-bottom: 1px solid rgba(240, 152, 60, 0.12);
+  }
+
+  .landing-hero-card-inner {
+    width: min(27rem, 100%);
   }
 
   .landing-hours-grid,
@@ -839,6 +844,29 @@ body.root-landing-page::before {
 }
 
 @media (max-width: 640px) {
+  .landing-shell-section {
+    padding-top: 74px;
+    padding-bottom: 74px;
+  }
+
+  .landing-hero-card {
+    min-height: auto;
+    padding: 42px 22px 28px;
+  }
+
+  .landing-hero-card-inner {
+    gap: 12px;
+  }
+
+  .landing-hero-sign {
+    width: min(220px, 58%);
+  }
+
+  .landing-hero-copy {
+    max-width: 20rem;
+    font-size: 1rem;
+  }
+
   .landing-section-head {
     gap: 16px;
   }
