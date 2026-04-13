@@ -2504,17 +2504,10 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
           const safeDayKey = escAttrJs(dayKey);
           return `
             <div class="landing-hours-day-row">
-              <label for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open">${escHtml(LANDING_DAY_LABELS[dayKey])}</label>
+              <div class="landing-hours-day-header">
+                <label for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open">${escHtml(LANDING_DAY_LABELS[dayKey])}</label>
+              </div>
               <div class="landing-hours-day-controls">
-                <label class="landing-hours-toggle" for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed">
-                  <input
-                    id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed"
-                    type="checkbox"
-                    ${day.closed ? 'checked' : ''}
-                    onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'closed', this.checked)"
-                  >
-                  Closed
-                </label>
                 <input
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open"
                   type="time"
@@ -2529,6 +2522,17 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                   ${day.closed ? 'disabled' : ''}
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                 >
+              </div>
+              <div class="landing-hours-day-footer">
+                <label class="landing-hours-toggle" for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed">
+                  <input
+                    id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed"
+                    type="checkbox"
+                    ${day.closed ? 'checked' : ''}
+                    onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'closed', this.checked)"
+                  >
+                  Closed
+                </label>
               </div>
             </div>`;
         }).join('')}
