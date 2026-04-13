@@ -1,6 +1,6 @@
 ---
 name: recursive-design-loop
-description: Run an aggressive recursive design and front-end performance improvement loop against a specific screen on the current branch's Vercel preview deployment. Requires a target screen argument (e.g. /leroyslounge, /manager, /elroyscantina). Use when the user asks for repeated design polish passes, preview-only Playwright audits, recursive UX/performance iteration, or to keep improving a specific page until diminishing returns.
+description: Run an aggressive recursive design and front-end performance improvement loop against a specific screen on the deployed Vercel build that matches the current worktree commit. Handles protected deployments, manager/admin sign-in, and menu-context bootstrapping before auditing. Requires a target screen argument (e.g. /leroyslounge, /manager, /elroyscantina). Use when the user asks for repeated design polish passes, deployed-screen audits, recursive UX/performance iteration, or to keep improving a specific page until diminishing returns.
 ---
 
 # Recursive Design Loop
@@ -20,19 +20,40 @@ If the user does not specify a screen, ask which one before proceeding.
 
 ## Source Of Truth
 
-- inspect only the Vercel preview deployment for the current branch
+- inspect the deployed Vercel build that matches the current worktree commit
+  exactly; prefer Preview, but do not guess by branch name alone
 - never use localhost, a local dev server, a local build, or any locally run
   copy of the site for Playwright inspection
-- derive the preview URL by running `git rev-parse HEAD` to get the commit
-  hash, then `vercel ls` (personal account, no `--scope` needed) and matching
-  the deployment for the current branch
-- each pass is incomplete until you inspect the current preview, implement the
-  pass, run `deploy`, poll until the preview is ready, and inspect the updated
-  preview again
-- if the Vercel preview cannot be reached, check `vercel ls` for build status
-  first — if still building, wait and poll; if errored, surface the error
-  message to the user; only stop and ask if the deployment is ready but still
-  unreachable; never fall back to localhost
+- start with `git rev-parse HEAD`, then resolve deployments by commit metadata:
+  first look for a Ready Preview deployment whose commit SHA matches `HEAD`;
+  if none exists, look for a Ready deployment whose commit SHA matches `HEAD`
+  even if that deployment is Production (common on `main`)
+- if the current worktree is detached or `vercel ls` is ambiguous, use Vercel
+  deployment metadata (`githubCommitSha`, `gitCommitSha`, `githubCommitRef`,
+  `gitCommitRef`) to match the exact commit rather than assuming the latest
+  Preview is correct
+- only fall back to "latest ready Preview for the current branch" when an
+  exact-commit match does not exist and the user explicitly wants branch-level
+  inspection instead of exact-commit inspection
+- each pass is incomplete until you inspect the matched deployed build,
+  implement the pass, run `deploy`, poll until the new deployment is Ready,
+  and inspect the updated deployment again
+- if no Ready deployment exists for the current commit, surface that clearly
+  and stop; do not silently inspect some other branch's deployment
+- if the matched deployment is still building, wait and poll; if it errored,
+  surface the error message to the user; never fall back to localhost
+
+## Protected Deployments
+
+- assume Vercel Authentication may protect Preview and even Production URLs
+- before launching Playwright, verify whether the deployment can be opened
+  directly; if it redirects to Vercel login or returns 401/403, generate a
+  temporary share URL with the Vercel access helper and use that share URL for
+  browser inspection
+- keep the underlying canonical deployment URL in the log, but record that a
+  temporary share URL was used to reach it
+- if browser access still fails after generating a share URL, stop and surface
+  that as a deployment-access issue rather than treating it as a product bug
 
 ## Repo Guardrails
 
@@ -82,55 +103,88 @@ At session start:
 - `release-and-version-agent` when footer metadata or preview badge behavior is
   in scope
 
+## Settings Route Readiness
+
+For `/manager` and `/admin`, do not treat the route as audit-ready just because
+the page loaded.
+
+1. Reach the deployed route with browser access solved first
+   (share URL if needed).
+2. Check whether the route is showing an auth overlay, a redirect prompt, a
+   site picker, or a "No menu context" shell.
+3. If auth is required, ask the user for credentials or permission to use an
+   existing authenticated session. Do not audit only the auth overlay unless
+   the user explicitly wants auth-flow work.
+4. After sign-in, verify the route has a real menu context:
+   - if `?menu=` is missing or the shell says `No menu selected`, select an
+     accessible menu through the built-in picker or navigate to the same route
+     with an explicit allowed `?menu=<slug>`
+   - if the route redirects toward the restaurant selector, follow that path,
+     choose a real menu, then return to the settings screen in-context
+5. Only begin the substantive audit once the settings workspace shows a real
+   active menu and its actual sections/items are loaded.
+6. Audit auth-only, no-menu, and redirect states as secondary edge states after
+   the in-context manager/admin workspace has been inspected.
+
 ## Pass Audit
 
 ### Pass 1 (Audit — no code changes)
 
-1. Find the Vercel preview URL: run `git rev-parse HEAD`, then `vercel ls`,
-   match the deployment for the current branch.
-2. Launch Playwright headed (visible browser) so the user can watch live.
+1. Resolve the exact deployed build for `git rev-parse HEAD` using deployment
+   metadata, preferring a Ready Preview deployment when one exists.
+2. If the deployment is protected, generate a temporary share URL and use it
+   for browser access.
+3. Launch Playwright headed (visible browser) so the user can watch live.
    Use headless only if the user has opted out of watching or the environment
    has no display.
-3. Inspect the target screen in all four mode combinations:
+4. If the target is `/manager` or `/admin`, complete the Settings Route
+   Readiness checklist before judging the screen.
+5. Inspect the target screen in all four mode combinations:
    - desktop light mode
    - desktop dark mode
    - mobile light mode
    - mobile dark mode
-4. **Scroll the full page in every mode.** Scroll in viewport-height increments
+6. **Scroll the full page in every mode.** Scroll in viewport-height increments
    from top to bottom, pausing to screenshot and evaluate every section. Never
    rely on the initial viewport alone — do not move on until you have seen
    every pixel of the page.
-5. Interact with every reachable state: navigation, modals, forms, menus, tabs,
+7. Interact with every reachable state: navigation, modals, forms, menus, tabs,
    drawers, hover, focus, active, disabled, loading, empty, and error states.
-6. Apply the Creative Evaluation Lens (see below) in full.
-7. Document every issue found. Tag `[CRITICAL]` where appropriate.
-8. Write `design-loop-issues.md` (merge with any existing issues).
-9. Append the audit report to `design-loop-log.md`.
-10. Propose what the first code-changing pass will tackle.
-11. In pause-after-every-pass mode: ask for approval before proceeding.
+8. Apply the Creative Evaluation Lens (see below) in full.
+9. Document every issue found. Tag `[CRITICAL]` where appropriate.
+10. Write `design-loop-issues.md` (merge with any existing issues).
+11. Append the audit report to `design-loop-log.md`.
+12. Propose what the first code-changing pass will tackle.
+13. In pause-after-every-pass mode: ask for approval before proceeding.
     With `--passes N`: proceed automatically.
 
 ### Code-Changing Passes (Pass 2+)
 
-1. Re-inspect only the modes and states relevant to what this pass will change.
+1. Re-resolve the new deployment for the just-pushed commit by exact commit
+   metadata, not by assuming the newest Preview row belongs to this work.
+2. If the deployment is protected, generate a fresh temporary share URL before
+   browser inspection.
+3. If the target is `/manager` or `/admin`, restore authenticated, in-context
+   menu state before judging the result of the pass.
+4. Re-inspect only the modes and states relevant to what this pass will change.
    Scroll in viewport-height increments — screenshot every section.
-2. Before editing, state:
+5. Before editing, state:
    - what you found
    - what you are changing
    - why the current state falls short and what the change does for the
      experience
-3. Make the changes.
-4. Run `deploy`. Use commit message format:
+6. Make the changes.
+7. Run `deploy`. Use commit message format:
    `design(<screen>): pass N — <one-line summary>`
-5. Poll `vercel ls` until the deployment status is Ready.
-6. Reinspect the affected modes and states. Compare before vs after.
-7. Confirm the pass improved the experience and did not introduce regressions.
-8. Run `menu-regression-reviewer` if the pass touched any behavioral code.
-9. Update `design-loop-issues.md`: remove issues that are now fixed.
-10. Append the pass report to `design-loop-log.md`.
-11. Plan the next pass based on current state — one pass at a time, never
+8. Poll until the new matched deployment status is Ready.
+9. Reinspect the affected modes and states. Compare before vs after.
+10. Confirm the pass improved the experience and did not introduce regressions.
+11. Run `menu-regression-reviewer` if the pass touched any behavioral code.
+12. Update `design-loop-issues.md`: remove issues that are now fixed.
+13. Append the pass report to `design-loop-log.md`.
+14. Plan the next pass based on current state — one pass at a time, never
     plan all passes upfront.
-12. In pause-after-every-pass mode: ask whether to continue.
+15. In pause-after-every-pass mode: ask whether to continue.
     With `--passes N`: continue automatically until N code-changing passes
     are complete.
 
@@ -192,9 +246,11 @@ Append to `design-loop-log.md`:
 
 - pass number and type (audit or code-changing)
 - target screen and states inspected
+- deployment resolution notes (exact commit matched, preview vs production,
+  protected URL vs share URL)
 - highest-leverage issues found
 - changes made (or issues documented, for audit pass)
 - why the pass mattered — what shifted in the experience
-- preview URL inspected
+- deployment URL inspected
 - validation and regression results
 - what the next pass would tackle
