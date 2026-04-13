@@ -13,6 +13,8 @@ const DEFAULT_RUNTIME_SCRIPTS = [
   'core/ui/manager/workspace.js',
   'core/ui/manager/sections.js',
   'core/ui/manager/editors.js',
+  'core/ui/manager/open-food-facts.js',
+  'core/ui/manager/barcode-scanner.js',
   'core/ui/admin/workspace.js',
   'core/ui/admin/switcher.js',
   'core/ui/public/footer-actions.js',

@@ -232,7 +232,12 @@ function setMenuDirtyFlag(value) {
   _dirty = !!value;
 }
 
-function uid() { return crypto.randomUUID(); }
+function uid() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 function slugify(name) {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
@@ -269,6 +274,26 @@ let _hasSharedDraft = false;
 let _sharedDraftSavedTs = '';
 let _previewModalState = null;
 let _previewSelectionState = {};
+let _lastAddItemCategoryId = '';
+const ADD_ITEM_MODAL_MANUAL_MODE = 'manual';
+const ADD_ITEM_MODAL_SCAN_MODE = 'scan';
+function createAddItemModalState(overrides = {}) {
+  return {
+    isOpen: false,
+    mode: ADD_ITEM_MODAL_MANUAL_MODE,
+    fields: null,
+    duplicateWarning: '',
+    entryMode: ADD_ITEM_MODAL_MANUAL_MODE,
+    lookupPending: false,
+    lookupBarcode: '',
+    lookupRequestId: 0,
+    manualBarcode: '',
+    scanState: 'idle',
+    scannerService: null,
+    ...overrides,
+  };
+}
+let _addItemModalState = createAddItemModalState();
 function invalidateDiff() { _diffDirty = true; _dirty = true; updateSaveBtn(); }
 function countDiffLines(diff = getCachedDiff()) {
   return (diff || []).reduce((count, section) => (
@@ -475,6 +500,593 @@ function getUncategorizedCategoryDef() {
     sub: 'Items for specials & autocomplete — not shown on public menu',
     placeholder: 'Add to pool…',
   };
+}
+
+function canOpenAddItemModal() {
+  return !!MENU_ID && currentUserCanManageMenu(MENU_ID);
+}
+
+function getAddItemModalCategoryDefs() {
+  return [
+    ...getManagedCategoryDefs().filter(cat => !cat.readOnly && !cat.deprecated),
+    getUncategorizedCategoryDef(),
+  ];
+}
+
+function getAddItemModalDefaultCategoryId() {
+  const categoryDefs = getAddItemModalCategoryDefs();
+  const validCategoryIds = new Set(categoryDefs.map(cat => cat.id));
+  if (_lastAddItemCategoryId && validCategoryIds.has(_lastAddItemCategoryId)) return _lastAddItemCategoryId;
+  return categoryDefs[0]?.id || UNCATEGORIZED_ID;
+}
+
+function createAddItemModalFields(overrides = {}) {
+  return {
+    name: '',
+    categoryId: getAddItemModalDefaultCategoryId(),
+    desc: '',
+    price: '',
+    recipe: [],
+    upcharges: [],
+    ...overrides,
+  };
+}
+
+function getAddItemCategoryLabel(catId) {
+  return getAddItemModalCategoryDefs().find(cat => cat.id === catId)?.title || 'this category';
+}
+
+function getAddItemDuplicateWarning(fields = _addItemModalState.fields) {
+  const name = String(fields?.name || '').trim();
+  const categoryId = String(fields?.categoryId || '').trim();
+  if (!name || !categoryId) return '';
+  const targetItems = menuState[categoryId]?.items || [];
+  const nameLower = name.toLowerCase();
+  const duplicate = targetItems.find(item => {
+    const itemName = String(item?.name || '').trim().toLowerCase();
+    if (!itemName || itemName !== nameLower) return false;
+    if (categoryId === UNCATEGORIZED_ID) return true;
+    return item?.onMenu !== false;
+  });
+  if (!duplicate) return '';
+  return `"${duplicate.name}" already exists in ${getAddItemCategoryLabel(categoryId)}.`;
+}
+
+function syncAddItemModalWarnings() {
+  _addItemModalState.duplicateWarning = getAddItemDuplicateWarning();
+}
+
+function getAddItemModalViewState() {
+  const fields = _addItemModalState.fields || createAddItemModalFields();
+  return {
+    isOpen: !!_addItemModalState.isOpen,
+    mode: _addItemModalState.mode || ADD_ITEM_MODAL_MANUAL_MODE,
+    duplicateWarning: _addItemModalState.duplicateWarning || '',
+    entryMode: _addItemModalState.entryMode || ADD_ITEM_MODAL_MANUAL_MODE,
+    lookupPending: !!_addItemModalState.lookupPending,
+    lookupBarcode: _addItemModalState.lookupBarcode || '',
+    manualBarcode: _addItemModalState.manualBarcode || '',
+    scanState: _addItemModalState.scanState || 'idle',
+    scanUnsupported: _addItemModalState.scanState === 'unsupported',
+    fields: {
+      name: fields.name || '',
+      categoryId: fields.categoryId || '',
+      desc: fields.desc || '',
+      price: fields.price || '',
+      recipe: recipeArray(fields.recipe),
+      upcharges: itemUpchargeArray(fields.upcharges),
+    },
+  };
+}
+
+function renderManagerAddItemLauncher() {
+  const button = document.getElementById('manager-add-item-btn');
+  if (!button) return;
+  const canOpen = canOpenAddItemModal();
+  button.textContent = 'Add Item(s)';
+  button.setAttribute('aria-label', 'Add item or items');
+  button.style.display = canOpen ? '' : 'none';
+  button.disabled = !canOpen;
+  button.onclick = canOpen ? () => openAddItemModal({ mode: ADD_ITEM_MODAL_MANUAL_MODE }) : null;
+  if (!canOpen && _addItemModalState.isOpen) {
+    closeAddItemModal();
+  }
+}
+
+function updateDrawerAddItemButton() {
+  const addItemBtn = document.getElementById('drawer-add-item-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
+  const adminDrawerBtn = document.getElementById('admin-btn-drawer');
+  const returnBtn = document.getElementById('drawer-return-btn');
+  if (!addItemBtn) return;
+
+  const signedIn = !!currentUser;
+  const isAdmin = currentUser?.role === 'admin';
+  const canOpen = signedIn && canOpenAddItemModal();
+
+  addItemBtn.style.display = canOpen ? '' : 'none';
+  addItemBtn.disabled = !canOpen;
+  addItemBtn.style.order = isAdmin ? '4' : '3';
+  if (drawerSwitchBtn) drawerSwitchBtn.style.order = '2';
+  if (adminDrawerBtn) adminDrawerBtn.style.order = '3';
+  if (returnBtn) returnBtn.style.order = '5';
+}
+
+function captureAddItemModalFocusState() {
+  const activeEl = document.activeElement;
+  const activeId = activeEl?.id || '';
+  if (!activeId || !/^add-item-/.test(activeId)) return null;
+  const state = { id: activeId };
+  if (typeof activeEl.selectionStart === 'number') state.selectionStart = activeEl.selectionStart;
+  if (typeof activeEl.selectionEnd === 'number') state.selectionEnd = activeEl.selectionEnd;
+  return state;
+}
+
+function restoreAddItemModalFocusState(focusState) {
+  if (!focusState?.id) return;
+  const target = document.getElementById(focusState.id);
+  if (!target || typeof target.focus !== 'function') return;
+  target.focus();
+  if (typeof focusState.selectionStart === 'number' && typeof focusState.selectionEnd === 'number') {
+    if (typeof target.setSelectionRange === 'function') {
+      target.setSelectionRange(focusState.selectionStart, focusState.selectionEnd);
+    } else {
+      try {
+        target.selectionStart = focusState.selectionStart;
+        target.selectionEnd = focusState.selectionEnd;
+      } catch (_) {
+        // Ignore selection restore failures on non-text inputs.
+      }
+    }
+  }
+}
+
+function focusAddItemModalField(fieldId) {
+  const target = document.getElementById(fieldId);
+  if (!target || typeof target.focus !== 'function') return;
+  target.focus();
+  if (typeof target.select === 'function' && (
+    fieldId === 'add-item-name-input' ||
+    fieldId === 'add-item-price-input' ||
+    fieldId === 'add-item-barcode-input'
+  )) {
+    target.select();
+  }
+}
+
+function handleAddItemModalKeydown(event) {
+  if (event?.key !== 'Escape') return;
+  event.preventDefault();
+  closeAddItemModal();
+}
+
+async function stopAddItemModalScanner() {
+  const scannerService = _addItemModalState.scannerService;
+  _addItemModalState.scannerService = null;
+  if (!scannerService || typeof scannerService.stop !== 'function') return { ok: true };
+  try {
+    return await scannerService.stop();
+  } catch (_) {
+    return { ok: false, reason: 'stop-failed' };
+  }
+}
+
+function handleAddItemModalScannerStartFailure(error) {
+  if (!_addItemModalState.isOpen) return { ok: false, reason: 'closed' };
+  _addItemModalState.scanState = 'unsupported';
+  _addItemModalState.lookupPending = false;
+  _addItemModalState.lookupBarcode = '';
+  void stopAddItemModalScanner();
+  renderAddItemModal({ focusFieldId: 'add-item-barcode-input' });
+  const message = error?.name === 'NotAllowedError'
+    ? 'Camera permission was denied. Enter a UPC manually instead.'
+    : 'Camera unavailable. Enter a UPC manually instead.';
+  showToast(message, 'info');
+  return { ok: false, reason: 'unsupported', error };
+}
+
+function queueAddItemModalScannerStart() {
+  startAddItemModalScanner().catch(error => {
+    handleAddItemModalScannerStartFailure(error);
+  });
+}
+
+function setAddItemModalMode(mode, options = {}) {
+  if (!_addItemModalState.isOpen) return { ok: false, reason: 'closed' };
+
+  const nextMode = mode === ADD_ITEM_MODAL_SCAN_MODE ? ADD_ITEM_MODAL_SCAN_MODE : ADD_ITEM_MODAL_MANUAL_MODE;
+  if (nextMode === ADD_ITEM_MODAL_SCAN_MODE) {
+    _addItemModalState.mode = ADD_ITEM_MODAL_SCAN_MODE;
+    _addItemModalState.entryMode = ADD_ITEM_MODAL_SCAN_MODE;
+    _addItemModalState.lookupPending = false;
+    _addItemModalState.lookupBarcode = '';
+    _addItemModalState.manualBarcode = '';
+    _addItemModalState.scanState = 'starting';
+    void stopAddItemModalScanner();
+    renderAddItemModal();
+    requestAnimationFrame(() => {
+      queueAddItemModalScannerStart();
+    });
+    return { ok: true, mode: ADD_ITEM_MODAL_SCAN_MODE };
+  }
+
+  _addItemModalState.mode = ADD_ITEM_MODAL_MANUAL_MODE;
+  if (!options.preserveEntryMode) _addItemModalState.entryMode = ADD_ITEM_MODAL_MANUAL_MODE;
+  _addItemModalState.scanState = 'idle';
+  void stopAddItemModalScanner();
+  renderAddItemModal({ focusFieldId: options.focusFieldId || 'add-item-name-input' });
+  return { ok: true, mode: ADD_ITEM_MODAL_MANUAL_MODE };
+}
+
+async function startAddItemModalScanner() {
+  if (!_addItemModalState.isOpen || _addItemModalState.mode !== ADD_ITEM_MODAL_SCAN_MODE) {
+    return { ok: false, reason: 'inactive' };
+  }
+
+  await stopAddItemModalScanner();
+  const scannerService = createBarcodeScannerService();
+  if (!scannerService || typeof scannerService.start !== 'function') {
+    _addItemModalState.scanState = 'unsupported';
+    renderAddItemModal({ focusFieldId: 'add-item-barcode-input' });
+    return { ok: false, reason: 'unsupported' };
+  }
+
+  _addItemModalState.scannerService = scannerService;
+  const videoEl = document.getElementById('add-item-scanner-video');
+  const result = await scannerService.start(videoEl, {
+    onDetect: barcode => beginAddItemBarcodeLookup(barcode).catch(() => {}),
+  });
+
+  if (_addItemModalState.scannerService !== scannerService) {
+    await scannerService.stop?.();
+    return { ok: false, reason: 'replaced' };
+  }
+
+  if (!result?.ok) {
+    _addItemModalState.scannerService = null;
+    _addItemModalState.scanState = 'unsupported';
+    renderAddItemModal({ focusFieldId: 'add-item-barcode-input' });
+    return result || { ok: false, reason: 'unsupported' };
+  }
+
+  _addItemModalState.scanState = 'live';
+  return result;
+}
+
+async function beginAddItemBarcodeLookup(rawBarcode) {
+  const barcode = String(rawBarcode || '').trim();
+  if (!_addItemModalState.isOpen || !barcode) return { ok: false, reason: 'required' };
+
+  const requestId = (_addItemModalState.lookupRequestId || 0) + 1;
+  _addItemModalState.lookupRequestId = requestId;
+  _addItemModalState.lookupPending = true;
+  _addItemModalState.lookupBarcode = barcode;
+  _addItemModalState.manualBarcode = barcode;
+  _addItemModalState.mode = ADD_ITEM_MODAL_MANUAL_MODE;
+  _addItemModalState.entryMode = ADD_ITEM_MODAL_SCAN_MODE;
+  _addItemModalState.scanState = 'idle';
+  const categoryId = String(_addItemModalState.fields?.categoryId || getAddItemModalDefaultCategoryId());
+  _addItemModalState.fields = createAddItemModalFields({ categoryId });
+  syncAddItemModalWarnings();
+  await stopAddItemModalScanner();
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+
+  const product = await lookupOpenFoodFactsProduct(barcode);
+  if (!_addItemModalState.isOpen || _addItemModalState.lookupRequestId !== requestId) {
+    return { ok: false, reason: 'stale' };
+  }
+
+  _addItemModalState.lookupPending = false;
+  if (product) {
+    _addItemModalState.fields.name = product.name || '';
+    _addItemModalState.fields.desc = product.description || '';
+  } else {
+    _addItemModalState.fields.name = '';
+    _addItemModalState.fields.desc = '';
+    showToast('Product not found', 'info');
+  }
+  syncAddItemModalWarnings();
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+  return { ok: true, product };
+}
+
+function updateAddItemModalManualBarcode(value) {
+  if (!_addItemModalState.isOpen) return;
+  _addItemModalState.manualBarcode = String(value || '');
+}
+
+function submitAddItemModalBarcodeLookup() {
+  const barcode = String(_addItemModalState.manualBarcode || '').trim();
+  if (!barcode) {
+    renderAddItemModal({ focusFieldId: 'add-item-barcode-input' });
+    return { ok: false, reason: 'required' };
+  }
+  return beginAddItemBarcodeLookup(barcode);
+}
+
+function renderAddItemModal(options = {}) {
+  const host = document.getElementById('manager-add-item-modal-host');
+  if (!host) return;
+  if (!_addItemModalState.isOpen || !canOpenAddItemModal()) {
+    host.innerHTML = '';
+    return;
+  }
+
+  const view = getAddItemModalViewState();
+  const { fields } = view;
+  const isScanMode = view.mode === ADD_ITEM_MODAL_SCAN_MODE;
+  const canConfirm = !!fields.name.trim() && !!fields.categoryId && !view.duplicateWarning;
+  const modalSubtitle = isScanMode
+    ? 'Scan a barcode to prefill item details, or use manual UPC lookup when camera scanning is unavailable.'
+    : (MENU_TYPE === 'food'
+      ? 'Add a menu item with pricing, description, and upcharges in one place.'
+      : 'Add a menu item with pricing, description, and drinks recipe details in one place.');
+  const categoryOptions = getAddItemModalCategoryDefs().map(cat => (
+    `<option value="${escHtml(cat.id)}"${cat.id === fields.categoryId ? ' selected' : ''}>${escHtml(cat.title)}</option>`
+  )).join('');
+  const modeToggleHtml = `
+    <div class="add-item-mode-toggle" role="tablist" aria-label="Add item mode">
+      <button type="button" class="add-item-mode-chip${isScanMode ? ' is-active' : ''}" role="tab" aria-selected="${isScanMode ? 'true' : 'false'}" onclick="setAddItemModalMode('${ADD_ITEM_MODAL_SCAN_MODE}')">Scan</button>
+      <button type="button" class="add-item-mode-chip${!isScanMode ? ' is-active' : ''}" role="tab" aria-selected="${!isScanMode ? 'true' : 'false'}" onclick="setAddItemModalMode('${ADD_ITEM_MODAL_MANUAL_MODE}')">Manual</button>
+    </div>`;
+  const lookupStatusHtml = view.lookupPending
+    ? `<div class="add-item-modal-note" role="status">Looking up ${escHtml(view.lookupBarcode || 'barcode')}…</div>`
+    : '';
+  const scanBodyHtml = view.scanUnsupported
+    ? `
+      <div class="add-item-scan-panel add-item-scan-panel--unsupported">
+        <div class="add-item-scan-copy">
+          <p class="add-item-scan-heading">Camera scanning isn’t available here.</p>
+          <p class="add-item-inline-note">Enter a UPC manually and we’ll still try Open Food Facts before you finish the item.</p>
+        </div>
+        <div class="add-item-inline-row add-item-inline-row--barcode">
+          <input id="add-item-barcode-input" class="catmgr-input" type="text" inputmode="numeric" autocomplete="off" value="${escHtml(view.manualBarcode)}" placeholder="Enter barcode / UPC…" oninput="updateAddItemModalManualBarcode(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddItemModalBarcodeLookup();}"/>
+          <button type="button" class="btn-small" ${view.lookupPending ? 'disabled' : ''} onclick="submitAddItemModalBarcodeLookup()">Lookup UPC</button>
+        </div>
+      </div>`
+    : `
+      <div class="add-item-scan-panel">
+        <div class="add-item-scanner-frame">
+          <video id="add-item-scanner-video" class="add-item-scanner-video" autoplay playsinline muted></video>
+          <div class="add-item-scanner-overlay">
+            <span class="add-item-scanner-overlay-copy">Align a barcode inside the frame</span>
+          </div>
+        </div>
+        <p class="add-item-inline-note">The camera will prefill name and description, then hand off to the normal form.</p>
+      </div>`;
+  const upchargesHtml = fields.upcharges.length
+    ? `<div class="add-item-pill-list">${fields.upcharges.map((entry, index) => `
+        <div class="add-item-pill">
+          <span>${escHtml(entry.label)}${entry.price ? ` <strong>${escHtml(entry.price)}</strong>` : ''}</span>
+          <button type="button" class="add-item-pill-remove" aria-label="Remove upcharge" onclick="removeAddItemModalUpcharge(${index})">×</button>
+        </div>
+      `).join('')}</div>`
+    : '<p class="add-item-inline-note">No upcharges yet.</p>';
+  const recipeHtml = MENU_TYPE === 'food'
+    ? ''
+    : `
+      <div class="add-item-field-block">
+        <label class="add-item-field-label" for="add-item-recipe-input">Recipe</label>
+        ${fields.recipe.length
+          ? `<div class="add-item-pill-list">${fields.recipe.map((entry, index) => `
+              <div class="add-item-pill">
+                <span>${escHtml(entry)}</span>
+                <button type="button" class="add-item-pill-remove" aria-label="Remove ingredient" onclick="removeAddItemModalRecipeIngredient(${index})">×</button>
+              </div>
+            `).join('')}</div>`
+          : '<p class="add-item-inline-note">No ingredients yet.</p>'}
+        <div class="add-item-inline-row">
+          <input id="add-item-recipe-input" class="catmgr-input" type="text" placeholder="Add ingredient…" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addAddItemModalRecipeIngredient();}"/>
+          <button type="button" class="btn-small" onclick="addAddItemModalRecipeIngredient()">Add Ingredient</button>
+        </div>
+      </div>`;
+  const manualBodyHtml = `
+    ${lookupStatusHtml}
+    <div class="add-item-modal-grid">
+      <label class="add-item-field-block">
+        <span class="add-item-field-label">Name</span>
+        <input id="add-item-name-input" class="catmgr-input" type="text" value="${escHtml(fields.name)}" placeholder="Item name…" oninput="updateAddItemModalField('name', this.value)"/>
+      </label>
+      <label class="add-item-field-block">
+        <span class="add-item-field-label">Category</span>
+        <select id="add-item-category-input" class="catmgr-input" onchange="updateAddItemModalField('categoryId', this.value)">${categoryOptions}</select>
+      </label>
+      <label class="add-item-field-block add-item-field-block--full">
+        <span class="add-item-field-label">Description</span>
+        <textarea id="add-item-desc-input" class="desc-input" rows="3" placeholder="Describe this item…" oninput="updateAddItemModalField('desc', this.value)">${escHtml(fields.desc)}</textarea>
+      </label>
+      <label class="add-item-field-block">
+        <span class="add-item-field-label">Price</span>
+        <input id="add-item-price-input" class="catmgr-input" type="text" value="${escHtml(fields.price)}" placeholder="$0.00" oninput="updateAddItemModalField('price', this.value)"/>
+      </label>
+      <div class="add-item-field-block">
+        <span class="add-item-field-label">Upcharges</span>
+        ${upchargesHtml}
+        <div class="add-item-inline-row">
+          <input id="add-item-upcharge-label" class="catmgr-input" type="text" placeholder="Label"/>
+          <input id="add-item-upcharge-price" class="catmgr-input" type="text" placeholder="+$0.00" onkeydown="if(event.key==='Enter'){event.preventDefault();addAddItemModalUpcharge();}"/>
+          <button type="button" class="btn-small" onclick="addAddItemModalUpcharge()">Add</button>
+        </div>
+      </div>
+      ${recipeHtml}
+    </div>`;
+  const modalActionsHtml = isScanMode
+    ? `
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
+      </div>`
+    : `
+      <div class="modal-actions">
+        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
+        <button type="button" class="btn-secondary" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal({ addMore: true })">Confirm &amp; Add More</button>
+        <button type="button" class="btn-confirm" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal()">Confirm</button>
+      </div>`;
+
+  host.innerHTML = `
+    <div class="modal-bg open" id="manager-add-item-overlay" onclick="if(event.target===this)closeAddItemModal()">
+      <div class="modal add-item-modal" role="dialog" aria-modal="true" aria-labelledby="add-item-modal-title" onkeydown="handleAddItemModalKeydown(event)">
+        <h2 id="add-item-modal-title">Add Item(s)</h2>
+        <div class="modal-sub">${escHtml(modalSubtitle)}</div>
+        ${modeToggleHtml}
+        ${view.duplicateWarning ? `<div class="add-item-modal-warning" role="alert">${escHtml(view.duplicateWarning)}</div>` : ''}
+        ${isScanMode ? scanBodyHtml : manualBodyHtml}
+        ${modalActionsHtml}
+      </div>
+    </div>`;
+
+  if (options.focusState) {
+    requestAnimationFrame(() => restoreAddItemModalFocusState(options.focusState));
+  } else if (options.focusFieldId) {
+    requestAnimationFrame(() => focusAddItemModalField(options.focusFieldId));
+  }
+}
+
+function openAddItemModal(options = {}) {
+  if (!canOpenAddItemModal()) return { ok: false, reason: 'forbidden' };
+  const requestedMode = options.mode === ADD_ITEM_MODAL_SCAN_MODE ? ADD_ITEM_MODAL_SCAN_MODE : ADD_ITEM_MODAL_MANUAL_MODE;
+  _addItemModalState = createAddItemModalState({
+    isOpen: true,
+    mode: requestedMode,
+    entryMode: requestedMode,
+    fields: createAddItemModalFields(),
+    scanState: requestedMode === ADD_ITEM_MODAL_SCAN_MODE ? 'starting' : 'idle',
+  });
+  syncAddItemModalWarnings();
+  if (requestedMode === ADD_ITEM_MODAL_SCAN_MODE) {
+    renderAddItemModal();
+    requestAnimationFrame(() => {
+      queueAddItemModalScannerStart();
+    });
+    return { ok: true, mode: ADD_ITEM_MODAL_SCAN_MODE };
+  }
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+  return { ok: true, mode: ADD_ITEM_MODAL_MANUAL_MODE };
+}
+
+function closeAddItemModal() {
+  _addItemModalState.lookupRequestId = (_addItemModalState.lookupRequestId || 0) + 1;
+  void stopAddItemModalScanner();
+  _addItemModalState = createAddItemModalState();
+  renderAddItemModal();
+}
+
+function updateAddItemModalField(field, value) {
+  if (!_addItemModalState.isOpen) return;
+  if (!_addItemModalState.fields) _addItemModalState.fields = createAddItemModalFields();
+  if (!Object.prototype.hasOwnProperty.call(_addItemModalState.fields, field)) return;
+  const focusState = captureAddItemModalFocusState();
+  _addItemModalState.fields[field] = field === 'categoryId' ? String(value || '') : String(value || '');
+  syncAddItemModalWarnings();
+  renderAddItemModal({ focusState });
+}
+
+function addAddItemModalRecipeIngredient(rawValue) {
+  if (!_addItemModalState.isOpen || MENU_TYPE === 'food') return false;
+  if (!_addItemModalState.fields) _addItemModalState.fields = createAddItemModalFields();
+  const input = document.getElementById('add-item-recipe-input');
+  const value = String(typeof rawValue === 'string' ? rawValue : input?.value || '').trim();
+  if (!value) return false;
+  _addItemModalState.fields.recipe = recipeArray(_addItemModalState.fields.recipe);
+  _addItemModalState.fields.recipe.push(value);
+  if (input) input.value = '';
+  renderAddItemModal({ focusFieldId: 'add-item-recipe-input' });
+  return true;
+}
+
+function removeAddItemModalRecipeIngredient(index) {
+  if (!_addItemModalState.fields || !Array.isArray(_addItemModalState.fields.recipe)) return;
+  _addItemModalState.fields.recipe.splice(index, 1);
+  renderAddItemModal({ focusFieldId: 'add-item-recipe-input' });
+}
+
+function addAddItemModalUpcharge(rawLabel, rawPrice) {
+  if (!_addItemModalState.isOpen) return false;
+  if (!_addItemModalState.fields) _addItemModalState.fields = createAddItemModalFields();
+  const labelInput = document.getElementById('add-item-upcharge-label');
+  const priceInput = document.getElementById('add-item-upcharge-price');
+  const label = String(typeof rawLabel === 'string' ? rawLabel : labelInput?.value || '').trim();
+  const price = String(typeof rawPrice === 'string' ? rawPrice : priceInput?.value || '').trim();
+  if (!label) return false;
+  _addItemModalState.fields.upcharges = itemUpchargeArray(_addItemModalState.fields.upcharges);
+  _addItemModalState.fields.upcharges.push({ label, price: price || '+$0' });
+  if (labelInput) labelInput.value = '';
+  if (priceInput) priceInput.value = '';
+  renderAddItemModal({ focusFieldId: 'add-item-upcharge-label' });
+  return true;
+}
+
+function removeAddItemModalUpcharge(index) {
+  if (!_addItemModalState.fields || !Array.isArray(_addItemModalState.fields.upcharges)) return;
+  _addItemModalState.fields.upcharges.splice(index, 1);
+  renderAddItemModal({ focusFieldId: 'add-item-upcharge-label' });
+}
+
+function buildNewMenuItemFromAddModal(fields) {
+  const categoryId = fields.categoryId || '';
+  return {
+    id: uid(),
+    name: String(fields.name || '').trim(),
+    desc: String(fields.desc || '').trim(),
+    recipe: MENU_TYPE === 'food' ? [] : recipeArray(fields.recipe),
+    price: String(fields.price || '').trim(),
+    eightySixed: false,
+    onMenu: categoryId === UNCATEGORIZED_ID ? false : true,
+    upcharges: itemUpchargeArray(fields.upcharges),
+    showDescription: true,
+    showRecipe: false,
+  };
+}
+
+function confirmAddItemModal(options = {}) {
+  if (!_addItemModalState.isOpen || !_addItemModalState.fields) return { ok: false, reason: 'closed' };
+  syncAddItemModalWarnings();
+  const fields = _addItemModalState.fields;
+  if (!String(fields.name || '').trim() || !String(fields.categoryId || '').trim()) {
+    renderAddItemModal({ focusFieldId: !String(fields.name || '').trim() ? 'add-item-name-input' : 'add-item-category-input' });
+    return { ok: false, reason: 'required' };
+  }
+  if (_addItemModalState.duplicateWarning) {
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+    return { ok: false, reason: 'duplicate' };
+  }
+
+  const categoryId = fields.categoryId;
+  if (!menuState[categoryId]) menuState[categoryId] = { items: [], lastSent: [] };
+  const item = buildNewMenuItemFromAddModal(fields);
+  menuState[categoryId].items.push(item);
+  _lastAddItemCategoryId = categoryId;
+  invalidateDiff();
+  renderManagerItems(categoryId);
+  renderPricingSection();
+  renderDescriptionSection();
+  markSectionsStale('manager-items-section');
+  markSectionsStale('manager-pricing-section');
+  markSectionsStale('manager-description-section');
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+
+  if (options && options.addMore) {
+    const reopenMode = _addItemModalState.entryMode === ADD_ITEM_MODAL_SCAN_MODE
+      ? ADD_ITEM_MODAL_SCAN_MODE
+      : ADD_ITEM_MODAL_MANUAL_MODE;
+    _addItemModalState = createAddItemModalState({
+      isOpen: true,
+      mode: reopenMode,
+      entryMode: reopenMode,
+      fields: createAddItemModalFields({ categoryId: _lastAddItemCategoryId }),
+      scanState: reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? 'starting' : 'idle',
+    });
+    renderAddItemModal(reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? {} : { focusFieldId: 'add-item-name-input' });
+    if (reopenMode === ADD_ITEM_MODAL_SCAN_MODE) {
+      requestAnimationFrame(() => {
+        queueAddItemModalScannerStart();
+      });
+    }
+    return { ok: true, keptOpen: true, item, mode: reopenMode };
+  }
+
+  closeAddItemModal();
+  return { ok: true, item };
 }
 
 function getRenderableCategoryItems(catId) {
@@ -1432,6 +2044,18 @@ function getUiModuleBoundary() {
     return globalThis.__HF_UI_MODULES__;
   }
   return null;
+}
+
+function lookupOpenFoodFactsProduct(barcode, deps = {}) {
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.lookupOpenFoodFactsProduct !== 'function') return Promise.resolve(null);
+  return boundary.lookupOpenFoodFactsProduct(barcode, deps);
+}
+
+function createBarcodeScannerService(deps = {}) {
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createBarcodeScannerService !== 'function') return null;
+  return boundary.createBarcodeScannerService(deps);
 }
 
 function buildManagerWorkspaceModuleDeps() {
@@ -5282,6 +5906,7 @@ function renderUserHeader(options = {}) {
     adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminDrawerBtn.classList.toggle('active', isAdminMode);
   }
+  updateDrawerAddItemButton();
 
   _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
   _setDisplayBySelector('[data-route-admin]', (signedIn && isAdmin) ? '' : 'none');
@@ -5338,11 +5963,12 @@ function setActiveSettingsSection(sectionId) {
   });
 }
 
-function setSettingsDrawerOpen(isOpen) {
+function setSettingsDrawerOpen(isOpen, options = {}) {
   const drawer = document.getElementById('manager-settings-rail');
   const backdrop = document.getElementById('settings-drawer-backdrop');
   const toggle = document.getElementById('settings-drawer-toggle');
   const isMobileDrawer = window.innerWidth <= 920;
+  const shouldRestoreToggleFocus = options.restoreFocus !== false;
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
@@ -5353,7 +5979,7 @@ function setSettingsDrawerOpen(isOpen) {
     requestAnimationFrame(() => {
       drawer.querySelector('.manager-shell-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
     });
-  } else if (!isOpen && isMobileDrawer && toggle) {
+  } else if (!isOpen && isMobileDrawer && toggle && shouldRestoreToggleFocus) {
     toggle.focus();
   }
 }
@@ -5364,8 +5990,14 @@ function toggleSettingsDrawer() {
   setSettingsDrawerOpen(!drawer.classList.contains('is-open'));
 }
 
-function closeSettingsDrawer() {
-  setSettingsDrawerOpen(false);
+function closeSettingsDrawer(options = {}) {
+  setSettingsDrawerOpen(false, options);
+}
+
+function onDrawerAddItemClick() {
+  if (!canOpenAddItemModal()) return { ok: false, reason: 'forbidden' };
+  closeSettingsDrawer({ restoreFocus: false });
+  return openAddItemModal({ mode: ADD_ITEM_MODAL_SCAN_MODE });
 }
 
 function _getSettingsSectionHashId() {
@@ -5757,6 +6389,7 @@ function updateActiveMenuBar() {
   const canSwitch     = role === 'admin' || accessibleIds.length > 1;
   if (switchBtn) switchBtn.style.display = canSwitch ? '' : 'none';
   if (drawerSwitchBtn) drawerSwitchBtn.style.display = canSwitch ? '' : 'none';
+  updateDrawerAddItemButton();
 }
 
 async function onSwitchMenuClick() {
@@ -6580,6 +7213,7 @@ function renderManagerCategories() {
   const container = document.getElementById('manager-items-categories') || document.getElementById('manager-categories');
   if (!container) return;
   container.innerHTML = '';
+  renderManagerAddItemLauncher();
   // Preserve uncategorized expansion state across re-renders
   const _uncatWasExpanded = !document.getElementById('mgr-card-' + UNCATEGORIZED_ID)?.classList.contains('collapsed');
   const uncategorized = getUncategorizedCategoryDef();
@@ -6601,16 +7235,7 @@ function renderManagerCategories() {
       <div class="current-section">
         <div class="current-label">On Menu Now</div>
         <div class="current-items" id="mgr-items-${escHtml(cat.id)}"></div>
-        <div class="add-item-wrap">
-          <div class="add-item-area">
-            <input class="add-item-input" id="new-input-${escHtml(cat.id)}" type="text" placeholder="${escHtml(isReadOnlyCategory ? 'Legacy category is read-only' : (cat.placeholder || 'Add item…'))}" aria-label="${escHtml(isReadOnlyCategory ? `${cat.title} is read-only` : `Add item to ${cat.title}`)}" autocomplete="off" ${isReadOnlyCategory ? 'disabled' : `
-              oninput="showAutocomplete('${escHtml(cat.id)}')"
-              onblur="setTimeout(()=>hideAutocomplete('${escHtml(cat.id)}'),150)"
-              onkeydown="handleAddItemKeydown(event,'${escHtml(cat.id)}')"`}/>
-            <button class="add-item-btn" ${isReadOnlyCategory ? 'disabled aria-disabled="true"' : `onclick="addItem('${escHtml(cat.id)}')" aria-label="Add item to ${escHtml(cat.label)}"`}>+</button>
-          </div>
-          <div class="autocomplete-list" id="ac-${escHtml(cat.id)}"></div>
-        </div>
+        ${isReadOnlyCategory ? `<p class="manager-category-note">Legacy category is read-only.</p>` : ''}
       </div>`;
     container.appendChild(card);
     renderManagerItems(cat.id);
@@ -6632,19 +7257,11 @@ function renderManagerCategories() {
     <div class="current-section">
       <div class="current-label">Item Pool</div>
       <div class="current-items" id="mgr-items-${UNCATEGORIZED_ID}"></div>
-      <div class="add-item-wrap">
-        <div class="add-item-area">
-          <input class="add-item-input" id="new-input-${UNCATEGORIZED_ID}" type="text" placeholder="${escHtml(uncategorized.placeholder)}" aria-label="Add item to uncategorized pool" autocomplete="off"
-            oninput="showAutocomplete('${UNCATEGORIZED_ID}')"
-            onblur="setTimeout(()=>hideAutocomplete('${UNCATEGORIZED_ID}'),150)"
-            onkeydown="handleAddItemKeydown(event,'${UNCATEGORIZED_ID}')"/>
-          <button class="add-item-btn" onclick="addItem('${UNCATEGORIZED_ID}')" aria-label="Add item to uncategorized pool">+</button>
-        </div>
-        <div class="autocomplete-list" id="ac-${UNCATEGORIZED_ID}"></div>
-      </div>
+      <p class="manager-category-note">Use Add Item(s) to place new off-menu items in the pool.</p>
     </div>`;
   container.appendChild(uncatCard);
   renderManagerItems(UNCATEGORIZED_ID);
+  renderAddItemModal();
 }
 
 function toggleManagerCategory(catId) {
