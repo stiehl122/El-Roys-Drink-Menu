@@ -562,6 +562,16 @@ body.route-restaurant.route-restaurant--leroy {
   pointer-events: none;
 }
 
+#restaurant-site-wrapper .ll-slat-section[data-category='special'] {
+  border-color: rgb(250 189 0 / 0.22);
+  background:
+    linear-gradient(180deg, rgb(255 246 219 / 0.36), rgb(255 255 255 / 0.2));
+}
+
+#restaurant-site-wrapper .ll-slat-section[data-category='special']::before {
+  background: linear-gradient(90deg, rgb(255 240 214 / 0.45), rgb(250 189 0 / 0.48), transparent);
+}
+
 #restaurant-site-wrapper .ll-slat-section-head {
   display: flex;
   align-items: center;
@@ -579,6 +589,10 @@ body.route-restaurant.route-restaurant--leroy {
   min-width: 2rem;
   height: 1px;
   background: linear-gradient(90deg, var(--ll-board-section-rule), transparent);
+}
+
+#restaurant-site-wrapper .ll-slat-section[data-category='special'] .ll-slat-section-head::after {
+  background: linear-gradient(90deg, rgb(250 189 0 / 0.35), transparent);
 }
 
 #restaurant-site-wrapper .ll-slat-section-title {
@@ -725,6 +739,13 @@ body.route-restaurant.route-restaurant--leroy {
   text-transform: uppercase;
   transform: rotate(-10deg);
   box-shadow: 1px 1px 0 rgb(0 0 0 / 0.2);
+}
+
+#restaurant-site-wrapper .ll-slat-section[data-category='special'] .ll-board-chip {
+  padding: 2px 6px;
+  letter-spacing: 0.08em;
+  transform: rotate(-6deg);
+  box-shadow: 0 4px 10px rgb(211 11 11 / 0.16);
 }
 
 #restaurant-site-wrapper .ll-board-item--sold .ll-board-item-name,
@@ -1323,6 +1344,12 @@ body.route-restaurant.route-restaurant--leroy {
     --ll-board-pill-bg: rgb(255 240 214 / 0.08);
     --ll-board-pill-border: rgb(255 240 214 / 0.18);
     color-scheme: dark;
+  }
+
+  #restaurant-site-wrapper .ll-slat-section[data-category='special'] {
+    border-color: rgb(255 208 86 / 0.24);
+    background:
+      linear-gradient(180deg, rgb(50 34 24 / 0.66), rgb(28 20 18 / 0.6));
   }
 
   #restaurant-site-wrapper .ll-skip-link {
