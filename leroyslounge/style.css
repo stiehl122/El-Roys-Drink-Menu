@@ -872,7 +872,9 @@ body.route-restaurant.route-restaurant--leroy {
 #restaurant-site-wrapper .ll-board-footer {
   position: relative;
   z-index: 1;
-  padding: 1.5rem calc(2rem + var(--ll-safe-right)) calc(1.75rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
+  display: grid;
+  gap: 0.55rem;
+  padding: 1.85rem calc(2rem + var(--ll-safe-right)) calc(1.9rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
   margin-top: auto;
   background:
     linear-gradient(
@@ -882,45 +884,64 @@ body.route-restaurant.route-restaurant--leroy {
       rgb(65 0 0 / 0.72) 58%,
       var(--ll-board-frame) 100%
     );
-  text-align: right;
+  text-align: left;
+}
+
+#restaurant-site-wrapper .ll-board-footer-updated,
+#restaurant-site-wrapper .ll-board-footer-version,
+#restaurant-site-wrapper .ll-board-footer-actions {
+  width: min(60rem, calc(100% - 2rem));
+  margin-inline: auto;
 }
 
 #restaurant-site-wrapper .ll-board-footer-version {
-  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0;
 }
 
 #restaurant-site-wrapper .ll-board-footer .footer-preview-badge {
-  color: rgb(229 226 225 / 0.88);
-  border-color: rgb(229 226 225 / 0.2);
+  color: rgb(255 240 214 / 0.98);
+  border-color: rgb(255 240 214 / 0.26);
+  border-radius: 999px;
+  background: rgb(255 240 214 / 0.08);
+  padding: 0.18rem 0.5rem;
 }
 
 #restaurant-site-wrapper .ll-board-footer-actions {
   display: flex;
-  gap: 12px;
-  justify-content: flex-end;
+  gap: 0.55rem;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 0.15rem;
 }
 
 #restaurant-site-wrapper .ll-board-footer-action {
   appearance: none;
   -webkit-appearance: none;
-  border: 0;
-  background: none;
-  color: rgba(255, 240, 231, 0.72);
+  border: 1px solid rgb(255 240 214 / 0.18);
+  border-radius: 999px;
+  background: rgb(28 16 16 / 0.18);
+  color: rgba(255, 240, 231, 0.88);
   cursor: pointer;
   font: inherit;
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  text-decoration: underline;
-  text-underline-offset: 0.24em;
-  padding: 0;
+  text-decoration: none;
+  padding: 0.45rem 0.78rem;
+  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
 #restaurant-site-wrapper .ll-board-footer-action:hover,
 #restaurant-site-wrapper .ll-board-footer-action:focus-visible {
   color: #fff0e7;
+  border-color: rgb(255 240 214 / 0.4);
+  background: rgb(255 240 214 / 0.08);
+  transform: translateY(-1px);
   outline: none;
 }
 
