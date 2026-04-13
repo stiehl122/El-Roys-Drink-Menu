@@ -2665,6 +2665,31 @@ function syncLandingHoursDraftFromDom() {
   return record;
 }
 
+function renderLandingHoursValidationState(record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  const issuesEl = document.getElementById('landing-hours-issues');
+  const badgeEl = document.getElementById('landing-hours-panel-badge');
+  const validation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
+
+  if (issuesEl) {
+    issuesEl.innerHTML = validation.valid
+      ? ''
+      : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
+  }
+  if (badgeEl) {
+    badgeEl.textContent = validation.valid ? 'Ready' : 'Blocked';
+    badgeEl.className = `landing-admin-section-badge ${validation.valid ? 'is-ready' : 'is-blocked'}`;
+  }
+}
+
+function refreshLandingHoursAdminState(record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  setLandingPageState(normalized, { dirty: _landingPageDirty });
+  renderLandingOverview(normalized);
+  renderLandingHoursValidationState(normalized);
+  updateLandingAdminToolbar(normalized);
+}
+
 function updateLandingAdminToolbar(record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const diffSectionIds = getLandingDraftDiffSectionIds(normalized);
@@ -2704,23 +2729,12 @@ function updateLandingAdminToolbar(record = _landingPageState) {
 function renderLandingHoursPanel(record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const gridEl = document.getElementById('landing-admin-hours-grid');
-  const issuesEl = document.getElementById('landing-hours-issues');
-  const badgeEl = document.getElementById('landing-hours-panel-badge');
-  const validation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
   if (gridEl) {
     gridEl.innerHTML = knownLandingRestaurants().map(restaurant => (
       renderLandingHoursRowsHtml(normalized.draftContent.hours, restaurant.id, restaurant.name)
     )).join('');
   }
-  if (issuesEl) {
-    issuesEl.innerHTML = validation.valid
-      ? ''
-      : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  }
-  if (badgeEl) {
-    badgeEl.textContent = validation.valid ? 'Ready' : 'Blocked';
-    badgeEl.className = `landing-admin-section-badge ${validation.valid ? 'is-ready' : 'is-blocked'}`;
-  }
+  renderLandingHoursValidationState(normalized);
 }
 
 function renderLandingPlaceholderPanel(sectionId) {
@@ -2890,12 +2904,16 @@ function setLandingHoursField(restaurantId, dayKey, field, value) {
       targetDay.close = '';
     }
   } else if (field === 'open' || field === 'close') {
-    targetDay[field] = typeof value === 'string' ? value : '';
+    targetDay[field] = normalizeLandingTimeValue(value);
     if (targetDay[field]) targetDay.closed = false;
   }
   record.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeLandingDay(targetDay);
   _landingPageDirty = true;
-  renderLandingAdminWorkspace();
+  if (field === 'closed') {
+    renderLandingAdminWorkspace();
+    return;
+  }
+  refreshLandingHoursAdminState(record);
 }
 
 async function saveLandingPageDraft() {

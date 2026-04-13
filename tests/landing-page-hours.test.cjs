@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { createElement, loadAppSandbox, setState } = require('./helpers/runtime.cjs');
+const { createElement, getState, loadAppSandbox, setState } = require('./helpers/runtime.cjs');
 
 function buildHoursDraft(sandbox) {
   return sandbox.createDefaultLandingPageRecord().draftContent.hours;
@@ -156,4 +156,29 @@ test('landing hours sync reads current admin DOM values before validation', () =
   assert.equal(day.open, '16:00');
   assert.equal(day.close, '23:00');
   assert.equal(validation.valid, true);
+});
+
+test('landing open-close edits do not rerender the full hours workspace', () => {
+  const sandbox = loadAppSandbox({ Intl });
+  const restaurants = sandbox.__HF_DOMAIN_CONSTANTS__.RESTAURANTS;
+  const record = sandbox.createDefaultLandingPageRecord();
+  let workspaceRenderCalls = 0;
+
+  sandbox.renderLandingAdminWorkspace = () => {
+    workspaceRenderCalls += 1;
+  };
+  sandbox.renderLandingOverview = () => {};
+  sandbox.renderLandingHoursValidationState = () => {};
+  sandbox.updateLandingAdminToolbar = () => {};
+  setState(sandbox, { _landingPageState: record });
+
+  sandbox.setLandingHoursField(restaurants.LEROYS.id, 'wed', 'open', '16:00');
+  sandbox.setLandingHoursField(restaurants.LEROYS.id, 'wed', 'close', '23:00');
+
+  const currentState = getState(sandbox, '_landingPageState');
+  const day = currentState.draftContent.hours.restaurants[restaurants.LEROYS.id].days.wed;
+  assert.equal(workspaceRenderCalls, 0);
+  assert.equal(day.open, '16:00');
+  assert.equal(day.close, '23:00');
+  assert.equal(day.closed, false);
 });
