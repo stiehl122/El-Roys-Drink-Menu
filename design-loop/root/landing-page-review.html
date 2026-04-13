@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LEROY'S &amp; EL ROY'S — Tonight</title>
+
+  <!--
+    DESIGN REVIEW COPY — v1 Public Landing Page
+    Derived from Stitch screens (project 10770482172087921077) + vibe docs
+    ──────────────────────────────────────────────────────────────────────
+    Changes from Stitch:
+    • Typography: Bebas Neue (display) + Crimson Text (body) + Barlow Condensed (label)
+      Replaces: Epilogue / Noto Serif / Space Grotesk
+    • Header: corrected to "LEROY'S & EL ROY'S", removed admin/settings buttons,
+      removed "Nightlife Artifact" branding
+    • El Roy's accent: pushed from muted teal #94d3c1 → electric neon teal #13E9A4
+    • Hero backgrounds: real project assets used (logo.png, cantina-badge.png,
+      texture.png, stucco-texture.jpg)
+    • Hero: flex-expansion on hover (each half grows slightly on desktop)
+    • Scroll reveals: IntersectionObserver stagger on all sections
+    • Dot nav: updates on scroll via IntersectionObserver
+    • Reviews: two-pair carousel with JS pagination
+    • Footer: placeholder — actual app footer renders here in production
+    • Removed: mobile bottom nav bar (not in brief)
+  -->
+
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Crimson+Text:ital,wght@0,400;0,600;1,400;1,600&family=Barlow+Condensed:wght@300;400;500;600;700&family=Material+Symbols+Outlined:wght,FILL@400,0..1&display=swap" rel="stylesheet">
+
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            /* Leroy's accent — warm brass amber */
+            'lr-amber':       '#F0983C',
+            'lr-amber-bright':'#FFCF80',
+            'lr-amber-dim':   '#8C5E1A',
+            /* El Roy's accent — electric neon teal */
+            'er-teal':        '#13E9A4',
+            'er-teal-bright': '#7AFFD8',
+            'er-teal-dim':    '#0A7A56',
+            /* Backgrounds */
+            'base':           '#0B0702',
+            'base-warm':      '#130D06',
+            'base-cool':      '#080D0A',
+            'surface':        '#1A1008',
+            'surface-hi':     '#251608',
+            'surface-teal':   '#0C1610',
+            /* Typography */
+            'ink':            '#F0E0CC',
+            'ink-dim':        '#A89480',
+            'ink-ghost':      'rgba(240,224,204,0.35)',
+          },
+          fontFamily: {
+            display: ['Bebas Neue', 'Impact', 'sans-serif'],
+            body:    ['Crimson Text', 'Georgia', 'serif'],
+            label:   ['Barlow Condensed', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    /* ── Page vignette — dark edges, pulls focus inward ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9998;
+      background: radial-gradient(ellipse 80% 75% at 50% 38%, transparent 25%, rgba(0,0,0,0.55) 100%);
+    }
+
+    /* ── Film grain overlay — heavier, coarser ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.08;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 110px 110px;
+    }
+
+    /* ── Hero card textures ── */
+    .card-leroy {
+      background-color: #1C1008;
+      background-image:
+        radial-gradient(ellipse 65% 55% at 50% 55%, rgba(240,152,60,0.18) 0%, transparent 70%),
+        linear-gradient(rgba(20,10,3,0.32), rgba(20,10,3,0.32)),
+        url('../../assets/leroys-lounge/texture.png');
+      background-size: cover;
+    }
+    .card-elroys {
+      background-color: #0C1610;
+      background-image:
+        radial-gradient(ellipse 65% 55% at 50% 55%, rgba(19,233,164,0.13) 0%, transparent 70%),
+        linear-gradient(rgba(6,12,8,0.35), rgba(6,12,8,0.35)),
+        url('../../assets/el-roys-cantina/stucco-texture.jpg');
+      background-size: cover;
+    }
+
+    /* ── Neon text glow ── */
+    .glow-amber { text-shadow: 0 0 24px rgba(240,152,60,0.45), 0 0 48px rgba(240,152,60,0.18); }
+    .glow-teal  { text-shadow: 0 0 24px rgba(19,233,164,0.45), 0 0 48px rgba(19,233,164,0.18); }
+
+    /* ── Hero entrance ── */
+    @keyframes heroIn {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0);    }
+    }
+    .hero-content { animation: heroIn 1s cubic-bezier(0.16,1,0.3,1) both; }
+    .hero-leroy  .hero-content { animation-delay: 0.08s; }
+    .hero-elroys .hero-content { animation-delay: 0.22s; }
+
+    /* ── Hero flex expansion on hover ── */
+    @media (min-width: 768px) {
+      .hero-split { display: flex; }
+      .hero-split > .hero-half {
+        flex: 1;
+        transition: flex 0.55s cubic-bezier(0.4,0,0.2,1);
+      }
+      .hero-split > .hero-half:hover { flex: 1.12; }
+    }
+
+    /* ── Scroll reveal ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .reveal.shown { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 0.08s; }
+    .reveal-delay-2 { transition-delay: 0.18s; }
+    .reveal-delay-3 { transition-delay: 0.28s; }
+    .reveal-delay-4 { transition-delay: 0.38s; }
+
+    /* ── Dot nav ── */
+    .dnav-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: rgba(240,224,204,0.18);
+      transition: background 0.3s, box-shadow 0.3s, transform 0.3s;
+      cursor: pointer;
+    }
+    .dnav-dot.active {
+      background: #F0983C;
+      box-shadow: 0 0 10px rgba(240,152,60,0.7);
+      transform: scale(1.35);
+    }
+
+    /* ── Hours today highlight ── */
+    .today-lr {
+      background: rgba(240,152,60,0.09);
+      border: 1px solid rgba(240,152,60,0.22);
+    }
+    .today-er {
+      background: rgba(19,233,164,0.09);
+      border: 1px solid rgba(19,233,164,0.22);
+    }
+
+    /* ── Review carousel ── */
+    .review-pair { display: none; }
+    .review-pair.active { display: flex; }
+
+    /* ── Section rule ── */
+    .section-rule {
+      height: 1px;
+      flex: 1;
+      background: linear-gradient(to right, rgba(240,224,204,0.12), transparent);
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: #0B0702; }
+    ::-webkit-scrollbar-thumb { background: #8C5E1A; }
+
+    /* ── Status pulse ── */
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(74,222,128,0.55); }
+      50%       { box-shadow: 0 0 0 5px rgba(74,222,128,0);  }
+    }
+    .dot-pulse { animation: pulse-green 2s ease-in-out infinite; }
+
+    /* ── Comparison split textures ── */
+    .comp-leroy {
+      background: linear-gradient(rgba(28,16,8,0.58), rgba(28,16,8,0.58)),
+                  url('../../assets/leroys-lounge/texture.png') center/cover;
+    }
+    .comp-elroys {
+      background: linear-gradient(rgba(8,18,13,0.58), rgba(8,18,13,0.58)),
+                  url('../../assets/el-roys-cantina/stucco-texture.jpg') center/cover;
+    }
+  </style>
+</head>
+
+<body class="dark bg-base text-ink font-body overflow-x-hidden">
+
+<!-- ─────────────────────────────────────────────────────── DOT NAV -->
+<nav id="dot-nav" aria-label="Page sections" class="hidden lg:flex fixed right-5 top-1/2 -translate-y-1/2 z-50 flex-col gap-[14px]">
+  <button class="dnav-dot active" data-section="hero"       aria-label="Hero"       title="Hero"></button>
+  <button class="dnav-dot"        data-section="hours"      aria-label="Hours"      title="Hours"></button>
+  <button class="dnav-dot"        data-section="comparison" aria-label="Comparison" title="Comparison"></button>
+  <button class="dnav-dot"        data-section="events"     aria-label="Events"     title="Events"></button>
+  <button class="dnav-dot"        data-section="news"       aria-label="News"       title="News"></button>
+  <button class="dnav-dot"        data-section="reviews"    aria-label="Reviews"    title="Reviews"></button>
+</nav>
+
+<!-- ──────────────────────────────────────────────────────── HEADER -->
+<header class="fixed top-0 w-full z-40 flex justify-between items-center px-6 md:px-10 h-14
+               bg-[rgba(11,7,2,0.88)] backdrop-blur-md border-b border-[rgba(240,224,204,0.07)]">
+  <div class="font-display text-lg tracking-widest text-lr-amber">
+    LEROY'S &amp; EL ROY'S
+  </div>
+  <nav class="hidden md:flex items-center gap-7 font-label text-[11px] font-semibold tracking-[0.18em] uppercase text-ink-dim">
+    <a href="#hours"      class="hover:text-lr-amber transition-colors duration-200">Hours</a>
+    <a href="#events"     class="hover:text-lr-amber transition-colors duration-200">Events</a>
+    <a href="#news"       class="hover:text-lr-amber transition-colors duration-200">News</a>
+    <a href="#reviews"    class="hover:text-lr-amber transition-colors duration-200">Reviews</a>
+  </nav>
+</header>
+
+<!-- ───────────────────────────────────────────────────────── HERO -->
+<section id="hero" class="hero-split pt-14 min-h-screen">
+
+  <!-- ── Leroy's half ── -->
+  <div class="hero-half hero-leroy card-leroy relative overflow-hidden min-h-[50vh] md:min-h-screen
+              flex flex-col justify-end md:justify-center border-r border-[rgba(240,152,60,0.08)]">
+    <!-- Gradient toe -->
+    <div class="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#1C1008] via-transparent to-transparent pointer-events-none"></div>
+    <!-- Content -->
+    <div class="hero-content relative z-10 flex flex-col items-center text-center px-10 pb-12 md:pb-0 gap-5">
+      <!-- Sign image -->
+      <div class="mb-2 relative">
+        <img src="../../assets/el-roys-cantina/cantina-badge.png" alt="Leroy's Lounge sign"
+             class="w-40 md:w-52 mx-auto drop-shadow-2xl opacity-92 mix-blend-lighten">
+      </div>
+      <!-- Name -->
+      <h1 class="font-display text-6xl md:text-8xl leading-none tracking-wider uppercase text-lr-amber glow-amber">
+        LEROY'S<br>LOUNGE
+      </h1>
+      <!-- Status -->
+      <div class="flex items-center gap-2.5 bg-[rgba(28,16,8,0.7)] backdrop-blur-sm
+                  px-4 py-2 border border-[rgba(240,152,60,0.18)]">
+        <span class="dot-pulse w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+        <span class="font-label text-[11px] font-semibold tracking-[0.18em] uppercase text-lr-amber">
+          Open · Until 10 PM
+        </span>
+      </div>
+      <!-- CTA -->
+      <a href="/leroyslounge" class="inline-block mt-1 px-8 py-3 bg-lr-amber text-base font-display tracking-[0.18em]
+                                     uppercase text-[#2D1400] text-sm
+                                     hover:bg-lr-amber-bright transition-colors duration-200">
+        LEROY'S MENU
+      </a>
+    </div>
+  </div>
+
+  <!-- ── El Roy's half ── -->
+  <div class="hero-half hero-elroys card-elroys relative overflow-hidden min-h-[50vh] md:min-h-screen
+              flex flex-col justify-end md:justify-center">
+    <!-- Gradient toe -->
+    <div class="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#0C1610] via-transparent to-transparent pointer-events-none"></div>
+    <!-- Content -->
+    <div class="hero-content relative z-10 flex flex-col items-center text-center px-10 pb-12 md:pb-0 gap-5">
+      <!-- Cowboy hat placeholder — replace with El Roy's logo when ready -->
+      <div class="mb-2 relative flex justify-center">
+        <span class="text-8xl md:text-9xl select-none" style="filter: drop-shadow(0 0 18px rgba(19,233,164,0.45))">🤠</span>
+      </div>
+      <!-- Name -->
+      <h1 class="font-display text-6xl md:text-8xl leading-none tracking-wider uppercase text-er-teal glow-teal">
+        EL ROY'S<br>CANTINA
+      </h1>
+      <!-- Status -->
+      <div class="flex items-center gap-2.5 bg-[rgba(8,14,10,0.7)] backdrop-blur-sm
+                  px-4 py-2 border border-[rgba(19,233,164,0.18)]">
+        <span class="dot-pulse w-2 h-2 rounded-full bg-green-400 shrink-0"></span>
+        <span class="font-label text-[11px] font-semibold tracking-[0.18em] uppercase text-er-teal">
+          Open · Until 11 PM
+        </span>
+      </div>
+      <!-- CTA -->
+      <a href="/elroyscantina" class="inline-block mt-1 px-8 py-3 bg-er-teal font-display tracking-[0.18em]
+                                      uppercase text-[#041C11] text-sm
+                                      hover:bg-er-teal-bright transition-colors duration-200">
+        EL ROY'S MENU
+      </a>
+    </div>
+  </div>
+
+</section>
+
+<!-- ───────────────────────────────────────────────────────── HOURS -->
+<section id="hours" class="py-24 px-6 md:px-16 lg:px-24 bg-base-warm">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-5 mb-16 reveal">
+      <h2 class="font-display text-4xl md:text-5xl tracking-widest text-ink-dim shrink-0">HOURS</h2>
+      <div class="section-rule"></div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 md:gap-10">
+
+      <!-- Leroy's hours -->
+      <div class="reveal reveal-delay-1 border-l-2 border-lr-amber pl-7 space-y-6">
+        <h3 class="font-display text-2xl tracking-widest text-lr-amber uppercase">LEROY'S LOUNGE</h3>
+
+        <div class="today-lr px-4 py-3 flex justify-between items-center">
+          <span class="font-label text-xs font-bold tracking-[0.18em] uppercase">TODAY (FRI)</span>
+          <span class="font-label text-sm font-bold text-lr-amber">4 PM — 12 AM</span>
+        </div>
+
+        <div class="space-y-2.5 font-label text-[11px] font-medium tracking-wider uppercase text-ink-dim">
+          <div class="flex justify-between"><span>Mon — Thu</span><span>4 PM — 10 PM</span></div>
+          <div class="flex justify-between text-ink font-semibold"><span>Fri — Sat</span><span>4 PM — 12 AM</span></div>
+          <div class="flex justify-between"><span>Sunday</span><span>Closed</span></div>
+        </div>
+      </div>
+
+      <!-- El Roy's hours -->
+      <div class="reveal reveal-delay-2 border-l-2 border-er-teal pl-7 space-y-6">
+        <h3 class="font-display text-2xl tracking-widest text-er-teal uppercase">EL ROY'S CANTINA</h3>
+
+        <div class="today-er px-4 py-3 flex justify-between items-center">
+          <span class="font-label text-xs font-bold tracking-[0.18em] uppercase">TODAY (FRI)</span>
+          <span class="font-label text-sm font-bold text-er-teal">11 AM — 11 PM</span>
+        </div>
+
+        <div class="space-y-2.5 font-label text-[11px] font-medium tracking-wider uppercase text-ink-dim">
+          <div class="flex justify-between"><span>Mon — Thu</span><span>11 AM — 11 PM</span></div>
+          <div class="flex justify-between text-ink font-semibold"><span>Fri — Sat</span><span>11 AM — 2 AM</span></div>
+          <div class="flex justify-between"><span>Sunday</span><span>Brunch 10 AM — 4 PM</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────── COMPARISON -->
+<section id="comparison" class="border-y border-[rgba(240,224,204,0.06)]">
+  <div class="grid md:grid-cols-2">
+
+    <!-- Leroy's -->
+    <div class="comp-leroy reveal py-16 px-12 md:px-16 flex flex-col items-start gap-4
+                border-b md:border-b-0 md:border-r border-[rgba(240,152,60,0.1)]">
+      <span class="font-label text-[10px] font-semibold tracking-[0.25em] uppercase text-lr-amber-dim">The Lounge</span>
+      <h4 class="font-display text-3xl md:text-4xl tracking-widest text-lr-amber uppercase">American Bites</h4>
+      <p class="font-body italic text-base text-ink-dim leading-relaxed max-w-xs">
+        Burgers, fries, and late-night plates with real heft. A bar-food canon that earns its keep.
+      </p>
+    </div>
+
+    <!-- El Roy's -->
+    <div class="comp-elroys reveal reveal-delay-1 py-16 px-12 md:px-16 flex flex-col items-start gap-4">
+      <span class="font-label text-[10px] font-semibold tracking-[0.25em] uppercase text-er-teal-dim">The Cantina</span>
+      <h4 class="font-display text-3xl md:text-4xl tracking-widest text-er-teal uppercase">Tex-Mex</h4>
+      <p class="font-body italic text-base text-ink-dim leading-relaxed max-w-xs">
+        Tacos, queso, and margaritas with enough heat to remember. Bold, social, high-energy eating.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────── EVENTS -->
+<section id="events" class="py-24 px-6 md:px-16 lg:px-24 bg-base">
+  <div class="max-w-6xl mx-auto">
+
+    <div class="flex items-center gap-5 mb-14 reveal">
+      <h2 class="font-display text-4xl md:text-5xl tracking-widest text-ink-dim shrink-0">EVENTS</h2>
+      <div class="section-rule"></div>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+
+      <!-- Event 1 — Leroy's -->
+      <article class="reveal reveal-delay-1 group bg-surface border border-[rgba(240,224,204,0.07)] overflow-hidden">
+        <div class="overflow-hidden">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBoV4T47nkJ5VqslS2w2eAnKtsxhKmCvO-F4rWcvpS4y8gSOwJc1p23K-MezMhExJgITVIQ-EcPn_ONtEdEFStOWUbnixBera-9crzx-3pS6Y9S8KQoJ08gl5oMjEL1QWBhdjQDXAdTJHIj8R0McGgOMpjDQzlxgPY_H31dJCBUKSv-QH8-zbg0ZUWWslr5sN6q8_2K22s6lUyVHT2yoRxkCJD01y7BxH1Lz5sNsVneTC-DLgHLVr4Cvs1jGevEI0flJkHB36s4dQhk"
+               alt="Vinyl Night" class="w-full h-52 object-cover opacity-50 brightness-75 saturate-50
+                    group-hover:opacity-70 group-hover:brightness-90 group-hover:saturate-75 group-hover:scale-105 transition-all duration-700">
+        </div>
+        <div class="p-6 space-y-3">
+          <span class="font-label text-[10px] font-bold tracking-[0.18em] uppercase text-lr-amber
+                       bg-[rgba(240,152,60,0.1)] px-2 py-1 inline-block">
+            LEROY'S · TUE NIGHTS
+          </span>
+          <h3 class="font-display text-xl tracking-wider text-ink uppercase">Vinyl Night: 70s Soul</h3>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed">
+            Standard classics and stiff drinks until the early hours.
+          </p>
+        </div>
+      </article>
+
+      <!-- Event 2 — El Roy's -->
+      <article class="reveal reveal-delay-2 group bg-surface-teal border border-[rgba(240,224,204,0.07)] overflow-hidden">
+        <div class="overflow-hidden">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg6WgFzSgy9WhmwM_uHMbA62HLShL_Frr4wxW6vl6cZ_DogeykOV7q9PKe2FXQ4WeCoFaoUPswFBcfIGF_4P2A_IvgcwQcupt13TtGdpuzUjX7o8ad7ryzvU43i2gJbRe2AmIIJvxCNxemGkxs7NMfIIrN7NCXcEmnUj4qDUcBbp_l314NPVg9FOyqIIrJrgty_IzAxqP3iDhE-SU1wEDwk042cbbrigxZBjTDiOdqZr4TH1U8B9F789voGZRnVy-hsWp3nya49Fv-"
+               alt="Neon Saturdays" class="w-full h-52 object-cover opacity-50 brightness-75 saturate-50
+                    group-hover:opacity-70 group-hover:brightness-90 group-hover:saturate-75 group-hover:scale-105 transition-all duration-700">
+        </div>
+        <div class="p-6 space-y-3">
+          <span class="font-label text-[10px] font-bold tracking-[0.18em] uppercase text-er-teal
+                       bg-[rgba(19,233,164,0.1)] px-2 py-1 inline-block">
+            EL ROY'S · SAT NIGHTS
+          </span>
+          <h3 class="font-display text-xl tracking-wider text-ink uppercase">Neon Wave Saturdays</h3>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed">
+            80s synth-wave and heavy bass in a high-gloss cantina.
+          </p>
+        </div>
+      </article>
+
+      <!-- Event 3 — Both -->
+      <article class="reveal reveal-delay-3 group bg-surface border border-[rgba(240,224,204,0.07)] overflow-hidden">
+        <div class="overflow-hidden">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjCa1TdL6mB4ltBAICdRCejifeVI4tmCCWr8C6TJDhtBROINJJBFtDX5GYsSov0Jq3dEmlqiqbxXJSNWQ8AeA8lUwoSViNrJfVftCxU3noGSnH3dDlqe5yfSHsSj45cT2RibS9nAbUT0s9YQmwh6LqMN9u-S582VSeg5JpgfmzgGBT9eVipqHTBfs2wY0yw3bhAgWSA44DbhZQp7M9fxUuDtJqaSyhqmsin6YwfP2dr0yZRxbRpr6XwDHOSi7z9_libhmvtNs0HQNy"
+               alt="Open Mic Jazz" class="w-full h-52 object-cover opacity-50 brightness-75 saturate-50
+                    group-hover:opacity-70 group-hover:brightness-90 group-hover:saturate-75 group-hover:scale-105 transition-all duration-700">
+        </div>
+        <div class="p-6 space-y-3">
+          <span class="font-label text-[10px] font-bold tracking-[0.18em] uppercase text-ink-dim
+                       bg-[rgba(240,224,204,0.07)] px-2 py-1 inline-block">
+            BOTH · SUN AFTERNOONS
+          </span>
+          <h3 class="font-display text-xl tracking-wider text-ink uppercase">Open Mic Jazz Jam</h3>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed">
+            Open stage, good pour, easy afternoon.
+          </p>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- Empty state — hidden by default, shown when no events -->
+    <div class="hidden mt-8 text-center font-body italic text-ink-dim text-base py-10 border border-[rgba(240,224,204,0.06)]">
+      Nothing scheduled right now.
+    </div>
+
+  </div>
+</section>
+
+<!-- ────────────────────────────────────────────────────────── NEWS -->
+<section id="news" class="py-24 px-6 md:px-16 lg:px-24 bg-base-warm">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-5 mb-14 reveal">
+      <h2 class="font-display text-4xl md:text-5xl tracking-widest text-ink-dim shrink-0">NEWS</h2>
+      <div class="section-rule"></div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-x-12 gap-y-10">
+
+      <!-- Article 1 — with image -->
+      <article class="reveal reveal-delay-1 group flex gap-5 items-start cursor-pointer">
+        <div class="shrink-0 overflow-hidden w-28 h-28">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTqJ3U2XWoUgHLyMxoBvUTa3FM9nwiypsTs0c3WEgp3NDOjhHz8-GQgjn2oBarBYjrl8TxbP6Z-PpdL586uCSPPGyY3eYCl52X22GTmv5Qs_BwHAS5uJUWuwQbD0uTq8Twuqgnv5CgJFKAZR9hAgsHoW6nnlK2jfixg4K18WShfy2sGcupsFk2gCMI69UZMEAAVwOyOKc5ql4eusuyxpbOGuyOA-cXmqJ-paLPadUZ1ci3yfIJBnzYXdyKGBGVIlUALY8JEzAtcOnj"
+               alt="Whiskey pour" class="w-full h-full object-cover brightness-75
+                    grayscale group-hover:grayscale-0 group-hover:brightness-90 transition-all duration-500">
+        </div>
+        <div class="flex-1 space-y-2">
+          <div class="flex items-center gap-2 font-label text-[10px] tracking-[0.18em] uppercase text-ink-dim">
+            <span class="text-lr-amber">LEROY'S</span>
+            <span>·</span>
+            <span>Bar Digest</span>
+            <span>·</span>
+            <span>Oct 24</span>
+          </div>
+          <h4 class="font-display text-lg tracking-wider leading-tight text-ink
+                     group-hover:text-lr-amber transition-colors duration-200 uppercase">
+            Why the Old Fashioned Never Left the Basement
+          </h4>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed line-clamp-2">
+            Inside the obsession with hand-carved ice and 1970s recipes that Leroy refuses to change.
+          </p>
+          <span class="inline-flex items-center gap-1 font-label text-[10px] font-semibold
+                       tracking-[0.18em] uppercase text-lr-amber-dim">
+            Read
+            <span class="material-symbols-outlined" style="font-size:12px">arrow_outward</span>
+          </span>
+        </div>
+      </article>
+
+      <!-- Article 2 — with image -->
+      <article class="reveal reveal-delay-2 group flex gap-5 items-start cursor-pointer">
+        <div class="shrink-0 overflow-hidden w-28 h-28">
+          <img src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX5Ufz8JDLbE_990CyTcxx3eOwk5CQrTBf7Vy1C7sV08XOCkNTbMekXCr86BxvuEwy5419aem-SLmquDEMU8O9pVVD50A2cPp2f9vRsCaq7_6mLwZP8pMjQp3vxOyfkIf5mJrQgGad3rfeI_qnRgl8a8b7LDmXykpT9pTxiFP4wza8aSk3jCc2snXkl2I9zukgkgA2h33hA6zRV266kN4MaqRDmEMezHwkBGgrVkPHHqJ22zqalbhGcVDKnPr1q1ErtwGwB8GcYzGY"
+               alt="Tacos" class="w-full h-full object-cover brightness-75
+                    grayscale group-hover:grayscale-0 group-hover:brightness-90 transition-all duration-500">
+        </div>
+        <div class="flex-1 space-y-2">
+          <div class="flex items-center gap-2 font-label text-[10px] tracking-[0.18em] uppercase text-ink-dim">
+            <span class="text-er-teal">EL ROY'S</span>
+            <span>·</span>
+            <span>Eater Weekly</span>
+            <span>·</span>
+            <span>Oct 21</span>
+          </div>
+          <h4 class="font-display text-lg tracking-wider leading-tight text-ink
+                     group-hover:text-er-teal transition-colors duration-200 uppercase">
+            Agave Heat: El Roy's Brings the Border Glow
+          </h4>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed line-clamp-2">
+            From the neon signage to the street-style tacos, El Roy's is redefining late-night dining in this city.
+          </p>
+          <span class="inline-flex items-center gap-1 font-label text-[10px] font-semibold
+                       tracking-[0.18em] uppercase text-er-teal-dim">
+            Read
+            <span class="material-symbols-outlined" style="font-size:12px">arrow_outward</span>
+          </span>
+        </div>
+      </article>
+
+      <!-- Article 3 — text-forward, no image (fallback card design) -->
+      <article class="reveal reveal-delay-3 group cursor-pointer md:col-span-1">
+        <div class="border-t border-[rgba(240,224,204,0.08)] pt-6 space-y-2">
+          <div class="flex items-center gap-2 font-label text-[10px] tracking-[0.18em] uppercase text-ink-dim">
+            <span class="text-lr-amber">BOTH</span>
+            <span>·</span>
+            <span>The Chronicle</span>
+            <span>·</span>
+            <span>Sep 30</span>
+          </div>
+          <h4 class="font-display text-lg tracking-wider leading-tight text-ink
+                     group-hover:text-lr-amber transition-colors duration-200 uppercase">
+            Two Floors, One Building, Zero Overlap
+          </h4>
+          <p class="font-body italic text-sm text-ink-dim leading-relaxed">
+            How Leroy's Lounge and El Roy's Cantina managed to share a wall for 40 years
+            without becoming the same bar.
+          </p>
+          <span class="inline-flex items-center gap-1 font-label text-[10px] font-semibold
+                       tracking-[0.18em] uppercase text-ink-dim mt-1">
+            Read
+            <span class="material-symbols-outlined" style="font-size:12px">arrow_outward</span>
+          </span>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────────────────────── REVIEWS -->
+<section id="reviews" class="py-24 px-6 md:px-16 lg:px-24 bg-base">
+  <div class="max-w-5xl mx-auto">
+
+    <div class="flex items-center gap-5 mb-14 reveal">
+      <h2 class="font-display text-4xl md:text-5xl tracking-widest text-ink-dim shrink-0">REVIEWS</h2>
+      <div class="section-rule"></div>
+    </div>
+
+    <!-- Pair 1 -->
+    <div class="review-pair active gap-6 flex-col md:flex-row" id="review-pair-0">
+      <!-- Leroy's -->
+      <div class="flex-1 bg-surface border border-[rgba(240,152,60,0.12)] p-8 relative space-y-4">
+        <div class="absolute top-5 right-5 opacity-[0.04] pointer-events-none select-none">
+          <span class="material-symbols-outlined text-8xl" style="font-variation-settings:'FILL' 1">format_quote</span>
+        </div>
+        <div class="flex gap-0.5 text-lr-amber">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+        </div>
+        <p class="font-body italic text-base md:text-lg text-ink leading-relaxed">
+          "Best Scotch I've ever had. It feels like 1974 in here and I never want to leave."
+        </p>
+        <div class="flex items-center justify-between pt-2">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-[rgba(240,152,60,0.15)] flex items-center justify-center
+                        font-label text-[10px] font-bold text-lr-amber">BV</div>
+            <span class="font-label text-xs font-semibold uppercase tracking-widest">Benny V.</span>
+          </div>
+          <span class="font-label text-[9px] tracking-[0.2em] uppercase text-ink-ghost">Google Review</span>
+        </div>
+      </div>
+      <!-- El Roy's -->
+      <div class="flex-1 bg-surface-teal border border-[rgba(19,233,164,0.12)] p-8 relative space-y-4">
+        <div class="absolute top-5 right-5 opacity-[0.04] pointer-events-none select-none">
+          <span class="material-symbols-outlined text-8xl" style="font-variation-settings:'FILL' 1">format_quote</span>
+        </div>
+        <div class="flex gap-0.5 text-er-teal">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+        </div>
+        <p class="font-body italic text-base md:text-lg text-ink leading-relaxed">
+          "Loud, bright, and the margaritas are dangerously smooth. Coming back for DJ night."
+        </p>
+        <div class="flex items-center justify-between pt-2">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-[rgba(19,233,164,0.12)] flex items-center justify-center
+                        font-label text-[10px] font-bold text-er-teal">SM</div>
+            <span class="font-label text-xs font-semibold uppercase tracking-widest">Sasha M.</span>
+          </div>
+          <span class="font-label text-[9px] tracking-[0.2em] uppercase text-ink-ghost">Google Review</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pair 2 -->
+    <div class="review-pair gap-6 flex-col md:flex-row" id="review-pair-1">
+      <!-- Leroy's -->
+      <div class="flex-1 bg-surface border border-[rgba(240,152,60,0.12)] p-8 relative space-y-4">
+        <div class="absolute top-5 right-5 opacity-[0.04] pointer-events-none select-none">
+          <span class="material-symbols-outlined text-8xl" style="font-variation-settings:'FILL' 1">format_quote</span>
+        </div>
+        <div class="flex gap-0.5 text-lr-amber">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+        </div>
+        <p class="font-body italic text-base md:text-lg text-ink leading-relaxed">
+          "Best Old Fashioned I've had in a decade. Feels like stepping back into 1974. The vinyl selection is top notch."
+        </p>
+        <div class="flex items-center justify-between pt-2">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-[rgba(240,152,60,0.15)] flex items-center justify-center
+                        font-label text-[10px] font-bold text-lr-amber">MC</div>
+            <span class="font-label text-xs font-semibold uppercase tracking-widest">Marcus Chen</span>
+          </div>
+          <span class="font-label text-[9px] tracking-[0.2em] uppercase text-ink-ghost">Google Review</span>
+        </div>
+      </div>
+      <!-- El Roy's -->
+      <div class="flex-1 bg-surface-teal border border-[rgba(19,233,164,0.12)] p-8 relative space-y-4">
+        <div class="absolute top-5 right-5 opacity-[0.04] pointer-events-none select-none">
+          <span class="material-symbols-outlined text-8xl" style="font-variation-settings:'FILL' 1">format_quote</span>
+        </div>
+        <div class="flex gap-0.5 text-er-teal">
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+          <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">star</span>
+        </div>
+        <p class="font-body italic text-base md:text-lg text-ink leading-relaxed">
+          "The tacos are authentic and the margaritas are dangerous. Neon vibes are 10/10. Definitely coming back for Lucha night!"
+        </p>
+        <div class="flex items-center justify-between pt-2">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-[rgba(19,233,164,0.12)] flex items-center justify-center
+                        font-label text-[10px] font-bold text-er-teal">SR</div>
+            <span class="font-label text-xs font-semibold uppercase tracking-widest">Sofia Rodriguez</span>
+          </div>
+          <span class="font-label text-[9px] tracking-[0.2em] uppercase text-ink-ghost">Google Review</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Carousel controls -->
+    <div class="flex items-center justify-center gap-6 mt-10">
+      <button id="rev-prev" aria-label="Previous reviews"
+              class="w-10 h-10 border border-[rgba(240,224,204,0.15)] flex items-center justify-center
+                     text-ink-dim hover:border-lr-amber hover:text-lr-amber transition-all duration-200
+                     active:scale-90">
+        <span class="material-symbols-outlined text-base">chevron_left</span>
+      </button>
+      <div class="flex gap-2">
+        <span class="w-1.5 h-1.5 rounded-full bg-lr-amber" id="rev-pip-0"></span>
+        <span class="w-1.5 h-1.5 rounded-full bg-[rgba(240,224,204,0.2)]" id="rev-pip-1"></span>
+      </div>
+      <button id="rev-next" aria-label="Next reviews"
+              class="w-10 h-10 border border-[rgba(240,224,204,0.15)] flex items-center justify-center
+                     text-ink-dim hover:border-lr-amber hover:text-lr-amber transition-all duration-200
+                     active:scale-90">
+        <span class="material-symbols-outlined text-base">chevron_right</span>
+      </button>
+    </div>
+
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────── BACK TO TOP -->
+<div class="flex justify-center py-16 bg-base">
+  <a href="#hero" aria-label="Back to top"
+     class="w-12 h-12 rounded-full border border-[rgba(240,224,204,0.15)] flex items-center justify-center
+            text-ink-dim hover:border-lr-amber hover:text-lr-amber transition-all duration-200 group">
+    <span class="material-symbols-outlined text-base group-hover:-translate-y-0.5 transition-transform">
+      arrow_upward
+    </span>
+  </a>
+</div>
+
+<!-- ─────────────────────────────────────────────────────── FOOTER -->
+<!--
+  ╔══════════════════════════════════════════════════════════════════╗
+  ║  FOOTER PLACEHOLDER                                             ║
+  ║  The actual app footer renders here in production.             ║
+  ║  It includes: APP_VERSION, last-updated timestamp,              ║
+  ║  and preview badge on non-production deploys.                  ║
+  ║  Do not redesign or modify the footer as part of this work.    ║
+  ╚══════════════════════════════════════════════════════════════════╝
+-->
+<footer class="w-full py-10 px-8 flex flex-col items-center gap-3
+               bg-[#070401] border-t border-[rgba(240,224,204,0.05)]">
+  <p class="font-label text-[9px] tracking-[0.3em] uppercase text-ink-ghost text-center">
+    LEROY'S &amp; EL ROY'S — [app footer renders here]
+  </p>
+  <div class="flex gap-3">
+    <span class="w-1 h-1 rounded-full bg-[rgba(240,224,204,0.12)]"></span>
+    <span class="w-1 h-1 rounded-full bg-[rgba(240,224,204,0.12)]"></span>
+    <span class="w-1 h-1 rounded-full bg-[rgba(240,224,204,0.12)]"></span>
+  </div>
+</footer>
+
+<!-- ─────────────────────────────────────────────────── JAVASCRIPT -->
+<script>
+  /* ── Scroll Reveal ── */
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('shown');
+        revealObserver.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12 });
+  document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+  /* ── Dot Nav ── */
+  const sections = ['hero', 'hours', 'comparison', 'events', 'news', 'reviews'];
+  const dots = document.querySelectorAll('.dnav-dot');
+
+  const sectionObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.id;
+        dots.forEach(d => d.classList.toggle('active', d.dataset.section === id));
+      }
+    });
+  }, { threshold: 0.4 });
+
+  sections.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) sectionObserver.observe(el);
+  });
+
+  dots.forEach(d => {
+    d.addEventListener('click', () => {
+      const target = document.getElementById(d.dataset.section);
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+
+  /* ── Review Carousel ── */
+  let currentPair = 0;
+  const totalPairs = 2;
+
+  function showPair(n) {
+    document.querySelectorAll('.review-pair').forEach((el, i) => {
+      el.classList.toggle('active', i === n);
+    });
+    for (let i = 0; i < totalPairs; i++) {
+      const pip = document.getElementById('rev-pip-' + i);
+      if (pip) {
+        pip.style.background = i === n
+          ? '#F0983C'
+          : 'rgba(240,224,204,0.2)';
+      }
+    }
+  }
+
+  document.getElementById('rev-prev')?.addEventListener('click', () => {
+    currentPair = (currentPair - 1 + totalPairs) % totalPairs;
+    showPair(currentPair);
+  });
+  document.getElementById('rev-next')?.addEventListener('click', () => {
+    currentPair = (currentPair + 1) % totalPairs;
+    showPair(currentPair);
+  });
+
+  /* ── Hero: subtle parallax on scroll ── */
+  const heroSection = document.getElementById('hero');
+  window.addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (y < window.innerHeight && heroSection) {
+      heroSection.style.transform = `translateY(${y * 0.18}px)`;
+    }
+  }, { passive: true });
+</script>
+
+</body>
+</html>

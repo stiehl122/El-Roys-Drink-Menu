@@ -56,6 +56,7 @@
 
       <nav class="admin-console-rail-nav">
         <button class="settings-rail-btn active" type="button" data-target="admin-restaurants-section" onclick="focusSettingsSection('admin-restaurants-section', this)">Restaurants</button>
+        <button class="settings-rail-btn" type="button" data-target="admin-landing-page-section" onclick="focusSettingsSection('admin-landing-page-section', this)">Landing Page</button>
         <button class="settings-rail-btn" type="button" data-target="admin-notifications-section" onclick="focusSettingsSection('admin-notifications-section', this)">Notifications</button>
         <button class="settings-rail-btn" type="button" data-target="admin-users-section" onclick="focusSettingsSection('admin-users-section', this)">Users</button>
       </nav>
@@ -108,6 +109,146 @@
             <p class="settings-section-copy">Fixed configuration — two restaurants, four menus. This section is read-only.</p>
           </div>
           <div id="menus-mgmt-list" class="admin-console-instance-grid"></div>
+        </section>
+
+        <section class="settings-section admin-console-section" id="admin-landing-page-section">
+          <div class="landing-admin-shell">
+            <div class="landing-admin-header">
+              <div class="landing-admin-header-copy">
+                <p class="settings-section-kicker">Public Root</p>
+                <h3>Landing Page</h3>
+                <p>Manage the shared homepage as one admin-only surface. Drafts stay private until you publish one or more sections live.</p>
+                <div class="landing-admin-status-row">
+                  <span id="landing-admin-live-pill" class="landing-admin-status-pill">Live shell pending</span>
+                  <span id="landing-admin-draft-pill" class="landing-admin-status-pill">No draft changes</span>
+                </div>
+              </div>
+
+              <div class="landing-admin-actions">
+                <button class="btn-small" type="button" id="landing-save-draft-btn" onclick="saveLandingPageDraft()">Save Draft</button>
+                <button class="btn-small admin-console-primary-btn" type="button" id="landing-publish-btn" onclick="openLandingPublishModal()">Publish Live</button>
+                <p id="landing-admin-toolbar-note" class="landing-admin-toolbar-note">Loading landing-page workspace…</p>
+              </div>
+            </div>
+
+            <div class="landing-admin-layout">
+              <nav class="landing-admin-nav" aria-label="Landing page sections">
+                <button type="button" class="landing-admin-nav-button is-active" data-landing-panel-trigger="landing-admin-panel-overview" onclick="focusLandingAdminPanel('landing-admin-panel-overview', this)">
+                  <strong>Overview</strong>
+                  <span>Live health, draft state, and subsection readiness.</span>
+                </button>
+                <button type="button" class="landing-admin-nav-button" data-landing-panel-trigger="landing-admin-panel-hours" onclick="focusLandingAdminPanel('landing-admin-panel-hours', this)">
+                  <strong>Hours</strong>
+                  <span>Recurring weekly schedules for both restaurants.</span>
+                </button>
+                <button type="button" class="landing-admin-nav-button" data-landing-panel-trigger="landing-admin-panel-news" onclick="focusLandingAdminPanel('landing-admin-panel-news', this)">
+                  <strong>News</strong>
+                  <span>Section shell is ready for imported story cards.</span>
+                </button>
+                <button type="button" class="landing-admin-nav-button" data-landing-panel-trigger="landing-admin-panel-events" onclick="focusLandingAdminPanel('landing-admin-panel-events', this)">
+                  <strong>Events</strong>
+                  <span>Section shell is ready for upcoming nights and empty states.</span>
+                </button>
+                <button type="button" class="landing-admin-nav-button" data-landing-panel-trigger="landing-admin-panel-reviews" onclick="focusLandingAdminPanel('landing-admin-panel-reviews', this)">
+                  <strong>Reviews</strong>
+                  <span>Section shell is reserved for balanced paired proof.</span>
+                </button>
+              </nav>
+
+              <div class="landing-admin-panels">
+                <section id="landing-admin-panel-overview" class="landing-admin-panel is-active">
+                  <div class="landing-admin-panel-head">
+                    <div>
+                      <p class="settings-section-kicker">At a glance</p>
+                      <h4>Overview</h4>
+                    </div>
+                    <span id="landing-overview-health-badge" class="landing-admin-section-badge">Loading</span>
+                  </div>
+
+                  <div class="landing-overview-grid">
+                    <article class="landing-overview-card">
+                      <span class="landing-overview-label">Public root</span>
+                      <strong id="landing-overview-root-status">Checking…</strong>
+                      <p id="landing-overview-root-copy">Verifying whether the live landing shell can render.</p>
+                    </article>
+                    <article class="landing-overview-card">
+                      <span class="landing-overview-label">Draft saved</span>
+                      <strong id="landing-overview-draft-saved">Not yet</strong>
+                      <p id="landing-overview-draft-copy">Landing-page drafts save separately from menu drafts.</p>
+                    </article>
+                    <article class="landing-overview-card">
+                      <span class="landing-overview-label">Live publish</span>
+                      <strong id="landing-overview-live-published">Not yet</strong>
+                      <p id="landing-overview-live-copy">Publish promotes selected subsections only.</p>
+                    </article>
+                    <article class="landing-overview-card">
+                      <span class="landing-overview-label">Hero status</span>
+                      <strong id="landing-overview-hero-lines">Loading…</strong>
+                      <p id="landing-overview-hero-copy">The public hero lines come from published hours.</p>
+                    </article>
+                  </div>
+
+                  <div class="landing-overview-section-list" id="landing-overview-section-list"></div>
+                  <div id="landing-overview-issues" class="landing-admin-issues"></div>
+                </section>
+
+                <section id="landing-admin-panel-hours" class="landing-admin-panel">
+                  <div class="landing-admin-panel-head">
+                    <div>
+                      <p class="settings-section-kicker">Recurring schedule</p>
+                      <h4>Hours</h4>
+                    </div>
+                    <span id="landing-hours-panel-badge" class="landing-admin-section-badge">Loading</span>
+                  </div>
+                  <p>Author recurring weekly hours for both restaurants side by side. Invalid schedules can still be drafted, but they cannot publish live.</p>
+                  <div class="landing-admin-hours-grid" id="landing-admin-hours-grid"></div>
+                  <div id="landing-hours-issues" class="landing-admin-issues"></div>
+                </section>
+
+                <section id="landing-admin-panel-news" class="landing-admin-panel">
+                  <div class="landing-admin-panel-head">
+                    <div>
+                      <p class="settings-section-kicker">Shell ready</p>
+                      <h4>News</h4>
+                    </div>
+                    <span id="landing-news-panel-badge" class="landing-admin-section-badge">Shell</span>
+                  </div>
+                  <article class="landing-admin-note">
+                    <strong>Public shell is in place.</strong>
+                    <p>The new root page already reserves the News chapter and empty state. This workspace slice keeps draft/live publishing plumbing ready without inventing the later import workflow early.</p>
+                  </article>
+                </section>
+
+                <section id="landing-admin-panel-events" class="landing-admin-panel">
+                  <div class="landing-admin-panel-head">
+                    <div>
+                      <p class="settings-section-kicker">Shell ready</p>
+                      <h4>Events</h4>
+                    </div>
+                    <span id="landing-events-panel-badge" class="landing-admin-section-badge">Shell</span>
+                  </div>
+                  <article class="landing-admin-note">
+                    <strong>Empty-state behavior is wired.</strong>
+                    <p>The public landing shell now includes the fixed Events chapter order and a safe empty state. Section-level draft/live publishing can promote this subsection independently once authoring lands.</p>
+                  </article>
+                </section>
+
+                <section id="landing-admin-panel-reviews" class="landing-admin-panel">
+                  <div class="landing-admin-panel-head">
+                    <div>
+                      <p class="settings-section-kicker">Shell ready</p>
+                      <h4>Reviews</h4>
+                    </div>
+                    <span id="landing-reviews-panel-badge" class="landing-admin-section-badge">Shell</span>
+                  </div>
+                  <article class="landing-admin-note">
+                    <strong>Paired-proof slot is reserved.</strong>
+                    <p>The public root now holds the Reviews chapter in the v1 order while keeping it calm when there is not yet enough balanced inventory to show both restaurants side by side.</p>
+                  </article>
+                </section>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="settings-section admin-console-section" id="admin-notifications-section">
@@ -301,6 +442,22 @@
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<div id="landing-publish-modal" class="landing-publish-modal" role="dialog" aria-modal="true" aria-labelledby="landing-publish-title" aria-hidden="true">
+  <div class="landing-publish-dialog">
+    <div>
+      <p class="settings-section-kicker">Subsection publish</p>
+      <h3 id="landing-publish-title">Publish Landing Page Live</h3>
+    </div>
+    <p>Select the subsections that are ready to promote from draft to live. Hours stays blocked until both weekly schedules validate cleanly.</p>
+    <div id="landing-publish-list" class="landing-publish-list"></div>
+    <div id="landing-publish-issues" class="landing-admin-issues"></div>
+    <div class="landing-publish-actions">
+      <button type="button" class="btn-small" onclick="closeLandingPublishModal()">Cancel</button>
+      <button type="button" class="btn-small admin-console-primary-btn" id="landing-publish-confirm-btn" onclick="publishLandingPageSections()">Publish Selected</button>
+    </div>
+  </div>
+</div>
 
 <script src="/core/domain/constants.js"></script>
 <script src="/core/domain/category-defaults.js"></script>

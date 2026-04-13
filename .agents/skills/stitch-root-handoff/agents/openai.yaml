@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stitch Root Handoff"
+  short_description: "Review Stitch root homepage designs and generate revision prompts before import"
+  default_prompt: "Use $stitch-root-handoff to inspect Stitch desktop/mobile screens for the public `/` homepage, compare them to the root landing-page brief, judge readiness for import, and write copy-paste Gemini revision prompts."

@@ -36,6 +36,7 @@
 
   const constants = {
     APP_VERSION: 'v0.8.9',
+    RESTAURANT_TIME_ZONE: 'America/Detroit',
     RESTAURANTS,
     MENUS,
     KNOWN_RESTAURANT_ORDER,

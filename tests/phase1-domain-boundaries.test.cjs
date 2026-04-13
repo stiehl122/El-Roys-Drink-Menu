@@ -18,6 +18,7 @@ function buildInjectedDomainConstants() {
   };
   return {
     APP_VERSION: 'v9.9.9-test',
+    RESTAURANT_TIME_ZONE: 'America/Detroit',
     RESTAURANTS: restaurants,
     MENUS: menus,
     KNOWN_RESTAURANT_ORDER: [restaurants.LEROYS.id, restaurants.ELROYS.id],
@@ -80,6 +81,7 @@ test('app runtime consumes injected domain constants through one boundary', () =
   });
 
   assert.equal(getState(sandbox, 'APP_VERSION'), 'v9.9.9-test');
+  assert.equal(getState(sandbox, 'RESTAURANT_TIME_ZONE'), 'America/Detroit');
   assert.equal(getState(sandbox, 'MENUS.LEROYS_DRINKS.id'), domain.MENUS.LEROYS_DRINKS.id);
   assert.equal(getState(sandbox, 'SITE_PATHS[RESTAURANTS.LEROYS.id]'), '/leroyslounge');
 });

@@ -3,418 +3,228 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>El Roy's & Leroy's</title>
+<title>Leroy's &amp; El Roy's | Tonight</title>
 <link rel="icon" type="image/png" href="HFLOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@400;700;900&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Space+Grotesk:wght@300;500;700&display=swap" rel="stylesheet">
-<style>
-  /* ── Reset ── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  /* ── Custom properties ── */
-  :root {
-    --lp-bg: #faf8f0;
-    --lp-text: #1c1c15;
-    --lp-text-muted: rgba(28, 28, 21, 0.35);
-    --lp-tagline: #6f7a70;
-    --lp-tagline-hover-green: #006f41;
-    --lp-tagline-hover-orange: #a83900;
-    --lp-footer: rgba(28, 28, 21, 0.25);
-    --lp-vignette-inner: rgba(250, 248, 240, 0);
-    --lp-vignette-outer: rgba(0, 0, 0, 0.08);
-    --lp-gradient-bottom: rgba(0, 0, 0, 0.03);
-    --lp-grain-opacity: 0.06;
-    --lp-glow-green: rgba(0, 84, 48, 0.15);
-    --lp-glow-orange: rgba(168, 57, 0, 0.18);
-    --lp-shadow: rgba(0, 0, 0, 0.12);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --lp-bg: #1c1c15;
-      --lp-text: #f4f1e6;
-      --lp-text-muted: rgba(244, 241, 230, 0.3);
-      --lp-tagline: #a0a89f;
-      --lp-tagline-hover-green: #9bf6bb;
-      --lp-tagline-hover-orange: #ffb59a;
-      --lp-footer: rgba(244, 241, 230, 0.2);
-      --lp-vignette-inner: rgba(28, 28, 21, 0);
-      --lp-vignette-outer: rgba(0, 0, 0, 0.6);
-      --lp-gradient-bottom: rgba(0, 0, 0, 0.5);
-      --lp-grain-opacity: 0.12;
-      --lp-glow-green: rgba(0, 84, 48, 0.4);
-      --lp-glow-orange: rgba(168, 57, 0, 0.5);
-      --lp-shadow: rgba(0, 0, 0, 0.8);
-    }
-  }
-
-  /* ── Body ── */
-  body {
-    background: var(--lp-bg);
-    color: var(--lp-text);
-    font-family: 'Newsreader', Georgia, serif;
-    min-height: 100vh;
-    min-height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    overflow-x: hidden;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* ── Grain overlay ── */
-  .lp-grain {
-    position: fixed;
-    inset: 0;
-    background-image: url('assets/grain-texture.png');
-    opacity: var(--lp-grain-opacity);
-    pointer-events: none;
-    z-index: 50;
-  }
-
-  /* ── Background effects ── */
-  .lp-vignette {
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(circle at 50% 50%, var(--lp-vignette-inner) 0%, var(--lp-vignette-outer) 100%);
-    pointer-events: none;
-    z-index: -1;
-  }
-  .lp-gradient-bottom {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 50%;
-    background: linear-gradient(to top, var(--lp-gradient-bottom), transparent);
-    pointer-events: none;
-    z-index: -1;
-  }
-
-  /* ── Main layout ── */
-  .lp-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 16px 24px 16px;
-    max-width: 960px;
-    margin: 0 auto;
-    width: 100%;
-    position: relative;
-  }
-
-  /* ── Headline ── */
-  .lp-headline {
-    font-family: 'Epilogue', sans-serif;
-    font-size: clamp(2.5rem, 7vw, 4.5rem);
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: -0.03em;
-    line-height: 0.95;
-    text-align: center;
-    margin-bottom: clamp(1rem, 3vh, 2.5rem);
-    text-shadow: 0 4px 24px var(--lp-shadow);
-  }
-
-  /* ── Destination rows ── */
-  .lp-destinations {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: clamp(1rem, 3vh, 3rem);
-  }
-
-  .lp-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    align-items: center;
-    text-decoration: none;
-    color: inherit;
-    cursor: pointer;
-  }
-  .lp-row:hover .lp-sign-img,
-  .lp-row:focus .lp-sign-img {
-    transform: scale(1.05);
-  }
-
-  /* ── El Roy's row ── */
-  .lp-row--elroys:hover .lp-sign-img,
-  .lp-row--elroys:focus .lp-sign-img {
-    transform: scale(1.05) rotate(15deg);
-  }
-  .lp-row--elroys:hover .lp-tagline,
-  .lp-row--elroys:focus .lp-tagline {
-    color: var(--lp-tagline-hover-green);
-  }
-
-  /* ── Leroy's row ── */
-  .lp-row--leroys:hover .lp-sign-img,
-  .lp-row--leroys:focus .lp-sign-img {
-    transform: scale(1.05) rotate(-5deg);
-  }
-  .lp-row--leroys:hover .lp-tagline,
-  .lp-row--leroys:focus .lp-tagline {
-    color: var(--lp-tagline-hover-orange);
-  }
-
-  /* ── Tagline text ── */
-  .lp-tagline {
-    font-family: 'Epilogue', sans-serif;
-    font-size: clamp(1.25rem, 3vw, 2.25rem);
-    font-style: italic;
-    color: var(--lp-tagline);
-    line-height: 1.2;
-    transition: color 0.4s;
-  }
-  .lp-tagline--right { text-align: right; }
-  .lp-tagline--left { text-align: left; }
-
-  /* ── Sign images ── */
-  .lp-sign {
-    display: flex;
-  }
-  .lp-sign--left { justify-content: flex-end; }
-  .lp-sign--right { justify-content: flex-start; }
-
-  .lp-sign-img {
-    width: 100%;
-    max-width: 400px;
-    max-height: 24vh;
-    height: auto;
-    object-fit: contain;
-    transition: transform 0.5s;
-  }
-  .lp-sign-img--green {
-    filter: drop-shadow(0 0 15px var(--lp-glow-green)) drop-shadow(0 20px 40px var(--lp-shadow));
-  }
-  .lp-sign-img--orange {
-    filter: drop-shadow(0 0 15px var(--lp-glow-orange)) drop-shadow(0 20px 40px var(--lp-shadow));
-  }
-
-  /* ── Mobile taglines (hidden on desktop) ── */
-  .lp-tagline-mobile {
-    display: none;
-    text-align: center;
-    font-family: 'Epilogue', sans-serif;
-    font-size: 1.1rem;
-    font-style: italic;
-    color: var(--lp-tagline);
-    margin-top: 0.5rem;
-    letter-spacing: 0.01em;
-  }
-
-  /* ── Footer ── */
-  .lp-footer {
-    width: 100%;
-    text-align: center;
-    padding: 1rem 2rem 1.5rem;
-    z-index: 40;
-  }
-  .lp-footer::before {
-    content: '';
-    display: block;
-    width: 48px;
-    height: 1px;
-    background: var(--lp-footer);
-    margin: 0 auto 0.75rem;
-  }
-  .lp-footer-text {
-    font-family: 'Space Grotesk', monospace;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
-    color: var(--lp-footer);
-  }
-  .lp-footer-actions {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-top: 0.75rem;
-  }
-  .lp-footer-action {
-    appearance: none;
-    border: 0;
-    background: none;
-    color: var(--lp-footer);
-    font-family: 'Space Grotesk', monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-    text-underline-offset: 0.24em;
-  }
-  .lp-footer-action:hover,
-  .lp-footer-action:focus-visible {
-    color: var(--lp-text);
-    outline: none;
-  }
-
-  /* ── Entrance animation ── */
-  @keyframes lp-fade-up {
-    from { opacity: 0; transform: translateY(20px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  .lp-headline {
-    animation: lp-fade-up 0.8s ease-out both;
-  }
-  .lp-row--elroys {
-    animation: lp-fade-up 0.8s ease-out 0.25s both;
-  }
-  .lp-row--leroys {
-    animation: lp-fade-up 0.8s ease-out 0.45s both;
-  }
-  .lp-footer {
-    animation: lp-fade-up 0.6s ease-out 0.65s both;
-  }
-
-  /* ── Row hover lift ── */
-  .lp-row {
-    border-radius: 16px;
-    padding: 1rem;
-    transition: background 0.4s, box-shadow 0.4s;
-    outline: none;
-  }
-
-  /* ── Focus-visible ring ── */
-  .lp-row:focus-visible {
-    outline: 2px solid var(--lp-tagline);
-    outline-offset: 4px;
-    border-radius: 16px;
-  }
-  .lp-row--elroys:focus-visible {
-    outline-color: var(--lp-tagline-hover-green);
-  }
-  .lp-row--leroys:focus-visible {
-    outline-color: var(--lp-tagline-hover-orange);
-  }
-  .lp-row--elroys:hover,
-  .lp-row--elroys:focus {
-    background: rgba(0, 84, 48, 0.04);
-    box-shadow: 0 8px 32px rgba(0, 84, 48, 0.06);
-  }
-  .lp-row--leroys:hover,
-  .lp-row--leroys:focus {
-    background: rgba(168, 57, 0, 0.04);
-    box-shadow: 0 8px 32px rgba(168, 57, 0, 0.06);
-  }
-  @media (prefers-color-scheme: dark) {
-    .lp-row--elroys:hover,
-    .lp-row--elroys:focus {
-      background: rgba(0, 84, 48, 0.12);
-      box-shadow: 0 8px 32px rgba(0, 84, 48, 0.15);
-    }
-    .lp-row--leroys:hover,
-    .lp-row--leroys:focus {
-      background: rgba(168, 57, 0, 0.12);
-      box-shadow: 0 8px 32px rgba(168, 57, 0, 0.15);
-    }
-  }
-
-  /* ── Reduced motion ── */
-  @media (prefers-reduced-motion: reduce) {
-    .lp-headline, .lp-row--elroys, .lp-row--leroys, .lp-footer {
-      animation: none;
-    }
-    .lp-sign-img { transition: none; }
-  }
-
-  /* ── Mobile ── */
-  @media (max-width: 640px) {
-    .lp-headline {
-      font-size: clamp(1.75rem, 9vw, 2.75rem);
-      margin-bottom: 0.75rem;
-    }
-    .lp-destinations { gap: 0.5rem; }
-
-    .lp-row {
-      grid-template-columns: 1fr;
-      justify-items: center;
-      text-align: center;
-      padding: 0.75rem 0.75rem;
-    }
-
-    /* Hide desktop taglines, show mobile ones */
-    .lp-tagline--desktop { display: none; }
-    .lp-tagline-mobile { display: block; }
-
-    .lp-sign { justify-content: center !important; }
-    .lp-sign-img { max-width: 260px; max-height: 22vh; }
-
-    /* Reorder: El Roy's = sign first, then mobile tagline */
-    .lp-row--elroys .lp-tagline--desktop { order: 2; }
-    .lp-row--elroys .lp-sign { order: 1; }
-
-    /* Reorder: Leroy's = sign first, then mobile tagline */
-    .lp-row--leroys .lp-sign { order: 1; }
-    .lp-row--leroys .lp-tagline--desktop { order: 2; }
-
-    .lp-footer { padding: 0.75rem 2rem 1rem; }
-  }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Bebas+Neue&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles/root-landing.css">
 <link rel="stylesheet" href="/core/auth/auth-overlay-unified.css">
 </head>
-<body>
+<body class="root-landing-page">
 
-<!-- Grain texture -->
-<div class="lp-grain"></div>
+<section id="site-picker-view" class="landing-root" hidden>
+  <nav class="landing-dot-nav" aria-label="Page sections">
+    <button type="button" class="is-active" data-landing-dot="hero" aria-label="Hero"></button>
+    <button type="button" data-landing-dot="hours" aria-label="Hours"></button>
+    <button type="button" data-landing-dot="comparison" aria-label="Comparison"></button>
+    <button type="button" data-landing-dot="events" aria-label="Events"></button>
+    <button type="button" data-landing-dot="news" aria-label="News"></button>
+    <button type="button" data-landing-dot="reviews" aria-label="Reviews"></button>
+  </nav>
 
-<!-- Background effects -->
-<div class="lp-vignette"></div>
-<div class="lp-gradient-bottom"></div>
+  <main id="landing-root-shell" class="landing-root-shell" hidden>
+    <section id="hero" class="landing-hero">
+      <article class="landing-hero-card landing-hero-card--leroys">
+        <div class="landing-hero-card-inner">
+          <p class="landing-hero-kicker">Leroy's Lounge</p>
+          <img class="landing-hero-sign" src="/assets/leroys-sign.png" alt="Leroy's Lounge sign">
+          <h1 class="landing-hero-title landing-hero-title--leroys">Leroy's Lounge</h1>
+          <p class="landing-hero-copy">Basement-bar warmth, American bites, and the kind of late-night room that rewards a wrong turn.</p>
+          <div id="landing-hero-status-leroys" class="landing-status-pill is-closed">Loading hours...</div>
+          <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge">See Leroy's Food</a>
+        </div>
+      </article>
 
-<main class="lp-main">
+      <article class="landing-hero-card landing-hero-card--elroys">
+        <div class="landing-hero-card-inner">
+          <p class="landing-hero-kicker">El Roy's Cantina</p>
+          <img class="landing-hero-sign" src="/assets/elroys-sign.png" alt="El Roy's Cantina sign">
+          <h1 class="landing-hero-title landing-hero-title--elroys">El Roy's Cantina</h1>
+          <p class="landing-hero-copy">Border-glam color, Tex-Mex heat, and a louder kind of night out when the room needs more shine.</p>
+          <div id="landing-hero-status-elroys" class="landing-status-pill is-closed">Loading hours...</div>
+          <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina">See El Roy's Food</a>
+        </div>
+      </article>
+    </section>
 
-  <!-- Headline -->
-  <h1 class="lp-headline">Where are you<br>headed tonight?</h1>
+    <section id="hours" class="landing-shell-section landing-shell-section--warm landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-section-head">
+          <h2>Hours</h2>
+          <div class="landing-section-rule"></div>
+        </div>
+        <p class="landing-section-copy">Live status comes first up top. Full recurring hours live here when you want the rest of the week at a glance.</p>
 
-  <div class="lp-destinations">
+        <div class="landing-hours-grid">
+          <article class="landing-hours-card landing-hours-card--leroys">
+            <div>
+              <p class="landing-section-kicker">Leroy's Lounge</p>
+              <h3 class="landing-hero-title landing-hero-title--leroys" style="font-size:2.6rem">This Week</h3>
+            </div>
+            <div id="landing-hours-today-leroys" class="landing-hours-today landing-hours-today--leroys">
+              <span>Today</span>
+              <strong>Loading...</strong>
+            </div>
+            <dl id="landing-hours-list-leroys" class="landing-hours-table"></dl>
+          </article>
 
-    <!-- Row 1: El Roy's Cantina — tagline left, sign right -->
-    <a class="lp-row lp-row--elroys" href="/elroyscantina">
-      <p class="lp-tagline lp-tagline--right lp-tagline--desktop">
-        One way up.<br>All the way south.
-      </p>
-      <div class="lp-sign lp-sign--right">
-        <img class="lp-sign-img lp-sign-img--green"
-             src="assets/elroys-sign.png"
-             alt="El Roy's Cantina">
+          <article class="landing-hours-card landing-hours-card--elroys">
+            <div>
+              <p class="landing-section-kicker">El Roy's Cantina</p>
+              <h3 class="landing-hero-title landing-hero-title--elroys" style="font-size:2.6rem">This Week</h3>
+            </div>
+            <div id="landing-hours-today-elroys" class="landing-hours-today landing-hours-today--elroys">
+              <span>Today</span>
+              <strong>Loading...</strong>
+            </div>
+            <dl id="landing-hours-list-elroys" class="landing-hours-table"></dl>
+          </article>
+        </div>
       </div>
-      <p class="lp-tagline-mobile">One way up. All the way south.</p>
-    </a>
+    </section>
 
-    <!-- Row 2: Leroy's Lounge — sign left, tagline right -->
-    <a class="lp-row lp-row--leroys" href="/leroyslounge">
-      <div class="lp-sign lp-sign--left">
-        <img class="lp-sign-img lp-sign-img--orange"
-             src="assets/leroys-sign.png"
-             alt="Leroy's Lounge">
+    <section id="comparison" class="landing-shell-section landing-shell-section--panel landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-section-head">
+          <h2>Choose Your Night</h2>
+          <div class="landing-section-rule"></div>
+        </div>
+
+        <div class="landing-comparison-grid">
+          <article class="landing-comparison-card landing-comparison-card--leroys">
+            <p class="landing-card-kicker">The Lounge</p>
+            <h3 style="color:var(--landing-leroys)">American Bites</h3>
+            <p>Burgers, fries, and late-night plates with real heft. Leroy's leans warm, grounded, and analog in the best possible way.</p>
+          </article>
+
+          <article class="landing-comparison-card landing-comparison-card--elroys">
+            <p class="landing-card-kicker">The Cantina</p>
+            <h3 style="color:var(--landing-elroys)">Tex-Mex</h3>
+            <p>Tacos, queso, and margarita energy first. El Roy's brings the brighter, glossier room when the night needs more voltage.</p>
+          </article>
+        </div>
       </div>
-      <p class="lp-tagline lp-tagline--left lp-tagline--desktop">
-        Worth every<br>wrong turn.
-      </p>
-      <p class="lp-tagline-mobile">Worth every wrong turn.</p>
-    </a>
+    </section>
 
+    <section id="events" class="landing-shell-section landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-section-head">
+          <h2>Events</h2>
+          <div class="landing-section-rule"></div>
+        </div>
+        <div id="landing-events-list" class="landing-story-grid landing-story-list"></div>
+        <article id="landing-events-empty" class="landing-empty-card">
+          <p class="landing-empty-kicker">Nothing booked yet</p>
+          <h3>Nothing scheduled right now.</h3>
+          <p>The shell is live and ready for upcoming nights, but the public page stays calm instead of faking urgency when nothing is on deck.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="news" class="landing-shell-section landing-shell-section--warm landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-section-head">
+          <h2>News</h2>
+          <div class="landing-section-rule"></div>
+        </div>
+        <div id="landing-news-list" class="landing-review-grid landing-review-list"></div>
+        <article id="landing-news-empty" class="landing-empty-card">
+          <p class="landing-empty-kicker">Imported stories</p>
+          <h3>Fresh coverage lands here.</h3>
+          <p>When the teams publish news, it will appear as a clean editorial layer without getting in the way of the decision-first flow above.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="reviews" class="landing-shell-section landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-section-head">
+          <h2>Reviews</h2>
+          <div class="landing-section-rule"></div>
+        </div>
+        <div id="landing-reviews-list" class="landing-review-grid landing-review-list"></div>
+        <article id="landing-reviews-empty" class="landing-empty-card">
+          <p class="landing-empty-kicker">Paired proof</p>
+          <h3>Balanced social proof comes later.</h3>
+          <p>The public shell keeps this slot reserved for paired Leroy's and El Roy's reviews once both sides have enough usable live inventory.</p>
+        </article>
+      </div>
+    </section>
+
+    <div class="landing-backtop-wrap">
+      <a class="landing-backtop" href="#hero" aria-label="Back to top">↑</a>
+    </div>
+  </main>
+
+  <div id="landing-root-fallback" class="landing-root-fallback" hidden>
+    <div class="landing-root-fallback-card">
+      <p class="landing-empty-kicker">Safe fallback</p>
+      <h2>Choose a restaurant</h2>
+      <p>The richer homepage is temporarily unavailable, but the direct path to each food menu stays open.</p>
+      <div class="landing-root-fallback-actions">
+        <a class="landing-root-fallback-link" href="/leroyslounge">Leroy's Lounge</a>
+        <a class="landing-root-fallback-link" href="/elroyscantina">El Roy's Cantina</a>
+      </div>
+    </div>
   </div>
 
-</main>
+  <footer class="landing-root-footer">
+    <p class="landing-root-footer-text">Drinks &amp; Food menus. Updated live.</p>
+    <div class="landing-root-footer-actions" data-route-staff-actions>
+      <button class="landing-root-footer-action" type="button" data-route-staff-signin>Staff Sign-In</button>
+      <button class="landing-root-footer-action" type="button" data-route-staff-manager style="display:none">Manager</button>
+      <button class="landing-root-footer-action" type="button" data-route-staff-admin style="display:none">Admin</button>
+      <button class="landing-root-footer-action" type="button" data-route-staff-signout style="display:none">Sign Out</button>
+    </div>
+  </footer>
+</section>
 
-<footer class="lp-footer">
-  <p class="lp-footer-text">Drinks &amp; Food menus. Updated live.</p>
-  <div class="lp-footer-actions" data-route-staff-actions>
-    <button class="lp-footer-action" type="button" data-route-staff-signin>Staff Sign-In</button>
-    <button class="lp-footer-action" type="button" data-route-staff-manager style="display:none">Manager</button>
-    <button class="lp-footer-action" type="button" data-route-staff-admin style="display:none">Admin</button>
-    <button class="lp-footer-action" type="button" data-route-staff-signout style="display:none">Sign Out</button>
-  </div>
-</footer>
+<script>
+  (function initRootLandingChrome() {
+    const shellSections = Array.from(document.querySelectorAll('main [id]'));
+    const dots = Array.from(document.querySelectorAll('[data-landing-dot]'));
+    if (!shellSections.length || !dots.length || !('IntersectionObserver' in window)) {
+      dots.forEach(dot => {
+        dot.addEventListener('click', () => {
+          const target = document.getElementById(dot.dataset.landingDot);
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
+      return;
+    }
 
+    const revealObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.16 });
+
+    document.querySelectorAll('.landing-reveal').forEach(section => {
+      revealObserver.observe(section);
+    });
+
+    const sectionObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        dots.forEach(dot => {
+          dot.classList.toggle('is-active', dot.dataset.landingDot === entry.target.id);
+        });
+      });
+    }, { threshold: 0.38 });
+
+    shellSections.forEach(section => {
+      sectionObserver.observe(section);
+    });
+
+    dots.forEach(dot => {
+      dot.addEventListener('click', () => {
+        const target = document.getElementById(dot.dataset.landingDot);
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  })();
+</script>
 
 <script src="/core/domain/constants.js"></script>
 <script src="/core/domain/category-defaults.js"></script>
