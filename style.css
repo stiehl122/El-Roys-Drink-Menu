@@ -4352,8 +4352,30 @@ body.manager-stitch-shell .manager-shell-drawer-meta {
   border-radius: 18px;
 }
 
+body.manager-stitch-shell .manager-shell-drawer-kicker {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-drawer-copy {
+  margin: -2px 0 0;
+  color: var(--manager-shell-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 body.manager-stitch-shell .manager-shell-drawer-meta .manager-shell-header-badge {
   align-self: flex-start;
+}
+
+body.manager-stitch-shell .manager-shell-drawer-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 body.manager-stitch-shell .manager-shell-drawer-admin {
@@ -5369,14 +5391,11 @@ body.manager-stitch-shell .del-item {
 
   body.manager-stitch-shell .manager-shell-actionbar-copy {
     max-width: none;
-    gap: 0;
+    gap: 2px;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
-    display: none;
-  }
-
-  body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-title {
+    display: block;
     font-size: 10px;
     letter-spacing: 0.16em;
   }
@@ -5384,11 +5403,9 @@ body.manager-stitch-shell .del-item {
   body.manager-stitch-shell .manager-shell-actionbar-copy .workspace-actions-sub {
     max-width: none;
     display: block;
-    overflow: hidden;
     font-size: 10.5px;
     line-height: 1.25;
-    white-space: nowrap;
-    text-overflow: ellipsis;
+    white-space: normal;
   }
 
   body.manager-stitch-shell .manager-shell-actionbar-groups {
@@ -5423,6 +5440,26 @@ body.manager-stitch-shell .del-item {
   body.manager-stitch-shell .manager-shell-actionbar-status {
     display: none;
   }
+
+  body.manager-stitch-shell .manager-shell-drawer-meta {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  body.manager-stitch-shell .manager-shell-drawer-return {
+    margin-top: 4px;
+    background: transparent;
+    border-color: var(--manager-shell-border-strong);
+    color: var(--manager-shell-primary);
+  }
+
+  body.manager-stitch-shell .manager-shell-drawer-return:hover,
+  body.manager-stitch-shell .manager-shell-drawer-return:focus-visible {
+    background: var(--manager-shell-primary);
+    border-color: var(--manager-shell-primary);
+    color: var(--manager-shell-bg);
+  }
+
   body.manager-stitch-shell .manager-shell-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

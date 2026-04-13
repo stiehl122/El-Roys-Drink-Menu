@@ -140,10 +140,14 @@
             >×</button>
           </div>
           <div class="manager-shell-drawer-meta">
+            <p class="manager-shell-drawer-kicker">Quick Actions</p>
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
-            <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
-            <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
+            <p class="manager-shell-drawer-copy">Use the rail for long-form edits, then publish from the dock when service is ready.</p>
+            <div class="manager-shell-drawer-actions">
+              <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+              <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
+              <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
+            </div>
             <button class="btn-small manager-shell-drawer-return" id="drawer-return-btn" type="button" onclick="exitView()">Return to menu</button>
           </div>
         </div>
