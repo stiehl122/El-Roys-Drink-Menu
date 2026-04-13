@@ -1,6 +1,9 @@
 {
   "rewrites": [
     { "source": "/api/send-groupme", "destination": "/api/send-notification" },
+    { "source": "/api/config", "destination": "/api/role?mode=config" },
+    { "source": "/api/import-news", "destination": "/api/import?kind=news" },
+    { "source": "/api/import-review", "destination": "/api/import?kind=review" },
     { "source": "/leroyslounge", "destination": "/leroyslounge/index.html" },
     { "source": "/leroyslounge/", "destination": "/leroyslounge/index.html" },
     { "source": "/elroyscantina", "destination": "/elroyscantina/index.html" },
