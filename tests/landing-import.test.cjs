@@ -44,6 +44,34 @@ test('news import extracts best-effort article metadata', async () => {
   }
 });
 
+test('news import decodes numeric html entities in imported fields', async () => {
+  const { importNewsFromUrl } = await loadImportModule();
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    text: async () => `
+      <html>
+        <head>
+          <meta property="og:title" content="Leroy&#039;s patio is back">
+          <meta property="og:description" content="Tonight&#x27;s first round is on us.">
+          <meta property="og:site_name" content="City&#039;s Best">
+          <meta property="article:published_time" content="2026-04-12T12:00:00Z">
+          <link rel="canonical" href="https://example.com/story">
+        </head>
+      </html>
+    `,
+  });
+
+  try {
+    const result = await importNewsFromUrl('https://example.com/story');
+    assert.equal(result.title, "Leroy's patio is back");
+    assert.equal(result.body, "Tonight's first round is on us.");
+    assert.equal(result.source, "City's Best");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('review import extracts best-effort Google review fields', async () => {
   const { importReviewFromUrl } = await loadImportModule();
   const originalFetch = global.fetch;

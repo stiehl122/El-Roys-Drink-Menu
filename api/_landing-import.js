@@ -4,9 +4,18 @@ function normalizeWhitespace(value = '') {
 
 function decodeHtmlEntities(value = '') {
   return String(value || '')
+    .replace(/&#(\d+);/gi, (_, code) => {
+      const numeric = Number.parseInt(code, 10);
+      return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : _;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => {
+      const numeric = Number.parseInt(code, 16);
+      return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : _;
+    })
     .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>');
 }
