@@ -4981,6 +4981,10 @@ async function saveAdminSettingsThroughApi(action, payload = {}) {
   });
 }
 
+async function persistStateDirect(options = {}) {
+  return false;
+}
+
 async function sbRead() {
   if (!SUPABASE_URL || !MENU_ID) return null;
   const restaurantFetch = RESTAURANT_ID
@@ -5759,6 +5763,17 @@ async function patchMenuDraftState(snapshot, savedAt = Date.now()) {
     return { downgradedFields: Array.isArray(apiResult.payload?.downgradedFields) ? apiResult.payload.downgradedFields : [] };
   }
   throw new Error(apiResult.payload?.error || 'Draft save failed.');
+}
+
+async function sbPatchRestaurantDesign(restaurantId, design = {}) {
+  const apiResult = await saveAdminSettingsThroughApi('save_restaurant_design', {
+    restaurant_id: restaurantId,
+    design,
+  });
+  if (!apiResult?.ok) {
+    throw new Error(apiResult?.payload?.error || 'Design patch failed.');
+  }
+  return apiResult.payload || {};
 }
 
 async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
