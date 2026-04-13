@@ -523,6 +523,28 @@ body.root-landing-page::before {
 .landing-story-card--news {
   overflow: hidden;
   display: grid;
+  color: var(--landing-ink);
+  text-decoration: none;
+  border-color: rgba(240, 224, 204, 0.12);
+  background:
+    linear-gradient(180deg, rgba(19, 13, 6, 0.94), rgba(12, 8, 4, 0.98)),
+    radial-gradient(circle at top right, rgba(240, 152, 60, 0.08), transparent 42%);
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+}
+
+.landing-story-card--news:visited,
+.landing-story-card--news:hover,
+.landing-story-card--news:focus-visible {
+  color: var(--landing-ink);
+  text-decoration: none;
+}
+
+.landing-story-card--news:hover,
+.landing-story-card--news:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(240, 152, 60, 0.24);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  outline: none;
 }
 
 .landing-story-card--news.has-image {
@@ -539,12 +561,39 @@ body.root-landing-page::before {
   object-fit: cover;
   display: block;
   border-bottom: 1px solid rgba(240, 224, 204, 0.08);
+  filter: saturate(0.92) contrast(1.04);
 }
 
 .landing-story-copy {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   padding: 28px;
+}
+
+.landing-story-card--news .landing-card-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  color: rgba(240, 224, 204, 0.52);
+}
+
+.landing-story-card--news h3 {
+  color: #f4e6d4;
+  font-size: clamp(1.9rem, 2.8vw, 2.55rem);
+  line-height: 0.92;
+  letter-spacing: 0.08em;
+  text-wrap: balance;
+}
+
+.landing-story-card--news p {
+  color: rgba(240, 224, 204, 0.8);
+}
+
+.landing-story-card--news .landing-story-copy > p:last-of-type {
+  max-width: 54ch;
+  font-size: 1.02rem;
+  line-height: 1.74;
 }
 
 .landing-review-carousel {
@@ -615,19 +664,19 @@ body.root-landing-page::before {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 4px;
   font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   font-size: 0.9rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: inherit;
+  color: var(--landing-elroys);
   text-decoration: none;
 }
 
 .landing-story-link:hover,
 .landing-story-link:focus-visible {
-  text-decoration: underline;
+  color: #7fffd9;
   outline: none;
 }
 
