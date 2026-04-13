@@ -1330,10 +1330,9 @@ test('manager shell header stays minimal and action-focused', () => {
   assert.match(managerHtml, /Manager Workspace/);
   assert.match(managerHtml, /id="switch-menu-btn"[\s\S]*Menu Switcher/);
   assert.match(managerHtml, /id="admin-btn"[\s\S]*Admin Console/);
+  assert.match(managerHtml, /manager-shell-legacy-hooks/);
   assert.doesNotMatch(managerHtml, /Current Menu Control Room/);
   assert.doesNotMatch(managerHtml, /manager-shell-header-summary/);
-  assert.doesNotMatch(managerHtml, /manager-header-menu-badge/);
-  assert.doesNotMatch(managerHtml, /active-menu-bar/);
 });
 
 test('public route contract and route renderers register and hydrate both restaurant shells', async () => {

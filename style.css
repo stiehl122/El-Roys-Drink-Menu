@@ -2219,6 +2219,18 @@ body.manager-stitch-shell .manager-shell-topbar-actions {
   min-width: 0;
 }
 
+body.manager-stitch-shell .manager-shell-legacy-hooks {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 body.manager-stitch-shell .manager-shell-brand-mark,
 body.manager-stitch-shell .manager-shell-stat-label,
 body.manager-stitch-shell .manager-shell-field-label,
