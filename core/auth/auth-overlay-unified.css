@@ -204,6 +204,23 @@ body.admin-console-page .auth-field input:focus {
   margin-bottom: 12px;
 }
 
+.auth-preview-btn {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 13px;
+  margin: 0 0 8px;
+  border: 1px solid rgba(45, 55, 72, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #2d3748;
+  font-family: 'Space Grotesk', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
 body.manager-stitch-shell .auth-submit-btn,
 body.admin-console-page .auth-submit-btn {
   min-height: 46px;
@@ -217,8 +234,29 @@ body.admin-console-page .auth-submit-btn {
   box-shadow: none;
 }
 
+body.manager-stitch-shell .auth-preview-btn,
+body.admin-console-page .auth-preview-btn {
+  min-height: 44px;
+  border-radius: 9px;
+  border: 1px solid rgba(45, 55, 72, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  color: #2d3748;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  box-shadow: none;
+}
+
 .auth-submit-btn:hover {
   background: #1a202c;
+}
+
+.auth-preview-btn:hover,
+.auth-preview-btn:focus-visible {
+  background: rgba(45, 55, 72, 0.08);
+  border-color: rgba(45, 55, 72, 0.28);
+  color: #1a202c;
 }
 
 body.manager-stitch-shell .auth-submit-btn:hover,
@@ -226,9 +264,34 @@ body.admin-console-page .auth-submit-btn:hover {
   background: #1a202c;
 }
 
+body.manager-stitch-shell .auth-preview-btn:hover,
+body.manager-stitch-shell .auth-preview-btn:focus-visible,
+body.admin-console-page .auth-preview-btn:hover,
+body.admin-console-page .auth-preview-btn:focus-visible {
+  background: rgba(45, 55, 72, 0.08);
+  border-color: rgba(45, 55, 72, 0.28);
+}
+
 .auth-submit-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.auth-preview-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-preview-note {
+  margin: 0 0 12px;
+  color: #718096;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+body.manager-stitch-shell .auth-preview-note,
+body.admin-console-page .auth-preview-note {
+  color: #718096;
 }
 
 .auth-toggle-btn,

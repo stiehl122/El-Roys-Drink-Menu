@@ -10,6 +10,7 @@ const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1';
+const PREVIEW_AUDIT_SESSION_ENDPOINT = '/api/session-bootstrap';
 
 const LS_KEYS = {
   menuId:       'hf_menu_id',
@@ -85,6 +86,8 @@ let _landingPageLoadError = '';
 let _activeLandingAdminPanel = 'landing-admin-panel-overview';
 let _landingAdminFilters = null;
 let _landingReviewCarouselIndex = 0;
+let _previewAuditAvailability = null;
+let _previewAuditAvailabilityPromise = null;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -2739,6 +2742,18 @@ function createSettingsRoutePolicyService(deps = {}) {
 
       const requestedMenu = getRequestedMenu();
       if (!requestedMenu) {
+        const fallbackMenuId = getFallbackMenuId(user);
+        if (fallbackMenuId) {
+          const targetPath = getManagerHref(fallbackMenuId);
+          if (targetPath) {
+            return {
+              kind: 'manager-redirect',
+              pageMode: 'manager',
+              targetPath,
+              menuId: fallbackMenuId,
+            };
+          }
+        }
         return {
           kind: 'manager-denied',
           pageMode: 'manager',
@@ -8511,20 +8526,23 @@ function initAuthTriggerDelegation() {
 }
 
 function requestSignIn(options = {}) {
+  let result;
   const controller = getAuthOverlayController();
   if (controller?.requestSignIn && !_authModuleDelegationStack.has('requestSignIn')) {
     _authModuleDelegationStack.add('requestSignIn');
     try {
-      return controller.requestSignIn(options);
+      result = controller.requestSignIn(options);
     } finally {
       _authModuleDelegationStack.delete('requestSignIn');
     }
+  } else {
+    const normalized = (typeof options === 'string')
+      ? { screen: options }
+      : (options || {});
+    result = openAuthOverlay(normalized.screen || 'signin');
   }
-
-  const normalized = (typeof options === 'string')
-    ? { screen: options }
-    : (options || {});
-  return openAuthOverlay(normalized.screen || 'signin');
+  syncPreviewAuditButton();
+  return result;
 }
 
 function _authFocusTrap(e) {
@@ -8588,29 +8606,143 @@ function closeAuthOverlay() {
 }
 
 function renderAuthScreen(screen) {
+  let result;
   const controller = getAuthOverlayController();
   if (controller?.renderAuthScreen && !_authModuleDelegationStack.has('renderAuthScreen')) {
     _authModuleDelegationStack.add('renderAuthScreen');
     try {
-      return controller.renderAuthScreen(screen);
+      result = controller.renderAuthScreen(screen);
     } finally {
       _authModuleDelegationStack.delete('renderAuthScreen');
     }
+  } else {
+    _authScreen = screen;
+    ['signin', 'signup', 'forgot', 'reset'].forEach(s => {
+      const el = document.getElementById(`auth-screen-${s}`);
+      if (el) el.style.display = s === screen ? '' : 'none';
+    });
+    const errEl = document.getElementById(`${screen}-error`);
+    if (errEl) errEl.textContent = '';
+    const box = document.getElementById('auth-box');
+    const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password', reset: 'Set New Password' };
+    if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
+    syncAuthUsernameAssistFields();
+    const firstInput = document.querySelector(`#auth-screen-${screen} input`);
+    if (firstInput) setTimeout(() => firstInput.focus(), 0);
+  }
+  syncPreviewAuditButton();
+  return result;
+}
+
+function setPreviewAuditButtonState({ visible = false, label = 'Use Preview Audit Session', disabled = false, note = '' } = {}) {
+  const button = document.getElementById('preview-audit-btn');
+  const noteEl = document.getElementById('preview-audit-note');
+  if (!button || !noteEl) return;
+
+  const show = !!visible && _authScreen === 'signin';
+  button.hidden = !show;
+  noteEl.hidden = !show;
+  button.disabled = !!disabled;
+  button.textContent = label || 'Use Preview Audit Session';
+  noteEl.textContent = note || 'Preview-only helper for design audits.';
+}
+
+async function fetchPreviewAuditAvailability(options = {}) {
+  const force = !!options.force;
+  const requestedMode = _appPageMode === 'admin' ? 'admin' : 'manager';
+  if (!IS_PREVIEW) {
+    _previewAuditAvailability = { available: false };
+    return _previewAuditAvailability;
+  }
+  if (!force && _previewAuditAvailability) return _previewAuditAvailability;
+  if (!force && _previewAuditAvailabilityPromise) return _previewAuditAvailabilityPromise;
+
+  _previewAuditAvailabilityPromise = (async () => {
+    try {
+      const response = await fetch(`${PREVIEW_AUDIT_SESSION_ENDPOINT}?mode=${encodeURIComponent(requestedMode)}`);
+      const payload = await response.json().catch(() => ({}));
+      _previewAuditAvailability = {
+        available: !!payload?.loopAudit?.available,
+        label: payload?.loopAudit?.label || 'Use Preview Audit Session',
+        mode: payload?.loopAudit?.mode || requestedMode,
+      };
+    } catch (_) {
+      _previewAuditAvailability = { available: false };
+    } finally {
+      _previewAuditAvailabilityPromise = null;
+    }
+    return _previewAuditAvailability;
+  })();
+
+  return _previewAuditAvailabilityPromise;
+}
+
+async function syncPreviewAuditButton(options = {}) {
+  if (_authScreen !== 'signin' || !IS_PREVIEW) {
+    setPreviewAuditButtonState({ visible: false });
+    return;
   }
 
-  _authScreen = screen;
-  ['signin', 'signup', 'forgot', 'reset'].forEach(s => {
-    const el = document.getElementById(`auth-screen-${s}`);
-    if (el) el.style.display = s === screen ? '' : 'none';
+  setPreviewAuditButtonState({
+    visible: true,
+    disabled: true,
+    label: 'Checking Preview Audit Session…',
+    note: 'Preview-only helper for design audits.',
   });
-  const errEl = document.getElementById(`${screen}-error`);
+
+  const status = await fetchPreviewAuditAvailability(options);
+  if (!status?.available) {
+    setPreviewAuditButtonState({ visible: false });
+    return;
+  }
+
+  setPreviewAuditButtonState({
+    visible: true,
+    disabled: false,
+    label: status.label || 'Use Preview Audit Session',
+    note: 'Preview-only helper for design audits.',
+  });
+}
+
+async function handlePreviewAuditSignIn() {
+  const errEl = document.getElementById('signin-error');
+  const submitBtn = document.getElementById('signin-submit-btn');
+  const button = document.getElementById('preview-audit-btn');
+  const requestedMode = _appPageMode === 'admin' ? 'admin' : 'manager';
   if (errEl) errEl.textContent = '';
-  const box = document.getElementById('auth-box');
-  const titles = { signin: 'Sign In', signup: 'Create Account', forgot: 'Reset Password', reset: 'Set New Password' };
-  if (box) box.setAttribute('aria-label', titles[screen] || 'Sign In');
-  syncAuthUsernameAssistFields();
-  const firstInput = document.querySelector(`#auth-screen-${screen} input`);
-  if (firstInput) setTimeout(() => firstInput.focus(), 0);
+
+  const status = await fetchPreviewAuditAvailability();
+  if (!status?.available) {
+    if (errEl) errEl.textContent = 'Preview audit session is not configured for this deployment.';
+    setPreviewAuditButtonState({ visible: false });
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Opening Preview Audit Session…';
+  }
+
+  try {
+    const response = await fetch(PREVIEW_AUDIT_SESSION_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: requestedMode }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.session?.access_token) {
+      throw new Error(payload?.error || 'Preview audit session failed.');
+    }
+    const { role } = await getAccessSessionService().applyAuthenticatedSession(payload.session, { closeOverlay: true });
+    await _syncRequestedPageMode();
+    if (role === 'none') showToast('Preview audit session opened, but no menu access is configured.', 'info');
+  } catch (error) {
+    if (errEl) errEl.textContent = error?.message || 'Preview audit session failed.';
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+    if (_authScreen === 'signin') syncPreviewAuditButton({ force: true });
+  }
 }
 
 function getAuthUsernameHint(preferredIds = []) {
