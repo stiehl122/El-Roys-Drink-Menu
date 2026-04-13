@@ -117,6 +117,8 @@ def main() -> int:
     print(f"- `browser mode`: {'headed' if args.headed else 'headless'}")
     print(f"- `DEFCON filter`: {defcon_window(args)}")
     print("- `carryover`: import newest open bug-squash PR/branch first, then local `bug-loop/issues.md`")
+    print("- `audit stance`: whole-app audit required; low-findings skepticism enabled")
+    print("- `full-suite cadence`: once at run start, targeted checks per pass, full suite again at run end")
     print()
     print("## Shared Loop Secrets")
     print(f"- `LOOP_ADMIN_EMAIL` + `LOOP_ADMIN_PASSWORD`: {yes_no(ADMIN_ROLE.configured())}")

@@ -9,6 +9,19 @@ Use this skill for repo-specific, pre-launch bug hunting on El Roy's. This
 skill is bug-first, not design-polish-first, and it should not silently expand
 into schema work, destructive git, or open-ended redesign.
 
+## Audit Stance
+
+Start from the assumption that a large cross-surface app with a legacy-heavy
+shared runtime almost certainly hides multiple meaningful bugs. A first sweep
+that finds only `0-2` minor issues is not evidence of cleanliness; it is
+evidence that coverage was too shallow until proven otherwise.
+
+At the start of every run:
+
+1. Read `references/bug-lenses.md`.
+2. Treat low findings as suspicious by default.
+3. Prefer being embarrassingly thorough over being prematurely satisfied.
+
 ## Invocation
 
 On every run:
@@ -77,6 +90,7 @@ When the user says "just run it" or gives only the skill name, treat that as
 - block `Send Update` unless `--allow-send` is set
 - commit one successful pass at a time
 - open a draft PR at the end
+- enable low-findings skepticism by default
 
 ## Required Preflight
 
@@ -115,6 +129,9 @@ Rules:
 - if neither role is configured, continue with public-only coverage unless the
   user explicitly asked for auth coverage
 
+If role credentials are configured and the run scope includes authenticated
+surfaces, authenticated coverage is mandatory, not optional.
+
 ## Persistent State
 
 All recursive bug-squash memory lives under `bug-loop/`:
@@ -141,6 +158,8 @@ Use the helper script for ledger maintenance:
 python3 .agents/skills/recursive-bug-squash/scripts/issue_ledger.py list
 python3 .agents/skills/recursive-bug-squash/scripts/issue_ledger.py upsert ...
 ```
+
+`bug-loop/log.md` must exist for every run, even when no bugs are fixed.
 
 ## DEFCON Scale
 
@@ -178,14 +197,70 @@ Once bugs exist in the queue, pick the next pass by:
 3. whether another pass changed a dependency that just made a quarantined bug
    worth retrying
 
+## Mandatory Whole-App Audit
+
+For a default whole-app run, the first phase is an audit, not a fix. Do not
+skip straight to code changes unless severe carryover issues already exist.
+
+The audit phase must:
+
+1. Run the full local suite once at the start of the run.
+2. Turn any failing local test into at least one bug candidate in
+   `bug-loop/issues.md`.
+3. Build and log an explicit coverage matrix for every in-scope surface.
+4. Use authenticated coverage when `LOOP_*` credentials exist.
+5. Refuse to call the app "clean" until every in-scope surface has either:
+   - real interaction evidence
+   - direct test evidence for the exact behavior
+   - or a logged blocker explaining why coverage was incomplete
+
+Minimum whole-app audit coverage:
+
+- `picker`
+- `/leroyslounge` drinks and food
+- `/elroyscantina` drinks and food
+- public footer actions signed-out
+- public footer actions signed-in when credentials exist
+- auth overlay sign-in / signup / forgot / access-denied flows when reachable
+- manager menu switching
+- manager add-item modal
+- manager 86 / restore flow
+- manager save-draft and save-live flow
+- admin shell and menu / settings switching
+- shared route fallback / query normalization / footer metadata / preview badge
+
+For route-owned public pages, scroll the whole page and switch between menu
+states. For manager and admin, open drawers, modals, menus, and role-gated
+states instead of checking only the initial shell.
+
+## UI And Integration Proof Rules
+
+Static reasoning alone is not enough for these classes unless an existing local
+test directly exercises the same behavior:
+
+- route boot and fallback rendering
+- public footer actions
+- auth overlay transitions
+- manager and admin access gating
+- drawers, menus, dialogs, and modals
+- menu switching between drinks and food
+- add-item modal and scanner flows
+- 86 / restore behavior
+- save-draft / save-live / send-preview flows
+- last-updated / version / preview badge rendering
+
+When behavior crosses UI, routing, auth, persistence, or browser state, use
+preview/browser verification earlier instead of over-trusting code inspection.
+
 ## Proof Order
 
 For every suspected fix:
 
 1. Prefer code reasoning and existing local checks first.
 2. Run the most relevant local tests first, not the whole suite.
-3. Use preview/browser verification only when code/tests cannot fully prove the
-   behavior.
+3. If the behavior is UI or integration heavy and code/tests do not fully prove
+   it quickly, move to preview/browser verification instead of stretching static
+   reasoning too far.
 4. If interactive verification needs real menu mutations, keep the mutation as
    narrow as possible and clean up incidental test data before the pass ends.
 5. Only use `Send Update` when `--allow-send` is set.
@@ -195,6 +270,31 @@ If `--no-preview` is active and proof would require preview/browser inspection:
 - quarantine the bug
 - record the reason in the ledger
 - continue unless the issue is `DEFCON 1`
+
+## Low-Findings Skepticism
+
+If a default whole-app audit finds fewer than `5` actionable issues, or only
+finds `DEFCON 4` / `DEFCON 5` issues, do not accept that result yet.
+
+Instead, run a mandatory second audit pass with an adversarial lens focused on:
+
+- negative auth and access-denied paths
+- stale menu state and route switching
+- missing or malformed Supabase config behavior
+- empty, archived, and hidden-content states
+- category deletion / uncategorized behavior
+- modal open / close / escape / focus flows
+- save-draft versus save-live versus send-preview seams
+- footer sign-in / manager / admin / sign-out transitions
+- preview badge, version, and timestamp mismatches
+- API error paths and silent failure branches
+
+Do not describe the app as "mostly clean" or stop after only two minor bugs
+without:
+
+1. the initial whole-app coverage matrix
+2. the adversarial second audit
+3. explicit log evidence explaining why no more serious bugs were found
 
 ## Pass Rules
 
@@ -223,6 +323,9 @@ For each pass:
 
 Do not batch unrelated bugs into the same pass.
 
+Every discovered bug candidate must hit the ledger immediately, even if it is
+later reclassified or fixed in the same run.
+
 ## Retry Policy
 
 - one active attempt per bug at a time
@@ -245,6 +348,11 @@ poison the rest of the run.
 
 ## Verification Cadence
 
+At the start of a whole-app run:
+
+- run the full local suite once
+- log the initial failures and coverage plan
+
 Per successful pass:
 
 - run the most relevant local tests and checks first
@@ -257,6 +365,21 @@ At the end of the whole run:
 - confirm the ledger and branch are up to date
 - push the final branch
 - open a draft PR
+
+## Logging Requirements
+
+Each run entry in `bug-loop/log.md` must include:
+
+- effective config and override flags
+- full-suite result at run start
+- coverage matrix with surfaces, roles, and proof mode used
+- findings grouped by DEFCON
+- fixes landed, fixes discarded, and bugs quarantined
+- whether the low-findings skepticism rule was triggered
+- final full-suite result
+
+If a run exits with suspiciously few bugs, the log must explain why that result
+is credible instead of simply asserting it.
 
 ## Git Rules
 
