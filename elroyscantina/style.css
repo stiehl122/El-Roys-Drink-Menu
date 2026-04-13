@@ -459,7 +459,15 @@ body.route-restaurant.route-restaurant--elroy {
 }
 
 #restaurant-site-wrapper .erc-item.is-86d {
-  opacity: 0.5;
+  opacity: 0.78;
+}
+
+#restaurant-site-wrapper .erc-item.is-86d .erc-item-title,
+#restaurant-site-wrapper .erc-item.is-86d .erc-item-price {
+  color: rgb(146 122 93 / 1);
+  text-decoration: line-through;
+  text-decoration-color: rgb(179 27 37 / 0.4);
+  text-decoration-thickness: 1px;
 }
 
 #restaurant-site-wrapper .erc-item-row {
@@ -1022,6 +1030,28 @@ body.route-restaurant.route-restaurant--elroy {
 
   #restaurant-site-wrapper .erc-route-boot-line {
     background: linear-gradient(90deg, rgb(112 95 72 / 0.3), rgb(255 208 145 / 0.16), rgb(112 95 72 / 0.3));
+  }
+
+  #restaurant-site-wrapper .erc-section-line {
+    background: rgb(196 168 124 / 0.22);
+  }
+
+  #restaurant-site-wrapper .erc-item.is-86d .erc-item-title,
+  #restaurant-site-wrapper .erc-item.is-86d .erc-item-price {
+    color: rgb(213 190 157 / 0.88);
+    text-decoration-color: rgb(255 128 132 / 0.5);
+  }
+
+  #restaurant-site-wrapper .erc-item-desc,
+  #restaurant-site-wrapper .erc-timestamp-label,
+  #restaurant-site-wrapper .erc-footer-updated,
+  #restaurant-site-wrapper .erc-footer-version {
+    color: rgb(219 203 177 / 0.9);
+  }
+
+  #restaurant-site-wrapper .erc-upcharge-chip {
+    border-color: rgb(129 109 82 / 0.55);
+    color: rgb(236 225 207 / 0.94);
   }
 
   #restaurant-site-wrapper .erc-footer {
