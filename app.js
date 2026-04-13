@@ -83,6 +83,8 @@ let _landingPageDirty = false;
 let _landingPageLoadPromise = null;
 let _landingPageLoadError = '';
 let _activeLandingAdminPanel = 'landing-admin-panel-overview';
+let _landingAdminFilters = null;
+let _landingReviewCarouselIndex = 0;
 
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
@@ -147,6 +149,16 @@ const LANDING_DAY_LABELS = {
   sat: 'Saturday',
   sun: 'Sunday',
 };
+const LANDING_TARGET_BOTH = 'both';
+const LANDING_IMPORT_STATUS_IDLE = 'idle';
+const LANDING_IMPORT_STATUS_IMPORTED = 'imported';
+const LANDING_IMPORT_STATUS_PARTIAL = 'partial';
+const LANDING_IMPORT_STATUS_FAILED = 'failed';
+const LANDING_ITEM_STATUS_LIVE = 'Live';
+const LANDING_ITEM_STATUS_DRAFT = 'Draft';
+const LANDING_ITEM_STATUS_MISSING = 'Missing Fields';
+const LANDING_ITEM_STATUS_ARCHIVED = 'ARCHIVED';
+const LANDING_FILTER_STORAGE_KEY = 'hf_landing_admin_filters';
 
 function buildFallbackDomainConstants() {
   const restaurants = {
@@ -286,6 +298,60 @@ function createDefaultLandingHoursRestaurant() {
   });
   return { days };
 }
+function createDefaultLandingImportMeta(sourceUrl = '') {
+  return {
+    sourceUrl: sourceUrl ? String(sourceUrl) : '',
+    lastAttemptTs: '',
+    lastSuccessTs: '',
+    status: LANDING_IMPORT_STATUS_IDLE,
+    messages: [],
+  };
+}
+function createDefaultLandingEventItem() {
+  return {
+    id: uid(),
+    target: LANDING_TARGET_BOTH,
+    title: '',
+    eventDate: '',
+    startTime: '',
+    endTime: '',
+    timingNote: '',
+    body: '',
+    archived: false,
+    archivedAt: '',
+    updatedAt: '',
+  };
+}
+function createDefaultLandingNewsItem() {
+  return {
+    id: uid(),
+    target: LANDING_TARGET_BOTH,
+    title: '',
+    body: '',
+    href: '',
+    source: '',
+    publishedDate: '',
+    imageUrl: '',
+    archived: false,
+    archivedAt: '',
+    updatedAt: '',
+    importMeta: createDefaultLandingImportMeta(),
+  };
+}
+function createDefaultLandingReviewItem() {
+  return {
+    id: uid(),
+    href: '',
+    author: '',
+    quote: '',
+    source: 'Google Review',
+    rating: '',
+    archived: false,
+    archivedAt: '',
+    updatedAt: '',
+    importMeta: createDefaultLandingImportMeta(),
+  };
+}
 function createDefaultLandingContent() {
   const restaurants = {};
   const reviewRestaurants = {};
@@ -333,24 +399,78 @@ function normalizeLandingHoursRestaurant(rawRestaurant = {}) {
   });
   return { days };
 }
-function normalizeLandingStoryItem(rawItem = {}) {
+function normalizeLandingTarget(value = '', options = {}) {
+  const { allowBoth = true, fallback = allowBoth ? LANDING_TARGET_BOTH : knownLandingRestaurants()[0]?.id || '' } = options;
+  const candidate = value ? String(value) : '';
+  if (allowBoth && candidate === LANDING_TARGET_BOTH) return LANDING_TARGET_BOTH;
+  if (candidate && knownLandingRestaurants().some(restaurant => restaurant.id === candidate)) return candidate;
+  return fallback;
+}
+function normalizeLandingImportMeta(rawMeta = {}) {
+  const status = [
+    LANDING_IMPORT_STATUS_IDLE,
+    LANDING_IMPORT_STATUS_IMPORTED,
+    LANDING_IMPORT_STATUS_PARTIAL,
+    LANDING_IMPORT_STATUS_FAILED,
+  ].includes(rawMeta?.status)
+    ? rawMeta.status
+    : LANDING_IMPORT_STATUS_IDLE;
+  const rawMessages = Array.isArray(rawMeta?.messages)
+    ? rawMeta.messages
+    : (rawMeta?.message ? [rawMeta.message] : []);
+  return {
+    sourceUrl: rawMeta?.sourceUrl ? String(rawMeta.sourceUrl) : '',
+    lastAttemptTs: normalizeLandingTimestamp(rawMeta?.lastAttemptTs),
+    lastSuccessTs: normalizeLandingTimestamp(rawMeta?.lastSuccessTs),
+    status,
+    messages: rawMessages.map(message => String(message || '')).filter(Boolean),
+  };
+}
+function normalizeLandingEventItem(rawItem = {}) {
   return {
     id: rawItem?.id ? String(rawItem.id) : uid(),
+    target: normalizeLandingTarget(rawItem?.target, { allowBoth: true }),
+    title: rawItem?.title ? String(rawItem.title) : '',
+    eventDate: rawItem?.eventDate ? String(rawItem.eventDate) : '',
+    startTime: normalizeLandingTimeValue(rawItem?.startTime),
+    endTime: normalizeLandingTimeValue(rawItem?.endTime),
+    timingNote: rawItem?.timingNote ? String(rawItem.timingNote) : '',
+    body: rawItem?.body ? String(rawItem.body) : '',
+    archived: !!rawItem?.archived,
+    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
+    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
+  };
+}
+function normalizeLandingNewsItem(rawItem = {}) {
+  return {
+    id: rawItem?.id ? String(rawItem.id) : uid(),
+    target: normalizeLandingTarget(rawItem?.target, { allowBoth: true }),
     title: rawItem?.title ? String(rawItem.title) : '',
     body: rawItem?.body ? String(rawItem.body) : '',
-    target: rawItem?.target ? String(rawItem.target) : '',
     href: rawItem?.href ? String(rawItem.href) : '',
     source: rawItem?.source ? String(rawItem.source) : '',
-    publishedAt: rawItem?.publishedAt ? String(rawItem.publishedAt) : '',
+    publishedDate: rawItem?.publishedDate ? String(rawItem.publishedDate) : (rawItem?.publishedAt ? String(rawItem.publishedAt) : ''),
+    imageUrl: rawItem?.imageUrl ? String(rawItem.imageUrl) : '',
+    archived: !!rawItem?.archived,
+    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
+    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
+    importMeta: normalizeLandingImportMeta(rawItem?.importMeta || {}),
   };
 }
 function normalizeLandingReviewItem(rawItem = {}) {
+  const rating = Number(rawItem?.rating);
+  const normalizedRating = Number.isFinite(rating) && rating >= 1 && rating <= 5 ? Math.round(rating) : '';
   return {
     id: rawItem?.id ? String(rawItem.id) : uid(),
+    href: rawItem?.href ? String(rawItem.href) : '',
     author: rawItem?.author ? String(rawItem.author) : '',
     quote: rawItem?.quote ? String(rawItem.quote) : '',
     source: rawItem?.source ? String(rawItem.source) : 'Google Review',
-    rating: Number.isFinite(Number(rawItem?.rating)) ? Math.max(1, Math.min(5, Number(rawItem.rating))) : 5,
+    rating: normalizedRating,
+    archived: !!rawItem?.archived,
+    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
+    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
+    importMeta: normalizeLandingImportMeta(rawItem?.importMeta || {}),
   };
 }
 function normalizeLandingContent(rawContent = {}) {
@@ -367,10 +487,10 @@ function normalizeLandingContent(rawContent = {}) {
     overview: rawContent?.overview && typeof rawContent.overview === 'object' ? cloneJsonCompatible(rawContent.overview, {}) : {},
     hours: { restaurants: hoursRestaurants },
     events: {
-      items: Array.isArray(rawContent?.events?.items) ? rawContent.events.items.map(normalizeLandingStoryItem) : [],
+      items: Array.isArray(rawContent?.events?.items) ? rawContent.events.items.map(normalizeLandingEventItem) : [],
     },
     news: {
-      items: Array.isArray(rawContent?.news?.items) ? rawContent.news.items.map(normalizeLandingStoryItem) : [],
+      items: Array.isArray(rawContent?.news?.items) ? rawContent.news.items.map(normalizeLandingNewsItem) : [],
     },
     reviews: {
       restaurants: reviewRestaurants,
@@ -444,6 +564,100 @@ function renderLandingTimeSelectOptions(selectedValue = '', placeholder = 'Selec
   });
   return optionMarkup.join('');
 }
+function isLandingIsoDate(value = '') {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+function formatLandingDateLabel(value = '', options = {}) {
+  if (!isLandingIsoDate(value)) return value ? String(value) : '';
+  const [year, month, day] = value.split('-').map(Number);
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    month: options.short ? 'short' : 'long',
+    day: 'numeric',
+    year: options.year === false ? undefined : 'numeric',
+    timeZone: 'UTC',
+  });
+  return formatter.format(utcDate).replace(', ', options.short && options.year === false ? ' ' : ', ');
+}
+function getLandingTargetLabel(target = '') {
+  if (target === LANDING_TARGET_BOTH) return 'Both';
+  const restaurant = knownLandingRestaurants().find(entry => entry.id === target);
+  return restaurant ? restaurant.name : 'Both';
+}
+function getLandingTargetAccentClass(target = '') {
+  if (target === RESTAURANTS.LEROYS.id) return 'landing-tag--leroys';
+  if (target === RESTAURANTS.ELROYS.id) return 'landing-tag--elroys';
+  return 'landing-tag--both';
+}
+function formatLandingImportStatusLabel(status = '') {
+  if (status === LANDING_IMPORT_STATUS_IMPORTED) return 'Imported';
+  if (status === LANDING_IMPORT_STATUS_PARTIAL) return 'Partial';
+  if (status === LANDING_IMPORT_STATUS_FAILED) return 'Needs Repair';
+  return 'Waiting';
+}
+function formatLandingImportTimestamp(meta = {}) {
+  return meta?.lastSuccessTs
+    ? `Imported ${formatLandingTimestampLabel(meta.lastSuccessTs)}`
+    : (meta?.lastAttemptTs ? `Tried ${formatLandingTimestampLabel(meta.lastAttemptTs)}` : 'Not imported yet');
+}
+function isLandingAbsoluteUrl(value = '') {
+  try {
+    const url = new URL(String(value || '').trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+function getLandingEventDateRank(value = '') {
+  if (!isLandingIsoDate(value)) return Number.MAX_SAFE_INTEGER;
+  return Date.parse(`${value}T00:00:00Z`);
+}
+function sortLandingEvents(items = []) {
+  return items.slice().sort((a, b) => {
+    const rankDelta = getLandingEventDateRank(a.eventDate) - getLandingEventDateRank(b.eventDate);
+    if (rankDelta !== 0) return rankDelta;
+    const startDelta = (parseLandingTimeToMinutes(a.startTime) ?? Number.MAX_SAFE_INTEGER) - (parseLandingTimeToMinutes(b.startTime) ?? Number.MAX_SAFE_INTEGER);
+    if (startDelta !== 0) return startDelta;
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  });
+}
+function sortLandingNews(items = []) {
+  return items.slice().sort((a, b) => {
+    const aRank = isLandingIsoDate(a.publishedDate) ? Date.parse(`${a.publishedDate}T00:00:00Z`) : 0;
+    const bRank = isLandingIsoDate(b.publishedDate) ? Date.parse(`${b.publishedDate}T00:00:00Z`) : 0;
+    if (aRank !== bRank) return bRank - aRank;
+    return (Number(b.updatedAt || 0) || 0) - (Number(a.updatedAt || 0) || 0);
+  });
+}
+function sortLandingReviews(items = []) {
+  return items.slice().sort((a, b) => {
+    const successDelta = (Number(b.importMeta?.lastSuccessTs || 0) || 0) - (Number(a.importMeta?.lastSuccessTs || 0) || 0);
+    if (successDelta !== 0) return successDelta;
+    return (Number(b.updatedAt || 0) || 0) - (Number(a.updatedAt || 0) || 0);
+  });
+}
+function getLandingActiveItems(items = []) {
+  return Array.isArray(items) ? items.filter(item => !item?.archived) : [];
+}
+function getLandingVisibleItems(items = [], showArchived = false) {
+  if (showArchived) return Array.isArray(items) ? items.slice() : [];
+  return getLandingActiveItems(items);
+}
+function getLandingDefaultFilters() {
+  return {
+    events: { showArchived: false },
+    news: { showArchived: false },
+    reviews: { showArchived: false },
+  };
+}
+function normalizeLandingFilters(raw = {}) {
+  const defaults = getLandingDefaultFilters();
+  return {
+    events: { ...defaults.events, showArchived: !!raw?.events?.showArchived },
+    news: { ...defaults.news, showArchived: !!raw?.news?.showArchived },
+    reviews: { ...defaults.reviews, showArchived: !!raw?.reviews?.showArchived },
+  };
+}
 function formatLandingHoursRange(day = {}) {
   if (day?.closed) return 'Closed';
   const openMinutes = parseLandingTimeToMinutes(day.open);
@@ -490,6 +704,130 @@ function buildLandingWeekRows(section = {}, restaurantId = '', todayKey = 'mon')
     isToday: dayKey === todayKey,
     rangeLabel: formatLandingHoursRange(restaurantHours.days[dayKey]),
   }));
+}
+function loadLandingFilters() {
+  if (_landingAdminFilters) return _landingAdminFilters;
+  try {
+    _landingAdminFilters = normalizeLandingFilters(JSON.parse(sessionStorage.getItem(LANDING_FILTER_STORAGE_KEY) || '{}'));
+  } catch (_) {
+    _landingAdminFilters = getLandingDefaultFilters();
+  }
+  return _landingAdminFilters;
+}
+function getLandingSectionFilter(sectionId = '') {
+  const filters = loadLandingFilters();
+  return filters?.[sectionId] || getLandingDefaultFilters()[sectionId] || { showArchived: false };
+}
+function saveLandingFilters() {
+  try {
+    sessionStorage.setItem(LANDING_FILTER_STORAGE_KEY, JSON.stringify(loadLandingFilters()));
+  } catch (_) {}
+}
+function setLandingSectionFilter(sectionId = '', key = '', value = false) {
+  const filters = loadLandingFilters();
+  if (!filters[sectionId]) filters[sectionId] = { showArchived: false };
+  filters[sectionId][key] = !!value;
+  saveLandingFilters();
+}
+function validateLandingEventItem(item = {}) {
+  const issues = [];
+  if (!item.target) issues.push('target');
+  if (!item.title?.trim()) issues.push('title');
+  if (!isLandingIsoDate(item.eventDate)) issues.push('date');
+  if (parseLandingTimeToMinutes(item.startTime) === null) issues.push('start time');
+  if (parseLandingTimeToMinutes(item.endTime) === null && !item.timingNote?.trim()) issues.push('end time or note');
+  if (!item.body?.trim()) issues.push('description');
+  return {
+    valid: issues.length === 0,
+    missingFields: issues,
+  };
+}
+function validateLandingNewsItem(item = {}) {
+  const issues = [];
+  if (!item.target) issues.push('target');
+  if (!item.title?.trim()) issues.push('headline');
+  if (!isLandingAbsoluteUrl(item.href)) issues.push('article URL');
+  if (!item.source?.trim()) issues.push('source');
+  if (!isLandingIsoDate(item.publishedDate)) issues.push('publish date');
+  if (!item.importMeta?.lastAttemptTs) issues.push('import record');
+  return {
+    valid: issues.length === 0,
+    missingFields: issues,
+  };
+}
+function validateLandingReviewItem(item = {}) {
+  const issues = [];
+  if (!isLandingAbsoluteUrl(item.href)) issues.push('review URL');
+  if (!item.author?.trim()) issues.push('author');
+  if (!item.quote?.trim()) issues.push('quote');
+  if (!Number.isFinite(Number(item.rating)) || Number(item.rating) < 1 || Number(item.rating) > 5) issues.push('rating');
+  if (!item.importMeta?.lastAttemptTs) issues.push('import record');
+  return {
+    valid: issues.length === 0,
+    missingFields: issues,
+  };
+}
+function validateLandingEventsSection(section = {}) {
+  const issues = [];
+  const items = sortLandingEvents(getLandingActiveItems(Array.isArray(section?.items) ? section.items.map(normalizeLandingEventItem) : []));
+  items.forEach(item => {
+    const validation = validateLandingEventItem(item);
+    if (validation.valid) return;
+    issues.push(`${item.title?.trim() || 'Untitled event'}: missing ${validation.missingFields.join(', ')}.`);
+  });
+  return { valid: issues.length === 0, issues };
+}
+function validateLandingNewsSection(section = {}) {
+  const issues = [];
+  const items = sortLandingNews(getLandingActiveItems(Array.isArray(section?.items) ? section.items.map(normalizeLandingNewsItem) : []));
+  items.forEach(item => {
+    const validation = validateLandingNewsItem(item);
+    if (validation.valid) return;
+    issues.push(`${item.title?.trim() || item.href?.trim() || 'Imported story'}: missing ${validation.missingFields.join(', ')}.`);
+  });
+  return { valid: issues.length === 0, issues };
+}
+function validateLandingReviewsSection(section = {}) {
+  const issues = [];
+  knownLandingRestaurants().forEach(restaurant => {
+    const items = sortLandingReviews(
+      getLandingActiveItems(Array.isArray(section?.restaurants?.[restaurant.id]) ? section.restaurants[restaurant.id].map(normalizeLandingReviewItem) : [])
+    );
+    items.forEach(item => {
+      const validation = validateLandingReviewItem(item);
+      if (validation.valid) return;
+      issues.push(`${restaurant.name}: ${item.author?.trim() || item.href?.trim() || 'Imported review'} is missing ${validation.missingFields.join(', ')}.`);
+    });
+  });
+  return { valid: issues.length === 0, issues };
+}
+function getLandingSectionValidation(sectionId = '', record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  if (sectionId === 'hours') return validateLandingHoursSection(normalized.draftContent.hours);
+  if (sectionId === 'events') return validateLandingEventsSection(normalized.draftContent.events);
+  if (sectionId === 'news') return validateLandingNewsSection(normalized.draftContent.news);
+  if (sectionId === 'reviews') return validateLandingReviewsSection(normalized.draftContent.reviews);
+  return { valid: true, issues: [] };
+}
+function findLandingItemById(items = [], itemId = '') {
+  return Array.isArray(items) ? items.find(item => item?.id === itemId) || null : null;
+}
+function getLandingItemStatusLabel(sectionId = '', item = {}, liveSection = null) {
+  if (item?.archived) return LANDING_ITEM_STATUS_ARCHIVED;
+  const validation = sectionId === 'events'
+    ? validateLandingEventItem(item)
+    : sectionId === 'news'
+      ? validateLandingNewsItem(item)
+      : validateLandingReviewItem(item);
+  if (!validation.valid) return LANDING_ITEM_STATUS_MISSING;
+  let liveItem = null;
+  if (sectionId === 'reviews') {
+    liveItem = findLandingItemById(liveSection || [], item.id);
+  } else {
+    liveItem = findLandingItemById(liveSection?.items || [], item.id);
+  }
+  if (liveItem && JSON.stringify(item) === JSON.stringify(liveItem)) return LANDING_ITEM_STATUS_LIVE;
+  return LANDING_ITEM_STATUS_DRAFT;
 }
 function validateLandingHoursSection(section = {}) {
   const issues = [];
@@ -2518,7 +2856,7 @@ function getLandingSectionStatus(sectionId, record = _landingPageState) {
   const hasDraftDiff = landingSectionHasDiff(sectionId, normalized);
   const validation = sectionId === 'hours'
     ? validateLandingHoursSection(getLandingHoursSectionForValidation(normalized))
-    : { valid: true, issues: [] };
+    : getLandingSectionValidation(sectionId, normalized);
   return {
     sectionId,
     label: LANDING_PAGE_SECTION_LABELS[sectionId] || sectionId,
@@ -2592,11 +2930,333 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
       </div>
     </article>`;
 }
+function renderLandingTargetOptionsHtml(selectedTarget = '', options = {}) {
+  const { includeBoth = true } = options;
+  const values = [];
+  if (includeBoth) values.push({ value: LANDING_TARGET_BOTH, label: 'Both' });
+  knownLandingRestaurants().forEach(restaurant => {
+    values.push({ value: restaurant.id, label: restaurant.name });
+  });
+  return values.map(option => (
+    `<option value="${escHtml(option.value)}" ${option.value === selectedTarget ? 'selected' : ''}>${escHtml(option.label)}</option>`
+  )).join('');
+}
+function renderLandingRatingOptionsHtml(selectedValue = '') {
+  const rating = Number(selectedValue);
+  const normalized = Number.isFinite(rating) ? String(rating) : '';
+  const options = ['<option value="">Rating</option>'];
+  for (let value = 5; value >= 1; value -= 1) {
+    options.push(`<option value="${value}" ${normalized === String(value) ? 'selected' : ''}>${value} Stars</option>`);
+  }
+  return options.join('');
+}
+function getLandingItemStatusClass(status = '') {
+  if (status === LANDING_ITEM_STATUS_LIVE) return 'is-live';
+  if (status === LANDING_ITEM_STATUS_ARCHIVED) return 'is-archived';
+  if (status === LANDING_ITEM_STATUS_MISSING) return 'is-blocked';
+  return 'is-draft';
+}
+function renderLandingStatusBadgeHtml(status = '') {
+  return `<span class="landing-admin-item-status ${getLandingItemStatusClass(status)}">${escHtml(status)}</span>`;
+}
+function renderLandingImportMetaHtml(meta = {}) {
+  const normalized = normalizeLandingImportMeta(meta);
+  const messages = normalized.messages.length
+    ? `<ul class="landing-import-message-list">${normalized.messages.map(message => `<li>${escHtml(message)}</li>`).join('')}</ul>`
+    : '';
+  return `
+    <div class="landing-import-meta">
+      <p><strong>${escHtml(formatLandingImportStatusLabel(normalized.status))}</strong> · ${escHtml(formatLandingImportTimestamp(normalized))}</p>
+      ${normalized.sourceUrl ? `<p><a href="${escHtml(normalized.sourceUrl)}" target="_blank" rel="noreferrer">${escHtml(normalized.sourceUrl)}</a></p>` : ''}
+      ${messages}
+    </div>`;
+}
+function formatLandingEventScheduleLine(item = {}) {
+  const parts = [];
+  if (item.eventDate) parts.push(formatLandingDateLabel(item.eventDate));
+  const startLabel = parseLandingTimeToMinutes(item.startTime);
+  if (startLabel !== null) {
+    let timeLabel = formatLandingMinutes(startLabel);
+    const endMinutes = parseLandingTimeToMinutes(item.endTime);
+    if (endMinutes !== null) {
+      timeLabel += ` - ${formatLandingMinutes(endMinutes)}`;
+    } else if (item.timingNote?.trim()) {
+      timeLabel += ` · ${item.timingNote.trim()}`;
+    }
+    parts.push(timeLabel);
+  } else if (item.timingNote?.trim()) {
+    parts.push(item.timingNote.trim());
+  }
+  return parts.filter(Boolean).join(' · ');
+}
+function setLandingPanelBadge(sectionId = '', validation = { valid: true }, options = {}) {
+  const badgeEl = document.getElementById(`landing-${sectionId}-panel-badge`);
+  if (!badgeEl) return;
+  const label = validation.valid ? (options.readyLabel || 'Ready') : 'Blocked';
+  badgeEl.textContent = label;
+  badgeEl.className = `landing-admin-section-badge ${validation.valid ? 'is-ready' : 'is-blocked'}`;
+}
+function renderLandingEventCardHtml(item = {}, liveSection = { items: [] }) {
+  const safeId = escAttrJs(item.id);
+  const status = getLandingItemStatusLabel('events', item, liveSection);
+  const validation = validateLandingEventItem(item);
+  return `
+    <article class="landing-admin-editor-card">
+      <div class="landing-admin-editor-head">
+        <div class="landing-admin-editor-head-copy">
+          <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
+          ${renderLandingStatusBadgeHtml(status)}
+        </div>
+        <button type="button" class="btn-small" onclick="toggleLandingEventArchived(${safeId}, ${item.archived ? 'false' : 'true'})">${item.archived ? 'Restore' : 'Archive'}</button>
+      </div>
+      <div class="landing-admin-field-grid landing-admin-field-grid--events">
+        <label class="landing-admin-field">
+          <span>Target</span>
+          <select class="landing-admin-input" onchange="updateLandingEventField(${safeId}, 'target', this.value)">
+            ${renderLandingTargetOptionsHtml(item.target, { includeBoth: true })}
+          </select>
+        </label>
+        <label class="landing-admin-field">
+          <span>Title</span>
+          <input class="landing-admin-input" type="text" value="${escHtml(item.title)}" placeholder="Jazz trio downstairs" onchange="updateLandingEventField(${safeId}, 'title', this.value)">
+        </label>
+        <label class="landing-admin-field">
+          <span>Date</span>
+          <input class="landing-admin-input" type="date" value="${escHtml(item.eventDate)}" onchange="updateLandingEventField(${safeId}, 'eventDate', this.value)">
+        </label>
+        <label class="landing-admin-field">
+          <span>Starts</span>
+          <select class="landing-admin-input" onchange="updateLandingEventField(${safeId}, 'startTime', this.value)">
+            ${renderLandingTimeSelectOptions(item.startTime, 'Start time')}
+          </select>
+        </label>
+        <label class="landing-admin-field">
+          <span>Ends</span>
+          <select class="landing-admin-input" onchange="updateLandingEventField(${safeId}, 'endTime', this.value)">
+            ${renderLandingTimeSelectOptions(item.endTime, 'End time')}
+          </select>
+        </label>
+        <label class="landing-admin-field">
+          <span>Timing note</span>
+          <input class="landing-admin-input" type="text" value="${escHtml(item.timingNote)}" placeholder="Until late" onchange="updateLandingEventField(${safeId}, 'timingNote', this.value)">
+        </label>
+      </div>
+      <label class="landing-admin-field">
+        <span>Description</span>
+        <textarea class="landing-admin-textarea" rows="3" placeholder="Short event description" onchange="updateLandingEventField(${safeId}, 'body', this.value)">${escHtml(item.body)}</textarea>
+      </label>
+      <div class="landing-admin-editor-foot">
+        <p class="landing-admin-editor-meta">${escHtml(formatLandingEventScheduleLine(item) || 'Date and time will show here.')}</p>
+        ${!validation.valid ? `<p class="landing-admin-editor-warning">Missing ${escHtml(validation.missingFields.join(', '))}.</p>` : ''}
+      </div>
+    </article>`;
+}
+function renderLandingNewsCardHtml(item = {}, liveSection = { items: [] }) {
+  const safeId = escAttrJs(item.id);
+  const status = getLandingItemStatusLabel('news', item, liveSection);
+  const validation = validateLandingNewsItem(item);
+  return `
+    <article class="landing-admin-editor-card">
+      <div class="landing-admin-editor-head">
+        <div class="landing-admin-editor-head-copy">
+          <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
+          ${renderLandingStatusBadgeHtml(status)}
+        </div>
+        <div class="landing-admin-inline-actions">
+          <button type="button" class="btn-small" onclick="refreshLandingNewsItem(${safeId})">Refresh</button>
+          <button type="button" class="btn-small" onclick="toggleLandingNewsArchived(${safeId}, ${item.archived ? 'false' : 'true'})">${item.archived ? 'Restore' : 'Archive'}</button>
+        </div>
+      </div>
+      <div class="landing-admin-field-grid">
+        <label class="landing-admin-field">
+          <span>Target</span>
+          <select class="landing-admin-input" onchange="updateLandingNewsField(${safeId}, 'target', this.value)">
+            ${renderLandingTargetOptionsHtml(item.target, { includeBoth: true })}
+          </select>
+        </label>
+        <label class="landing-admin-field">
+          <span>Source</span>
+          <input class="landing-admin-input" type="text" value="${escHtml(item.source)}" placeholder="Detroit Free Press" onchange="updateLandingNewsField(${safeId}, 'source', this.value)">
+        </label>
+        <label class="landing-admin-field landing-admin-field--wide">
+          <span>Headline</span>
+          <input class="landing-admin-input" type="text" value="${escHtml(item.title)}" placeholder="Imported headline" onchange="updateLandingNewsField(${safeId}, 'title', this.value)">
+        </label>
+        <label class="landing-admin-field landing-admin-field--wide">
+          <span>Article URL</span>
+          <input class="landing-admin-input" type="url" value="${escHtml(item.href)}" placeholder="https://..." onchange="updateLandingNewsField(${safeId}, 'href', this.value)">
+        </label>
+        <label class="landing-admin-field">
+          <span>Publish date</span>
+          <input class="landing-admin-input" type="date" value="${escHtml(item.publishedDate)}" onchange="updateLandingNewsField(${safeId}, 'publishedDate', this.value)">
+        </label>
+        <label class="landing-admin-field landing-admin-field--wide">
+          <span>Image URL</span>
+          <input class="landing-admin-input" type="url" value="${escHtml(item.imageUrl)}" placeholder="Optional image" onchange="updateLandingNewsField(${safeId}, 'imageUrl', this.value)">
+        </label>
+      </div>
+      <label class="landing-admin-field">
+        <span>Excerpt</span>
+        <textarea class="landing-admin-textarea" rows="3" placeholder="Optional summary for text-forward cards" onchange="updateLandingNewsField(${safeId}, 'body', this.value)">${escHtml(item.body)}</textarea>
+      </label>
+      <div class="landing-admin-editor-foot">
+        ${renderLandingImportMetaHtml(item.importMeta)}
+        ${!validation.valid ? `<p class="landing-admin-editor-warning">Missing ${escHtml(validation.missingFields.join(', '))}.</p>` : ''}
+      </div>
+    </article>`;
+}
+function renderLandingReviewCardHtml(item = {}, restaurantId = '', liveItems = []) {
+  const safeId = escAttrJs(item.id);
+  const status = getLandingItemStatusLabel('reviews', item, liveItems);
+  const validation = validateLandingReviewItem(item);
+  return `
+    <article class="landing-admin-editor-card">
+      <div class="landing-admin-editor-head">
+        <div class="landing-admin-editor-head-copy">
+          ${renderLandingStatusBadgeHtml(status)}
+        </div>
+        <div class="landing-admin-inline-actions">
+          <button type="button" class="btn-small" onclick="refreshLandingReviewItem(${escAttrJs(restaurantId)}, ${safeId})">Refresh</button>
+          <button type="button" class="btn-small" onclick="toggleLandingReviewArchived(${escAttrJs(restaurantId)}, ${safeId}, ${item.archived ? 'false' : 'true'})">${item.archived ? 'Restore' : 'Archive'}</button>
+        </div>
+      </div>
+      <div class="landing-admin-field-grid">
+        <label class="landing-admin-field landing-admin-field--wide">
+          <span>Review URL</span>
+          <input class="landing-admin-input" type="url" value="${escHtml(item.href)}" placeholder="https://maps.google.com/..." onchange="updateLandingReviewField(${escAttrJs(restaurantId)}, ${safeId}, 'href', this.value)">
+        </label>
+        <label class="landing-admin-field">
+          <span>Author</span>
+          <input class="landing-admin-input" type="text" value="${escHtml(item.author)}" placeholder="Reviewer name" onchange="updateLandingReviewField(${escAttrJs(restaurantId)}, ${safeId}, 'author', this.value)">
+        </label>
+        <label class="landing-admin-field">
+          <span>Rating</span>
+          <select class="landing-admin-input" onchange="updateLandingReviewField(${escAttrJs(restaurantId)}, ${safeId}, 'rating', this.value)">
+            ${renderLandingRatingOptionsHtml(item.rating)}
+          </select>
+        </label>
+      </div>
+      <label class="landing-admin-field">
+        <span>Quote</span>
+        <textarea class="landing-admin-textarea" rows="4" placeholder="Quoted review copy" onchange="updateLandingReviewField(${escAttrJs(restaurantId)}, ${safeId}, 'quote', this.value)">${escHtml(item.quote)}</textarea>
+      </label>
+      <div class="landing-admin-editor-foot">
+        ${renderLandingImportMetaHtml(item.importMeta)}
+        ${!validation.valid ? `<p class="landing-admin-editor-warning">Missing ${escHtml(validation.missingFields.join(', '))}.</p>` : ''}
+      </div>
+    </article>`;
+}
+function renderLandingEventsPanel(record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  const bodyEl = document.getElementById('landing-events-panel-body');
+  const issuesEl = document.getElementById('landing-events-issues');
+  const validation = validateLandingEventsSection(normalized.draftContent.events);
+  const filter = getLandingSectionFilter('events');
+  const visibleItems = getLandingVisibleItems(sortLandingEvents(normalized.draftContent.events.items), filter.showArchived);
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="landing-admin-toolbar-row">
+        <button type="button" class="btn-small admin-console-primary-btn" onclick="addLandingEventDraft()">Add Event</button>
+        <label class="landing-admin-toggle">
+          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('events', this.checked)">
+          Show archived
+        </label>
+      </div>
+      ${visibleItems.length ? `<div class="landing-admin-editor-list">${visibleItems.map(item => renderLandingEventCardHtml(item, normalized.liveContent.events)).join('')}</div>` : `
+        <article class="landing-admin-note">
+          <strong>No ${filter.showArchived ? '' : 'active '}events yet.</strong>
+          <p>Manual event cards live here. Add a night, tag the room, and publish the full section when it is ready.</p>
+        </article>`}
+    `;
+  }
+  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
+  setLandingPanelBadge('events', validation);
+}
+function renderLandingNewsPanel(record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  const bodyEl = document.getElementById('landing-news-panel-body');
+  const issuesEl = document.getElementById('landing-news-issues');
+  const validation = validateLandingNewsSection(normalized.draftContent.news);
+  const filter = getLandingSectionFilter('news');
+  const visibleItems = getLandingVisibleItems(sortLandingNews(normalized.draftContent.news.items), filter.showArchived);
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="landing-admin-toolbar-row landing-admin-toolbar-row--stack">
+        <div class="landing-admin-import-row">
+          <select id="landing-news-import-target" class="landing-admin-input">
+            ${renderLandingTargetOptionsHtml(LANDING_TARGET_BOTH, { includeBoth: true })}
+          </select>
+          <input id="landing-news-import-url" class="landing-admin-input landing-admin-input--grow" type="url" placeholder="Paste article URL to import" onpaste="handleLandingNewsImportPaste()">
+          <button type="button" class="btn-small admin-console-primary-btn" onclick="importLandingNewsDraft()">Import Story</button>
+        </div>
+        <label class="landing-admin-toggle">
+          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('news', this.checked)">
+          Show archived
+        </label>
+      </div>
+      ${visibleItems.length ? `<div class="landing-admin-editor-list">${visibleItems.map(item => renderLandingNewsCardHtml(item, normalized.liveContent.news)).join('')}</div>` : `
+        <article class="landing-admin-note">
+          <strong>No ${filter.showArchived ? '' : 'active '}stories yet.</strong>
+          <p>Paste an article URL to create or refresh a draft news card. Missing fields stay editable in draft until the section is ready.</p>
+        </article>`}
+    `;
+  }
+  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
+  setLandingPanelBadge('news', validation);
+}
+function renderLandingReviewsPanel(record = _landingPageState) {
+  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
+  const bodyEl = document.getElementById('landing-reviews-panel-body');
+  const issuesEl = document.getElementById('landing-reviews-issues');
+  const validation = validateLandingReviewsSection(normalized.draftContent.reviews);
+  const filter = getLandingSectionFilter('reviews');
+  if (bodyEl) {
+    bodyEl.innerHTML = `
+      <div class="landing-admin-toolbar-row">
+        <label class="landing-admin-toggle">
+          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('reviews', this.checked)">
+          Show archived
+        </label>
+      </div>
+      <div class="landing-admin-review-lanes">
+        ${knownLandingRestaurants().map(restaurant => {
+          const items = getLandingVisibleItems(sortLandingReviews(normalized.draftContent.reviews.restaurants[restaurant.id]), filter.showArchived);
+          return `
+            <section class="landing-admin-review-lane">
+              <div class="landing-admin-review-lane-head">
+                <div>
+                  <p class="settings-section-kicker">${escHtml(restaurant.name)}</p>
+                  <h5>${escHtml(restaurant.name)}</h5>
+                </div>
+                <span class="landing-tag ${getLandingTargetAccentClass(restaurant.id)}">${escHtml(items.length)} draft</span>
+              </div>
+              <div class="landing-admin-import-row">
+                <input id="landing-review-import-url-${escHtml(restaurant.id)}" class="landing-admin-input landing-admin-input--grow" type="url" placeholder="Paste Google review URL" onpaste="handleLandingReviewImportPaste(${escAttrJs(restaurant.id)})">
+                <button type="button" class="btn-small admin-console-primary-btn" onclick="importLandingReviewDraft(${escAttrJs(restaurant.id)})">Import Review</button>
+              </div>
+              ${items.length ? `<div class="landing-admin-editor-list">${items.map(item => renderLandingReviewCardHtml(item, restaurant.id, normalized.liveContent.reviews.restaurants[restaurant.id])).join('')}</div>` : `
+                <article class="landing-admin-note">
+                  <strong>No ${filter.showArchived ? '' : 'active '}reviews yet.</strong>
+                  <p>Imported Google reviews stay frozen as draft snapshots until you explicitly refresh and republish them.</p>
+                </article>`}
+            </section>`;
+        }).join('')}
+      </div>
+    `;
+  }
+  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
+  setLandingPanelBadge('reviews', validation);
+}
 
 function renderLandingOverview(record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const diffSectionIds = getLandingDraftDiffSectionIds(normalized);
-  const hoursValidation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
+  const sectionValidations = ['hours', 'events', 'news', 'reviews'].map(sectionId => ({
+    sectionId,
+    validation: getLandingSectionValidation(sectionId, normalized),
+  }));
+  const blockingIssues = sectionValidations.flatMap(entry => entry.validation.issues);
+  const allValid = sectionValidations.every(entry => entry.validation.valid);
   const rootStatusEl = document.getElementById('landing-overview-root-status');
   const rootCopyEl = document.getElementById('landing-overview-root-copy');
   const draftSavedEl = document.getElementById('landing-overview-draft-saved');
@@ -2626,8 +3286,8 @@ function renderLandingOverview(record = _landingPageState) {
   if (heroLinesEl) heroLinesEl.textContent = `${leroysStatus.label} / ${elroysStatus.label}`;
   if (heroCopyEl) heroCopyEl.textContent = 'These public hero lines are generated from the live recurring-hours schedules.';
   if (healthBadgeEl) {
-    healthBadgeEl.textContent = hoursValidation.valid ? 'Healthy' : 'Needs attention';
-    healthBadgeEl.className = `landing-admin-section-badge ${hoursValidation.valid ? 'is-ready' : 'is-blocked'}`;
+    healthBadgeEl.textContent = allValid ? 'Healthy' : 'Needs attention';
+    healthBadgeEl.className = `landing-admin-section-badge ${allValid ? 'is-ready' : 'is-blocked'}`;
   }
   if (listEl) {
     listEl.innerHTML = LANDING_PAGE_SECTION_ORDER.map(sectionId => {
@@ -2648,9 +3308,9 @@ function renderLandingOverview(record = _landingPageState) {
     }).join('');
   }
   if (issuesEl) {
-    issuesEl.innerHTML = hoursValidation.valid
+    issuesEl.innerHTML = allValid
       ? ''
-      : hoursValidation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
+      : blockingIssues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
   }
 }
 
@@ -2765,14 +3425,6 @@ function renderLandingHoursPanel(record = _landingPageState) {
   renderLandingHoursValidationState(normalized);
 }
 
-function renderLandingPlaceholderPanel(sectionId) {
-  const badgeEl = document.getElementById(`landing-${sectionId}-panel-badge`);
-  if (!badgeEl) return;
-  const status = getLandingSectionStatus(sectionId);
-  badgeEl.textContent = status.hasDraftDiff ? 'Drafting' : 'Shell';
-  badgeEl.className = `landing-admin-section-badge ${status.hasDraftDiff ? 'is-ready' : ''}`;
-}
-
 function renderLandingAdminWorkspace(options = {}) {
   if (!hasLandingAdminShell()) return;
   const { forceReload = false } = options;
@@ -2781,9 +3433,9 @@ function renderLandingAdminWorkspace(options = {}) {
     setLandingPageState(normalized, { dirty: _landingPageDirty });
     renderLandingOverview(normalized);
     renderLandingHoursPanel(normalized);
-    renderLandingPlaceholderPanel('news');
-    renderLandingPlaceholderPanel('events');
-    renderLandingPlaceholderPanel('reviews');
+    renderLandingEventsPanel(normalized);
+    renderLandingNewsPanel(normalized);
+    renderLandingReviewsPanel(normalized);
     updateLandingAdminToolbar(normalized);
     focusLandingAdminPanel(_activeLandingAdminPanel);
   };
@@ -2803,53 +3455,142 @@ function renderLandingAdminWorkspace(options = {}) {
     });
 }
 
-function renderLandingRootStories(containerId, emptyId, items = [], cardClass = 'landing-story-card') {
-  const listEl = document.getElementById(containerId);
-  const emptyEl = document.getElementById(emptyId);
+function setLandingRootSectionVisible(sectionId = '', visible = true) {
+  const sectionEl = document.getElementById(sectionId);
+  if (sectionEl) sectionEl.hidden = !visible;
+  const dotEl = document.querySelector(`[data-landing-dot="${sectionId}"]`);
+  if (dotEl) dotEl.hidden = !visible;
+}
+function getLandingRenderableEvents(section = {}) {
+  return sortLandingEvents(
+    getLandingActiveItems(Array.isArray(section?.items) ? section.items.map(normalizeLandingEventItem) : [])
+  ).filter(item => validateLandingEventItem(item).valid);
+}
+function getLandingRenderableNews(section = {}) {
+  return sortLandingNews(
+    getLandingActiveItems(Array.isArray(section?.items) ? section.items.map(normalizeLandingNewsItem) : [])
+  ).filter(item => validateLandingNewsItem(item).valid);
+}
+function getLandingRenderableReviews(section = {}, restaurantId = '') {
+  return sortLandingReviews(
+    getLandingActiveItems(Array.isArray(section?.restaurants?.[restaurantId]) ? section.restaurants[restaurantId].map(normalizeLandingReviewItem) : [])
+  ).filter(item => validateLandingReviewItem(item).valid);
+}
+function buildLandingReviewPairs(section = {}) {
+  const leroysReviews = getLandingRenderableReviews(section, RESTAURANTS.LEROYS.id);
+  const elroysReviews = getLandingRenderableReviews(section, RESTAURANTS.ELROYS.id);
+  if (leroysReviews.length < 3 || elroysReviews.length < 3) return [];
+  const pairCount = Math.min(leroysReviews.length, elroysReviews.length);
+  return Array.from({ length: pairCount }, (_, index) => ({
+    id: `pair-${index}`,
+    leroys: leroysReviews[index],
+    elroys: elroysReviews[index],
+  }));
+}
+function renderLandingRootEvents(section = {}) {
+  const listEl = document.getElementById('landing-events-list');
+  const emptyEl = document.getElementById('landing-events-empty');
   if (!listEl || !emptyEl) return;
-  if (!Array.isArray(items) || !items.length) {
+  const items = getLandingRenderableEvents(section);
+  setLandingRootSectionVisible('events', true);
+  if (!items.length) {
     listEl.innerHTML = '';
     emptyEl.hidden = false;
     return;
   }
   emptyEl.hidden = true;
-  listEl.innerHTML = items.map(item => {
-    const hasLink = !!item.href;
-    const articleOpen = hasLink
-      ? `<a class="landing-story-card ${cardClass}" href="${escHtml(item.href)}" target="_blank" rel="noreferrer">`
-      : `<article class="landing-story-card ${cardClass}">`;
-    const articleClose = hasLink ? '</a>' : '</article>';
-    return `${articleOpen}
-      <p class="landing-card-kicker">${escHtml(item.target || 'Both')}</p>
-      <h3>${escHtml(item.title || 'Coming soon')}</h3>
+  listEl.innerHTML = items.map(item => `
+    <article class="landing-story-card landing-story-card--event">
+      <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
+      <h3>${escHtml(item.title || 'Upcoming event')}</h3>
       <p>${escHtml(item.body || '')}</p>
-      ${item.source || item.publishedAt ? `<p class="landing-card-kicker">${escHtml([item.source, item.publishedAt].filter(Boolean).join(' · '))}</p>` : ''}
-      ${hasLink ? '<span class="landing-story-link">Read Story ↗</span>' : ''}
-    ${articleClose}`;
-  }).join('');
+      <p class="landing-card-kicker">${escHtml(formatLandingEventScheduleLine(item))}</p>
+    </article>
+  `).join('');
 }
-
+function renderLandingRootNews(section = {}) {
+  const listEl = document.getElementById('landing-news-list');
+  const emptyEl = document.getElementById('landing-news-empty');
+  const items = getLandingRenderableNews(section);
+  if (!listEl || !emptyEl) return;
+  setLandingRootSectionVisible('news', items.length > 0);
+  if (!items.length) {
+    listEl.innerHTML = '';
+    emptyEl.hidden = true;
+    return;
+  }
+  emptyEl.hidden = true;
+  listEl.innerHTML = items.map(item => `
+    <a class="landing-story-card landing-story-card--news ${item.imageUrl ? 'has-image' : 'is-text-only'}" href="${escHtml(item.href)}" target="_blank" rel="noreferrer">
+      ${item.imageUrl ? `<img class="landing-story-image" src="${escHtml(item.imageUrl)}" alt="${escHtml(item.title || item.source || 'News image')}">` : ''}
+      <div class="landing-story-copy">
+        <p class="landing-card-kicker">
+          <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
+          <span>${escHtml([item.source, formatLandingDateLabel(item.publishedDate, { short: true, year: false })].filter(Boolean).join(' · '))}</span>
+        </p>
+        <h3>${escHtml(item.title || 'Imported story')}</h3>
+        ${item.body ? `<p>${escHtml(item.body)}</p>` : ''}
+        <span class="landing-story-link">Read Story ↗</span>
+      </div>
+    </a>
+  `).join('');
+}
 function renderLandingRootReviews(section = {}) {
+  const sectionEl = document.getElementById('reviews');
   const listEl = document.getElementById('landing-reviews-list');
   const emptyEl = document.getElementById('landing-reviews-empty');
-  if (!listEl || !emptyEl) return;
-  const leroysReviews = Array.isArray(section?.restaurants?.[RESTAURANTS.LEROYS.id]) ? section.restaurants[RESTAURANTS.LEROYS.id] : [];
-  const elroysReviews = Array.isArray(section?.restaurants?.[RESTAURANTS.ELROYS.id]) ? section.restaurants[RESTAURANTS.ELROYS.id] : [];
-  if (leroysReviews.length < 3 || elroysReviews.length < 3) {
+  const controlsEl = document.getElementById('landing-reviews-controls');
+  const dotsEl = document.getElementById('landing-reviews-dots');
+  if (!sectionEl || !listEl || !emptyEl || !controlsEl || !dotsEl) return;
+  const pairs = buildLandingReviewPairs(section);
+  const visible = pairs.length > 0;
+  setLandingRootSectionVisible('reviews', visible);
+  if (!visible) {
     listEl.innerHTML = '';
-    emptyEl.hidden = false;
+    emptyEl.hidden = true;
+    controlsEl.hidden = true;
+    _landingReviewCarouselIndex = 0;
     return;
   }
   emptyEl.hidden = true;
-  listEl.innerHTML = [leroysReviews[0], elroysReviews[0]].map((review, index) => {
-    const accent = index === 0 ? RESTAURANTS.LEROYS.name : RESTAURANTS.ELROYS.name;
-    return `<article class="landing-review-card">
-      <p class="landing-card-kicker">${escHtml(accent)}</p>
-      <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(review.rating) || 5)))}</h3>
-      <p>${escHtml(review.quote || '')}</p>
-      <p class="landing-card-kicker">${escHtml(review.author || '')}${review.source ? ` · ${escHtml(review.source)}` : ''}</p>
-    </article>`;
-  }).join('');
+  controlsEl.hidden = pairs.length <= 1;
+  _landingReviewCarouselIndex = Math.max(0, Math.min(_landingReviewCarouselIndex, pairs.length - 1));
+  listEl.innerHTML = pairs.map((pair, index) => `
+    <article class="landing-review-pair ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" data-landing-review-pair="${index}">
+      <article class="landing-review-card landing-review-card--leroys">
+        <p class="landing-card-kicker">${escHtml(RESTAURANTS.LEROYS.name)}</p>
+        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.leroys.rating) || 5)))}</h3>
+        <p>${escHtml(pair.leroys.quote || '')}</p>
+        <p class="landing-card-kicker">${escHtml(pair.leroys.author || '')}${pair.leroys.source ? ` · ${escHtml(pair.leroys.source)}` : ''}</p>
+      </article>
+      <article class="landing-review-card landing-review-card--elroys">
+        <p class="landing-card-kicker">${escHtml(RESTAURANTS.ELROYS.name)}</p>
+        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.elroys.rating) || 5)))}</h3>
+        <p>${escHtml(pair.elroys.quote || '')}</p>
+        <p class="landing-card-kicker">${escHtml(pair.elroys.author || '')}${pair.elroys.source ? ` · ${escHtml(pair.elroys.source)}` : ''}</p>
+      </article>
+    </article>
+  `).join('');
+  dotsEl.innerHTML = pairs.map((pair, index) => (
+    `<button type="button" class="landing-review-dot ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" aria-label="Review pair ${index + 1}" onclick="setLandingReviewCarouselIndex(${index})"></button>`
+  )).join('');
+}
+function setLandingReviewCarouselIndex(nextIndex = 0) {
+  const pairEls = Array.from(document.querySelectorAll('[data-landing-review-pair]'));
+  if (!pairEls.length) return;
+  _landingReviewCarouselIndex = Math.max(0, Math.min(Number(nextIndex) || 0, pairEls.length - 1));
+  pairEls.forEach((pairEl, index) => {
+    pairEl.classList.toggle('is-active', index === _landingReviewCarouselIndex);
+  });
+  document.querySelectorAll('.landing-review-dot').forEach((dotEl, index) => {
+    dotEl.classList.toggle('is-active', index === _landingReviewCarouselIndex);
+  });
+}
+function stepLandingReviewCarousel(direction = 1) {
+  const pairCount = document.querySelectorAll('[data-landing-review-pair]').length;
+  if (!pairCount) return;
+  const nextIndex = (_landingReviewCarouselIndex + direction + pairCount) % pairCount;
+  setLandingReviewCarouselIndex(nextIndex);
 }
 
 function renderLandingRootHours(section = {}) {
@@ -2892,14 +3633,18 @@ function renderLandingRootPage(record = _landingPageState) {
   if (!hasLandingRootShell()) return;
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   renderLandingRootHours(normalized.liveContent.hours);
-  renderLandingRootStories('landing-events-list', 'landing-events-empty', normalized.liveContent.events.items);
-  renderLandingRootStories('landing-news-list', 'landing-news-empty', normalized.liveContent.news.items, 'landing-review-card');
+  renderLandingRootEvents(normalized.liveContent.events);
+  renderLandingRootNews(normalized.liveContent.news);
   renderLandingRootReviews(normalized.liveContent.reviews);
   setLandingRootFallbackVisible(false);
 }
 
 async function initLandingRootPage() {
   if (!hasLandingRootShell()) return;
+  const prevButton = document.getElementById('landing-reviews-prev');
+  const nextButton = document.getElementById('landing-reviews-next');
+  if (prevButton) prevButton.onclick = () => stepLandingReviewCarousel(-1);
+  if (nextButton) nextButton.onclick = () => stepLandingReviewCarousel(1);
   try {
     const record = await ensureLandingPageStateLoaded();
     renderLandingRootPage(record);
@@ -2942,6 +3687,265 @@ function setLandingHoursField(restaurantId, dayKey, field, value) {
     return;
   }
   refreshLandingHoursAdminState(record);
+}
+
+function updateLandingDraftRecord(mutator = () => {}, options = {}) {
+  const { rerender = true } = options;
+  const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: true });
+  mutator(record);
+  _landingPageDirty = true;
+  if (rerender) renderLandingAdminWorkspace();
+  return record;
+}
+function markLandingItemUpdated(item = {}) {
+  item.updatedAt = String(Date.now());
+  return item;
+}
+function findLandingNewsItemByUrl(items = [], url = '') {
+  const candidate = String(url || '').trim();
+  if (!candidate) return null;
+  return items.find(item => (
+    item?.href === candidate || item?.importMeta?.sourceUrl === candidate
+  )) || null;
+}
+function findLandingReviewItemByUrl(items = [], url = '') {
+  const candidate = String(url || '').trim();
+  if (!candidate) return null;
+  return items.find(item => (
+    item?.href === candidate || item?.importMeta?.sourceUrl === candidate
+  )) || null;
+}
+async function requestLandingImport(endpoint = '', payload = {}) {
+  if (!currentUser?.accessToken) throw new Error('Sign in as an admin to import landing-page content.');
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${currentUser.accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (_) {
+    data = null;
+  }
+  if (!response.ok) throw new Error(data?.error || data?.message || 'Import failed.');
+  return data || {};
+}
+function applyLandingImportMeta(currentMeta = {}, result = {}) {
+  const attemptedAt = result?.attemptedAt ? String(result.attemptedAt) : String(Date.now());
+  const nextStatus = result?.status || LANDING_IMPORT_STATUS_FAILED;
+  const wasSuccessful = nextStatus === LANDING_IMPORT_STATUS_IMPORTED || nextStatus === LANDING_IMPORT_STATUS_PARTIAL;
+  return normalizeLandingImportMeta({
+    ...currentMeta,
+    sourceUrl: result?.sourceUrl || result?.href || currentMeta?.sourceUrl || '',
+    lastAttemptTs: attemptedAt,
+    lastSuccessTs: wasSuccessful ? attemptedAt : currentMeta?.lastSuccessTs,
+    status: nextStatus,
+    messages: Array.isArray(result?.messages) ? result.messages : currentMeta?.messages,
+  });
+}
+function upsertLandingNewsDraftFromImport(target = LANDING_TARGET_BOTH, result = {}) {
+  const sourceUrl = String(result?.sourceUrl || result?.href || '').trim();
+  updateLandingDraftRecord(record => {
+    const items = record.draftContent.news.items;
+    const existing = findLandingNewsItemByUrl(items, sourceUrl);
+    const base = existing || createDefaultLandingNewsItem();
+    const nextItem = normalizeLandingNewsItem({
+      ...base,
+      target: existing?.target || normalizeLandingTarget(target, { allowBoth: true }),
+      title: result?.title || base.title,
+      body: result?.body || base.body,
+      href: result?.href || sourceUrl || base.href,
+      source: result?.source || base.source,
+      publishedDate: result?.publishedDate || base.publishedDate,
+      imageUrl: result?.imageUrl || base.imageUrl,
+      importMeta: applyLandingImportMeta(base.importMeta, result),
+      updatedAt: String(Date.now()),
+    });
+    if (existing) {
+      const index = items.findIndex(item => item.id === existing.id);
+      if (index >= 0) items[index] = nextItem;
+    } else {
+      items.unshift(nextItem);
+    }
+  });
+}
+function upsertLandingReviewDraftFromImport(restaurantId = '', result = {}) {
+  updateLandingDraftRecord(record => {
+    if (!record.draftContent.reviews.restaurants[restaurantId]) {
+      record.draftContent.reviews.restaurants[restaurantId] = [];
+    }
+    const items = record.draftContent.reviews.restaurants[restaurantId];
+    const sourceUrl = String(result?.sourceUrl || result?.href || '').trim();
+    const existing = findLandingReviewItemByUrl(items, sourceUrl);
+    const base = existing || createDefaultLandingReviewItem();
+    const nextItem = normalizeLandingReviewItem({
+      ...base,
+      href: result?.href || sourceUrl || base.href,
+      author: result?.author || base.author,
+      quote: result?.quote || base.quote,
+      source: result?.source || base.source || 'Google Review',
+      rating: result?.rating || base.rating,
+      importMeta: applyLandingImportMeta(base.importMeta, result),
+      updatedAt: String(Date.now()),
+    });
+    if (existing) {
+      const index = items.findIndex(item => item.id === existing.id);
+      if (index >= 0) items[index] = nextItem;
+    } else {
+      items.unshift(nextItem);
+    }
+  });
+}
+function addLandingEventDraft() {
+  updateLandingDraftRecord(record => {
+    record.draftContent.events.items.unshift(normalizeLandingEventItem({
+      ...createDefaultLandingEventItem(),
+      updatedAt: String(Date.now()),
+    }));
+  });
+}
+function updateLandingEventField(itemId = '', field = '', value = '') {
+  updateLandingDraftRecord(record => {
+    const item = findLandingItemById(record.draftContent.events.items, itemId);
+    if (!item) return;
+    if (field === 'target') item.target = normalizeLandingTarget(value, { allowBoth: true });
+    else if (field === 'eventDate') item.eventDate = String(value || '');
+    else if (field === 'startTime' || field === 'endTime') item[field] = normalizeLandingTimeValue(value);
+    else item[field] = typeof value === 'string' ? value : '';
+    if (field === 'endTime' && item.endTime) item.timingNote = '';
+    markLandingItemUpdated(item);
+  });
+}
+function toggleLandingEventArchived(itemId = '', archived = false) {
+  updateLandingDraftRecord(record => {
+    const item = findLandingItemById(record.draftContent.events.items, itemId);
+    if (!item) return;
+    item.archived = !!archived;
+    item.archivedAt = archived ? String(Date.now()) : '';
+    markLandingItemUpdated(item);
+  });
+}
+function updateLandingNewsField(itemId = '', field = '', value = '') {
+  updateLandingDraftRecord(record => {
+    const item = findLandingItemById(record.draftContent.news.items, itemId);
+    if (!item) return;
+    if (field === 'target') item.target = normalizeLandingTarget(value, { allowBoth: true });
+    else item[field] = typeof value === 'string' ? value : '';
+    if (field === 'href' && !item.importMeta?.sourceUrl) {
+      item.importMeta = normalizeLandingImportMeta({ ...item.importMeta, sourceUrl: item.href });
+    }
+    markLandingItemUpdated(item);
+  });
+}
+function toggleLandingNewsArchived(itemId = '', archived = false) {
+  updateLandingDraftRecord(record => {
+    const item = findLandingItemById(record.draftContent.news.items, itemId);
+    if (!item) return;
+    item.archived = !!archived;
+    item.archivedAt = archived ? String(Date.now()) : '';
+    markLandingItemUpdated(item);
+  });
+}
+function updateLandingReviewField(restaurantId = '', itemId = '', field = '', value = '') {
+  updateLandingDraftRecord(record => {
+    const items = record.draftContent.reviews.restaurants[restaurantId] || [];
+    const item = findLandingItemById(items, itemId);
+    if (!item) return;
+    if (field === 'rating') item.rating = value ? String(Number(value)) : '';
+    else item[field] = typeof value === 'string' ? value : '';
+    if (field === 'href' && !item.importMeta?.sourceUrl) {
+      item.importMeta = normalizeLandingImportMeta({ ...item.importMeta, sourceUrl: item.href });
+    }
+    markLandingItemUpdated(item);
+  });
+}
+function toggleLandingReviewArchived(restaurantId = '', itemId = '', archived = false) {
+  updateLandingDraftRecord(record => {
+    const items = record.draftContent.reviews.restaurants[restaurantId] || [];
+    const item = findLandingItemById(items, itemId);
+    if (!item) return;
+    item.archived = !!archived;
+    item.archivedAt = archived ? String(Date.now()) : '';
+    markLandingItemUpdated(item);
+  });
+}
+function toggleLandingSectionArchivedFilter(sectionId = '', checked = false) {
+  setLandingSectionFilter(sectionId, 'showArchived', checked);
+  renderLandingAdminWorkspace();
+}
+function handleLandingNewsImportPaste() {
+  setTimeout(() => {
+    importLandingNewsDraft();
+  }, 0);
+}
+function handleLandingReviewImportPaste(restaurantId = '') {
+  setTimeout(() => {
+    importLandingReviewDraft(restaurantId);
+  }, 0);
+}
+async function importLandingNewsDraft() {
+  const targetSelect = document.getElementById('landing-news-import-target');
+  const urlInput = document.getElementById('landing-news-import-url');
+  const target = targetSelect?.value || LANDING_TARGET_BOTH;
+  const url = String(urlInput?.value || '').trim();
+  if (!url) return;
+  try {
+    const result = await requestLandingImport('/api/import-news', { url, target });
+    upsertLandingNewsDraftFromImport(target, result);
+    if (urlInput) urlInput.value = '';
+    showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} news draft.`, 'success');
+  } catch (error) {
+    showToast(`⚠️ ${error?.message || 'News import failed.'}`, 'error');
+  }
+}
+async function refreshLandingNewsItem(itemId = '') {
+  const record = normalizeLandingPageRecord(_landingPageState || createDefaultLandingPageRecord());
+  const item = findLandingItemById(record.draftContent.news.items, itemId);
+  const sourceUrl = String(item?.importMeta?.sourceUrl || item?.href || '').trim();
+  if (!item || !sourceUrl) {
+    showToast('⚠️ Add an article URL before refreshing this story.', 'error');
+    return;
+  }
+  try {
+    const result = await requestLandingImport('/api/import-news', { url: sourceUrl, target: item.target });
+    upsertLandingNewsDraftFromImport(item.target, result);
+    showToast('✅ News draft refreshed.', 'success');
+  } catch (error) {
+    showToast(`⚠️ ${error?.message || 'News refresh failed.'}`, 'error');
+  }
+}
+async function importLandingReviewDraft(restaurantId = '') {
+  const urlInput = document.getElementById(`landing-review-import-url-${restaurantId}`);
+  const url = String(urlInput?.value || '').trim();
+  if (!url) return;
+  try {
+    const result = await requestLandingImport('/api/import-review', { url, restaurantId });
+    upsertLandingReviewDraftFromImport(restaurantId, result);
+    if (urlInput) urlInput.value = '';
+    showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} review draft.`, 'success');
+  } catch (error) {
+    showToast(`⚠️ ${error?.message || 'Review import failed.'}`, 'error');
+  }
+}
+async function refreshLandingReviewItem(restaurantId = '', itemId = '') {
+  const record = normalizeLandingPageRecord(_landingPageState || createDefaultLandingPageRecord());
+  const item = findLandingItemById(record.draftContent.reviews.restaurants[restaurantId] || [], itemId);
+  const sourceUrl = String(item?.importMeta?.sourceUrl || item?.href || '').trim();
+  if (!item || !sourceUrl) {
+    showToast('⚠️ Add a review URL before refreshing this review.', 'error');
+    return;
+  }
+  try {
+    const result = await requestLandingImport('/api/import-review', { url: sourceUrl, restaurantId });
+    upsertLandingReviewDraftFromImport(restaurantId, result);
+    showToast('✅ Review draft refreshed.', 'success');
+  } catch (error) {
+    showToast(`⚠️ ${error?.message || 'Review refresh failed.'}`, 'error');
+  }
 }
 
 async function saveLandingPageDraft() {
@@ -3023,10 +4027,12 @@ async function publishLandingPageSections() {
   }
   try {
     const currentRecord = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
-    const hoursStatus = getLandingSectionStatus('hours', currentRecord);
-    if (selectedSectionIds.includes('hours') && !hoursStatus.isValid) {
+    const blockedSection = selectedSectionIds
+      .map(sectionId => getLandingSectionStatus(sectionId, currentRecord))
+      .find(status => !status.isValid);
+    if (blockedSection) {
       renderLandingPublishModal();
-      showToast('⚠️ Fix the hours schedule before publishing it live.', 'error');
+      showToast(`⚠️ Fix ${blockedSection.label.toLowerCase()} before publishing it live.`, 'error');
       return;
     }
     const nextLiveRecord = applyLandingSectionPublish(currentRecord, selectedSectionIds);
