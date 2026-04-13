@@ -360,7 +360,8 @@
   accent-color: var(--admin-accent);
 }
 
-.landing-hours-day-controls input[type="time"] {
+.landing-hours-day-controls select {
+  appearance: none;
   width: 100%;
   min-width: 148px;
   min-height: 46px;
@@ -376,31 +377,35 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
   box-shadow: inset 0 1px 2px rgba(14, 25, 20, 0.04);
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(16, 37, 28, 0.72) 50%),
+    linear-gradient(135deg, rgba(16, 37, 28, 0.72) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 34px;
 }
 
-.landing-hours-day-controls input[type="time"]::-webkit-datetime-edit {
-  color: var(--admin-ink);
-}
-
-.landing-hours-day-controls input[type="time"]::-webkit-calendar-picker-indicator {
-  opacity: 0.9;
-}
-
-.landing-hours-day-controls input[type="time"]:hover {
+.landing-hours-day-controls select:hover {
   border-color: rgba(27, 107, 81, 0.28);
 }
 
-.landing-hours-day-controls input[type="time"]:focus-visible {
+.landing-hours-day-controls select:focus-visible {
   outline: 2px solid rgba(27, 107, 81, 0.18);
   outline-offset: 1px;
   border-color: var(--admin-accent);
 }
 
-.landing-hours-day-controls input[type="time"]:disabled {
+.landing-hours-day-controls select:disabled {
   opacity: 0.68;
   background: #eef2ef;
   color: var(--admin-muted);
   border-style: dashed;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(93, 114, 102, 0.58) 50%),
+    linear-gradient(135deg, rgba(93, 114, 102, 0.58) 50%, transparent 50%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -422,17 +427,13 @@
     color: #10251c;
   }
 
-  .landing-hours-day-controls input[type="time"] {
+  .landing-hours-day-controls select {
     background: #ffffff;
     color: #0e1d16;
     border-color: rgba(27, 107, 81, 0.24);
     box-shadow:
       inset 0 1px 2px rgba(14, 25, 20, 0.05),
       0 1px 0 rgba(255, 255, 255, 0.5);
-  }
-
-  .landing-hours-day-controls input[type="time"]::-webkit-datetime-edit {
-    color: #0e1d16;
   }
 }
 

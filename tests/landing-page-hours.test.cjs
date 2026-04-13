@@ -182,3 +182,23 @@ test('landing open-close edits do not rerender the full hours workspace', () => 
   assert.equal(day.close, '23:00');
   assert.equal(day.closed, false);
 });
+
+test('landing hours rows render app-owned select controls with preserved values', () => {
+  const sandbox = loadAppSandbox({ Intl });
+  const restaurants = sandbox.__HF_DOMAIN_CONSTANTS__.RESTAURANTS;
+  const hours = buildHoursDraft(sandbox);
+
+  hours.restaurants[restaurants.LEROYS.id].days.wed = {
+    closed: false,
+    open: '16:00',
+    close: '23:00',
+  };
+
+  const html = sandbox.renderLandingHoursRowsHtml(hours, restaurants.LEROYS.id, restaurants.LEROYS.name);
+
+  assert.match(html, /<select[^>]+data-landing-hours-field="open"/i);
+  assert.match(html, /<select[^>]+data-landing-hours-field="close"/i);
+  assert.match(html, /<option value="16:00" selected>4 PM<\/option>/i);
+  assert.match(html, /<option value="23:00" selected>11 PM<\/option>/i);
+  assert.doesNotMatch(html, /type="time"/i);
+});

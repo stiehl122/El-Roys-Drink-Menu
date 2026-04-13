@@ -414,6 +414,36 @@ function formatLandingMinutes(minutes) {
   const hours12 = hours24 % 12 || 12;
   return mins === 0 ? `${hours12} ${suffix}` : `${hours12}:${String(mins).padStart(2, '0')} ${suffix}`;
 }
+function getLandingTimeSelectOptions() {
+  const options = [];
+  for (let minutes = 0; minutes < 1440; minutes += 15) {
+    const hours24 = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    options.push({
+      value: `${String(hours24).padStart(2, '0')}:${String(mins).padStart(2, '0')}`,
+      label: formatLandingMinutes(minutes),
+    });
+  }
+  return options;
+}
+const LANDING_TIME_SELECT_OPTIONS = getLandingTimeSelectOptions();
+function renderLandingTimeSelectOptions(selectedValue = '', placeholder = 'Select time') {
+  const normalized = normalizeLandingTimeValue(selectedValue);
+  const optionMarkup = [`<option value="">${escHtml(placeholder)}</option>`];
+  const hasSelectedValue = normalized && LANDING_TIME_SELECT_OPTIONS.some(option => option.value === normalized);
+  if (normalized && !hasSelectedValue) {
+    const fallbackMinutes = parseLandingTimeToMinutes(normalized);
+    optionMarkup.push(
+      `<option value="${escHtml(normalized)}" selected>${escHtml(fallbackMinutes === null ? normalized : formatLandingMinutes(fallbackMinutes))}</option>`
+    );
+  }
+  LANDING_TIME_SELECT_OPTIONS.forEach(option => {
+    optionMarkup.push(
+      `<option value="${escHtml(option.value)}" ${option.value === normalized ? 'selected' : ''}>${escHtml(option.label)}</option>`
+    );
+  });
+  return optionMarkup.join('');
+}
 function formatLandingHoursRange(day = {}) {
   if (day?.closed) return 'Closed';
   const openMinutes = parseLandingTimeToMinutes(day.open);
@@ -2520,30 +2550,28 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                 <label for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open">${escHtml(LANDING_DAY_LABELS[dayKey])}</label>
               </div>
               <div class="landing-hours-day-controls">
-                <input
+                <select
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open"
-                  type="time"
-                  value="${escHtml(day.open || '')}"
                   data-landing-hours-field="open"
                   data-landing-hours-restaurant="${escHtml(restaurantId)}"
                   data-landing-hours-day="${escHtml(dayKey)}"
+                  aria-label="${escHtml(`${restaurantLabel} ${LANDING_DAY_LABELS[dayKey]} open time`)}"
                   ${day.closed ? 'disabled' : ''}
-                  oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
-                  onblur="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                 >
-                <input
+                  ${renderLandingTimeSelectOptions(day.open, 'Open time')}
+                </select>
+                <select
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-close"
-                  type="time"
-                  value="${escHtml(day.close || '')}"
                   data-landing-hours-field="close"
                   data-landing-hours-restaurant="${escHtml(restaurantId)}"
                   data-landing-hours-day="${escHtml(dayKey)}"
+                  aria-label="${escHtml(`${restaurantLabel} ${LANDING_DAY_LABELS[dayKey]} close time`)}"
                   ${day.closed ? 'disabled' : ''}
-                  oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
-                  onblur="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                 >
+                  ${renderLandingTimeSelectOptions(day.close, 'Close time')}
+                </select>
               </div>
               <div class="landing-hours-day-footer">
                 <label class="landing-hours-toggle" for="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed">
