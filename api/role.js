@@ -2,7 +2,7 @@ import {
   readMenuAccessForUser,
   readProfile,
   requireAuthenticatedUser,
-} from './_auth.js';
+} from '../server/_auth.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();

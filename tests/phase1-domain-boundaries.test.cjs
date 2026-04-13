@@ -98,7 +98,7 @@ test('app runtime consumes injected category defaults through one boundary', () 
 });
 
 test('api auth helper resolves restaurant specials from shared domain boundary', () => {
-  const authSource = fs.readFileSync(path.join(__dirname, '..', 'api', '_auth.js'), 'utf8');
+  const authSource = fs.readFileSync(path.join(__dirname, '..', 'server', '_auth.js'), 'utf8');
 
   assert.match(authSource, /__HF_DOMAIN_CONSTANTS__/);
   assert.doesNotMatch(authSource, /const RESTAURANT_SPECIALS\\s*=\\s*\\{/);

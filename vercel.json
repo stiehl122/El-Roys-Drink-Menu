@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/send-groupme", "destination": "/api/send-notification" },
     { "source": "/leroyslounge", "destination": "/leroyslounge/index.html" },
     { "source": "/leroyslounge/", "destination": "/leroyslounge/index.html" },
     { "source": "/elroyscantina", "destination": "/elroyscantina/index.html" },

@@ -28,7 +28,9 @@ Route rewrites live in [`vercel.json`](vercel.json).
 - Shared Phase 4 route boundary: [`routes/shared/public-route-core.js`](routes/shared/public-route-core.js)
 - Route-owned public shells: [`leroyslounge/index.html`](leroyslounge/index.html), [`leroyslounge/style.css`](leroyslounge/style.css), [`leroyslounge/app.js`](leroyslounge/app.js), [`elroyscantina/index.html`](elroyscantina/index.html), [`elroyscantina/style.css`](elroyscantina/style.css), [`elroyscantina/app.js`](elroyscantina/app.js)
 - Shared settings shells: [`manager/index.html`](manager/index.html), [`admin/index.html`](admin/index.html)
-- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/specials.js`](api/specials.js), [`api/send-notification.js`](api/send-notification.js), [`api/send-groupme.js`](api/send-groupme.js), [`api/_auth.js`](api/_auth.js), [`api/_supabase.js`](api/_supabase.js), [`api/_notification-gateway.js`](api/_notification-gateway.js)
+- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/specials.js`](api/specials.js), [`api/send-notification.js`](api/send-notification.js)
+- Shared server helpers: [`server/_auth.js`](server/_auth.js), [`server/_supabase.js`](server/_supabase.js), [`server/_notification-gateway.js`](server/_notification-gateway.js)
+- Legacy `/api/send-groupme` requests now rewrite to [`api/send-notification.js`](api/send-notification.js) for Hobby-plan function-count compatibility.
 
 Supabase is the source of truth for menus, categories, items, featured groups, history, notification config, and auth-backed access. Local storage is still used for session/cache support, but live menu state is database-backed.
 
