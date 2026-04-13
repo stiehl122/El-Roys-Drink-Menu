@@ -64,7 +64,7 @@
         </div>
       </div>
 
-      <div class="manager-shell-legacy-hooks" aria-hidden="true">
+      <div class="manager-shell-legacy-hooks" aria-hidden="true" hidden>
         <button class="manager-btn" id="action-btn" tabindex="-1">Open Manager</button>
         <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
         <div class="manager-shell-meta-card">
@@ -82,6 +82,26 @@
   <div id="loading-view">
     <div class="spinner"></div>
     <p>Loading manager workspace…</p>
+    <section class="manager-shell-locked-card" id="manager-locked-card" hidden aria-labelledby="manager-locked-title">
+      <p class="manager-shell-locked-kicker">Manager Access</p>
+      <h2 id="manager-locked-title">Open the workspace</h2>
+      <p class="manager-shell-locked-copy">Sign in to edit menu drafts, review recent changes, and publish updates to the live board.</p>
+      <div class="manager-shell-locked-actions">
+        <button
+          class="btn-small manager-shell-locked-primary"
+          id="manager-locked-signin-btn"
+          type="button"
+          data-auth-trigger="signin"
+          data-auth-origin="manager-locked-shell"
+        >Sign In</button>
+        <button
+          class="btn-small manager-shell-locked-secondary"
+          type="button"
+          data-auth-trigger="signup"
+          data-auth-origin="manager-locked-shell"
+        >Create Account</button>
+      </div>
+    </section>
   </div>
 
   <div id="public-view" style="display:none;">
@@ -120,10 +140,14 @@
             >×</button>
           </div>
           <div class="manager-shell-drawer-meta">
+            <p class="manager-shell-drawer-kicker">Quick Actions</p>
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
-            <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-            <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
-            <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
+            <p class="manager-shell-drawer-copy">Use the rail for long-form edits, then publish from the dock when service is ready.</p>
+            <div class="manager-shell-drawer-actions">
+              <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+              <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
+              <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
+            </div>
             <button class="btn-small manager-shell-drawer-return" id="drawer-return-btn" type="button" onclick="exitView()">Return to menu</button>
           </div>
         </div>
@@ -142,6 +166,20 @@
               <div>
                 <p class="settings-section-kicker">Service Overview</p>
                 <h2>At a glance</h2>
+              </div>
+            </div>
+
+            <div class="manager-shell-overview-hero">
+              <div class="manager-shell-overview-hero-copy">
+                <p class="manager-shell-overview-hero-kicker">Start Here</p>
+                <h3>Move from draft to service without losing your place.</h3>
+                <p class="manager-shell-overview-hero-text">Jump straight into items, pricing, descriptions, or categories, then come back here before you publish from the dock.</p>
+              </div>
+              <div class="manager-shell-overview-hero-actions" aria-label="Quick manager actions">
+                <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-items-section')">Edit Items</button>
+                <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-pricing-section')">Pricing</button>
+                <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-description-section')">Descriptions</button>
+                <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-categories-section')">Categories</button>
               </div>
             </div>
 
@@ -352,7 +390,7 @@
 </div>
 
 
-<div class="modal-bg" id="modal-bg">
+<div class="modal-bg" id="modal-bg" hidden aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <h2 id="modal-title">Patch Notes Preview</h2>
     <div class="modal-sub" id="modal-subtitle">Review the changes before publishing them to the live menu.</div>

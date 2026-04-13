@@ -55,6 +55,25 @@ body.admin-console-page .auth-box::before {
   display: none;
 }
 
+body.manager-stitch-shell #auth-overlay {
+  padding: 24px;
+  background: color-mix(in srgb, var(--manager-shell-overlay) 90%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+body.manager-stitch-shell .auth-box {
+  width: min(100%, 420px);
+  max-width: 420px;
+  padding: 42px 34px 30px;
+  border: 1px solid var(--manager-shell-border-strong);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 32%),
+    linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+  color: var(--manager-shell-text);
+  box-shadow: 0 30px 60px var(--manager-shell-shadow-strong);
+}
+
 .auth-box h2 {
   font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
@@ -71,6 +90,15 @@ body.admin-console-page .auth-box h2 {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: #1a202c;
+}
+
+body.manager-stitch-shell .auth-box h2 {
+  font-family: 'Noto Serif', serif;
+  font-size: clamp(2rem, 3.2vw, 2.55rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--manager-shell-primary);
 }
 
 .auth-box p,
@@ -93,6 +121,15 @@ body.admin-console-page .auth-approval-notice,
 body.admin-console-page .auth-back-btn,
 body.admin-console-page .pin-cancel {
   color: #718096;
+  font-size: 12px;
+}
+
+body.manager-stitch-shell .auth-box p,
+body.manager-stitch-shell .auth-toggle,
+body.manager-stitch-shell .auth-approval-notice,
+body.manager-stitch-shell .auth-back-btn,
+body.manager-stitch-shell .pin-cancel {
+  color: var(--manager-shell-muted);
   font-size: 12px;
 }
 
@@ -135,6 +172,14 @@ body.admin-console-page .auth-hint-msg {
   border-radius: 8px;
 }
 
+body.manager-stitch-shell .auth-hint-msg {
+  color: var(--manager-shell-muted);
+  background: var(--manager-shell-primary-faint);
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
 .auth-screen-form {
   display: block;
   margin: 0;
@@ -169,6 +214,20 @@ body.admin-console-page .auth-field input {
   box-shadow: none;
 }
 
+body.manager-stitch-shell .auth-field {
+  margin-bottom: 12px;
+}
+
+body.manager-stitch-shell .auth-field input {
+  min-height: 48px;
+  padding: 13px 15px;
+  border: 1px solid var(--manager-shell-border-strong);
+  border-radius: 16px;
+  font-family: 'Inter', sans-serif;
+  background: color-mix(in srgb, var(--manager-shell-surface) 92%, transparent);
+  color: var(--manager-shell-text);
+}
+
 .auth-field input:focus {
   border-color: #2d3748;
 }
@@ -177,6 +236,11 @@ body.manager-stitch-shell .auth-field input:focus,
 body.admin-console-page .auth-field input:focus {
   border-color: #2d3748;
   box-shadow: none;
+}
+
+body.manager-stitch-shell .auth-field input:focus {
+  border-color: var(--manager-shell-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--manager-shell-accent-soft) 76%, transparent);
 }
 
 .auth-error {
@@ -204,6 +268,23 @@ body.admin-console-page .auth-field input:focus {
   margin-bottom: 12px;
 }
 
+.auth-preview-btn {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 13px;
+  margin: 0 0 8px;
+  border: 1px solid rgba(45, 55, 72, 0.16);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #2d3748;
+  font-family: 'Space Grotesk', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
 body.manager-stitch-shell .auth-submit-btn,
 body.admin-console-page .auth-submit-btn {
   min-height: 46px;
@@ -217,8 +298,52 @@ body.admin-console-page .auth-submit-btn {
   box-shadow: none;
 }
 
+body.manager-stitch-shell .auth-submit-btn,
+body.manager-stitch-shell .auth-preview-btn {
+  min-height: 48px;
+  border-radius: 16px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .auth-submit-btn {
+  background: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+  margin-bottom: 10px;
+}
+
+body.manager-stitch-shell .auth-preview-btn {
+  border: 1px solid var(--manager-shell-border);
+  background: color-mix(in srgb, var(--manager-shell-surface) 78%, transparent);
+  color: var(--manager-shell-primary);
+}
+
+body.manager-stitch-shell .auth-preview-btn,
+body.admin-console-page .auth-preview-btn {
+  min-height: 44px;
+  border-radius: 9px;
+  border: 1px solid rgba(45, 55, 72, 0.16);
+  background: rgba(255, 255, 255, 0.78);
+  color: #2d3748;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  box-shadow: none;
+}
+
 .auth-submit-btn:hover {
   background: #1a202c;
+}
+
+.auth-preview-btn:hover,
+.auth-preview-btn:focus-visible {
+  background: rgba(45, 55, 72, 0.08);
+  border-color: rgba(45, 55, 72, 0.28);
+  color: #1a202c;
 }
 
 body.manager-stitch-shell .auth-submit-btn:hover,
@@ -226,9 +351,50 @@ body.admin-console-page .auth-submit-btn:hover {
   background: #1a202c;
 }
 
+body.manager-stitch-shell .auth-preview-btn:hover,
+body.manager-stitch-shell .auth-preview-btn:focus-visible,
+body.admin-console-page .auth-preview-btn:hover,
+body.admin-console-page .auth-preview-btn:focus-visible {
+  background: rgba(45, 55, 72, 0.08);
+  border-color: rgba(45, 55, 72, 0.28);
+}
+
+body.manager-stitch-shell .auth-submit-btn:hover,
+body.manager-stitch-shell .auth-submit-btn:focus-visible {
+  background: var(--manager-shell-accent);
+}
+
+body.manager-stitch-shell .auth-preview-btn:hover,
+body.manager-stitch-shell .auth-preview-btn:focus-visible {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
 .auth-submit-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.auth-preview-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.auth-preview-note {
+  margin: 0 0 12px;
+  color: #718096;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+body.manager-stitch-shell .auth-preview-note,
+body.admin-console-page .auth-preview-note {
+  color: #718096;
+}
+
+body.manager-stitch-shell .auth-preview-note {
+  color: var(--manager-shell-muted);
 }
 
 .auth-toggle-btn,
@@ -256,6 +422,14 @@ body.admin-console-page .auth-link-btn,
 body.admin-console-page .auth-back-btn,
 body.admin-console-page .pin-cancel {
   color: #2d3748;
+}
+
+body.manager-stitch-shell .auth-toggle-btn,
+body.manager-stitch-shell .auth-link-btn,
+body.manager-stitch-shell .auth-back-btn,
+body.manager-stitch-shell .pin-cancel {
+  color: var(--manager-shell-primary);
+  font-family: 'Inter', sans-serif;
 }
 
 .auth-link-btn {
@@ -288,6 +462,17 @@ body.admin-console-page .pin-cancel {
 .pin-cancel:hover,
 .pin-cancel:focus-visible {
   color: #1a202c;
+}
+
+body.manager-stitch-shell .auth-link-btn:hover,
+body.manager-stitch-shell .auth-link-btn:focus-visible,
+body.manager-stitch-shell .auth-toggle-btn:hover,
+body.manager-stitch-shell .auth-toggle-btn:focus-visible,
+body.manager-stitch-shell .auth-back-btn:hover,
+body.manager-stitch-shell .auth-back-btn:focus-visible,
+body.manager-stitch-shell .pin-cancel:hover,
+body.manager-stitch-shell .pin-cancel:focus-visible {
+  color: var(--manager-shell-accent);
 }
 
 .auth-username-assist {
@@ -326,9 +511,25 @@ body.admin-console-page .pin-cancel {
     border-radius: 14px;
   }
 
+  body.manager-stitch-shell #auth-overlay {
+    align-items: flex-end;
+    padding: 12px;
+  }
+
+  body.manager-stitch-shell .auth-box {
+    width: min(100%, 420px);
+    max-width: none;
+    padding: 24px 20px 22px;
+    border-radius: 24px 24px 18px 18px;
+  }
+
   body.manager-stitch-shell .auth-box h2,
   body.admin-console-page .auth-box h2 {
     font-size: 20px;
+  }
+
+  body.manager-stitch-shell .auth-box h2 {
+    font-size: 1.9rem;
   }
 
   .auth-submit-btn,
@@ -341,5 +542,11 @@ body.admin-console-page .pin-cancel {
   body.admin-console-page .auth-submit-btn,
   body.admin-console-page .auth-field input {
     min-height: 44px;
+  }
+
+  body.manager-stitch-shell .auth-submit-btn,
+  body.manager-stitch-shell .auth-preview-btn,
+  body.manager-stitch-shell .auth-field input {
+    min-height: 46px;
   }
 }

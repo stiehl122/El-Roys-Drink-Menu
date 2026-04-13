@@ -1,9 +1,6 @@
 # Manager Design Loop Issues
 
-## Pass 1 audit
+## After Pass 5
 
-1. The unauthenticated manager state leaves too much dead canvas between the topbar and the auth dialog, so the page reads as unfinished instead of intentional.
-2. The auth card is undersized for desktop and visually disconnected from the manager shell, especially when no menu is selected yet.
-3. Dark mode contrast is too weak in the auth flow. The primary action loses emphasis and the shell recedes into a near-black wash.
-4. Mobile auth states need stronger sheet treatment and spacing so Sign In, Create Account, and Reset Password feel anchored to the route rather than floating above it.
-5. The drawer action cluster needs stronger hierarchy so `Return to menu` clearly belongs to the nav rail and does not read like a generic utility button.
+1. The signed-out `/manager` shell still exposes a stray `No sent updates yet.` text node in preview snapshots, which suggests one hidden manager footer/default element is still leaking into the accessibility surface.
+2. The Patch Notes modal still appears in preview snapshots before explicit open, even after moving it to a `hidden`/`aria-hidden` lifecycle. This likely needs a deeper accessibility-focused audit of the modal container and any dialog-role descendants.

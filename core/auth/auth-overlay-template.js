@@ -21,6 +21,8 @@
         </div>
         <div class="auth-error" id="signin-error"></div>
         <button class="auth-submit-btn" id="signin-submit-btn" onclick="handleSignIn()">Sign In</button>
+        <button class="auth-preview-btn" id="preview-audit-btn" type="button" onclick="handlePreviewAuditSignIn()" hidden>Use Preview Audit Session</button>
+        <p class="auth-preview-note" id="preview-audit-note" hidden>Preview-only helper for design audits.</p>
         <button class="auth-link-btn" onclick="renderAuthScreen('forgot')">Forgot password?</button>
         <div class="auth-toggle">
           <span>Don't have an account?</span>
