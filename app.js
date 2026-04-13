@@ -3311,7 +3311,10 @@ function applyDesign(design) {
   }
   const brand = (design.brandName || '').trim();
   const title = (design.menuTitle || '').trim();
-  document.title = [brand, title].filter(Boolean).join(' | ') || 'Current Menu';
+  const currentTitle = (document.title || '').trim();
+  if (currentTitle.toUpperCase() === 'CURRENT MENU') {
+    document.title = [brand, title].filter(Boolean).join(' | ') || 'Current Menu';
+  }
 }
 
 async function renderPublicViews() {
