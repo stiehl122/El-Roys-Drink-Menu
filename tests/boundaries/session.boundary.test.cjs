@@ -89,3 +89,56 @@ test('menu session lifecycle boundary handles redirect and fallback', async () =
   assert.equal(fallback.showLoadError, false);
   assert.equal(fallback.snapshot.source, 'cache');
 });
+
+test('menu state loader boundary forwards wave 1 api projections through one loader contract', async () => {
+  const sandbox = loadAppSandbox();
+  const apiProjection = {
+    cats: [{ key: 'beer', items: [{ id: 'lager' }] }],
+    meta: {
+      draft_state: { cats: [{ key: 'beer', items: [] }] },
+      draft_saved_ts: 1712705200000,
+    },
+    restaurant: { id: 'restaurant-main', name: 'Main Restaurant' },
+    workspace: {
+      actor: { id: 'user-1', role: 'manager' },
+      permissions: { canManage: true },
+    },
+  };
+  let hydrated = null;
+  let draftState = null;
+  let cached = null;
+  let clearCalls = 0;
+
+  const service = sandbox.createMenuStateLoaderService({
+    readState: async () => apiProjection,
+    hydrateFromState: data => {
+      hydrated = data;
+    },
+    applyPersistedDraftState: draft => {
+      draftState = draft;
+      return true;
+    },
+    setDefaultState: () => {
+      throw new Error('should not fall back');
+    },
+    clearDraftChanges: () => {
+      clearCalls += 1;
+    },
+    writeMenuCache: data => {
+      cached = data;
+    },
+    refreshFeatured: async () => {},
+    buildSnapshot: source => ({ source }),
+  });
+
+  const snapshot = await service.load({
+    request: { pageMode: 'manager' },
+    source: 'network',
+  });
+
+  assert.equal(snapshot.source, 'network');
+  assert.equal(hydrated, apiProjection);
+  assert.deepEqual(draftState, apiProjection.meta.draft_state);
+  assert.equal(cached, apiProjection);
+  assert.equal(clearCalls, 0);
+});

@@ -915,6 +915,56 @@ function getMenuSessionPorts() {
     async patchMenuDraftState(snapshot, savedAt) {
       return patchMenuDraftState(snapshot, savedAt);
     },
+    async publishMenuUpdate(options = {}) {
+      const preview = options.preview?.sections ? options.preview : buildMenuSessionPreview(buildMenuSessionSnapshot('preview'));
+      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
+      const mode = options.mode || (preview.mode === 'update-only'
+        ? (options.notify === false ? 'save' : 'update-only')
+        : (options.notify === false ? 'save' : 'save-and-update'));
+      const apiResult = await publishMenuThroughApi({ mode, preview, selectedChangeIds });
+      if (!apiResult.ok) {
+        return {
+          ok: false,
+          preview,
+          userHandled: false,
+          userMessage: apiResult.payload?.error || 'Publish failed.',
+          snapshot: buildMenuSessionSnapshot('publish-failed'),
+        };
+      }
+      const result = apiResult.payload || {};
+      const ts = Number(result.ts || Date.now());
+      if (mode === 'save') {
+        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
+        lsSet(LS_KEYS.lastUpdated, String(ts));
+        _dirty = false;
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+      } else if (result.notificationStatus?.partial || (mode === 'save-and-update' && result.notificationStatus && result.notificationStatus.ok === false)) {
+        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
+        lsSet(LS_KEYS.lastUpdated, String(ts));
+        _dirty = false;
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+      } else if (mode === 'save-and-update' || mode === 'update-only') {
+        _lastSentFeaturedIds = new Set(getCurrentFeaturedIds());
+        applySentState(preview.diff, ts);
+        _dirty = false;
+        clearDraftSaveOnlyChanges();
+        clearSharedDraftState();
+        updateSaveBtn();
+        updateLastUpdatedLabel();
+      }
+      return {
+        ...result,
+        ok: result.ok !== false,
+        preview,
+        snapshot: buildMenuSessionSnapshot((mode === 'save') ? 'saved-live' : 'publish-complete'),
+      };
+    },
     finalizePersistStatus(ok) {
       finalizePersistStatus(ok);
     },
@@ -1043,6 +1093,9 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
     },
 
     async publishUpdate(options = {}) {
+      if (typeof sessionPorts.publishMenuUpdate === 'function') {
+        return sessionPorts.publishMenuUpdate(options);
+      }
       const preview = options.preview?.sections ? options.preview : buildPreview();
       const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
       const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
@@ -2186,25 +2239,128 @@ async function sbResolveMenu() {
   }
 }
 
-async function sbEnsureUncategorized() {
-  if (_uncatCategoryUuid || !SUPABASE_URL || !MENU_ID) return;
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${MENU_ID}&key=eq.__uncategorized__&select=id`,
-    { headers: sbHeaders() }
-  );
-  if (!res.ok) return;
-  const rows = await res.json();
-  if (rows.length) { _uncatCategoryUuid = rows[0].id; return; }
-  const create = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-    method:  'POST',
-    headers: sbHeaders({ 'Prefer': 'return=representation' }),
-    body:    JSON.stringify({
-      menu_id: MENU_ID, key: UNCATEGORIZED_ID,
-      label: 'Uncategorized', icon: '', color: '', sub: '', placeholder: '',
-      display_order: 9999,
-    }),
+async function readApiJsonOrNull(url, options = {}) {
+  try {
+    const res = await fetch(url, options);
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function postApiJson(url, body, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(options.headers || {}),
+  };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body || {}),
+    });
+    const text = await res.text();
+    const payload = text ? JSON.parse(text) : {};
+    return {
+      ok: res.ok,
+      status: res.status,
+      payload,
+      fallbackable: res.status === 404 || res.status === 405,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      payload: { error: error?.message || 'Network error' },
+      fallbackable: true,
+    };
+  }
+}
+
+function getAuthorizedApiHeaders() {
+  const accessToken = String(currentUser?.accessToken || '').trim();
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+}
+
+async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) {
+  const menuId = request.requestedMenuId || MENU_ID;
+  if (!menuId) return null;
+
+  const pageMode = request.pageMode || _appPageMode;
+  const isStaffMode = pageMode === 'manager' || pageMode === 'admin';
+  const authorizedHeaders = getAuthorizedApiHeaders();
+
+  if (isStaffMode && authorizedHeaders.Authorization) {
+    const params = new URLSearchParams({ menu_id: menuId });
+    const workspace = await readApiJsonOrNull(`/api/menu-workspace?${params.toString()}`, {
+      headers: authorizedHeaders,
+    });
+    if (workspace) return workspace;
+  }
+
+  if (pageMode === 'public' || pageMode === 'picker') {
+    const params = new URLSearchParams({ menu_id: menuId });
+    const projection = await readApiJsonOrNull(`/api/menu-public?${params.toString()}`);
+    if (projection) return projection;
+  }
+
+  return null;
+}
+
+async function saveDraftThroughApi(snapshot, savedAt) {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
+  const result = await postApiJson('/api/menu-draft', {
+    menu_id: MENU_ID,
+    snapshot: snapshot || {},
+    saved_at: savedAt || Date.now(),
+    expected_draft_revision: getDraftSavedTs() || null,
+  }, {
+    headers: getAuthorizedApiHeaders(),
   });
-  if (create.ok) { const [cat] = await create.json(); _uncatCategoryUuid = cat.id; }
+  return result;
+}
+
+async function saveLiveMenuThroughApi(snapshot) {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
+  const result = await postApiJson('/api/menu-live', {
+    menu_id: MENU_ID,
+    snapshot,
+    expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+  }, {
+    headers: getAuthorizedApiHeaders(),
+  });
+  return result;
+}
+
+async function publishMenuThroughApi({ mode, preview, selectedChangeIds = [] }) {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
+  const selectedChanges = (preview?.notificationChanges || []).filter(change => selectedChangeIds.includes(change.id));
+  const selectedSections = groupNotificationChangesBySection(selectedChanges);
+  const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+  return postApiJson('/api/menu-publish', {
+    menu_id: MENU_ID,
+    mode,
+    snapshot: buildMenuCacheSnapshot(),
+    preview_diff: Array.isArray(preview?.diff) ? preview.diff : [],
+    selected_sections: serializeNotificationSectionsForLog(selectedSections),
+    patch_message: patchMessage,
+    expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+    expected_draft_revision: getDraftSavedTs() || null,
+  }, {
+    headers: getAuthorizedApiHeaders(),
+  });
+}
+
+async function saveAdminSettingsThroughApi(action, payload = {}) {
+  if (!getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
+  return postApiJson('/api/admin-settings', {
+    action,
+    ...payload,
+  }, {
+    headers: getAuthorizedApiHeaders(),
+  });
 }
 
 async function sbRead() {
@@ -2664,7 +2820,13 @@ async function refreshFeaturedForActiveMenu() {
 
 function withMenuStateLoaderDefaults(deps = {}) {
   return {
-    readState: typeof deps.readState === 'function' ? deps.readState : (() => sbRead()),
+    readState: typeof deps.readState === 'function'
+      ? deps.readState
+      : async ({ request } = {}) => {
+          const apiState = await readMenuStateThroughApi(request || buildCurrentMenuPageRequest());
+          if (apiState) return apiState;
+          return sbRead();
+        },
     hydrateFromState: typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data)),
     applyPersistedDraftState: typeof deps.applyPersistedDraftState === 'function'
       ? deps.applyPersistedDraftState
@@ -2747,7 +2909,7 @@ function createMenuStateLoaderService(deps = {}) {
       } = options;
       const includePersistedDraft = options.includePersistedDraft ?? (request.pageMode === 'manager' || request.pageMode === 'admin');
       try {
-        const data = await readState();
+        const data = await readState({ request, source: options.source || 'network', options });
         if (data) {
           hydrateFromState(data);
           const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
@@ -2778,7 +2940,8 @@ function createMenuStateLoaderService(deps = {}) {
       const oldCats = getCategorySnapshot();
       const oldDesign = getDesignSnapshotValue();
       const oldFeatured = getFeaturedSnapshotValue();
-      const data = await readState();
+      const request = options.request || buildCurrentMenuPageRequest();
+      const data = await readState({ request, source: 'poll', options });
       if (!data) {
         return {
           changed: false,
@@ -2815,10 +2978,6 @@ async function _pollActiveMenuStateInternal() {
 async function loadActiveMenuState(options = {}) {
   const result = await ensureCurrentMenuSession().refresh(options);
   return result?.snapshot || result;
-}
-
-async function sbPatchMenuMeta(update) {
-  return sbPatchMenuMetaForMenu(MENU_ID, update);
 }
 
 async function sbPatchMenuMetaForMenu(menuId, update) {
@@ -2976,31 +3135,12 @@ async function patchMenuMetaWithCompatibility(update) {
 }
 
 async function patchMenuDraftState(snapshot, savedAt = Date.now()) {
-  const payload = {
-    draft_state: snapshot || {},
-    draft_saved_ts: snapshot ? savedAt : null,
-  };
-  try {
-    await sbPatchMenuMetaForMenu(MENU_ID, payload);
+  const apiResult = await saveDraftThroughApi(snapshot, savedAt);
+  if (apiResult.ok) {
     _menuMetaSupportsDraftState = true;
-    return { downgradedFields: [] };
-  } catch (error) {
-    if (isMissingDraftStateColumnError(error)) {
-      _menuMetaSupportsDraftState = false;
-      throw new Error('Save Draft requires the latest Supabase draft-state migration before it can persist shared drafts.');
-    }
-    throw error;
+    return { downgradedFields: Array.isArray(apiResult.payload?.downgradedFields) ? apiResult.payload.downgradedFields : [] };
   }
-}
-
-async function sbPatchRestaurantDesign(design) {
-  if (!SUPABASE_URL || !RESTAURANT_ID || !currentUser?.accessToken) return;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}`, {
-    method:  'PATCH',
-    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-    body:    JSON.stringify({ design }),
-  });
-  if (!r.ok) throw new Error(`restaurant patch: ${r.status}`);
+  throw new Error(apiResult.payload?.error || 'Draft save failed.');
 }
 
 async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
@@ -3142,40 +3282,6 @@ async function sbReadRestaurantSpecials(restaurantId = RESTAURANT_ID) {
         .filter(s => s.item !== null),
     }];
   } catch(e) { return []; }
-}
-
-async function sbDeleteCategory(categoryUuid) {
-  if (!SUPABASE_URL || !categoryUuid || !currentUser?.accessToken) return;
-  await fetch(`${SUPABASE_URL}/rest/v1/categories?id=eq.${categoryUuid}`, {
-    method: 'DELETE', headers: sbHeaders(),
-  });
-}
-
-async function sbSeedCategories(menuId, defs) {
-  if (!SUPABASE_URL || !menuId || !currentUser?.accessToken) return;
-  // 1. Upsert __uncategorized__ sentinel
-  await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-    body: JSON.stringify({ menu_id: menuId, key: UNCATEGORIZED_ID, label: 'Uncategorized',
-      icon: '', color: '', placeholder: '', display_order: 9999 }),
-  });
-  // 2. Bulk insert category rows
-  const rows = defs.map((c, i) => ({
-    menu_id: menuId, key: c.key, label: c.label,
-    icon: c.icon, color: c.color, placeholder: c.placeholder, display_order: i,
-  }));
-  await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-    body: JSON.stringify(rows),
-  });
-  // 3. Create menu_meta row (ignore if already exists)
-  await fetch(`${SUPABASE_URL}/rest/v1/menu_meta`, {
-    method: 'POST',
-    headers: sbHeaders({ 'Prefer': 'resolution=ignore-duplicates,return=minimal' }),
-    body: JSON.stringify({ menu_id: menuId }),
-  });
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
@@ -3729,12 +3835,12 @@ async function saveDesign() {
   }
 
   try {
-    if (SUPABASE_URL && currentUser?.accessToken) {
-      await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(targetRestaurantId)}`, {
-        method:  'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body:    JSON.stringify({ design }),
-      });
+    const apiResult = await saveAdminSettingsThroughApi('save_restaurant_design', {
+      restaurant_id: targetRestaurantId,
+      design,
+    });
+    if (!apiResult.ok) {
+      throw new Error(apiResult.payload?.error || 'design patch failed');
     }
     showToast('✅ Design saved!', 'success');
   } catch(e) {
@@ -3863,36 +3969,6 @@ async function deleteCategory(catId) {
     const exists = pool.some(u => u.name.trim().toLowerCase() === item.name.trim().toLowerCase());
     if (!exists) pool.push({ ...item, onMenu: false });
   });
-  if (items.length > 0 && SUPABASE_URL) {
-    await sbEnsureUncategorized();
-    if (_uncatCategoryUuid) {
-      // Directly upsert the entire pool now — handles both DB-backed items
-      // (ON CONFLICT updates their category_id) and memory-only items (inserts them).
-      // This is explicit and doesn't rely on persistState() to handle orphaned items.
-      const rows = pool.map((item, idx) => ({
-        id:              item.id,
-        category_id:     _uncatCategoryUuid,
-        name:            item.name,
-        desc:            item.desc            || '',
-        recipe:          item.recipe          || [],
-        price:           item.price           || null,
-        is_eighty_sixed: item.eightySixed     || false,
-        on_menu:         false,
-        visibility:      item.visibility      || 'public',
-        upcharges:       item.upcharges       || [],
-        show_description:isItemDescriptionPublic(item),
-        show_recipe:     isItemRecipePublic(item),
-        display_order:   idx,
-      }));
-      await fetch(`${SUPABASE_URL}/rest/v1/items`, {
-        method:  'POST',
-        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body:    JSON.stringify(rows),
-      });
-    }
-  }
-  // Delete the category — items were moved to __uncategorized__ above, so CASCADE won't fire.
-  if (cat._uuid) await sbDeleteCategory(cat._uuid);
   CATEGORY_DEFS = CATEGORY_DEFS.filter(c => c.id !== catId);
   delete menuState[catId];
   invalidateDiff();
@@ -5765,7 +5841,6 @@ async function onSwitchMenuClick() {
     _uncatCategoryUuid = null;
     await ensureCurrentMenuSession().refresh();
     applyDesign(currentDesign);
-    await sbEnsureUncategorized();
     renderManagerWorkspace();
     updateDraftIndicator();
     updateSaveBtn();
@@ -6262,15 +6337,15 @@ async function saveNotifications() {
   // Keep global NOTIFICATIONS in sync if saving for the currently active menu
   if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
   try {
-    if (SUPABASE_URL && currentUser?.accessToken) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
-        method:  'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body:    JSON.stringify({ notifications }),
-      });
-      if (!r.ok) throw new Error(`notifications patch: ${r.status}`);
+    const apiResult = await saveAdminSettingsThroughApi('save_notifications', {
+      menu_id: targetMenuId,
+      notifications,
+    });
+    if (apiResult.ok) {
+      showToast('✅ Notifications saved!', 'success');
+      return;
     }
-    showToast('✅ Notifications saved!', 'success');
+    throw new Error(apiResult.payload?.error || 'notifications patch failed');
   } catch(e) {
     showToast(`Failed to save notifications: ${escHtml(e.message)}`, 'error');
   }
@@ -6307,15 +6382,15 @@ async function saveNotifCredKeys() {
   if (val('notif-cred-webhook-secret')) wh.env_key_secret = val('notif-cred-webhook-secret');
   if (Object.keys(wh).length) notifications_config.webhook = wh;
   try {
-    if (SUPABASE_URL && currentUser?.accessToken) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}`, {
-        method: 'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify({ notifications_config }),
-      });
-      if (!r.ok) throw new Error(`credential keys patch: ${r.status}`);
+    const apiResult = await saveAdminSettingsThroughApi('save_notification_credential_keys', {
+      restaurant_id: restaurantId,
+      notifications_config,
+    });
+    if (apiResult.ok) {
+      showToast('Credential keys saved!', 'success');
+      return;
     }
-    showToast('Credential keys saved!', 'success');
+    throw new Error(apiResult.payload?.error || 'credential keys patch failed');
   } catch(e) {
     showToast(`Failed to save credential keys: ${escHtml(e.message)}`, 'error');
   }
@@ -6343,17 +6418,17 @@ async function saveMenuUrl() {
   else delete notifications.menu_url;
 
   try {
-    if (SUPABASE_URL && currentUser?.accessToken) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(targetMenuId)}`, {
-        method: 'PATCH',
-        headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-        body: JSON.stringify({ notifications }),
-      });
-      if (!r.ok) throw new Error(`menu URL patch: ${r.status}`);
+    const apiResult = await saveAdminSettingsThroughApi('save_menu_url', {
+      menu_id: targetMenuId,
+      menu_url: normalizedUrl,
+    });
+    if (apiResult.ok) {
+      if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
+      localStorage.removeItem(LS_KEYS.menuUrl);
+      showToast('✅ Menu URL saved!', 'success');
+      return;
     }
-    if (targetMenuId === MENU_ID) NOTIFICATIONS = notifications;
-    localStorage.removeItem(LS_KEYS.menuUrl);
-    showToast('✅ Menu URL saved!', 'success');
+    throw new Error(apiResult.payload?.error || 'menu URL patch failed');
   } catch (e) {
     showToast(`Failed to save menu URL: ${escHtml(e.message)}`, 'error');
   }
@@ -6971,99 +7046,6 @@ function handleManagerItemDrop(event, catId, targetItemId) {
   showToast('Item order updated.', 'success');
 }
 
-function buildCategoryUpsertRows() {
-  return CATEGORY_DEFS
-    .map((c, idx) => ({ c, idx }))
-    .filter(({ c }) => c._uuid)
-    .map(({ c, idx }) => ({
-      id:            c._uuid,
-      menu_id:       MENU_ID,
-      key:           c.id,
-      label:         c.title,
-      icon:          c.icon        || '',
-      color:         c.color       || '',
-      sub:           c.sub         || '',
-      placeholder:   c.placeholder || '',
-      display_order: idx,
-    }));
-}
-
-async function insertNewCategories() {
-  for (const [idx, c] of CATEGORY_DEFS.entries()) {
-    if (c._uuid) continue;
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-      method:  'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body:    JSON.stringify({
-        menu_id:       MENU_ID,
-        key:           c.id,
-        label:         c.title,
-        icon:          c.icon        || '',
-        color:         c.color       || '',
-        sub:           c.sub         || '',
-        placeholder:   c.placeholder || '',
-        display_order: idx,
-      }),
-    });
-    if (r.ok) { const [row] = await r.json(); c._uuid = row.id; }
-  }
-}
-
-function buildItemUpsertRows() {
-  const itemRows = [];
-  CATEGORY_DEFS.forEach(cat => {
-    if (!cat._uuid) return;
-    (menuState[cat.id]?.items || []).forEach((item, idx) => {
-      itemRows.push({
-        id:              item.id,
-        category_id:     cat._uuid,
-        name:            item.name,
-        desc:            item.desc           || '',
-        recipe:          item.recipe         || [],
-        price:           item.price          || null,
-        is_eighty_sixed: item.eightySixed    || false,
-        is_draft:        false,
-        on_menu:         item.onMenu         !== false,
-        visibility:      item.visibility     || 'public',
-        upcharges:       item.upcharges      || [],
-        show_description:isItemDescriptionPublic(item),
-        show_recipe:     isItemRecipePublic(item),
-        display_order:   idx,
-      });
-    });
-  });
-  if (_uncatCategoryUuid) {
-    (menuState[UNCATEGORIZED_ID]?.items || []).forEach((item, idx) => {
-      itemRows.push({
-        id:              item.id,
-        category_id:     _uncatCategoryUuid,
-        name:            item.name,
-        desc:            item.desc   || '',
-        recipe:          item.recipe || [],
-        price:           item.price  || null,
-        is_eighty_sixed: item.eightySixed || false,
-        is_draft:        false,
-        on_menu:         false,
-        visibility:      item.visibility || 'public',
-        upcharges:       item.upcharges || [],
-        show_description:isItemDescriptionPublic(item),
-        show_recipe:     isItemRecipePublic(item),
-        display_order:   idx,
-      });
-    });
-  }
-  return itemRows;
-}
-
-async function flushDeletedItems() {
-  if (!_deletedItemIds.size) return;
-  const ids = [..._deletedItemIds].map(id => `"${id}"`).join(',');
-  await fetch(`${SUPABASE_URL}/rest/v1/items?id=in.(${ids})`, {
-    method: 'DELETE', headers: sbHeaders(),
-  });
-  _deletedItemIds.clear();
-}
-
 function finalizePersistStatus(ok) {
   const syncEl = document.getElementById('sync-status');
   if (!syncEl) return;
@@ -7080,127 +7062,20 @@ function finalizePersistStatus(ok) {
 async function persistState(options = {}) {
   const { silentFailure = false } = options;
   if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) return;
-  try {
-    const catRows = buildCategoryUpsertRows();
-    if (catRows.length) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/categories`, {
-        method:  'POST',
-        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body:    JSON.stringify(catRows),
-      });
-      if (!r.ok) throw new Error(`category upsert: ${r.status}`);
-    }
 
-    await insertNewCategories();
-
-    const itemRows = buildItemUpsertRows();
-    if (itemRows.length) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/items`, {
-        method:  'POST',
-        headers: sbHeaders({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body:    JSON.stringify(itemRows),
-      });
-      if (!r.ok) throw new Error(`items upsert: ${r.status}`);
-    }
-
-    await flushDeletedItems();
-
-    await Promise.all([
-      sbPatchMenuMeta({ bot_id: BOT_ID }),
-      sbPatchRestaurantDesign(currentDesign),
-    ]);
-
+  const apiSnapshot = {
+    ...buildMenuCacheSnapshot(),
+    deleted_item_ids: Array.from(_deletedItemIds),
+  };
+  const apiResult = await saveLiveMenuThroughApi(apiSnapshot);
+  if (apiResult.ok) {
+    _deletedItemIds.clear();
     finalizePersistStatus(true);
     return true;
-  } catch(e) {
-    finalizePersistStatus(false);
-    if (!silentFailure) showToast('⚠️ Cloud save failed.', 'error');
-    return false;
   }
-}
-
-function finalizeLiveCommit(ts) {
-  menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
-  lsSet(LS_KEYS.lastUpdated, String(ts));
-  _dirty = false;
-  clearDraftSaveOnlyChanges();
-  clearSharedDraftState();
-  updateSaveBtn();
-  updateLastUpdatedLabel();
-}
-
-async function commitLiveMenuChanges() {
-  const warnings = [];
-  try {
-    const persisted = await persistState({ silentFailure: true });
-    if (!persisted) {
-      return {
-        ok: false,
-        userHandled: true,
-        snapshot: buildMenuSessionSnapshot('live-save-failed'),
-      };
-    }
-    const ts = Date.now();
-    try {
-      await patchMenuMetaWithCompatibility({ last_updated_ts: ts });
-      await patchMenuDraftState(null);
-    } catch (_) {
-      warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
-    }
-    finalizeLiveCommit(ts);
-    const cacheSynced = syncLocalMenuCache({ silent: true });
-    if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
-    return {
-      ok: true,
-      ts,
-      warnings,
-      snapshot: buildMenuSessionSnapshot(warnings.length ? 'saved-live-warning' : 'saved-live'),
-    };
-  } catch (e) {
-    finalizePersistStatus(false);
-    return {
-      ok: false,
-      userHandled: false,
-      snapshot: buildMenuSessionSnapshot('live-save-failed'),
-    };
-  }
-}
-
-async function _saveActiveMenuDraftInternal() {
-  if (!SUPABASE_URL || !MENU_ID || !currentUser?.accessToken) {
-    return {
-      ok: false,
-      userHandled: false,
-      snapshot: buildMenuSessionSnapshot('draft-save-failed'),
-    };
-  }
-  if (!_dirty) {
-    return {
-      ok: false,
-      noop: true,
-      snapshot: buildMenuSessionSnapshot('draft-noop'),
-    };
-  }
-
-  const ts = Date.now();
-  try {
-    await patchMenuDraftState(buildPersistedDraftStateSnapshot(ts), ts);
-    _dirty = false;
-    setSharedDraftState(ts);
-    updateSaveBtn();
-    return {
-      ok: true,
-      ts,
-      snapshot: buildMenuSessionSnapshot('draft-saved'),
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      userHandled: false,
-      userMessage: error?.message || 'Draft save failed.',
-      snapshot: buildMenuSessionSnapshot('draft-save-failed'),
-    };
-  }
+  finalizePersistStatus(false);
+  if (!silentFailure) showToast(`⚠️ ${apiResult.payload?.error || 'Cloud save failed.'}`, 'error');
+  return false;
 }
 
 async function saveMenu() {

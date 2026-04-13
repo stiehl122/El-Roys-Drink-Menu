@@ -1,0 +1,181 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+const { pathToFileURL } = require('node:url');
+
+const ROOT = path.join(__dirname, '..');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
+
+async function importApiModule(relativePath) {
+  const fileUrl = pathToFileURL(path.join(ROOT, relativePath)).href;
+  return import(`${fileUrl}?wave1=${Date.now()}-${Math.random()}`);
+}
+
+test('wave 1 server read routes delegate through shared menu-read helpers', () => {
+  const workspaceSource = read('api/menu-workspace.js');
+  const publicSource = read('api/menu-public.js');
+  const bootstrapSource = read('api/session-bootstrap.js');
+
+  assert.match(workspaceSource, /from '\.\/_menu-read\.js'/);
+  assert.match(workspaceSource, /createMenuWorkspacePayload/);
+  assert.match(workspaceSource, /readMenuStateBundle/);
+  assert.match(workspaceSource, /requireAuthenticatedUser/);
+  assert.match(workspaceSource, /requireMenuAccess/);
+
+  assert.match(publicSource, /from '\.\/_menu-read\.js'/);
+  assert.match(publicSource, /createPublicMenuPayload/);
+  assert.match(publicSource, /readMenuStateBundle/);
+
+  assert.match(bootstrapSource, /from '\.\/_menu-read\.js'/);
+  assert.match(bootstrapSource, /createSessionBootstrapPayload/);
+  assert.match(bootstrapSource, /requireAuthenticatedUser/);
+  assert.match(bootstrapSource, /readMenuAccessForUser/);
+});
+
+test('shared menu read helper exposes stable wave 1 contract builders', async () => {
+  const helper = await importApiModule('api/_menu-read.js');
+
+  assert.equal(typeof helper.getKnownMenuById, 'function');
+  assert.equal(typeof helper.getKnownMenus, 'function');
+  assert.equal(typeof helper.getKnownRestaurants, 'function');
+  assert.equal(typeof helper.readMenuStateBundle, 'function');
+  assert.equal(typeof helper.createMenuWorkspacePayload, 'function');
+  assert.equal(typeof helper.createPublicMenuPayload, 'function');
+  assert.equal(typeof helper.createSessionBootstrapPayload, 'function');
+});
+
+test('wave 1 server read routes export request handlers', async () => {
+  const workspaceRoute = await importApiModule('api/menu-workspace.js');
+  const publicRoute = await importApiModule('api/menu-public.js');
+  const bootstrapRoute = await importApiModule('api/session-bootstrap.js');
+
+  assert.equal(typeof workspaceRoute.default, 'function');
+  assert.equal(typeof publicRoute.default, 'function');
+  assert.equal(typeof bootstrapRoute.default, 'function');
+});
+
+test('workspace payload preserves the live menu snapshot shape and adds staff context', async () => {
+  const helper = await importApiModule('api/_menu-read.js');
+  const bundle = {
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [{ key: 'beer', items: [{ id: 'draft-lager', on_menu: true, visibility: 'public' }] }],
+    meta: {
+      last_updated_ts: 1712705100000,
+      draft_state: { cats: [{ key: 'beer', items: [] }] },
+      draft_saved_ts: 1712705200000,
+    },
+    restaurant: {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: "Leroy's Lounge",
+      slug: 'leroys-lounge',
+      design: { accent: '#123' },
+      use_custom_design: true,
+    },
+  };
+
+  const payload = helper.createMenuWorkspacePayload(bundle, {
+    actor: {
+      id: 'user-1',
+      name: 'Alex',
+      role: 'manager',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+  });
+
+  assert.deepEqual(payload.cats, bundle.cats);
+  assert.equal(payload.meta.last_updated_ts, 1712705100000);
+  assert.deepEqual(payload.meta.draft_state, bundle.meta.draft_state);
+  assert.equal(payload.workspace.actor.role, 'manager');
+  assert.equal(payload.workspace.permissions.canManage, true);
+  assert.equal(payload.workspace.permissions.canAdmin, false);
+  assert.equal(payload.context.kind, 'menu-workspace');
+});
+
+test('public payload strips staff-only menu metadata and filters non-public items', async () => {
+  const helper = await importApiModule('api/_menu-read.js');
+  const payload = helper.createPublicMenuPayload({
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [
+      {
+        key: 'beer',
+        items: [
+          { id: 'lager', on_menu: true, visibility: 'public' },
+          { id: 'hidden', on_menu: false, visibility: 'public' },
+        ],
+      },
+      {
+        key: '__uncategorized__',
+        items: [{ id: 'uncat', on_menu: false, visibility: 'public' }],
+      },
+    ],
+    meta: {
+      bot_id: 'secret-bot',
+      notifications: { groupme: true },
+      draft_state: { cats: [] },
+      draft_saved_ts: 1712705200000,
+      last_updated_ts: 1712705100000,
+      last_sent_ts: 1712705150000,
+      last_sent_categories: ['beer'],
+      last_sent_featured: ['featured-1'],
+    },
+    restaurant: {
+      id: '00000000-0000-0000-0000-000000000010',
+      name: "Leroy's Lounge",
+      slug: 'leroys-lounge',
+      design: { accent: '#123' },
+      use_custom_design: true,
+    },
+  });
+
+  assert.equal(payload.context.kind, 'menu-public');
+  assert.equal(payload.cats.length, 1);
+  assert.equal(payload.cats[0].items.length, 1);
+  assert.equal(payload.meta.last_updated_ts, 1712705100000);
+  assert.equal(payload.meta.last_sent_ts, 1712705150000);
+  assert.deepEqual(payload.meta.last_sent_categories, ['beer']);
+  assert.deepEqual(payload.meta.last_sent_featured, ['featured-1']);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'draft_state'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'bot_id'), false);
+});
+
+test('session bootstrap payload exposes actor capabilities against the fixed menu registry', async () => {
+  const helper = await importApiModule('api/_menu-read.js');
+  const payload = helper.createSessionBootstrapPayload({
+    actor: { id: 'user-1', role: 'manager', name: 'Alex' },
+    accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+  });
+
+  assert.equal(payload.actor.role, 'manager');
+  assert.equal(typeof payload.appVersion, 'string');
+  assert.equal(payload.defaultMenuId, '00000000-0000-0000-0000-000000000020');
+  assert.equal(payload.capabilities.canAccessManager, true);
+  assert.equal(payload.capabilities.canAccessAdmin, false);
+  assert.equal(payload.capabilities.canManageAnyMenu, true);
+  assert.ok(Array.isArray(payload.restaurants));
+  assert.equal(payload.menus.length, 4);
+  assert.equal(payload.menus.filter(menu => menu.canManage).length, 1);
+});
+
+test('app runtime prefers wave 1 server read routes before direct supabase reads', () => {
+  const source = read('app.js');
+  assert.match(source, /\/api\/menu-workspace\?/);
+  assert.match(source, /\/api\/menu-public\?/);
+  assert.match(source, /if \(workspace\) return workspace;/);
+  assert.match(source, /if \(projection\) return projection;/);
+});

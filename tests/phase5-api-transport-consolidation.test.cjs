@@ -22,13 +22,22 @@ test('phase 5 shared api transport helper exports config, headers, and response 
 test('api routes consume shared supabase transport helper', () => {
   const users = read('api/users.js');
   const specials = read('api/specials.js');
-  const notify = read('api/send-notification.js');
 
   assert.match(users, /from '\.\/_supabase\.js'/);
   assert.match(specials, /from '\.\/_supabase\.js'/);
-  assert.match(notify, /from '\.\/_supabase\.js'/);
   assert.doesNotMatch(specials, /function\s+serviceHeaders\s*\(/);
   assert.doesNotMatch(specials, /function\s+readJsonSafe\s*\(/);
   assert.doesNotMatch(specials, /queryAction/);
   assert.doesNotMatch(specials, /action\s*===\s*'migrate'/);
+});
+
+test('notification route composes shared authorization and delivery boundaries', () => {
+  const notify = read('api/send-notification.js');
+
+  assert.match(notify, /from '\.\/_notification-gateway\.js'/);
+  assert.match(notify, /authorizeNotificationRequest/);
+  assert.match(notify, /from '\.\/_notification-delivery\.js'/);
+  assert.match(notify, /deliverMenuNotification/);
+  assert.doesNotMatch(notify, /from '\.\/_supabase\.js'/);
+  assert.doesNotMatch(notify, /serviceHeaders\s*\(/);
 });

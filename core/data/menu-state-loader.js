@@ -53,7 +53,7 @@
         } = options;
         const includePersistedDraft = options.includePersistedDraft ?? (request.pageMode === 'manager' || request.pageMode === 'admin');
         try {
-          const data = await readState();
+          const data = await readState({ request, source: options.source || 'network', options });
           if (data) {
             hydrateFromState(data);
             const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
@@ -84,7 +84,8 @@
         const oldCats = getCategorySnapshot();
         const oldDesign = getDesignSnapshotValue();
         const oldFeatured = getFeaturedSnapshotValue();
-        const data = await readState();
+        const request = options.request || globalScope.buildCurrentMenuPageRequest?.();
+        const data = await readState({ request, source: 'poll', options });
         if (!data) {
           return {
             changed: false,
