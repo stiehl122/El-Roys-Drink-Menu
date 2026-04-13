@@ -64,7 +64,7 @@
         </div>
       </div>
 
-      <div class="manager-shell-legacy-hooks" aria-hidden="true">
+      <div class="manager-shell-legacy-hooks" aria-hidden="true" hidden>
         <button class="manager-btn" id="action-btn" tabindex="-1">Open Manager</button>
         <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
         <div class="manager-shell-meta-card">
@@ -82,6 +82,26 @@
   <div id="loading-view">
     <div class="spinner"></div>
     <p>Loading manager workspace…</p>
+    <section class="manager-shell-locked-card" id="manager-locked-card" hidden aria-labelledby="manager-locked-title">
+      <p class="manager-shell-locked-kicker">Manager Access</p>
+      <h2 id="manager-locked-title">Open the workspace</h2>
+      <p class="manager-shell-locked-copy">Sign in to edit menu drafts, review recent changes, and publish updates to the live board.</p>
+      <div class="manager-shell-locked-actions">
+        <button
+          class="btn-small manager-shell-locked-primary"
+          id="manager-locked-signin-btn"
+          type="button"
+          data-auth-trigger="signin"
+          data-auth-origin="manager-locked-shell"
+        >Sign In</button>
+        <button
+          class="btn-small manager-shell-locked-secondary"
+          type="button"
+          data-auth-trigger="signup"
+          data-auth-origin="manager-locked-shell"
+        >Create Account</button>
+      </div>
+    </section>
   </div>
 
   <div id="public-view" style="display:none;">

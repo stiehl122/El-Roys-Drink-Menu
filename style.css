@@ -2409,6 +2409,82 @@ body.manager-stitch-shell #loading-view {
   padding-top: calc(112px + env(safe-area-inset-top));
 }
 
+body.manager-stitch-shell #loading-view.loading-view-locked {
+  min-height: calc(100vh - 92px - env(safe-area-inset-top));
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 18px;
+  padding-top: calc(116px + env(safe-area-inset-top));
+}
+
+body.manager-stitch-shell .manager-shell-locked-card {
+  width: min(560px, 100%);
+  margin: 0 auto;
+  padding: 28px 28px 30px;
+  border: 1px solid var(--manager-shell-border);
+  background:
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 34%),
+    linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
+  box-shadow: 0 24px 40px var(--manager-shell-shadow);
+  text-align: left;
+}
+
+body.manager-stitch-shell .manager-shell-locked-kicker {
+  margin: 0 0 10px;
+  color: var(--manager-shell-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .manager-shell-locked-card h2 {
+  margin: 0 0 12px;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: clamp(1.8rem, 3vw, 2.35rem);
+  line-height: 1.05;
+}
+
+body.manager-stitch-shell .manager-shell-locked-copy {
+  max-width: 32rem;
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+body.manager-stitch-shell .manager-shell-locked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+body.manager-stitch-shell .manager-shell-locked-primary,
+body.manager-stitch-shell .manager-shell-locked-secondary {
+  min-height: 44px;
+  padding-inline: 16px;
+}
+
+body.manager-stitch-shell .manager-shell-locked-primary {
+  background: var(--manager-shell-primary);
+  border-color: var(--manager-shell-primary);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .manager-shell-locked-primary:hover,
+body.manager-stitch-shell .manager-shell-locked-primary:focus-visible {
+  background: var(--manager-shell-accent);
+  border-color: var(--manager-shell-accent);
+  color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .manager-shell-locked-secondary {
+  background: transparent;
+}
+
 body.manager-stitch-shell .spinner {
   box-shadow: 0 0 0 8px var(--manager-shell-surface);
 }
@@ -4944,6 +5020,27 @@ body.manager-stitch-shell .manager-shell-actionbar-status {
   body.manager-stitch-shell .manager-shell-stats-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  body.manager-stitch-shell #loading-view.loading-view-locked {
+    min-height: calc(100vh - 32px - env(safe-area-inset-top));
+    padding-top: calc(92px + env(safe-area-inset-top));
+  }
+
+  body.manager-stitch-shell .manager-shell-locked-card {
+    width: 100%;
+    padding: 22px 20px 24px;
+    border-radius: 20px;
+  }
+
+  body.manager-stitch-shell .manager-shell-locked-actions {
+    flex-direction: column;
+  }
+
+  body.manager-stitch-shell .manager-shell-locked-primary,
+  body.manager-stitch-shell .manager-shell-locked-secondary {
+    width: 100%;
+    justify-content: center;
   }
 
   body.manager-stitch-shell .manager-shell-stat-card {

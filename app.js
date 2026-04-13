@@ -3166,7 +3166,7 @@ async function syncRequestedPageModeLegacy() {
     document.body.classList.remove('manager-mode');
     publicView.style.display = 'none';
     managerView.style.display = 'none';
-    _setLoadingMessage('Sign in to access settings.', { hideSpinner: true });
+    _setLoadingMessage('Sign in to access settings.', { hideSpinner: true, showLockedState: true });
     requestSignIn({ screen: 'signin', origin: 'settings-gate', reason: 'settings-auth-required' });
     return {
       handled: true,
@@ -6982,9 +6982,12 @@ function _setLoadingMessage(message, opts = {}) {
   _setSettingsShellPending(false);
   const spinner = loadingView.querySelector('.spinner');
   const textEl = loadingView.querySelector('p');
+  const lockedCard = document.getElementById('manager-locked-card');
   loadingView.style.display = 'block';
+  loadingView.classList.toggle('loading-view-locked', !!opts.showLockedState);
   if (spinner) spinner.style.display = opts.hideSpinner ? 'none' : '';
   if (textEl) textEl.textContent = message;
+  if (lockedCard) lockedCard.hidden = !opts.showLockedState;
 }
 
 function getAccessibleManagerMenuIds() {
@@ -7979,6 +7982,8 @@ function renderUserHeader(options = {}) {
   const actionBtn = document.getElementById('action-btn');
   const adminBtn  = document.getElementById('admin-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
+  const drawerToggle = document.getElementById('settings-drawer-toggle');
+  const lockedSignInBtn = document.getElementById('manager-locked-signin-btn');
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
@@ -7992,6 +7997,12 @@ function renderUserHeader(options = {}) {
   if (adminDrawerBtn) {
     adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminDrawerBtn.classList.toggle('active', isAdminMode);
+  }
+  if (drawerToggle) {
+    drawerToggle.style.display = (!signedIn && isSettingsRoute) ? 'none' : '';
+  }
+  if (lockedSignInBtn) {
+    lockedSignInBtn.textContent = signedIn ? 'Resume Manager' : 'Sign In';
   }
   updateDrawerAddItemButton();
 
