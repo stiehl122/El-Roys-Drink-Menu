@@ -26,6 +26,12 @@ body.route-restaurant.route-restaurant--leroy {
   --ll-board-dropdown: rgb(42 42 42 / 1);
   --ll-board-dropdown-line: rgb(53 53 53 / 1);
   --ll-board-frame: rgb(65 0 0 / 0.95);
+  --ll-board-section-surface: rgb(255 255 255 / 0.2);
+  --ll-board-section-surface-strong: rgb(255 255 255 / 0.3);
+  --ll-board-section-border: rgb(65 0 0 / 0.14);
+  --ll-board-section-rule: rgb(65 0 0 / 0.22);
+  --ll-board-section-shadow: 0 18px 34px rgb(65 0 0 / 0.08);
+  --ll-board-board-glaze: rgb(255 255 255 / 0.16);
   --ll-board-stamp-border: rgb(255 255 255 / 0.3);
   --ll-board-action-border: rgb(255 255 255 / 0.2);
   --ll-board-action-text: rgb(255 255 255 / 0.96);
@@ -479,6 +485,7 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-board-bg {
+  position: relative;
   background:
     repeating-linear-gradient(
       180deg,
@@ -492,14 +499,34 @@ body.route-restaurant.route-restaurant--leroy {
   min-height: calc(100dvh - 80px);
 }
 
+#restaurant-site-wrapper .ll-board-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top center, var(--ll-board-board-glaze), transparent 58%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 26%);
+  pointer-events: none;
+}
+
 #restaurant-site-wrapper .ll-board-main {
-  width: min(48rem, calc(100% - 2rem));
+  position: relative;
+  z-index: 1;
+  width: min(60rem, calc(100% - 2rem));
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   padding: 2.5rem calc(2rem + var(--ll-safe-right)) calc(3rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
 }
 
 #restaurant-site-wrapper #ll-route-main {
   scroll-margin-top: calc(7rem + var(--ll-safe-top));
+}
+
+#restaurant-site-wrapper #ll-route-sections {
+  display: grid;
+  gap: 1.35rem;
 }
 
 #restaurant-site-wrapper .ll-board-footer-updated,
@@ -514,13 +541,25 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-slat-section {
+  position: relative;
   padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  overflow: visible;
-  margin-bottom: 2.5rem;
+  padding: 1.35rem 1.45rem 1.1rem;
+  border: 1px solid var(--ll-board-section-border);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(180deg, var(--ll-board-section-surface-strong), var(--ll-board-section-surface));
+  box-shadow: var(--ll-board-section-shadow);
+  overflow: hidden;
+  margin-bottom: 0;
+}
+
+#restaurant-site-wrapper .ll-slat-section::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgb(255 255 255 / 0.35), var(--ll-board-section-rule), rgb(255 255 255 / 0.12));
+  pointer-events: none;
 }
 
 #restaurant-site-wrapper .ll-slat-section-head {
@@ -531,7 +570,15 @@ body.route-restaurant.route-restaurant--leroy {
   padding: 0;
   border: 0;
   background: transparent;
-  margin-bottom: 1rem;
+  margin-bottom: 1.15rem;
+}
+
+#restaurant-site-wrapper .ll-slat-section-head::after {
+  content: '';
+  flex: 1 1 auto;
+  min-width: 2rem;
+  height: 1px;
+  background: linear-gradient(90deg, var(--ll-board-section-rule), transparent);
 }
 
 #restaurant-site-wrapper .ll-slat-section-title {
@@ -548,6 +595,7 @@ body.route-restaurant.route-restaurant--leroy {
 #restaurant-site-wrapper .ll-board-rows {
   display: flex;
   flex-direction: column;
+  gap: 0.1rem;
 }
 
 #restaurant-site-wrapper .ll-board-item.menu-item {
@@ -565,6 +613,7 @@ body.route-restaurant.route-restaurant--leroy {
   justify-content: space-between;
   gap: 1rem;
   min-height: 10px;
+  padding-block: 0.15rem;
 }
 
 #restaurant-site-wrapper .ll-board-row--expandable {
@@ -572,7 +621,7 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-board-row-spacer {
-  height: 14px;
+  height: 10px;
 }
 
 #restaurant-site-wrapper .ll-board-row--desc {
@@ -821,6 +870,8 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-board-footer {
+  position: relative;
+  z-index: 1;
   padding: 1.5rem calc(2rem + var(--ll-safe-right)) calc(1.75rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
   margin-top: auto;
   background:
@@ -871,6 +922,17 @@ body.route-restaurant.route-restaurant--leroy {
 #restaurant-site-wrapper .ll-board-footer-action:focus-visible {
   color: #fff0e7;
   outline: none;
+}
+
+@media (min-width: 980px) {
+  #restaurant-site-wrapper #ll-route-sections {
+    grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 0.95fr);
+    align-items: start;
+  }
+
+  #restaurant-site-wrapper #ll-route-sections > .ll-slat-section {
+    height: 100%;
+  }
 }
 
 @keyframes ll-board-flicker {
@@ -960,6 +1022,7 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-slat-section {
+    padding: 1rem 1rem 0.9rem;
     margin-bottom: 1.75rem;
   }
 
@@ -1080,6 +1143,10 @@ body.route-restaurant.route-restaurant--leroy {
     padding: 0.875rem calc(0.25rem + var(--ll-safe-right)) calc(1.5rem + var(--ll-safe-bottom)) calc(0.25rem + var(--ll-safe-left));
   }
 
+  #restaurant-site-wrapper .ll-slat-section {
+    padding-inline: 0.9rem;
+  }
+
   #restaurant-site-wrapper .ll-board-row {
     align-items: flex-start;
   }
@@ -1163,6 +1230,12 @@ body.route-restaurant.route-restaurant--leroy {
     --ll-board-dropdown: rgb(35 35 34 / 1);
     --ll-board-dropdown-line: rgb(48 48 47 / 1);
     --ll-board-frame: rgb(28 16 16 / 0.95);
+    --ll-board-section-surface: rgb(22 18 17 / 0.54);
+    --ll-board-section-surface-strong: rgb(34 25 23 / 0.66);
+    --ll-board-section-border: rgb(255 240 214 / 0.12);
+    --ll-board-section-rule: rgb(255 240 214 / 0.16);
+    --ll-board-section-shadow: 0 20px 40px rgb(0 0 0 / 0.28);
+    --ll-board-board-glaze: rgb(255 244 224 / 0.08);
     --ll-board-stamp-border: rgb(255 240 214 / 0.34);
     --ll-board-action-border: rgb(255 240 214 / 0.24);
     --ll-board-action-text: rgb(255 244 224 / 0.98);
