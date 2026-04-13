@@ -72,6 +72,42 @@ test('news import decodes numeric html entities in imported fields', async () =>
   }
 });
 
+test('news import preserves apostrophes inside quoted meta tags', async () => {
+  const { importNewsFromUrl } = await loadImportModule();
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    text: async () => `
+      <html>
+        <head>
+          <meta property="og:title" content="Leroy's patio is back">
+          <meta property="og:description" content="Tonight's first round is on us.">
+          <meta property="og:site_name" content="Detroit's Best">
+          <meta property="article:published_time" content="2026-04-12T12:00:00Z">
+          <link rel="canonical" href="https://example.com/story">
+        </head>
+      </html>
+    `,
+  });
+
+  try {
+    const result = await importNewsFromUrl('https://example.com/story');
+    assert.equal(result.title, "Leroy's patio is back");
+    assert.equal(result.body, "Tonight's first round is on us.");
+    assert.equal(result.source, "Detroit's Best");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('news import rejects localhost and private-network URLs', async () => {
+  const { importNewsFromUrl } = await loadImportModule();
+  await assert.rejects(
+    () => importNewsFromUrl('http://127.0.0.1/private'),
+    error => error?.status === 400 && /public internet url/i.test(String(error?.message || ''))
+  );
+});
+
 test('review import extracts best-effort Google review fields', async () => {
   const { importReviewFromUrl } = await loadImportModule();
   const originalFetch = global.fetch;

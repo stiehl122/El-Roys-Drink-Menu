@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 function normalizeWhitespace(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -53,6 +55,57 @@ function canonicalizeUrl(rawUrl = '') {
   }
 }
 
+function escapeRegExp(value = '') {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function isPrivateIpv4(hostname = '') {
+  const parts = String(hostname || '').split('.').map(Number);
+  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  if (parts[0] === 10) return true;
+  if (parts[0] === 127) return true;
+  if (parts[0] === 169 && parts[1] === 254) return true;
+  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 192 && parts[1] === 168) return true;
+  return false;
+}
+
+function isPrivateIpv6(hostname = '') {
+  const normalized = String(hostname || '').trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true;
+  if (normalized.startsWith('fe80:')) return true;
+  return normalized.startsWith('fc') || normalized.startsWith('fd');
+}
+
+function isBlockedRemoteHostname(hostname = '') {
+  const normalized = String(hostname || '').trim().toLowerCase();
+  if (!normalized) return true;
+  if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true;
+  const ipVersion = isIP(normalized);
+  if (ipVersion === 4) return isPrivateIpv4(normalized);
+  if (ipVersion === 6) return isPrivateIpv6(normalized);
+  return false;
+}
+
+function assertSafeRemoteUrl(rawUrl = '', message = 'Enter a valid public URL.') {
+  const sourceUrl = canonicalizeUrl(rawUrl);
+  if (!sourceUrl) throw { status: 400, message };
+  let parsed = null;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch (_) {
+    throw { status: 400, message };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw { status: 400, message };
+  }
+  if (isBlockedRemoteHostname(parsed.hostname)) {
+    throw { status: 400, message: 'Use a public internet URL for landing-page imports.' };
+  }
+  return sourceUrl;
+}
+
 function getHostLabel(url = '') {
   try {
     const hostname = new URL(url).hostname.replace(/^www\./i, '');
@@ -75,10 +128,14 @@ function formatImportDate(value = '') {
 }
 
 function extractMetaContent(html = '', key = '', attr = 'property') {
-  const pattern = new RegExp(`<meta[^>]+${attr}=["']${key}["'][^>]+content=["']([^"']+)["'][^>]*>`, 'i');
-  const reversePattern = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${key}["'][^>]*>`, 'i');
-  const match = html.match(pattern) || html.match(reversePattern);
-  return match ? stripHtml(match[1]) : '';
+  const safeKey = escapeRegExp(key);
+  const safeAttr = escapeRegExp(attr);
+  const pattern = new RegExp(`<meta[^>]+${safeAttr}=(["'])${safeKey}\\1[^>]+content=(["'])([\\s\\S]*?)\\2[^>]*>`, 'i');
+  const reversePattern = new RegExp(`<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]+${safeAttr}=(["'])${safeKey}\\3[^>]*>`, 'i');
+  const match = html.match(pattern);
+  if (match) return stripHtml(match[3]);
+  const reverseMatch = html.match(reversePattern);
+  return reverseMatch ? stripHtml(reverseMatch[2]) : '';
 }
 
 function extractLinkHref(html = '', rel = 'canonical') {
@@ -147,8 +204,7 @@ function buildImportStatus(requiredValues = []) {
 
 export async function importNewsFromUrl(rawUrl = '') {
   const attemptedAt = String(Date.now());
-  const sourceUrl = canonicalizeUrl(rawUrl);
-  if (!sourceUrl) throw { status: 400, message: 'Enter a valid article URL.' };
+  const sourceUrl = assertSafeRemoteUrl(rawUrl, 'Enter a valid article URL.');
 
   try {
     const html = await fetchRemoteHtml(sourceUrl);
@@ -214,8 +270,7 @@ export async function importNewsFromUrl(rawUrl = '') {
 
 export async function importReviewFromUrl(rawUrl = '') {
   const attemptedAt = String(Date.now());
-  const sourceUrl = canonicalizeUrl(rawUrl);
-  if (!sourceUrl) throw { status: 400, message: 'Enter a valid Google review URL.' };
+  const sourceUrl = assertSafeRemoteUrl(rawUrl, 'Enter a valid Google review URL.');
   if (!/google\./i.test(sourceUrl)) throw { status: 400, message: 'Use a Google review URL for v1 review imports.' };
 
   try {

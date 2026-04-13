@@ -3625,8 +3625,10 @@ function renderLandingRootHours(section = {}) {
 function setLandingRootFallbackVisible(visible) {
   const shellEl = document.getElementById('landing-root-shell');
   const fallbackEl = document.getElementById('landing-root-fallback');
+  const dotNavEl = document.querySelector('.landing-dot-nav');
   if (shellEl) shellEl.hidden = !!visible;
   if (fallbackEl) fallbackEl.hidden = !visible;
+  if (dotNavEl) dotNavEl.hidden = !!visible;
 }
 
 function renderLandingRootPage(record = _landingPageState) {

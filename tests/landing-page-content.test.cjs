@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadAppSandbox } = require('./helpers/runtime.cjs');
+const { createDocument, createElement, loadAppSandbox } = require('./helpers/runtime.cjs');
 
 function buildRecord(sandbox) {
   return sandbox.createDefaultLandingPageRecord();
@@ -127,4 +127,24 @@ test('landing renderable news excludes archived and invalid items', () => {
 
   assert.equal(items.length, 1);
   assert.equal(items[0].id, 'news-valid');
+});
+
+test('landing safe fallback hides the section dot nav', () => {
+  const document = createDocument();
+  const shellEl = document._registerElement('landing-root-shell', createElement('main', 'landing-root-shell'));
+  const fallbackEl = document._registerElement('landing-root-fallback', createElement('div', 'landing-root-fallback'));
+  const dotNavEl = createElement('nav');
+  document._registerSelector('.landing-dot-nav', dotNavEl);
+
+  const sandbox = loadAppSandbox({ Intl, document });
+
+  sandbox.setLandingRootFallbackVisible(true);
+  assert.equal(shellEl.hidden, true);
+  assert.equal(fallbackEl.hidden, false);
+  assert.equal(dotNavEl.hidden, true);
+
+  sandbox.setLandingRootFallbackVisible(false);
+  assert.equal(shellEl.hidden, false);
+  assert.equal(fallbackEl.hidden, true);
+  assert.equal(dotNavEl.hidden, false);
 });
