@@ -699,6 +699,41 @@ body.route-restaurant.route-restaurant--elroy {
   outline: none;
 }
 
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-main {
+  padding-bottom: calc(3.25rem + var(--erc-safe-bottom));
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-hero {
+  margin-bottom: 2.3rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-section {
+  margin-bottom: 2.5rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-section-head {
+  margin-bottom: 1.35rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-items {
+  gap: 1.45rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-row {
+  padding-bottom: 0.22rem;
+  margin-bottom: 0.22rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-title,
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-price {
+  font-size: 1.22rem;
+}
+
+#restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-desc {
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
 @keyframes erc-route-boot-sheen {
   from {
     background-position: 200% 0;
@@ -890,6 +925,19 @@ body.route-restaurant.route-restaurant--elroy {
 
   #restaurant-site-wrapper .erc-page.is-mobile-compact .erc-hero {
     margin-bottom: 2rem;
+  }
+
+  #restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-hero {
+    margin-bottom: 1.45rem;
+  }
+
+  #restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-section {
+    margin-bottom: 2rem;
+  }
+
+  #restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-title,
+  #restaurant-site-wrapper .erc-page:has(.erc-menu-toggle-btn[data-route-menu-toggle='food'][aria-pressed='true']) .erc-item-price {
+    font-size: 1.12rem;
   }
 }
 
