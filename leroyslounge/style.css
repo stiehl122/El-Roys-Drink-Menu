@@ -1105,32 +1105,50 @@ body.route-restaurant.route-restaurant--leroy {
 
 @media (max-width: 640px) {
   #restaurant-site-wrapper .ll-board-topbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'logo actions'
+      'toggle toggle';
+    gap: 0.55rem 0.75rem;
     padding: calc(0.75rem + var(--ll-safe-top)) calc(0.75rem + var(--ll-safe-right)) 0.75rem calc(0.75rem + var(--ll-safe-left));
   }
 
   #restaurant-site-wrapper .ll-board-topbar-left {
+    grid-area: logo;
     align-self: center;
   }
 
   #restaurant-site-wrapper .ll-board-topbar-center {
-    justify-content: center;
+    grid-area: toggle;
+    justify-content: stretch;
   }
 
   #restaurant-site-wrapper .ll-board-topbar-right {
-    gap: 0.5rem;
+    grid-area: actions;
+    gap: 0.45rem;
+    align-self: center;
   }
 
-  #restaurant-site-wrapper .ll-menu-toggle,
+  #restaurant-site-wrapper .ll-board-logo {
+    height: 2.1rem;
+  }
+
+  #restaurant-site-wrapper .ll-menu-toggle {
+    width: 100%;
+  }
+
   #restaurant-site-wrapper .ll-board-action-cluster {
     width: auto;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 0.35rem;
   }
 
   #restaurant-site-wrapper .ll-board-jump-link,
   #restaurant-site-wrapper .ll-board-swap-trigger {
     min-height: 32px;
-    padding-inline: 10px;
+    padding-inline: 0.7rem;
+    font-size: 8px;
   }
 
   #restaurant-site-wrapper .ll-board-route-dropdown {
@@ -1162,28 +1180,30 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: 'logo toggle';
     gap: 0.5rem;
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar-left {
-    grid-column: 1;
+    grid-area: logo;
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar-center {
-    grid-column: 2;
-    justify-content: flex-start;
+    grid-area: toggle;
+    justify-content: flex-end;
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-board-topbar-right {
-    grid-column: 3;
-    width: 100%;
+    grid-area: actions;
+    width: auto;
     justify-content: flex-end;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   #restaurant-site-wrapper .ll-board-page.is-mobile-compact .ll-menu-toggle {
-    width: min(100%, 14rem);
+    width: min(100%, 12.5rem);
+    margin-left: auto;
   }
 }
 
