@@ -318,8 +318,8 @@ function normalizeLandingTimestamp(value) {
 }
 function normalizeLandingDay(rawDay = {}) {
   const closed = !!rawDay?.closed;
-  const open = typeof rawDay?.open === 'string' ? rawDay.open : '';
-  const close = typeof rawDay?.close === 'string' ? rawDay.close : '';
+  const open = normalizeLandingTimeValue(rawDay?.open);
+  const close = normalizeLandingTimeValue(rawDay?.close);
   return {
     closed,
     open: closed ? '' : open,
@@ -390,9 +390,17 @@ function normalizeLandingPageRecord(rawRecord = {}) {
 function getLandingSectionContent(record = createDefaultLandingPageRecord(), source = 'draft') {
   return source === 'live' ? record.liveContent : record.draftContent;
 }
+function normalizeLandingTimeValue(value = '') {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return '';
+  return `${match[1]}:${match[2]}`;
+}
 function parseLandingTimeToMinutes(value = '') {
-  if (typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return null;
-  const [hours, minutes] = value.split(':').map(Number);
+  const normalized = normalizeLandingTimeValue(value);
+  if (!normalized) return null;
+  const [hours, minutes] = normalized.split(':').map(Number);
   if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
   return hours * 60 + minutes;
@@ -2512,14 +2520,22 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-open"
                   type="time"
                   value="${escHtml(day.open || '')}"
+                  data-landing-hours-field="open"
+                  data-landing-hours-restaurant="${escHtml(restaurantId)}"
+                  data-landing-hours-day="${escHtml(dayKey)}"
                   ${day.closed ? 'disabled' : ''}
+                  oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
                 >
                 <input
                   id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-close"
                   type="time"
                   value="${escHtml(day.close || '')}"
+                  data-landing-hours-field="close"
+                  data-landing-hours-restaurant="${escHtml(restaurantId)}"
+                  data-landing-hours-day="${escHtml(dayKey)}"
                   ${day.closed ? 'disabled' : ''}
+                  oninput="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                   onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
                 >
               </div>
@@ -2528,6 +2544,9 @@ function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantL
                   <input
                     id="landing-hours-${escHtml(restaurantId)}-${escHtml(dayKey)}-closed"
                     type="checkbox"
+                    data-landing-hours-field="closed"
+                    data-landing-hours-restaurant="${escHtml(restaurantId)}"
+                    data-landing-hours-day="${escHtml(dayKey)}"
                     ${day.closed ? 'checked' : ''}
                     onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'closed', this.checked)"
                   >
@@ -2599,6 +2618,45 @@ function renderLandingOverview(record = _landingPageState) {
       ? ''
       : hoursValidation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
   }
+}
+
+function syncLandingHoursDraftFromDom() {
+  if (!hasLandingAdminShell()) return _landingPageState || createDefaultLandingPageRecord();
+  const fields = Array.from(document.querySelectorAll('[data-landing-hours-field]'));
+  if (!fields.length) return _landingPageState || createDefaultLandingPageRecord();
+
+  const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: _landingPageDirty });
+  const groupedDays = new Map();
+
+  fields.forEach(fieldEl => {
+    const restaurantId = fieldEl.getAttribute('data-landing-hours-restaurant') || '';
+    const dayKey = fieldEl.getAttribute('data-landing-hours-day') || '';
+    const field = fieldEl.getAttribute('data-landing-hours-field') || '';
+    if (!restaurantId || !dayKey || !field) return;
+    const key = `${restaurantId}:${dayKey}`;
+    const entry = groupedDays.get(key) || { restaurantId, dayKey };
+    if (field === 'closed') {
+      entry.closed = !!fieldEl.checked;
+    } else if (field === 'open' || field === 'close') {
+      entry[field] = normalizeLandingTimeValue(fieldEl.value);
+    }
+    groupedDays.set(key, entry);
+  });
+
+  groupedDays.forEach(({ restaurantId, dayKey, open, close, closed }) => {
+    if (!record.draftContent.hours.restaurants[restaurantId]) {
+      record.draftContent.hours.restaurants[restaurantId] = createDefaultLandingHoursRestaurant();
+    }
+    const currentDay = record.draftContent.hours.restaurants[restaurantId].days[dayKey] || createDefaultLandingDay();
+    record.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeLandingDay({
+      ...currentDay,
+      closed: !!closed,
+      open: closed ? '' : (typeof open === 'string' ? open : currentDay.open),
+      close: closed ? '' : (typeof close === 'string' ? close : currentDay.close),
+    });
+  });
+
+  return record;
 }
 
 function updateLandingAdminToolbar(record = _landingPageState) {
@@ -2836,7 +2894,7 @@ function setLandingHoursField(restaurantId, dayKey, field, value) {
 
 async function saveLandingPageDraft() {
   try {
-    const record = await ensureLandingPageStateLoaded();
+    const record = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
     const timestamp = Date.now();
     const nextRecord = await upsertLandingPageRecord({
       draft_content: record.draftContent,
@@ -2859,7 +2917,7 @@ function renderLandingPublishModal() {
   const issuesEl = document.getElementById('landing-publish-issues');
   const confirmButton = document.getElementById('landing-publish-confirm-btn');
   if (!modalEl || !listEl || !issuesEl || !confirmButton) return;
-  const record = normalizeLandingPageRecord(_landingPageState || createDefaultLandingPageRecord());
+  const record = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || _landingPageState || createDefaultLandingPageRecord());
   const statuses = LANDING_PAGE_SECTION_ORDER.map(sectionId => getLandingSectionStatus(sectionId, record));
   const publishableCount = statuses.filter(status => status.hasDraftDiff && status.isValid).length;
   listEl.innerHTML = statuses.map(status => {
@@ -2912,7 +2970,7 @@ async function publishLandingPageSections() {
     return;
   }
   try {
-    const currentRecord = await ensureLandingPageStateLoaded();
+    const currentRecord = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
     const hoursStatus = getLandingSectionStatus('hours', currentRecord);
     if (selectedSectionIds.includes('hours') && !hoursStatus.isValid) {
       renderLandingPublishModal();
