@@ -40,3 +40,7 @@ coverage/
 design-loop/**/design-loop-log.md
 design-loop/**/*.png
 design-loop/**/*.jpg
+
+# Bug loop artifacts (issues file is committed)
+bug-loop/log.md
+bug-loop/artifacts/

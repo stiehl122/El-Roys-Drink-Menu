@@ -1,0 +1,7 @@
+interface:
+  display_name: "Recursive Bug Squash"
+  short_description: "Unattended multi-pass El Roy's bug hunting"
+  default_prompt: "Use $recursive-bug-squash to print its config sheet, ask for any overrides, run an unattended pre-launch bug sweep in a disposable worktree, and open a draft PR with the validated fixes."
+
+policy:
+  allow_implicit_invocation: false
