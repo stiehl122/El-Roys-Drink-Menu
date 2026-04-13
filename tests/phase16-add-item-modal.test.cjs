@@ -376,6 +376,41 @@ test('scan mode prefills the add-item form from a detected barcode and releases 
   assert.match(modalHost.innerHTML, /Sparkling mineral water/);
 });
 
+test('scan lookup resets stale manual pricing and modifier fields before prefilling', async () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let detectBarcode = null;
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start(_videoEl, options = {}) {
+      detectBarcode = options.onDetect;
+      return { ok: true, mode: 'native' };
+    },
+    async stop() { return { ok: true }; },
+  });
+  sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct = async () => ({
+    name: 'Mineral Water',
+    description: 'Glass bottle',
+  });
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('categoryId', 'cocktails');
+  sandbox.updateAddItemModalField('price', '$12');
+  sandbox.addAddItemModalUpcharge('Chamoy Rim', '+$2');
+  sandbox.addAddItemModalRecipeIngredient('Lime');
+
+  sandbox.setAddItemModalMode('scan');
+  await flushAsync();
+  await detectBarcode('02113642');
+  await flushAsync();
+
+  assert.equal(getState(sandbox, '_addItemModalState.fields.categoryId'), 'cocktails');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.price'), '');
+  assert.equal(JSON.stringify(getState(sandbox, '_addItemModalState.fields.upcharges')), JSON.stringify([]));
+  assert.equal(JSON.stringify(getState(sandbox, '_addItemModalState.fields.recipe')), JSON.stringify([]));
+});
+
 test('scan mode shows a toast and blank form fields when a product lookup misses', async () => {
   const sandbox = loadAppSandbox();
   setupManagerAddItemDom(sandbox);
@@ -404,6 +439,30 @@ test('scan mode shows a toast and blank form fields when a product lookup misses
   assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), '');
   assert.equal(toasts.length, 1);
   assert.equal(toasts[0], 'Product not found');
+});
+
+test('scan mode falls back to manual UPC input when camera startup throws', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  const toasts = [];
+  seedManagerMenuState(sandbox, {
+    showToast: message => toasts.push(message),
+  });
+
+  const deniedError = new Error('denied');
+  deniedError.name = 'NotAllowedError';
+  sandbox.__HF_UI_MODULES__.createBarcodeScannerService = () => ({
+    async start() { throw deniedError; },
+    async stop() { return { ok: true }; },
+  });
+
+  sandbox.openAddItemModal({ mode: 'scan' });
+  await flushAsync();
+
+  assert.equal(getState(sandbox, '_addItemModalState.scanState'), 'unsupported');
+  assert.match(modalHost.innerHTML, /Enter barcode \/ UPC/i);
+  assert.equal(toasts.length, 1);
+  assert.equal(toasts[0], 'Camera permission was denied. Enter a UPC manually instead.');
 });
 
 test('unsupported scan mode falls back to manual UPC lookup inside the modal', async () => {

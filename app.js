@@ -671,6 +671,26 @@ async function stopAddItemModalScanner() {
   }
 }
 
+function handleAddItemModalScannerStartFailure(error) {
+  if (!_addItemModalState.isOpen) return { ok: false, reason: 'closed' };
+  _addItemModalState.scanState = 'unsupported';
+  _addItemModalState.lookupPending = false;
+  _addItemModalState.lookupBarcode = '';
+  void stopAddItemModalScanner();
+  renderAddItemModal({ focusFieldId: 'add-item-barcode-input' });
+  const message = error?.name === 'NotAllowedError'
+    ? 'Camera permission was denied. Enter a UPC manually instead.'
+    : 'Camera unavailable. Enter a UPC manually instead.';
+  showToast(message, 'info');
+  return { ok: false, reason: 'unsupported', error };
+}
+
+function queueAddItemModalScannerStart() {
+  startAddItemModalScanner().catch(error => {
+    handleAddItemModalScannerStartFailure(error);
+  });
+}
+
 function setAddItemModalMode(mode, options = {}) {
   if (!_addItemModalState.isOpen) return { ok: false, reason: 'closed' };
 
@@ -685,7 +705,7 @@ function setAddItemModalMode(mode, options = {}) {
     void stopAddItemModalScanner();
     renderAddItemModal();
     requestAnimationFrame(() => {
-      startAddItemModalScanner().catch(() => {});
+      queueAddItemModalScannerStart();
     });
     return { ok: true, mode: ADD_ITEM_MODAL_SCAN_MODE };
   }
@@ -745,11 +765,8 @@ async function beginAddItemBarcodeLookup(rawBarcode) {
   _addItemModalState.mode = ADD_ITEM_MODAL_MANUAL_MODE;
   _addItemModalState.entryMode = ADD_ITEM_MODAL_SCAN_MODE;
   _addItemModalState.scanState = 'idle';
-  if (!_addItemModalState.fields) {
-    _addItemModalState.fields = createAddItemModalFields({ categoryId: getAddItemModalDefaultCategoryId() });
-  }
-  _addItemModalState.fields.name = '';
-  _addItemModalState.fields.desc = '';
+  const categoryId = String(_addItemModalState.fields?.categoryId || getAddItemModalDefaultCategoryId());
+  _addItemModalState.fields = createAddItemModalFields({ categoryId });
   syncAddItemModalWarnings();
   await stopAddItemModalScanner();
   renderAddItemModal({ focusFieldId: 'add-item-name-input' });
@@ -938,7 +955,7 @@ function openAddItemModal(options = {}) {
   if (requestedMode === ADD_ITEM_MODAL_SCAN_MODE) {
     renderAddItemModal();
     requestAnimationFrame(() => {
-      startAddItemModalScanner().catch(() => {});
+      queueAddItemModalScannerStart();
     });
     return { ok: true, mode: ADD_ITEM_MODAL_SCAN_MODE };
   }
@@ -1062,7 +1079,7 @@ function confirmAddItemModal(options = {}) {
     renderAddItemModal(reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? {} : { focusFieldId: 'add-item-name-input' });
     if (reopenMode === ADD_ITEM_MODAL_SCAN_MODE) {
       requestAnimationFrame(() => {
-        startAddItemModalScanner().catch(() => {});
+        queueAddItemModalScannerStart();
       });
     }
     return { ok: true, keptOpen: true, item, mode: reopenMode };
