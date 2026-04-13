@@ -4183,6 +4183,7 @@ function renderLandingRootEvents(section = {}) {
   if (!listEl || !emptyEl) return;
   const items = getLandingRenderableEvents(section);
   setLandingRootSectionVisible('events', true);
+  listEl.classList.toggle('landing-story-list--single', items.length === 1);
   if (!items.length) {
     listEl.innerHTML = '';
     emptyEl.hidden = false;
@@ -4190,11 +4191,16 @@ function renderLandingRootEvents(section = {}) {
   }
   emptyEl.hidden = true;
   listEl.innerHTML = items.map(item => `
-    <article class="landing-story-card landing-story-card--event">
-      <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
-      <h3>${escHtml(item.title || 'Upcoming event')}</h3>
-      <p>${escHtml(item.body || '')}</p>
-      <p class="landing-card-kicker">${escHtml(formatLandingEventScheduleLine(item))}</p>
+    <article class="landing-story-card landing-story-card--event ${items.length === 1 ? 'is-featured' : ''}">
+      <div class="landing-event-copy">
+        <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
+        <h3>${escHtml(item.title || 'Upcoming event')}</h3>
+        ${item.body ? `<p class="landing-event-body">${escHtml(item.body)}</p>` : ''}
+        <div class="landing-event-meta">
+          <p class="landing-event-meta-label">On The Calendar</p>
+          <p class="landing-event-meta-line">${escHtml(formatLandingEventScheduleLine(item))}</p>
+        </div>
+      </div>
     </article>
   `).join('');
 }

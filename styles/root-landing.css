@@ -480,11 +480,6 @@ body.root-landing-page::before {
   margin-top: 10px;
 }
 
-.landing-story-list,
-.landing-review-list {
-  display: contents;
-}
-
 .landing-story-card .landing-card-kicker,
 .landing-review-card .landing-card-kicker,
 .landing-empty-card .landing-empty-kicker {
@@ -594,6 +589,92 @@ body.root-landing-page::before {
   max-width: 54ch;
   font-size: 1.02rem;
   line-height: 1.74;
+}
+
+.landing-story-list--single {
+  grid-template-columns: minmax(0, 46rem);
+  justify-content: center;
+}
+
+.landing-story-card--event {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  min-height: 18rem;
+  padding: 0;
+  border-color: rgba(240, 224, 204, 0.12);
+  background:
+    linear-gradient(135deg, rgba(20, 13, 8, 0.98), rgba(10, 7, 3, 0.98)),
+    radial-gradient(circle at top right, rgba(240, 152, 60, 0.12), transparent 38%);
+}
+
+.landing-story-card--event::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(240, 152, 60, 0.14), transparent 24%),
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.14));
+  pointer-events: none;
+}
+
+.landing-event-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  align-content: space-between;
+  min-height: 100%;
+  padding: 30px 30px 28px;
+}
+
+.landing-story-card--event h3 {
+  max-width: 14ch;
+  color: #f4e6d4;
+  font-size: clamp(2.25rem, 4vw, 3.65rem);
+  line-height: 0.9;
+  letter-spacing: 0.08em;
+  text-wrap: balance;
+}
+
+.landing-event-body {
+  max-width: 38ch;
+  color: rgba(240, 224, 204, 0.8);
+  font-size: 1.05rem;
+  line-height: 1.72;
+}
+
+.landing-event-meta {
+  display: grid;
+  gap: 7px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(240, 224, 204, 0.1);
+}
+
+.landing-event-meta-label,
+.landing-event-meta-line {
+  margin: 0;
+}
+
+.landing-event-meta-label {
+  color: rgba(240, 224, 204, 0.44);
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.landing-event-meta-line {
+  color: rgba(240, 224, 204, 0.76);
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  font-size: 0.98rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.landing-story-card--event.is-featured {
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.22);
 }
 
 .landing-review-carousel {
@@ -888,6 +969,10 @@ body.root-landing-page::before {
   .landing-story-grid,
   .landing-review-grid,
   .landing-review-pair {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-story-list--single {
     grid-template-columns: 1fr;
   }
 }
