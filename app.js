@@ -7323,6 +7323,7 @@ function renderFooter() {
   const versionHtml = APP_VERSION +
     (IS_PREVIEW ? ' <span class="footer-preview-badge">PREVIEW</span>' : '');
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
+  const showManagerMeta = !!currentUser && (isManagerMode || isAdminMode);
   const staffFooterState = buildPublicStaffFooterState();
   const publicVersionEl = document.getElementById('footer-version');
   const publicUpdatedEl = document.getElementById('footer-last-updated');
@@ -7333,18 +7334,22 @@ function renderFooter() {
   [publicVersionEl, managerVersionEl].forEach(el => {
     if (el) el.innerHTML = versionHtml;
   });
-  if (managerMenuEl) managerMenuEl.textContent = displayName || 'No menu selected';
+  if (managerMenuEl) managerMenuEl.textContent = showManagerMeta ? (displayName || 'No menu selected') : '';
 
   [publicUpdatedEl, managerUpdatedEl].forEach(el => {
     if (!el) return;
     if (ts) {
-      el.textContent = `Updated ${formatRelativeTime(ts)}`;
-      el.title = formatUpdatedAt(ts, 'Updated ');
+      el.textContent = (el === managerUpdatedEl && !showManagerMeta) ? '' : `Updated ${formatRelativeTime(ts)}`;
+      el.title = (el === managerUpdatedEl && !showManagerMeta) ? '' : formatUpdatedAt(ts, 'Updated ');
     } else {
       el.textContent = el === managerUpdatedEl ? 'Updated —' : '';
       el.title = '';
     }
   });
+  if (managerUpdatedEl && !showManagerMeta) {
+    managerUpdatedEl.textContent = '';
+    managerUpdatedEl.title = '';
+  }
   syncPublicStaffFooterActions(staffFooterState);
 }
 
@@ -10608,9 +10613,17 @@ function openPreview() {
       content.appendChild(saveOnlyBlock);
     }
   }
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
   modal.classList.add('open');
 }
-function closeModal() { document.getElementById('modal-bg')?.classList.remove('open'); }
+function closeModal() {
+  const modal = document.getElementById('modal-bg');
+  if (!modal) return;
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
+  modal.hidden = true;
+}
 
 // ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
 function buildPatchMessage(sections) {
