@@ -241,6 +241,88 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
   var upcharges: [ItemUpcharge]
   var showDescription: Bool
   var showRecipe: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case desc
+    case recipe
+    case price
+    case isEightySixed
+    case eightySixed
+    case displayOrder
+    case onMenu
+    case visibility
+    case upcharges
+    case showDescription
+    case showRecipe
+  }
+
+  init(
+    id: String,
+    name: String,
+    desc: String,
+    recipe: [String],
+    price: String,
+    isEightySixed: Bool,
+    displayOrder: Int,
+    onMenu: Bool,
+    visibility: String,
+    upcharges: [ItemUpcharge],
+    showDescription: Bool,
+    showRecipe: Bool
+  ) {
+    self.id = id
+    self.name = name
+    self.desc = desc
+    self.recipe = recipe
+    self.price = price
+    self.isEightySixed = isEightySixed
+    self.displayOrder = displayOrder
+    self.onMenu = onMenu
+    self.visibility = visibility
+    self.upcharges = upcharges
+    self.showDescription = showDescription
+    self.showRecipe = showRecipe
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+    let visibility = try container.decodeIfPresent(String.self, forKey: .visibility) ?? "public"
+    let explicitOnMenu = try container.decodeIfPresent(Bool.self, forKey: .onMenu)
+    let serverIsEightySixed = try container.decodeIfPresent(Bool.self, forKey: .isEightySixed)
+    let compactIsEightySixed = try container.decodeIfPresent(Bool.self, forKey: .eightySixed)
+
+    self.id = try container.decode(String.self, forKey: .id)
+    self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+    self.desc = try container.decodeIfPresent(String.self, forKey: .desc) ?? ""
+    self.recipe = try container.decodeIfPresent([String].self, forKey: .recipe) ?? []
+    self.price = try container.decodeIfPresent(String.self, forKey: .price) ?? ""
+    self.isEightySixed = serverIsEightySixed ?? compactIsEightySixed ?? false
+    self.displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? 0
+    self.onMenu = explicitOnMenu ?? (visibility != "off_menu")
+    self.visibility = visibility
+    self.upcharges = try container.decodeIfPresent([ItemUpcharge].self, forKey: .upcharges) ?? []
+    self.showDescription = try container.decodeIfPresent(Bool.self, forKey: .showDescription) ?? true
+    self.showRecipe = try container.decodeIfPresent(Bool.self, forKey: .showRecipe) ?? false
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(name, forKey: .name)
+    try container.encode(desc, forKey: .desc)
+    try container.encode(recipe, forKey: .recipe)
+    try container.encode(price, forKey: .price)
+    try container.encode(isEightySixed, forKey: .isEightySixed)
+    try container.encode(displayOrder, forKey: .displayOrder)
+    try container.encode(onMenu, forKey: .onMenu)
+    try container.encode(visibility, forKey: .visibility)
+    try container.encode(upcharges, forKey: .upcharges)
+    try container.encode(showDescription, forKey: .showDescription)
+    try container.encode(showRecipe, forKey: .showRecipe)
+  }
 }
 
 struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {

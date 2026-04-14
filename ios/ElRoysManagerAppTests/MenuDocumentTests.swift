@@ -86,6 +86,32 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertNil(try store.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
   }
 
+  func testCompactFeaturedItemProjectionDecodesWithDefaults() throws {
+    let data = Data("""
+    {
+      "id": "featured-1",
+      "name": "Badass Steak n' Cheese",
+      "price": "",
+      "visibility": "public",
+      "eightySixed": false,
+      "desc": "",
+      "recipe": [],
+      "upcharges": [],
+      "showDescription": true,
+      "showRecipe": false
+    }
+    """.utf8)
+
+    let item = try JSONDecoder.backend.decode(MenuItemPayload.self, from: data)
+
+    XCTAssertEqual(item.id, "featured-1")
+    XCTAssertEqual(item.name, "Badass Steak n' Cheese")
+    XCTAssertFalse(item.isEightySixed)
+    XCTAssertEqual(item.displayOrder, 0)
+    XCTAssertTrue(item.onMenu)
+    XCTAssertEqual(item.visibility, "public")
+  }
+
   private func makeWorkspace(categories: [MenuCategoryPayload] = []) -> MenuWorkspacePayload {
     MenuWorkspacePayload(
       cats: categories,

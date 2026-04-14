@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 46;
+	objectVersion = 54;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -56,9 +56,9 @@
 		5EC812C3BAE0F7C6924CA883 /* ElRoysManagerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ElRoysManagerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		603A2398CB2CF2EEA99C8CA8 /* RestaurantToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsView.swift; sourceTree = "<group>"; };
 		67BA26A5438F6F58657911AD /* BackendClients.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackendClients.swift; sourceTree = "<group>"; };
-		7C583553A19E8A99DB2FCB06 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; path = Contents.json; sourceTree = "<group>"; };
+		7C583553A19E8A99DB2FCB06 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
 		84134DB7CAEAA908459C8CE4 /* HomeViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
-		886370B05588ADB2B9200AB8 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; path = Contents.json; sourceTree = "<group>"; };
+		886370B05588ADB2B9200AB8 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
 		8EA9EC632EBEE43B8E14234E /* ElRoysManagerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ElRoysManagerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		95254918D5739FE7B2D38658 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		984625EC61B70E28EBE29AA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -66,7 +66,7 @@
 		BACAEC402B9AB79F23A25C53 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
 		E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
-		F0F348AEDABC4AE027B7FFAC /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; path = Contents.json; sourceTree = "<group>"; };
+		F0F348AEDABC4AE027B7FFAC /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
 		F3593CD916F5376C28FFC065 /* PublicMenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuViews.swift; sourceTree = "<group>"; };
 		F37F113DC84E3D882A61BC0A /* AppModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -104,7 +104,6 @@
 			children = (
 				F3593CD916F5376C28FFC065 /* PublicMenuViews.swift */,
 			);
-			name = Public;
 			path = Public;
 			sourceTree = "<group>";
 		};
@@ -113,7 +112,6 @@
 			children = (
 				E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */,
 			);
-			name = Menu;
 			path = Menu;
 			sourceTree = "<group>";
 		};
@@ -132,7 +130,6 @@
 			children = (
 				603A2398CB2CF2EEA99C8CA8 /* RestaurantToolsView.swift */,
 			);
-			name = RestaurantTools;
 			path = RestaurantTools;
 			sourceTree = "<group>";
 		};
@@ -141,7 +138,6 @@
 			children = (
 				3052B7FC5E6C4B92BCBB47B6 /* MenuDocumentTests.swift */,
 			);
-			name = ElRoysManagerAppTests;
 			path = ElRoysManagerAppTests;
 			sourceTree = "<group>";
 		};
@@ -150,7 +146,6 @@
 			children = (
 				D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */,
 			);
-			name = ElRoysManagerAppUITests;
 			path = ElRoysManagerAppUITests;
 			sourceTree = "<group>";
 		};
@@ -159,7 +154,6 @@
 			children = (
 				10DC14234E3A5AD660732ABF /* Glass.swift */,
 			);
-			name = Design;
 			path = Design;
 			sourceTree = "<group>";
 		};
@@ -169,7 +163,6 @@
 				1FF3EEDF738DA7824619341B /* OfflineDraftStore.swift */,
 				95254918D5739FE7B2D38658 /* SessionStore.swift */,
 			);
-			name = Storage;
 			path = Storage;
 			sourceTree = "<group>";
 		};
@@ -186,7 +179,6 @@
 			children = (
 				AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */,
 			);
-			name = Preview;
 			path = Preview;
 			sourceTree = "<group>";
 		};
@@ -201,7 +193,6 @@
 				E55C2123D52C57ACD07B3008 /* Models */,
 				3DE4E475B48DE117E9E11883 /* Storage */,
 			);
-			name = ElRoysManagerApp;
 			path = ElRoysManagerApp;
 			sourceTree = "<group>";
 		};
@@ -210,7 +201,6 @@
 			children = (
 				84134DB7CAEAA908459C8CE4 /* HomeViews.swift */,
 			);
-			name = Home;
 			path = Home;
 			sourceTree = "<group>";
 		};
@@ -225,7 +215,6 @@
 				1505DEB0003C0F8CF972BECC /* RestaurantTools */,
 				80CD8F44B69F8BE54CAA2EB2 /* Scanner */,
 			);
-			name = Features;
 			path = Features;
 			sourceTree = "<group>";
 		};
@@ -234,7 +223,6 @@
 			children = (
 				67BA26A5438F6F58657911AD /* BackendClients.swift */,
 			);
-			name = Clients;
 			path = Clients;
 			sourceTree = "<group>";
 		};
@@ -243,7 +231,6 @@
 			children = (
 				58BAAD2469B54D517FD6B0A6 /* AuthViews.swift */,
 			);
-			name = Auth;
 			path = Auth;
 			sourceTree = "<group>";
 		};
@@ -252,7 +239,6 @@
 			children = (
 				4960978B1EB557BC4FD6A6DC /* BarcodeScannerView.swift */,
 			);
-			name = Scanner;
 			path = Scanner;
 			sourceTree = "<group>";
 		};
@@ -261,7 +247,6 @@
 			children = (
 				886370B05588ADB2B9200AB8 /* Contents.json */,
 			);
-			name = AppIcon.appiconset;
 			path = AppIcon.appiconset;
 			sourceTree = "<group>";
 		};
@@ -278,7 +263,6 @@
 			children = (
 				7C583553A19E8A99DB2FCB06 /* Contents.json */,
 			);
-			name = AccentColor.colorset;
 			path = AccentColor.colorset;
 			sourceTree = "<group>";
 		};
@@ -289,7 +273,6 @@
 				8A63A39D9CE0BAB1D4448254 /* AppIcon.appiconset */,
 				F0F348AEDABC4AE027B7FFAC /* Contents.json */,
 			);
-			name = Assets.xcassets;
 			path = Assets.xcassets;
 			sourceTree = "<group>";
 		};
@@ -299,7 +282,6 @@
 				F37F113DC84E3D882A61BC0A /* AppModel.swift */,
 				34EB2A5A1E80AEC9A6C5F892 /* ElRoysManagerApp.swift */,
 			);
-			name = App;
 			path = App;
 			sourceTree = "<group>";
 		};
@@ -308,7 +290,6 @@
 			children = (
 				BACAEC402B9AB79F23A25C53 /* AppModels.swift */,
 			);
-			name = Models;
 			path = Models;
 			sourceTree = "<group>";
 		};
@@ -385,8 +366,9 @@
 		85DA13D02E4B6F72E228C041 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1600;
-				LastUpgradeCheck = 2630;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					0C082950AC88C5E7355886CC = {
 						CreatedOnToolsVersion = 26.3;
@@ -410,8 +392,6 @@
 				Base,
 			);
 			mainGroup = FDB8E8F4CD9FD0F0A9AF85AF;
-			minimizedProjectReferenceProxies = 0;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 1163BF169A09CCB57DEE8D54 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -514,7 +494,8 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
@@ -523,7 +504,10 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
@@ -568,9 +552,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -593,6 +579,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
 				PRODUCT_NAME = ElRoysManagerApp;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -612,7 +599,8 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
@@ -621,7 +609,10 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
@@ -637,6 +628,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -655,6 +647,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -703,9 +696,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -728,6 +723,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
 				PRODUCT_NAME = ElRoysManagerApp;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -742,6 +738,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -760,6 +757,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -783,7 +781,8 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
@@ -792,7 +791,10 @@
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
@@ -807,6 +809,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -854,9 +857,11 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -872,6 +877,7 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
 				PRODUCT_NAME = ElRoysManagerApp;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -885,6 +891,7 @@
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
