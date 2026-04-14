@@ -4472,6 +4472,7 @@ body.manager-stitch-shell .manager-shell-stat-meta {
 body.manager-stitch-shell .manager-shell-overview-grid {
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
   gap: 18px;
+  align-items: start;
 }
 
 body.manager-stitch-shell .manager-shell-overview-hero {
@@ -4524,8 +4525,12 @@ body.manager-stitch-shell .manager-shell-overview-chip {
   padding-inline: 14px;
 }
 
+body.manager-stitch-shell .manager-shell-overview-card {
+  align-self: start;
+}
+
 body.manager-stitch-shell .manager-shell-overview-card--featured {
-  min-height: 100%;
+  min-height: 0;
 }
 
 body.manager-stitch-shell .featured-specials-editor {
