@@ -1,5 +1,8 @@
 import { readAuthorizedMenuActor } from '../server/_menu-write.js';
-import { publishMenuUpdateForMenu } from '../server/_menu-publish.js';
+import {
+  previewMenuUpdateForMenu,
+  publishMenuUpdateForMenu,
+} from '../server/_menu-publish.js';
 
 function parseBody(req) {
   const body = req?.body;
@@ -29,14 +32,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await publishMenuUpdateForMenu({
+    const action = String(body?.action || '').trim().toLowerCase();
+    const command = action === 'preview'
+      ? previewMenuUpdateForMenu
+      : publishMenuUpdateForMenu;
+    const result = await command({
       actor,
       menuId,
       mode: String(body?.mode || '').trim(),
+      source: String(body?.source || '').trim(),
       snapshot: body?.snapshot || {},
-      selectedSections: Array.isArray(body?.selected_sections) ? body.selected_sections : [],
-      patchMessage: String(body?.patch_message || ''),
-      previewDiff: Array.isArray(body?.preview_diff) ? body.preview_diff : [],
+      selectedChangeIds: Array.isArray(body?.selected_change_ids) ? body.selected_change_ids : null,
+      legacySelectedSections: Array.isArray(body?.selected_sections) ? body.selected_sections : [],
       expectedLiveRevision: body?.expected_live_revision ?? null,
       expectedDraftRevision: body?.expected_draft_revision ?? null,
     });

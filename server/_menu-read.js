@@ -225,7 +225,7 @@ function sanitizePublicMeta(meta = {}) {
   };
 }
 
-export function createMenuWorkspacePayload(bundle, { actor = null } = {}) {
+export function createMenuWorkspacePayload(bundle, { actor = null, restaurantTools = null } = {}) {
   const accessibleMenuIds = getActorAccessibleMenuIds(actor);
   const menuId = bundle?.menu?.id || '';
   const restaurantId = bundle?.menu?.restaurantId || '';
@@ -235,18 +235,40 @@ export function createMenuWorkspacePayload(bundle, { actor = null } = {}) {
     ? true
     : !!restaurantSpecials?.menuIds?.every(candidateId => accessibleMenuIds.includes(candidateId));
   const normalizedActor = normalizeActor(actor);
+  const draftMeta = bundle?.meta && typeof bundle.meta === 'object' ? bundle.meta : {};
+  const hasSharedDraft = Object.keys(draftMeta?.draft_state || {}).length > 0;
+  const includesDraftAuthorship = [
+    'draft_saved_by_user_id',
+    'draft_saved_by_name',
+    'draft_saved_source',
+  ].some(field => Object.prototype.hasOwnProperty.call(draftMeta, field));
+  const sharedDraft = {
+    exists: hasSharedDraft,
+    savedAt: draftMeta?.draft_saved_ts || null,
+    savedBy: (draftMeta?.draft_saved_by_user_id || draftMeta?.draft_saved_by_name)
+      ? {
+          id: String(draftMeta?.draft_saved_by_user_id || ''),
+          name: String(draftMeta?.draft_saved_by_name || '').trim(),
+        }
+      : null,
+    source: String(draftMeta?.draft_saved_source || '').trim(),
+  };
   const workspaceCapabilities = {
     canSaveDraft: canManage,
     canSaveLiveMenu: canManage,
     canPublishUpdates: canManage,
     canManageRestaurantSpecials: canEditRestaurantSpecials,
+    canReadRestaurantTools: canEditRestaurantSpecials,
     canManageAdminSettings: normalizedActor?.role === 'admin',
+    includesDraftAuthorship,
+    includesRestaurantTools: !!restaurantTools,
   };
 
   return {
     cats: bundle?.cats || [],
     meta: bundle?.meta || {},
     restaurant: bundle?.restaurant || null,
+    restaurantTools: restaurantTools || null,
     context: {
       kind: 'menu-workspace',
       menu: bundle?.menu || null,
@@ -254,11 +276,13 @@ export function createMenuWorkspacePayload(bundle, { actor = null } = {}) {
     workspace: {
       actor: normalizedActor,
       accessibleMenuIds,
-      hasSharedDraft: Object.keys(bundle?.meta?.draft_state || {}).length > 0,
+      hasSharedDraft,
+      sharedDraft,
       permissions: {
         canManage,
         canAdmin: normalizedActor?.role === 'admin',
         canEditRestaurantSpecials,
+        canReadRestaurantTools: canEditRestaurantSpecials,
       },
       capabilities: workspaceCapabilities,
       revisions: {
@@ -268,7 +292,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null } = {}) {
     },
     capabilities: workspaceCapabilities,
     compatibility: {
-      contract: 'menu-workspace.v2',
+      contract: 'menu-workspace.v3',
       actorStamped: !!normalizedActor?.id,
       permissionShape: 'workspace.permissions.v1',
       capabilityShape: 'workspace.capabilities.v1',
@@ -276,7 +300,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null } = {}) {
   };
 }
 
-export function createPublicMenuPayload(bundle) {
+export function createPublicMenuPayload(bundle, { featuredGroups = [], featuredCompatibility = null } = {}) {
   return {
     cats: (bundle?.cats || [])
       .map(sanitizePublicCategory)
@@ -284,6 +308,7 @@ export function createPublicMenuPayload(bundle) {
       .filter(category => Array.isArray(category.items) ? category.items.length > 0 : true),
     meta: sanitizePublicMeta(bundle?.meta || {}),
     restaurant: sanitizePublicRestaurant(bundle?.restaurant || null),
+    featuredGroups: Array.isArray(featuredGroups) ? featuredGroups : [],
     context: {
       kind: 'menu-public',
       menu: bundle?.menu || null,
@@ -299,6 +324,7 @@ export function createPublicMenuPayload(bundle) {
       projection: 'guest-safe',
       categoryShape: 'public-category.v1',
       itemShape: 'public-item.v1',
+      featuredSource: featuredCompatibility?.featuredSource || 'none',
     },
   };
 }

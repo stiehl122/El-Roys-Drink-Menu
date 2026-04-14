@@ -60,6 +60,22 @@ test('wave 4 revision guard returns structured 409 conflicts and tolerates empty
         live_revision: 1712705100000,
         draft_revision: 1712705099999,
       });
+      assert.deepEqual(error?.body?.conflict_units, [{
+        type: 'revision_mismatch',
+        field: 'live_revision',
+        expected: 1712705100001,
+        actual: 1712705100000,
+      }]);
+      assert.deepEqual(error?.body?.server_snapshot, {
+        menu_id: 'menu-main',
+        current_revisions: {
+          live_revision: 1712705100000,
+          draft_revision: 1712705099999,
+        },
+      });
+      assert.equal(error?.body?.reconcile?.available, true);
+      assert.equal(error?.body?.reconcile?.strategy, 'reload_workspace');
+      assert.match(String(error?.body?.reconcile?.token || ''), /^menu-main:live_revision:/);
       assert.deepEqual(error?.body?.reconnect, {
         required: true,
         reason: 'stale_revision',

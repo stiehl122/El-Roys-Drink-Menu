@@ -651,7 +651,12 @@ test('save menu publishes a shared draft to live and leaves unsent changes behin
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0][0], '/api/menu-publish');
+  assert.equal(requests[0][1].action, 'publish');
   assert.equal(requests[0][1].mode, 'save');
+  assert.ok(Array.isArray(requests[0][1].selected_change_ids));
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'preview_diff'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'selected_sections'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'patch_message'), false);
   assert.equal(getState(sandbox, '_hasSharedDraft'), false);
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
   assert.match(result.successMessage, /saved to the live menu/i);
@@ -1506,13 +1511,15 @@ test('picker init bootstraps shared session state without requiring the app shel
   const calls = [];
 
   sandbox.fetch = async url => {
-    if (String(url) === '/api/config') {
-      calls.push('config');
+    if (String(url) === '/api/session-bootstrap') {
+      calls.push('bootstrap');
       return {
         ok: true,
         json: async () => ({
-          supabaseUrl: 'https://example.supabase.co',
-          supabaseAnonKey: 'anon-key',
+          config: {
+            supabaseUrl: 'https://example.supabase.co',
+            supabaseAnonKey: 'anon-key',
+          },
         }),
       };
     }
@@ -1549,7 +1556,7 @@ test('picker init bootstraps shared session state without requiring the app shel
 
   await sandbox.init();
 
-  assert.deepEqual(calls, ['picker', 'local-config', 'config', 'recovery', 'restore', 'render-header', 'sync-footer']);
+  assert.deepEqual(calls, ['picker', 'local-config', 'bootstrap', 'recovery', 'restore', 'render-header', 'sync-footer']);
 });
 
 test('menu fallback store keys snapshots by menu identity and menu type', () => {
@@ -1752,13 +1759,43 @@ test('notification routes rely on the shared notification gateway authorization 
   assert.match(notifySource, /authorizeNotificationRequest/);
   assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
   assert.match(vercelConfig, /"source": "\/api\/send-groupme", "destination": "\/api\/send-notification"/);
+  assert.match(vercelConfig, /"source": "\/api\/config", "destination": "\/api\/session-bootstrap\?mode=config"/);
+  assert.match(vercelConfig, /"source": "\/api\/role", "destination": "\/api\/session-bootstrap\?mode=profile"/);
 });
 
-test('role route relies on shared auth helper boundaries for identity and profile reads', () => {
-  const roleSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'role.js'), 'utf8');
+test('session bootstrap route handles profile and config modes via shared auth helper boundaries', () => {
+  const bootstrapSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'session-bootstrap.js'), 'utf8');
 
-  assert.match(roleSource, /requireAuthenticatedUser/);
-  assert.match(roleSource, /readProfile/);
-  assert.doesNotMatch(roleSource, /auth\/v1\/user/);
-  assert.doesNotMatch(roleSource, /profiles\?id=eq\.\$\{uid\}/);
+  assert.match(bootstrapSource, /requireAuthenticatedUser/);
+  assert.match(bootstrapSource, /readProfile/);
+  assert.match(bootstrapSource, /mode === 'config'/);
+  assert.match(bootstrapSource, /mode === 'profile'/);
+  assert.doesNotMatch(bootstrapSource, /auth\/v1\/user/);
+  assert.doesNotMatch(bootstrapSource, /profiles\?id=eq\.\$\{uid\}/);
+});
+
+test('runtime bootstrap and auth profile boundaries consume unified session-bootstrap endpoint', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const authApiSource = fs.readFileSync(path.join(__dirname, '..', 'core', 'auth', 'auth-api.js'), 'utf8');
+
+  assert.match(appSource, /readSessionBootstrapThroughApi/);
+  assert.match(appSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.doesNotMatch(appSource, /fetch\('\/api\/config'/);
+  assert.doesNotMatch(appSource, /fetch\('\/api\/role'/);
+  assert.match(authApiSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.doesNotMatch(authApiSource, /fetch\('\/api\/role'/);
+});
+
+test('runtime workspace and history boundaries request server restaurant-tools and scoped history', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+
+  assert.match(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.match(appSource, /scope: canReadRestaurantTools \? 'restaurant' : 'menu'/);
+  assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
+});
+
+test('import route delegates landing parsing through a non-api helper module', () => {
+  const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'import.js'), 'utf8');
+  assert.match(importSource, /from '\.\.\/server\/_landing-import\.js'/);
+  assert.doesNotMatch(importSource, /from '\.\/_landing-import\.js'/);
 });

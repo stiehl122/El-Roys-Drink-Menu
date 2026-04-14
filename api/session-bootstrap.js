@@ -6,6 +6,20 @@ import {
 import { getSupabaseServerConfig } from '../server/_supabase.js';
 import { createSessionBootstrapPayload } from '../server/_menu-read.js';
 
+function readRequestMode(req) {
+  const fallbackMode = String(req?.query?.mode || req?.query?.kind || '').trim().toLowerCase();
+  try {
+    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const mode = String(url.searchParams.get('mode') || url.searchParams.get('kind') || fallbackMode).trim().toLowerCase();
+    if (mode) return mode;
+    if (url.pathname.endsWith('/config')) return 'config';
+    if (url.pathname.endsWith('/role')) return 'profile';
+    return '';
+  } catch (_) {
+    return fallbackMode;
+  }
+}
+
 function hasAuthorizationHeader(req) {
   return !!String(req?.headers?.authorization || '').trim();
 }
@@ -37,6 +51,24 @@ function getLoopAuditConfig(mode = 'manager') {
   };
 }
 
+function readBootstrapConfig() {
+  return {
+    supabaseUrl: String(process.env.SUPABASE_URL || '').trim(),
+    supabaseAnonKey: String(process.env.SUPABASE_ANON_KEY || '').trim(),
+  };
+}
+
+function buildBootstrapReadiness(loopAudit = null) {
+  const config = readBootstrapConfig();
+  return {
+    config,
+    readiness: {
+      hasSupabaseConfig: !!(config.supabaseUrl && config.supabaseAnonKey),
+      previewAuditAvailable: !!loopAudit?.available,
+    },
+  };
+}
+
 async function signInPreviewAuditUser({ sbUrl, anonKey, email, password }) {
   const response = await fetch(`${sbUrl}/auth/v1/token?grant_type=password`, {
     method: 'POST',
@@ -60,6 +92,8 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
 
   try {
+    const mode = readRequestMode(req);
+
     if (req.method === 'POST') {
       if (!isPreviewRuntime()) {
         return res.status(403).json({ error: 'Preview audit session is only available on preview deployments.' });
@@ -113,16 +147,39 @@ export default async function handler(req, res) {
       });
     }
 
+    if (mode === 'config') {
+      res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate');
+      return res.json(readBootstrapConfig());
+    }
+
+    if (mode === 'profile') {
+      const { uid } = await requireAuthenticatedUser(req);
+      const profile = await readProfile(uid, { select: 'role,name' });
+      const role = profile?.role || 'none';
+      const accessibleMenuIds = role === 'manager'
+        ? (await readMenuAccessForUser(uid, { select: 'menu_id' })).map(row => row.menu_id)
+        : [];
+      return res.json({ role, name: profile?.name || '', accessibleMenuIds });
+    }
+
     const previewAuditMode = normalizeAuditMode(req.query?.mode || 'manager');
     const loopAudit = getLoopAuditConfig(previewAuditMode);
     if (!hasAuthorizationHeader(req)) {
+      const bootstrapPayload = createSessionBootstrapPayload();
+      const readinessPayload = buildBootstrapReadiness(loopAudit);
       return res.json({
-        ...createSessionBootstrapPayload(),
+        ...bootstrapPayload,
+        ...readinessPayload,
         loopAudit: {
           available: loopAudit.available,
           label: loopAudit.label,
           mode: previewAuditMode,
           previewOnly: true,
+        },
+        compatibility: {
+          ...bootstrapPayload.compatibility,
+          includesConfig: true,
+          readinessShape: 'bootstrap.readiness.v1',
         },
       });
     }
@@ -133,20 +190,28 @@ export default async function handler(req, res) {
     const accessibleMenuIds = role === 'manager'
       ? (await readMenuAccessForUser(uid, { select: 'menu_id' })).map(row => row.menu_id)
       : [];
+    const readinessPayload = buildBootstrapReadiness(loopAudit);
+    const bootstrapPayload = createSessionBootstrapPayload({
+      actor: {
+        id: uid,
+        name: profile?.name || '',
+        role,
+      },
+      accessibleMenuIds,
+    });
     return res.json({
-      ...createSessionBootstrapPayload({
-        actor: {
-          id: uid,
-          name: profile?.name || '',
-          role,
-        },
-        accessibleMenuIds,
-      }),
+      ...bootstrapPayload,
+      ...readinessPayload,
       loopAudit: {
         available: loopAudit.available,
         label: loopAudit.label,
         mode: previewAuditMode,
         previewOnly: true,
+      },
+      compatibility: {
+        ...bootstrapPayload.compatibility,
+        includesConfig: true,
+        readinessShape: 'bootstrap.readiness.v1',
       },
     });
   } catch (error) {

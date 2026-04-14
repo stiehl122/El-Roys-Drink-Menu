@@ -4,7 +4,7 @@ const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
 const MODULE_URL = pathToFileURL(
-  path.join(__dirname, '..', 'api', '_landing-import.js')
+  path.join(__dirname, '..', 'server', '_landing-import.js')
 ).href;
 
 async function loadImportModule() {

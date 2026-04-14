@@ -1036,6 +1036,7 @@
 .history-detail { display: none; padding: 0 10px 8px; font-size: 11px; }
 .history-entry.expanded .history-detail { display: block; }
 .history-cat { font-size: 12px; margin-top: 4px; }
+.history-message { padding: 4px 0 6px 12px; color: var(--text); }
 .history-line { padding-left: 12px; }
 .history-add { color: var(--green, #4caf50); }
 .history-remove { color: var(--red, #f44336); }
