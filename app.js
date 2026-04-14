@@ -1552,8 +1552,15 @@ function submitAddItemModalBarcodeLookup() {
   return beginAddItemBarcodeLookup(barcode);
 }
 
+function syncAddItemModalUiState() {
+  const body = document.body;
+  if (!body?.classList || typeof body.classList.toggle !== 'function') return;
+  body.classList.toggle('add-item-modal-open', !!_addItemModalState.isOpen && canOpenAddItemModal());
+}
+
 function renderAddItemModal(options = {}) {
   const host = document.getElementById('manager-add-item-modal-host');
+  syncAddItemModalUiState();
   if (!host) return;
   if (!_addItemModalState.isOpen || !canOpenAddItemModal()) {
     host.innerHTML = '';
@@ -2925,7 +2932,7 @@ function buildManagerWorkspaceModuleDeps() {
     updateActiveMenuBar: () => updateActiveMenuBar(),
     renderRecentChanges: () => renderRecentChanges(),
     renderFooter: () => renderFooter(),
-    initCollapsingHeader: () => initCollapsingHeader(),
+    initManagerMobileDrawerTrigger: () => initManagerMobileDrawerTrigger(),
     initDrawerSwipe: () => initDrawerSwipe(),
   };
 }
@@ -6518,7 +6525,7 @@ function renderManagerWorkspace(options = {}) {
   if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
   renderFooter();
-  initCollapsingHeader();
+  initManagerMobileDrawerTrigger();
   initDrawerSwipe();
 }
 
@@ -8230,6 +8237,8 @@ function renderUserHeader(options = {}) {
   const adminBtn  = document.getElementById('admin-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
   const drawerToggle = document.getElementById('settings-drawer-toggle');
+  const adminDrawerToggle = document.getElementById('admin-mobile-drawer-toggle');
+  const mobileDrawerTrigger = document.getElementById('manager-mobile-drawer-trigger');
   const lockedSignInBtn = document.getElementById('manager-locked-signin-btn');
 
   if (actionBtn) {
@@ -8245,13 +8254,15 @@ function renderUserHeader(options = {}) {
     adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminDrawerBtn.classList.toggle('active', isAdminMode);
   }
-  if (drawerToggle) {
-    drawerToggle.style.display = (!signedIn && isSettingsRoute) ? 'none' : '';
-  }
+  [drawerToggle, adminDrawerToggle, mobileDrawerTrigger].forEach(toggle => {
+    if (!toggle) return;
+    toggle.style.display = (!signedIn && isSettingsRoute) ? 'none' : '';
+  });
   if (lockedSignInBtn) {
     lockedSignInBtn.textContent = signedIn ? 'Resume Manager' : 'Sign In';
   }
   updateDrawerAddItemButton();
+  syncManagerMobileDrawerTrigger();
 
   _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
   _setDisplayBySelector('[data-route-admin]', (signedIn && isAdmin) ? '' : 'none');
@@ -8308,29 +8319,70 @@ function setActiveSettingsSection(sectionId) {
   });
 }
 
+function getSettingsDrawerDom() {
+  const adminDrawer = document.getElementById('admin-settings-rail');
+  const adminBackdrop = document.getElementById('admin-settings-drawer-backdrop');
+  const adminToggle = document.getElementById('admin-mobile-drawer-toggle');
+  const managerDrawer = document.getElementById('manager-settings-rail');
+  const managerBackdrop = document.getElementById('settings-drawer-backdrop');
+  const managerToggle = document.getElementById('settings-drawer-toggle');
+  const managerMobileTrigger = document.getElementById('manager-mobile-drawer-trigger');
+
+  const useAdminDrawer = (
+    _appPageMode === 'admin' ||
+    (document.body?.classList?.contains('admin-console-page') && !!adminDrawer) ||
+    (!managerDrawer && !!adminDrawer)
+  );
+
+  if (useAdminDrawer) {
+    return {
+      drawer: adminDrawer,
+      backdrop: adminBackdrop,
+      toggle: adminToggle,
+      mobileTrigger: null,
+      mobileWidth: 900,
+      bodyOpenClass: 'admin-settings-drawer-open',
+    };
+  }
+
+  return {
+    drawer: managerDrawer,
+    backdrop: managerBackdrop,
+    toggle: managerToggle,
+    mobileTrigger: managerMobileTrigger,
+    mobileWidth: 920,
+    bodyOpenClass: 'settings-drawer-open',
+  };
+}
+
 function setSettingsDrawerOpen(isOpen, options = {}) {
-  const drawer = document.getElementById('manager-settings-rail');
-  const backdrop = document.getElementById('settings-drawer-backdrop');
-  const toggle = document.getElementById('settings-drawer-toggle');
-  const isMobileDrawer = window.innerWidth <= 920;
+  const drawerDom = getSettingsDrawerDom();
+  const { drawer, backdrop, toggle, mobileTrigger, mobileWidth, bodyOpenClass } = drawerDom;
+  const isMobileDrawer = window.innerWidth <= mobileWidth;
   const shouldRestoreToggleFocus = options.restoreFocus !== false;
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
   backdrop.hidden = !(isOpen && isMobileDrawer);
-  document.body.classList.toggle('settings-drawer-open', !!isOpen && isMobileDrawer);
+  document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
+  document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);
   if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (mobileTrigger) mobileTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen && isMobileDrawer) {
     requestAnimationFrame(() => {
-      drawer.querySelector('.manager-shell-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
+      drawer.querySelector('.manager-shell-rail-close, .admin-console-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
     });
-  } else if (!isOpen && isMobileDrawer && toggle && shouldRestoreToggleFocus) {
-    toggle.focus();
+  } else if (!isOpen && isMobileDrawer && shouldRestoreToggleFocus) {
+    const preferredFocusTarget = document.body.classList.contains('manager-mobile-drawer-trigger-visible')
+      ? mobileTrigger
+      : toggle;
+    preferredFocusTarget?.focus();
   }
+  syncManagerMobileDrawerTrigger();
 }
 
 function toggleSettingsDrawer() {
-  const drawer = document.getElementById('manager-settings-rail');
+  const { drawer } = getSettingsDrawerDom();
   if (!drawer) return;
   setSettingsDrawerOpen(!drawer.classList.contains('is-open'));
 }
@@ -8513,8 +8565,12 @@ document.addEventListener('click', function(e) {
 // Close dropdown on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
-  const drawer = document.getElementById('manager-settings-rail');
-  if (drawer?.classList.contains('is-open') || document.body.classList.contains('settings-drawer-open')) {
+  const { drawer } = getSettingsDrawerDom();
+  if (
+    drawer?.classList.contains('is-open') ||
+    document.body.classList.contains('settings-drawer-open') ||
+    document.body.classList.contains('admin-settings-drawer-open')
+  ) {
     closeSettingsDrawer();
   }
   document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
@@ -10402,52 +10458,51 @@ function initSwipeGestures(containerEl) {
   });
 }
 
-// ─── COLLAPSING HEADER ───────────────────────────────────────────────────────
-let _lastScrollY = 0;
-let _collapsingHeaderBound = false;
+// ─── MANAGER MOBILE DRAWER TRIGGER ───────────────────────────────────────────
+let _managerMobileDrawerTriggerBound = false;
 
-function initCollapsingHeader() {
-  if (_collapsingHeaderBound) return;
-  _collapsingHeaderBound = true;
+function syncManagerMobileDrawerTrigger() {
+  const body = document.body;
+  if (!body) return;
+  const trigger = document.getElementById('manager-mobile-drawer-trigger');
+  const header = document.querySelector('#app-shell > header.manager-shell-topbar');
+  if (!trigger || !header) {
+    body.classList.remove('manager-mobile-drawer-trigger-visible');
+    return;
+  }
+  if (window.innerWidth > 920 || body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
+    body.classList.remove('manager-mobile-drawer-trigger-visible');
+    trigger.hidden = true;
+    return;
+  }
+  const rect = typeof header.getBoundingClientRect === 'function'
+    ? header.getBoundingClientRect()
+    : null;
+  const shouldShow = !!rect && rect.bottom <= 10;
+  body.classList.toggle('manager-mobile-drawer-trigger-visible', shouldShow);
+  trigger.hidden = !shouldShow;
+}
+
+function initManagerMobileDrawerTrigger() {
+  if (_managerMobileDrawerTriggerBound) return;
+  _managerMobileDrawerTriggerBound = true;
   let ticking = false;
-  const evaluate = () => {
-    const body = document.body;
-    const y = window.scrollY;
-    if (window.innerWidth > 920) {
-      if (body.classList.contains('settings-drawer-open')) closeSettingsDrawer();
-      body.classList.remove('header-compact', 'header-hidden');
-      _lastScrollY = y;
-      return;
-    }
-    const delta = y - _lastScrollY;
-    const scrollingDown = delta > 8;
-    const scrollingUp = delta < -8;
-    body.classList.toggle('header-compact', y > 32);
-    if (y <= 16) {
-      body.classList.remove('header-hidden');
-    } else if (y > 132 && scrollingDown) {
-      body.classList.add('header-hidden');
-    } else if (scrollingUp || y < 88) {
-      body.classList.remove('header-hidden');
-    }
-    _lastScrollY = y;
-  };
-  const requestEvaluate = () => {
+  const requestSync = () => {
     if (ticking) return;
     ticking = true;
     requestAnimationFrame(() => {
       ticking = false;
-      evaluate();
+      syncManagerMobileDrawerTrigger();
     });
   };
-  window.addEventListener('scroll', requestEvaluate, { passive: true });
-  window.addEventListener('resize', requestEvaluate);
-  requestEvaluate();
+  window.addEventListener('scroll', requestSync, { passive: true });
+  window.addEventListener('resize', requestSync);
+  requestSync();
 }
 
 // ─── DRAWER SWIPE TO CLOSE ───────────────────────────────────────────────────
 function initDrawerSwipe() {
-  const rail = document.getElementById('manager-settings-rail');
+  const { drawer: rail } = getSettingsDrawerDom();
   if (!rail || rail.dataset.swipeBound === 'true') return;
   rail.dataset.swipeBound = 'true';
   let startX = 0;

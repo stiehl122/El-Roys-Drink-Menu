@@ -1550,7 +1550,9 @@ test('public route contract and route renderers register and hydrate both restau
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
     assert.match(featuredWrap.innerHTML, /House Margarita 1/);
     assert.match(featuredWrap.innerHTML, /House Margarita 5/);
-    assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
+    assert.equal(page.classList.contains('is-mobile-expanded'), false);
+    assert.equal(page.classList.contains('is-mobile-compact'), false);
+    assert.equal(page.classList.contains('is-near-top'), false);
   }
 });
 

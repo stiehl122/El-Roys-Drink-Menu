@@ -29,7 +29,9 @@
     const updateActiveMenuBar = typeof deps.updateActiveMenuBar === 'function' ? deps.updateActiveMenuBar : (() => {});
     const renderRecentChanges = typeof deps.renderRecentChanges === 'function' ? deps.renderRecentChanges : (() => {});
     const renderFooter = typeof deps.renderFooter === 'function' ? deps.renderFooter : (() => {});
-    const initCollapsingHeader = typeof deps.initCollapsingHeader === 'function' ? deps.initCollapsingHeader : (() => {});
+    const initManagerMobileDrawerTrigger = typeof deps.initManagerMobileDrawerTrigger === 'function'
+      ? deps.initManagerMobileDrawerTrigger
+      : (typeof deps.initCollapsingHeader === 'function' ? deps.initCollapsingHeader : (() => {}));
     const initDrawerSwipe = typeof deps.initDrawerSwipe === 'function' ? deps.initDrawerSwipe : (() => {});
 
     function renderManagerOverviewStats() {
@@ -125,7 +127,7 @@
       if (options.includeRecentChanges !== false) renderRecentChanges();
       updateManagerActionBar();
       renderFooter();
-      initCollapsingHeader();
+      initManagerMobileDrawerTrigger();
       initDrawerSwipe();
     }
 

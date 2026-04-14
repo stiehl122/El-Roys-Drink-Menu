@@ -48,11 +48,34 @@
   </div>
 
   <div id="manager-view" class="admin-console-shell" style="display:none">
-    <aside class="admin-console-rail" aria-label="Admin console sections">
+    <button
+      class="admin-console-mobile-toggle"
+      id="admin-mobile-drawer-toggle"
+      type="button"
+      aria-label="Open section navigation"
+      aria-controls="admin-settings-rail"
+      aria-expanded="false"
+      onclick="toggleSettingsDrawer()"
+    >☰</button>
+
+    <div
+      class="admin-console-drawer-backdrop"
+      id="admin-settings-drawer-backdrop"
+      hidden
+      onclick="closeSettingsDrawer()"
+    ></div>
+
+    <aside class="admin-console-rail" id="admin-settings-rail" aria-label="Admin console sections" aria-hidden="false">
       <div class="admin-console-rail-brand">
         <p class="admin-console-rail-kicker">Admin</p>
         <h1 class="admin-console-rail-title">Console</h1>
       </div>
+      <button
+        class="admin-console-rail-close"
+        type="button"
+        aria-label="Close section navigation"
+        onclick="closeSettingsDrawer()"
+      >×</button>
 
       <nav class="admin-console-rail-nav">
         <button class="settings-rail-btn active" type="button" data-target="admin-restaurants-section" onclick="focusSettingsSection('admin-restaurants-section', this)">Restaurants</button>
