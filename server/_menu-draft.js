@@ -92,6 +92,7 @@ export async function saveSharedDraftCommand(req) {
     name: String(profile?.name || '').trim(),
     role,
   }, body?.source || '');
+  const draftExists = hasSharedDraft(snapshot);
 
   let saveResult;
   try {
@@ -124,10 +125,10 @@ export async function saveSharedDraftCommand(req) {
 
   return {
     ok: true,
-    status: 'draft_saved',
+    status: draftExists ? 'draft_saved' : 'draft_cleared',
     menuId,
-    savedAt,
-    hasSharedDraft: hasSharedDraft(snapshot),
+    savedAt: draftExists ? savedAt : null,
+    hasSharedDraft: draftExists,
     sharedDraft: saveResult.sharedDraft,
     compatibility: {
       command: 'menu-draft.v1',

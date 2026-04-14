@@ -19,12 +19,56 @@
     // Resolve the legacy fallback once during boundary construction so we do not
     // recurse back through the boundary later when publish is invoked.
     const fallbackService = buildFallbackService ? buildFallbackService() : null;
+    const resolveDraftChangeCount = snapshot => {
+      const diff = Array.isArray(snapshot?.notifyDiff) ? snapshot.notifyDiff : [];
+      const saveOnlyChanges = Array.isArray(snapshot?.saveOnlyChanges) ? snapshot.saveOnlyChanges : [];
+      const diffLineCount = typeof globalScope.countDiffLines === 'function'
+        ? globalScope.countDiffLines(diff)
+        : diff.reduce((count, section) => (
+            count + (section.added?.length || 0) +
+            (section.removed?.length || 0) +
+            (section.eightySixed?.length || 0) +
+            (section.restored?.length || 0)
+          ), 0);
+      return diffLineCount + saveOnlyChanges.length;
+    };
+    const isSharedDraftClearable = snapshot => {
+      const changeCount = resolveDraftChangeCount(snapshot);
+      if (typeof globalScope.isSharedDraftClearable === 'function') {
+        return globalScope.isSharedDraftClearable({
+          hasLocalDraft: !!snapshot?.dirty,
+          hasSharedDraft: !!snapshot?.hasSharedDraft,
+          changeCount,
+        });
+      }
+      return !!snapshot?.hasSharedDraft && !snapshot?.dirty && changeCount === 0;
+    };
 
     return {
       async saveDraft(options = {}) {
         void options;
         const snapshot = buildSnapshot('draft');
         if (!snapshot.dirty) {
+          if (isSharedDraftClearable(snapshot)) {
+            const ts = sessionPorts.now();
+            try {
+              await sessionPorts.patchMenuDraftState(null, ts);
+              sessionPorts.clearDraft?.();
+              return {
+                ok: true,
+                cleared: true,
+                ts,
+                snapshot: buildSnapshot('draft-cleared'),
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                userHandled: false,
+                userMessage: error?.message || 'Draft clear failed.',
+                snapshot: buildSnapshot('draft-clear-failed'),
+              };
+            }
+          }
           return {
             ok: false,
             noop: true,

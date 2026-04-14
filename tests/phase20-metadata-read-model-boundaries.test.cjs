@@ -43,3 +43,10 @@ test('session bootstrap route exposes config and readiness on the unified bounda
   assert.match(routeSource, /readiness:/);
   assert.match(routeSource, /includesConfig: true/);
 });
+
+test('draft command can clear shared drafts without a separate route', () => {
+  const draftSource = read('server/_menu-draft.js');
+
+  assert.match(draftSource, /status: draftExists \? 'draft_saved' : 'draft_cleared'/);
+  assert.match(draftSource, /hasSharedDraft: draftExists/);
+});

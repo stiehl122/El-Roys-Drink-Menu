@@ -1077,16 +1077,32 @@ function markSaveOnlyDraftChange(change) {
 function getDraftChangeCount() {
   return countDiffLines() + getDraftSaveOnlyChanges().length;
 }
+function isSharedDraftClearable({ hasLocalDraft = !!_dirty, hasSharedDraft = hasSharedDraftState(), changeCount = getDraftChangeCount() } = {}) {
+  return !!hasSharedDraft && !hasLocalDraft && Number(changeCount || 0) === 0;
+}
 function updateSaveBtn() {
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
   const hasLocalDraft = !!_dirty;
-  const hasDraftWork = hasLocalDraft || hasSharedDraftState();
-  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
-  if (saveBtn) saveBtn.disabled = !hasLocalDraft;
+  const hasSharedDraft = hasSharedDraftState();
+  const changeCount = getDraftChangeCount();
+  const hasClearableSharedDraft = isSharedDraftClearable({
+    hasLocalDraft,
+    hasSharedDraft,
+    changeCount,
+  });
+  const hasPublishableDraftWork = hasLocalDraft || (hasSharedDraft && !hasClearableSharedDraft);
+  const hasPendingUpdate = !hasLocalDraft && !hasSharedDraft && countDiffLines() > 0;
+  if (saveBtn) {
+    saveBtn.disabled = !hasLocalDraft && !hasClearableSharedDraft;
+    saveBtn.textContent = hasClearableSharedDraft ? 'Clear Draft' : 'Save Draft';
+    saveBtn.title = hasClearableSharedDraft
+      ? 'Remove the saved draft because it already matches the live menu'
+      : 'Save changes without notifying anyone';
+  }
   if (publishBtn) {
-    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
-    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+    publishBtn.disabled = !hasPublishableDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasPublishableDraftWork && hasPendingUpdate ? 'Update' : 'Save';
   }
   updateManagerActionBar();
 }
@@ -2320,6 +2336,12 @@ function getMenuSessionPorts() {
       setSharedDraftState(ts);
       updateSaveBtn();
     },
+    clearDraft() {
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
+      updateSaveBtn();
+    },
     commitLiveSave(ts) {
       menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
       lsSet(LS_KEYS.lastUpdated, String(ts));
@@ -2410,7 +2432,33 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
     async saveDraft(options = {}) {
       void options;
       const snapshot = buildSnapshot('draft');
+      const changeCount = countDiffLines(snapshot.notifyDiff || []) + (Array.isArray(snapshot.saveOnlyChanges) ? snapshot.saveOnlyChanges.length : 0);
+      const hasClearableSharedDraft = isSharedDraftClearable({
+        hasLocalDraft: !!snapshot.dirty,
+        hasSharedDraft: !!snapshot.hasSharedDraft,
+        changeCount,
+      });
       if (!snapshot.dirty) {
+        if (hasClearableSharedDraft) {
+          const ts = sessionPorts.now();
+          try {
+            await sessionPorts.patchMenuDraftState(null, ts);
+            sessionPorts.clearDraft?.();
+            return {
+              ok: true,
+              cleared: true,
+              ts,
+              snapshot: buildSnapshot('draft-cleared'),
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              userHandled: false,
+              userMessage: error?.message || 'Draft clear failed.',
+              snapshot: buildSnapshot('draft-clear-failed'),
+            };
+          }
+        }
         return {
           ok: false,
           noop: true,
@@ -6254,6 +6302,11 @@ function renderManagerOverviewStats() {
   const draftCount = getDraftChangeCount();
   const hasLocalDraft = !!_dirty;
   const hasSharedDraft = hasSharedDraftState();
+  const hasClearableSharedDraft = isSharedDraftClearable({
+    hasLocalDraft,
+    hasSharedDraft,
+    changeCount: draftCount,
+  });
   const sharedDraftInfo = getSharedDraftInfo();
   const notifyCount = !hasSharedDraft && !hasLocalDraft ? countDiffLines() : 0;
   const statusValue = document.getElementById('manager-overview-status-value');
@@ -6273,7 +6326,9 @@ function renderManagerOverviewStats() {
       const sourceLabel = formatHistorySourceLabel(sharedDraftInfo.source);
       const actorLabel = sharedDraftInfo.savedBy?.name ? ` by ${sharedDraftInfo.savedBy.name}` : '';
       const sourceSuffix = sourceLabel ? ` via ${sourceLabel}` : '';
-      statusMeta.textContent = `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish${actorLabel}${sourceSuffix}`;
+      statusMeta.textContent = hasClearableSharedDraft
+        ? `Saved draft matches the live menu${actorLabel}${sourceSuffix}. Clear Draft removes it.`
+        : `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish${actorLabel}${sourceSuffix}`;
     } else if (notifyCount > 0) {
       statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
     } else {
@@ -6313,9 +6368,15 @@ function createDraftLedgerService(deps = {}) {
     getActionBarState({ isCompactViewport = false } = {}) {
       const hasDraftChanges = isDirty();
       const hasShared = hasSharedDraft();
-      const hasDraftWork = hasDraftChanges || hasShared;
-      const hasPendingUpdate = !hasDraftWork && getDiffLineCount() > 0;
       const changeCount = getDraftCount();
+      const hasClearableSharedDraft = isSharedDraftClearable({
+        hasLocalDraft: hasDraftChanges,
+        hasSharedDraft: hasShared,
+        changeCount,
+      });
+      const hasDraftWork = hasDraftChanges || hasShared;
+      const hasPublishableDraftWork = hasDraftChanges || (hasShared && !hasClearableSharedDraft);
+      const hasPendingUpdate = !hasDraftChanges && !hasShared && getDiffLineCount() > 0;
       const notifyCount = hasPendingUpdate ? getDiffLineCount() : 0;
 
       let summaryText = 'No Pending Changes';
@@ -6323,6 +6384,8 @@ function createDraftLedgerService(deps = {}) {
         summaryText = isCompactViewport
           ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
           : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
+      } else if (hasClearableSharedDraft) {
+        summaryText = 'Saved draft matches the live menu. Clear Draft removes it.';
       } else if (hasShared) {
         summaryText = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
       } else if (hasPendingUpdate) {
@@ -6332,11 +6395,14 @@ function createDraftLedgerService(deps = {}) {
       return {
         hasDraftChanges,
         hasSharedDraft: hasShared,
+        hasClearableSharedDraft,
         hasDraftWork,
+        hasPublishableDraftWork,
         hasPendingUpdate,
         changeCount,
         summaryText,
-        publishLabel: !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save',
+        saveLabel: hasClearableSharedDraft ? 'Clear Draft' : 'Save Draft',
+        publishLabel: !hasPublishableDraftWork && hasPendingUpdate ? 'Update' : 'Save',
       };
     },
     getItemBadge({ item, catId, lastSentNames = null }) {
@@ -6390,13 +6456,19 @@ function updateManagerActionBar() {
   const publishBtn = document.getElementById('send-btn');
 
   if (primaryGroup) primaryGroup.hidden = false;
-  if (saveBtn) saveBtn.disabled = !ledgerState.hasDraftChanges;
+  if (saveBtn) {
+    saveBtn.disabled = !ledgerState.hasDraftChanges && !ledgerState.hasClearableSharedDraft;
+    saveBtn.textContent = ledgerState.saveLabel;
+    saveBtn.title = ledgerState.hasClearableSharedDraft
+      ? 'Remove the saved draft because it already matches the live menu'
+      : 'Save changes without notifying anyone';
+  }
   if (publishBtn) {
-    publishBtn.disabled = !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate;
+    publishBtn.disabled = !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate;
     publishBtn.textContent = ledgerState.publishLabel;
   }
   bar.hidden = false;
-  bar.classList.toggle('is-idle', !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate);
+  bar.classList.toggle('is-idle', !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate && !ledgerState.hasClearableSharedDraft);
   syncManagerActionBarStatus(syncEl);
 
   if (summary) summary.textContent = ledgerState.summaryText;
@@ -10018,7 +10090,9 @@ async function saveMenu() {
     const result = await ensureCurrentMenuSession().saveDraft();
     if (result?.noop) return;
     if (result?.ok) {
-      showToast(`✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
+      showToast(result?.cleared
+        ? `✅ ${_activeMenuName || 'Menu'} draft cleared.`
+        : `✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       return;
