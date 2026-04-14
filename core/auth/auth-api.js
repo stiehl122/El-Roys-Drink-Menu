@@ -1,6 +1,18 @@
 (function bootstrapAuthApi(globalScope) {
   if (!globalScope || globalScope.__HF_AUTH_API__) return;
 
+  function normalizeProfilePayload(payload = {}) {
+    const actor = payload?.actor && typeof payload.actor === 'object' ? payload.actor : payload;
+    const access = payload?.access && typeof payload.access === 'object' ? payload.access : payload;
+    return {
+      role: actor?.role || payload?.role || 'none',
+      name: actor?.name || payload?.name || '',
+      accessibleMenuIds: Array.isArray(access?.accessibleMenuIds || payload?.accessibleMenuIds)
+        ? (access?.accessibleMenuIds || payload?.accessibleMenuIds)
+        : [],
+    };
+  }
+
   globalScope.__HF_AUTH_API__ = {
     async signUp({ supabaseUrl = '', anonKey = '', email = '', password = '', name = '' } = {}) {
       const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
@@ -33,11 +45,12 @@
     },
 
     async getProfile({ accessToken = '' } = {}) {
-      const response = await fetch('/api/role', {
+      const response = await fetch('/api/session-bootstrap', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
-      return response.json();
+      const payload = await response.json();
+      return normalizeProfilePayload(payload || {});
     },
 
     async resetPasswordForEmail({ supabaseUrl = '', anonKey = '', email = '', redirectTo = '' } = {}) {

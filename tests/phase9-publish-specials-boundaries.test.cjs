@@ -21,13 +21,16 @@ test('wave 3 publish route delegates auth and command execution through shared s
   assert.match(publishRoute, /from '\.\.\/server\/_menu-write\.js'/);
   assert.match(publishRoute, /readAuthorizedMenuActor/);
   assert.match(publishRoute, /from '\.\.\/server\/_menu-publish\.js'/);
+  assert.match(publishRoute, /previewMenuUpdateForMenu/);
   assert.match(publishRoute, /publishMenuUpdateForMenu/);
+  assert.match(publishRoute, /body\?\.action/);
 });
 
 test('wave 3 publish command module owns notification delivery and persistence composition', async () => {
   const publishModuleSource = read('server/_menu-publish.js');
   const publishModule = await importApiModule('server/_menu-publish.js');
 
+  assert.equal(typeof publishModule.previewMenuUpdateForMenu, 'function');
   assert.equal(typeof publishModule.publishMenuUpdateForMenu, 'function');
   assert.match(publishModuleSource, /from '\.\/_notification-gateway\.js'/);
   assert.match(publishModuleSource, /truncateNotificationText/);
@@ -37,13 +40,19 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /saveLiveMenuForMenu/);
   assert.match(publishModuleSource, /patchMenuMetaForMenu/);
   assert.match(publishModuleSource, /insertUpdateLog/);
+  assert.match(publishModuleSource, /menu-publish-preview\.v1/);
+  assert.match(publishModuleSource, /buildCanonicalPreviewForMenu/);
+  assert.match(publishModuleSource, /resolveSelectedChanges/);
 });
 
 test('wave 3 app runtime prefers publish and specials server boundaries', () => {
   const source = read('app.js');
 
   assert.match(source, /async function publishMenuThroughApi/);
+  assert.match(source, /async function requestPublishPreviewThroughApi/);
   assert.match(source, /\/api\/menu-publish/);
+  assert.match(source, /action: 'preview'/);
+  assert.match(source, /selected_change_ids/);
   assert.match(source, /await ensureCurrentMenuSession\(\)\.publishUpdate/);
   assert.match(source, /await fetch\('\/api\/specials'/);
   assert.match(source, /async request\(action,\s*payload = \{\}\)/);

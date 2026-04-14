@@ -28,6 +28,12 @@ function formatInList(values = [], { quoted = false } = {}) {
     .join(',');
 }
 
+const OPTIONAL_DRAFT_METADATA_FIELDS = [
+  'draft_saved_by_user_id',
+  'draft_saved_by_name',
+  'draft_saved_source',
+];
+
 function cloneItemUpcharges(upcharges = []) {
   if (!Array.isArray(upcharges)) return [];
   return upcharges
@@ -141,6 +147,39 @@ function normalizeRevision(value) {
   return numeric;
 }
 
+function isMissingColumnIssue(payload, columnName) {
+  const message = `${payload?.error || payload?.message || payload?.hint || payload?.details || ''}`.toLowerCase();
+  return message.includes(columnName.toLowerCase()) &&
+    (message.includes('column') || message.includes('schema cache'));
+}
+
+function listMissingOptionalColumns(payload, fieldNames = []) {
+  return fieldNames.filter(fieldName => isMissingColumnIssue(payload, fieldName));
+}
+
+function hasSnapshotContent(snapshot = {}) {
+  return !!snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) && Object.keys(snapshot).length > 0;
+}
+
+export function normalizeAuditSource(value = '', { fallback = 'web' } = {}) {
+  const normalized = String(value || '').trim().toLowerCase();
+  const allowed = new Set([
+    'web',
+    'web_manager',
+    'web_admin',
+    'ios',
+    'ios_app',
+    'server',
+  ]);
+  if (allowed.has(normalized)) return normalized;
+  return fallback;
+}
+
+export function inferAuditSource(actor = null, source = '') {
+  const fallback = actor?.role === 'admin' ? 'web_admin' : 'web_manager';
+  return normalizeAuditSource(source, { fallback });
+}
+
 export function readRevisionState(meta = {}) {
   return {
     live_revision: normalizeRevision(meta?.last_updated_ts),
@@ -174,6 +213,21 @@ export function assertExpectedRevision(expectedRevision, actualRevision, fieldNa
         menu_id: menuId,
         command,
         current_revisions: currentRevisions,
+        conflict_units: [{
+          type: 'revision_mismatch',
+          field: fieldName,
+          expected,
+          actual,
+        }],
+        server_snapshot: {
+          menu_id: menuId,
+          current_revisions: currentRevisions,
+        },
+        reconcile: {
+          available: true,
+          strategy: 'reload_workspace',
+          token: [menuId || 'unknown', fieldName, String(actual ?? 'null')].join(':'),
+        },
         reconnect: {
           required: true,
           reason: 'stale_revision',
@@ -201,7 +255,7 @@ async function upsertCategories(menuId, normalizedSnapshot) {
     display_order: category.display_order,
   }));
   if (categoryRows.length) {
-    const response = await fetch(`${sbUrl}/rest/v1/categories`, {
+    const response = await fetch(`${sbUrl}/rest/v1/categories?on_conflict=menu_id,key`, {
       method: 'POST',
       headers: getContentHeaders(),
       body: JSON.stringify(categoryRows),
@@ -302,7 +356,14 @@ async function patchMenuBotId(menuId, botId) {
   );
 }
 
-export async function saveDraftStateForMenu({ menuId, snapshot = {}, savedAt, expectedDraftRevision = null }) {
+export async function saveDraftStateForMenu({
+  menuId,
+  snapshot = {},
+  savedAt,
+  expectedDraftRevision = null,
+  actor = null,
+  source = '',
+} = {}) {
   const meta = await readMenuMeta(menuId);
   assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts || null, 'draft_revision', {
     menuId,
@@ -311,17 +372,35 @@ export async function saveDraftStateForMenu({ menuId, snapshot = {}, savedAt, ex
   });
   const { sbUrl } = getSupabaseServerConfig();
   const normalizedSavedAt = Number(savedAt || Date.now());
-  await patchJsonOrThrow(
-    `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menuId}`,
+  const hasDraft = hasSnapshotContent(snapshot);
+  const normalizedSource = hasDraft ? inferAuditSource(actor, source) : '';
+  const compatibility = await patchMenuMetaForMenuWithCompatibility(
+    menuId,
     {
       draft_state: snapshot || {},
-      draft_saved_ts: snapshot ? normalizedSavedAt : null,
+      draft_saved_ts: hasDraft ? normalizedSavedAt : null,
+      draft_saved_by_user_id: hasDraft ? actor?.id || null : null,
+      draft_saved_by_name: hasDraft ? String(actor?.name || '').trim() : '',
+      draft_saved_source: normalizedSource,
     },
-    'Failed to save draft'
+    {
+      optionalFields: OPTIONAL_DRAFT_METADATA_FIELDS,
+    }
   );
   return {
-    draft_saved_ts: snapshot ? normalizedSavedAt : null,
-    downgradedFields: [],
+    draft_saved_ts: hasDraft ? normalizedSavedAt : null,
+    downgradedFields: compatibility.downgradedFields,
+    sharedDraft: {
+      exists: hasDraft,
+      savedAt: hasDraft ? normalizedSavedAt : null,
+      savedBy: hasDraft
+        ? {
+            id: String(actor?.id || ''),
+            name: String(actor?.name || '').trim(),
+          }
+        : null,
+      source: normalizedSource,
+    },
   };
 }
 
@@ -363,26 +442,68 @@ export async function patchMenuMetaForMenu(menuId, update = {}) {
   );
 }
 
-export async function insertUpdateLog({ menuId, actor = null, diff = [], message = '' }) {
+export async function patchMenuMetaForMenuWithCompatibility(menuId, update = {}, options = {}) {
+  const optionalFields = Array.isArray(options.optionalFields) ? options.optionalFields.filter(Boolean) : [];
+  try {
+    await patchMenuMetaForMenu(menuId, update);
+    return { downgradedFields: [] };
+  } catch (error) {
+    const payload = error instanceof Error
+      ? { message: error.message }
+      : (error?.body || error || {});
+    const missingFields = listMissingOptionalColumns(payload, optionalFields);
+    if (!missingFields.length) throw error;
+    const fallbackUpdate = { ...update };
+    missingFields.forEach(fieldName => {
+      delete fallbackUpdate[fieldName];
+    });
+    await patchMenuMetaForMenu(menuId, fallbackUpdate);
+    return {
+      downgradedFields: missingFields,
+    };
+  }
+}
+
+export async function insertUpdateLog({ menuId, actor = null, diff = [], message = '', source = '' }) {
   if (!message) return true;
   const { sbUrl } = getSupabaseServerConfig();
-  const response = await fetch(`${sbUrl}/rest/v1/update_log`, {
+  const requestBody = {
+    menu_id: menuId,
+    user_id: actor?.id || null,
+    user_name: String(actor?.name || '').trim(),
+    diff: Array.isArray(diff) ? diff : [],
+    message: String(message || ''),
+    source: normalizeAuditSource(source, { fallback: inferAuditSource(actor) }),
+  };
+  const baseHeaders = serviceHeaders({
+    'Content-Type': 'application/json',
+    Prefer: 'return=minimal',
+  });
+  let response = await fetch(`${sbUrl}/rest/v1/update_log`, {
     method: 'POST',
-    headers: serviceHeaders({
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    }),
-    body: JSON.stringify({
-      menu_id: menuId,
-      user_id: actor?.id || null,
-      user_name: String(actor?.name || '').trim(),
-      diff: Array.isArray(diff) ? diff : [],
-      message: String(message || ''),
-    }),
+    headers: baseHeaders,
+    body: JSON.stringify(requestBody),
   });
   if (!response.ok) {
     const payload = await readJsonSafe(response);
+    if (isMissingColumnIssue(payload, 'source')) {
+      const { source: _ignored, ...fallbackBody } = requestBody;
+      response = await fetch(`${sbUrl}/rest/v1/update_log`, {
+        method: 'POST',
+        headers: baseHeaders,
+        body: JSON.stringify(fallbackBody),
+      });
+      if (response.ok) {
+        return {
+          downgradedFields: ['source'],
+        };
+      }
+      const fallbackPayload = await readJsonSafe(response);
+      throw new Error(getApiErrorMessage(fallbackPayload, 'Failed to write update log'));
+    }
     throw new Error(getApiErrorMessage(payload, 'Failed to write update log'));
   }
-  return true;
+  return {
+    downgradedFields: [],
+  };
 }

@@ -44,7 +44,7 @@ async function itemBelongsToRestaurantMenus(sbUrl, menuIds, itemId) {
   return categories.some(category => (category.items || []).some(item => item.id === itemId));
 }
 
-async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
+export async function fetchRestaurantSpecialGroup(sbUrl, restaurantId, options = {}) {
   const { createIfMissing = false } = options;
   const config = getRestaurantSpecialConfig(restaurantId);
   if (!config?.canonicalId) return null;

@@ -26,6 +26,10 @@ function setupManagerAddItemDom(sandbox) {
   const drawer = doc._registerElement('manager-settings-rail', createElement('aside', 'manager-settings-rail'));
   const backdrop = doc._registerElement('settings-drawer-backdrop', createElement('div', 'settings-drawer-backdrop'));
   const toggle = doc._registerElement('settings-drawer-toggle', createElement('button', 'settings-drawer-toggle'));
+  const mobileTrigger = doc._registerElement('manager-mobile-drawer-trigger', createElement('button', 'manager-mobile-drawer-trigger'));
+  const topbar = createElement('header', 'manager-shell-topbar');
+  topbar.getBoundingClientRect = () => ({ bottom: 120 });
+  doc._registerSelector('#app-shell > header.manager-shell-topbar', topbar);
   const saveBtn = doc._registerElement('save-btn', createElement('button', 'save-btn'));
   const sendBtn = doc._registerElement('send-btn', createElement('button', 'send-btn'));
   const syncStatus = doc._registerElement('sync-status', createElement('div', 'sync-status'));
@@ -57,6 +61,8 @@ function setupManagerAddItemDom(sandbox) {
     drawer,
     backdrop,
     toggle,
+    mobileTrigger,
+    topbar,
     saveBtn,
     sendBtn,
     syncStatus,
@@ -183,6 +189,50 @@ test('confirm and add more keeps the modal open, resets the draft, and remembers
   assert.equal(getState(sandbox, '_addItemModalState.fields.name'), '');
   assert.equal(getState(sandbox, '_addItemModalState.fields.categoryId'), 'cocktails');
   assert.match(modalHost.innerHTML, /Confirm &amp; Add More/);
+});
+
+test('add item modal takes over manager chrome while open and releases it on close', () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.openAddItemModal();
+
+  assert.equal(sandbox.document.body.classList.contains('add-item-modal-open'), true);
+  assert.match(modalHost.innerHTML, /manager-add-item-overlay/);
+
+  sandbox.closeAddItemModal();
+
+  assert.equal(sandbox.document.body.classList.contains('add-item-modal-open'), false);
+  assert.equal(modalHost.innerHTML, '');
+});
+
+test('manager mobile drawer trigger appears after the header scrolls out and hides while the drawer is open', () => {
+  const sandbox = loadAppSandbox();
+  const { mobileTrigger, topbar } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  let headerBottom = 96;
+  topbar.getBoundingClientRect = () => ({ bottom: headerBottom });
+  sandbox.innerWidth = 390;
+  sandbox.window.innerWidth = 390;
+
+  sandbox.syncManagerMobileDrawerTrigger();
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), false);
+  assert.equal(mobileTrigger.hidden, true);
+
+  headerBottom = -4;
+  sandbox.syncManagerMobileDrawerTrigger();
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), true);
+  assert.equal(mobileTrigger.hidden, false);
+
+  sandbox.setSettingsDrawerOpen(true);
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), false);
+  assert.equal(mobileTrigger.hidden, true);
+
+  sandbox.setSettingsDrawerOpen(false, { restoreFocus: false });
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), true);
+  assert.equal(mobileTrigger.hidden, false);
 });
 
 test('duplicate blocking clears once the manager changes the conflicting draft', () => {

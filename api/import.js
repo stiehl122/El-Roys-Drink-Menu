@@ -1,5 +1,5 @@
 import { requireRole } from '../server/_auth.js';
-import { importNewsFromUrl, importReviewFromUrl, readRequestJson } from './_landing-import.js';
+import { importNewsFromUrl, importReviewFromUrl, readRequestJson } from '../server/_landing-import.js';
 
 const IMPORT_KIND = {
   NEWS: 'news',

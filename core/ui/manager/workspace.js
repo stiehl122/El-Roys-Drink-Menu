@@ -29,12 +29,15 @@
     const updateActiveMenuBar = typeof deps.updateActiveMenuBar === 'function' ? deps.updateActiveMenuBar : (() => {});
     const renderRecentChanges = typeof deps.renderRecentChanges === 'function' ? deps.renderRecentChanges : (() => {});
     const renderFooter = typeof deps.renderFooter === 'function' ? deps.renderFooter : (() => {});
-    const initCollapsingHeader = typeof deps.initCollapsingHeader === 'function' ? deps.initCollapsingHeader : (() => {});
+    const initManagerMobileDrawerTrigger = typeof deps.initManagerMobileDrawerTrigger === 'function'
+      ? deps.initManagerMobileDrawerTrigger
+      : (typeof deps.initCollapsingHeader === 'function' ? deps.initCollapsingHeader : (() => {}));
     const initDrawerSwipe = typeof deps.initDrawerSwipe === 'function' ? deps.initDrawerSwipe : (() => {});
 
     function renderManagerOverviewStats() {
       const categoryDefs = getCategoryDefs();
       const menuState = getMenuState();
+      const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport: windowRef.innerWidth <= 480 });
       const activeItems = categoryDefs.reduce((total, cat) => (
         total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
       ), 0);
@@ -59,7 +62,9 @@
             ? `${draftCount} pending change${draftCount === 1 ? '' : 's'} on top of the saved draft`
             : `${draftCount} pending change${draftCount === 1 ? '' : 's'}`;
         } else if (hasShared) {
-          statusMeta.textContent = `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish`;
+          statusMeta.textContent = ledgerState.hasClearableSharedDraft
+            ? 'Saved draft matches the live menu. Clear Draft removes it.'
+            : `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish`;
         } else if (notifyCount > 0) {
           statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
         } else {
@@ -90,13 +95,19 @@
       const publishBtn = documentRef.getElementById('send-btn');
 
       if (primaryGroup) primaryGroup.hidden = false;
-      if (saveBtn) saveBtn.disabled = !ledgerState.hasDraftChanges;
+      if (saveBtn) {
+        saveBtn.disabled = !ledgerState.hasDraftChanges && !ledgerState.hasClearableSharedDraft;
+        saveBtn.textContent = ledgerState.saveLabel;
+        saveBtn.title = ledgerState.hasClearableSharedDraft
+          ? 'Remove the saved draft because it already matches the live menu'
+          : 'Save changes without notifying anyone';
+      }
       if (publishBtn) {
-        publishBtn.disabled = !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate;
+        publishBtn.disabled = !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate;
         publishBtn.textContent = ledgerState.publishLabel;
       }
       bar.hidden = false;
-      bar.classList.toggle('is-idle', !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate);
+      bar.classList.toggle('is-idle', !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate && !ledgerState.hasClearableSharedDraft);
       syncManagerActionBarStatus(syncEl);
 
       if (summary) summary.textContent = ledgerState.summaryText;
@@ -116,7 +127,7 @@
       if (options.includeRecentChanges !== false) renderRecentChanges();
       updateManagerActionBar();
       renderFooter();
-      initCollapsingHeader();
+      initManagerMobileDrawerTrigger();
       initDrawerSwipe();
     }
 

@@ -20,7 +20,6 @@
     if (!windowRef || !documentRef) return null;
 
     const esc = typeof adapter.esc === 'function' ? adapter.esc : fallbackEsc;
-    const mobileBreakpointPx = Number(adapter.mobileBreakpointPx) || 820;
     const containerId = adapter.containerId || 'restaurant-site-wrapper';
     const templateId = adapter.templateId || '';
     const pageSelector = adapter.pageSelector || '.route-page';
@@ -37,8 +36,6 @@
     const userChipSelector = adapter.userChipSelector || '[data-route-user-chip]';
     const emptyCategoriesHtml = adapter.emptyCategoriesHtml || '<p>Nothing on the menu yet.</p>';
     const loadingSpecialsHtml = adapter.loadingSpecialsHtml || '<p>Loading specials…</p>';
-
-    let teardownMobileHeader = null;
 
     function getMenusForRoute(sharedState) {
       const restaurantId = sharedState.siteRestaurant?.id || sharedState.restaurantId || '';
@@ -187,83 +184,6 @@
       if (userChip) userChip.style.display = sharedState.currentUser ? '' : 'none';
     }
 
-    function addMediaListener(mql, handler) {
-      if (!mql) return () => {};
-      if (typeof mql.addEventListener === 'function') {
-        mql.addEventListener('change', handler);
-        return () => mql.removeEventListener('change', handler);
-      }
-      if (typeof mql.addListener === 'function') {
-        mql.addListener(handler);
-        return () => mql.removeListener(handler);
-      }
-      return () => {};
-    }
-
-    function bindMobileHeader(page) {
-      teardownMobileHeader?.();
-      if (!page) return;
-
-      const mql = windowRef.matchMedia(`(max-width: ${mobileBreakpointPx}px)`);
-      let lastY = Math.max(windowRef.scrollY || 0, 0);
-      let isCompact = false;
-      let ticking = false;
-
-      function applyState(nextCompact, nearTop) {
-        page.classList.toggle('is-mobile-compact', !!nextCompact);
-        page.classList.toggle('is-mobile-expanded', !nextCompact);
-        page.classList.toggle('is-near-top', !!nearTop);
-      }
-
-      function evaluate() {
-        const currentY = Math.max(windowRef.scrollY || 0, 0);
-        const nearTop = currentY <= 8;
-        const isMobile = mql.matches;
-
-        if (!isMobile) {
-          isCompact = false;
-          applyState(false, true);
-          lastY = currentY;
-          return;
-        }
-
-        if (nearTop || currentY < 18) {
-          isCompact = false;
-        } else if (isCompact) {
-          if (currentY < lastY - 36) isCompact = false;
-        } else if (currentY > lastY + 6 && currentY > 24) {
-          isCompact = true;
-        }
-
-        applyState(isCompact, nearTop);
-        lastY = currentY;
-      }
-
-      function requestEvaluate() {
-        if (ticking) return;
-        ticking = true;
-        windowRef.requestAnimationFrame(() => {
-          ticking = false;
-          evaluate();
-        });
-      }
-
-      const onScroll = () => requestEvaluate();
-      const onResize = () => requestEvaluate();
-      const removeMediaListener = addMediaListener(mql, requestEvaluate);
-
-      windowRef.addEventListener('scroll', onScroll, { passive: true });
-      windowRef.addEventListener('resize', onResize);
-      requestEvaluate();
-
-      teardownMobileHeader = () => {
-        removeMediaListener();
-        windowRef.removeEventListener('scroll', onScroll);
-        windowRef.removeEventListener('resize', onResize);
-        page.classList.remove('is-mobile-compact', 'is-mobile-expanded', 'is-near-top');
-      };
-    }
-
     function renderBootShell() {
       if (!templateId) return false;
       const template = documentRef.getElementById(templateId);
@@ -285,7 +205,6 @@
       const categoryWrap = sectionsId ? documentRef.getElementById(sectionsId) : null;
       if (categoryWrap) categoryWrap.innerHTML = buildMenuSwitchPlaceholder({});
 
-      bindMobileHeader(container.querySelector(pageSelector));
       return true;
     }
 
@@ -346,7 +265,6 @@
       renderSettingsDropdown(contract);
       bindMenuToggles(contract);
       windowRef.syncPublicStaffFooterActions?.(sharedState.publicFooter);
-      bindMobileHeader(container.querySelector(pageSelector));
 
       return true;
     }

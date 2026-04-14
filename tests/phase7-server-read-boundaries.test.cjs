@@ -34,6 +34,8 @@ test('wave 1 server read routes delegate through shared menu-read helpers', () =
   assert.match(bootstrapSource, /createSessionBootstrapPayload/);
   assert.match(bootstrapSource, /requireAuthenticatedUser/);
   assert.match(bootstrapSource, /readMenuAccessForUser/);
+  assert.match(bootstrapSource, /mode === 'config'/);
+  assert.match(bootstrapSource, /mode === 'profile'/);
 });
 
 test('shared menu read helper exposes stable wave 1 contract builders', async () => {
@@ -73,6 +75,9 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
       last_updated_ts: 1712705100000,
       draft_state: { cats: [{ key: 'beer', items: [] }] },
       draft_saved_ts: 1712705200000,
+      draft_saved_by_user_id: 'user-1',
+      draft_saved_by_name: 'Alex',
+      draft_saved_source: 'web_manager',
     },
     restaurant: {
       id: '00000000-0000-0000-0000-000000000010',
@@ -88,7 +93,15 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
       id: 'user-1',
       name: 'Alex',
       role: 'manager',
-      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+      accessibleMenuIds: [
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+      ],
+    },
+    restaurantTools: {
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      featuredGroups: [{ id: 'group-1', name: "Leroy's Lounge Specials", displayOrder: 0, slots: [] }],
+      siblingCatalog: [{ id: 'item-1', name: 'Fries', menuId: '00000000-0000-0000-0000-000000000021' }],
     },
   });
 
@@ -98,6 +111,14 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
   assert.equal(payload.workspace.actor.role, 'manager');
   assert.equal(payload.workspace.permissions.canManage, true);
   assert.equal(payload.workspace.permissions.canAdmin, false);
+  assert.equal(payload.workspace.permissions.canReadRestaurantTools, true);
+  assert.equal(payload.workspace.sharedDraft.exists, true);
+  assert.equal(payload.workspace.sharedDraft.savedAt, 1712705200000);
+  assert.deepEqual(payload.workspace.sharedDraft.savedBy, { id: 'user-1', name: 'Alex' });
+  assert.equal(payload.workspace.sharedDraft.source, 'web_manager');
+  assert.equal(payload.workspace.capabilities.includesDraftAuthorship, true);
+  assert.equal(payload.workspace.capabilities.includesRestaurantTools, true);
+  assert.equal(payload.restaurantTools.restaurantId, '00000000-0000-0000-0000-000000000010');
   assert.equal(payload.context.kind, 'menu-workspace');
 });
 

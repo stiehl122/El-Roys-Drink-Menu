@@ -479,6 +479,7 @@ test('manager action bar stays visible and reflects idle and active draft states
   assert.equal(primaryGroup.hidden, false);
   assert.equal(summary.textContent, 'No Pending Changes');
   assert.equal(saveBtn.disabled, true);
+  assert.equal(saveBtn.textContent, 'Save Draft');
   assert.equal(sendBtn.disabled, true);
   assert.equal(bar.classList.contains('is-idle'), true);
 
@@ -502,6 +503,7 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   assert.equal(summary.textContent, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
   assert.equal(saveBtn.disabled, false);
+  assert.equal(saveBtn.textContent, 'Save Draft');
   assert.equal(sendBtn.disabled, false);
   assert.equal(bar.classList.contains('is-idle'), false);
 
@@ -526,7 +528,23 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   assert.equal(summary.textContent, '1 saved draft change is ready to publish.');
   assert.equal(saveBtn.disabled, true);
+  assert.equal(saveBtn.textContent, 'Save Draft');
   assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Save');
+
+  setState(sandbox, {
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, 'Saved draft matches the live menu. Clear Draft removes it.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(saveBtn.textContent, 'Clear Draft');
+  assert.equal(sendBtn.disabled, true);
   assert.equal(sendBtn.textContent, 'Save');
 });
 
@@ -613,6 +631,77 @@ test('save draft persists a shared draft snapshot without publishing the live me
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
 });
 
+test('save draft clears a shared draft that already matches live', async () => {
+  const sandbox = loadAppSandbox();
+  const requests = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+    _dirty: false,
+    _hasSharedDraft: true,
+    _diffDirty: false,
+    _diffCache: [],
+    menuState: {
+      beer: {
+        items: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            desc: '',
+            recipe: [],
+            price: '$8',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            upcharges: [],
+            showDescription: true,
+            showRecipe: false,
+          },
+        ],
+        lastSent: [
+          {
+            id: 'item-1',
+            name: 'Lager',
+            desc: '',
+            recipe: [],
+            price: '$8',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            upcharges: [],
+            showDescription: true,
+            showRecipe: false,
+          },
+        ],
+      },
+      _meta: {},
+    },
+  });
+  sandbox.fetch = async (url, options = {}) => {
+    requests.push([url, JSON.parse(options.body || '{}')]);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({
+        ok: true,
+        status: 'draft_cleared',
+        sharedDraft: { exists: false, savedAt: null, savedBy: null, source: '' },
+      }),
+    };
+  };
+
+  const result = await sandbox.ensureCurrentMenuSession().saveDraft();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.cleared, true);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0][0], '/api/menu-draft');
+  assert.deepEqual(requests[0][1].snapshot, {});
+  assert.equal(getState(sandbox, 'hasSharedDraftState()'), false);
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE');
+});
+
 test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
@@ -651,7 +740,12 @@ test('save menu publishes a shared draft to live and leaves unsent changes behin
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0][0], '/api/menu-publish');
+  assert.equal(requests[0][1].action, 'publish');
   assert.equal(requests[0][1].mode, 'save');
+  assert.ok(Array.isArray(requests[0][1].selected_change_ids));
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'preview_diff'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'selected_sections'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'patch_message'), false);
   assert.equal(getState(sandbox, '_hasSharedDraft'), false);
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
   assert.match(result.successMessage, /saved to the live menu/i);
@@ -1456,7 +1550,9 @@ test('public route contract and route renderers register and hydrate both restau
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
     assert.match(featuredWrap.innerHTML, /House Margarita 1/);
     assert.match(featuredWrap.innerHTML, /House Margarita 5/);
-    assert.equal(page.classList.contains('is-mobile-expanded') || page.classList.contains('is-mobile-compact'), true);
+    assert.equal(page.classList.contains('is-mobile-expanded'), false);
+    assert.equal(page.classList.contains('is-mobile-compact'), false);
+    assert.equal(page.classList.contains('is-near-top'), false);
   }
 });
 
@@ -1506,13 +1602,15 @@ test('picker init bootstraps shared session state without requiring the app shel
   const calls = [];
 
   sandbox.fetch = async url => {
-    if (String(url) === '/api/config') {
-      calls.push('config');
+    if (String(url) === '/api/session-bootstrap') {
+      calls.push('bootstrap');
       return {
         ok: true,
         json: async () => ({
-          supabaseUrl: 'https://example.supabase.co',
-          supabaseAnonKey: 'anon-key',
+          config: {
+            supabaseUrl: 'https://example.supabase.co',
+            supabaseAnonKey: 'anon-key',
+          },
         }),
       };
     }
@@ -1549,7 +1647,7 @@ test('picker init bootstraps shared session state without requiring the app shel
 
   await sandbox.init();
 
-  assert.deepEqual(calls, ['picker', 'local-config', 'config', 'recovery', 'restore', 'render-header', 'sync-footer']);
+  assert.deepEqual(calls, ['picker', 'local-config', 'bootstrap', 'recovery', 'restore', 'render-header', 'sync-footer']);
 });
 
 test('menu fallback store keys snapshots by menu identity and menu type', () => {
@@ -1752,13 +1850,43 @@ test('notification routes rely on the shared notification gateway authorization 
   assert.match(notifySource, /authorizeNotificationRequest/);
   assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
   assert.match(vercelConfig, /"source": "\/api\/send-groupme", "destination": "\/api\/send-notification"/);
+  assert.match(vercelConfig, /"source": "\/api\/config", "destination": "\/api\/session-bootstrap\?mode=config"/);
+  assert.match(vercelConfig, /"source": "\/api\/role", "destination": "\/api\/session-bootstrap\?mode=profile"/);
 });
 
-test('role route relies on shared auth helper boundaries for identity and profile reads', () => {
-  const roleSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'role.js'), 'utf8');
+test('session bootstrap route handles profile and config modes via shared auth helper boundaries', () => {
+  const bootstrapSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'session-bootstrap.js'), 'utf8');
 
-  assert.match(roleSource, /requireAuthenticatedUser/);
-  assert.match(roleSource, /readProfile/);
-  assert.doesNotMatch(roleSource, /auth\/v1\/user/);
-  assert.doesNotMatch(roleSource, /profiles\?id=eq\.\$\{uid\}/);
+  assert.match(bootstrapSource, /requireAuthenticatedUser/);
+  assert.match(bootstrapSource, /readProfile/);
+  assert.match(bootstrapSource, /mode === 'config'/);
+  assert.match(bootstrapSource, /mode === 'profile'/);
+  assert.doesNotMatch(bootstrapSource, /auth\/v1\/user/);
+  assert.doesNotMatch(bootstrapSource, /profiles\?id=eq\.\$\{uid\}/);
+});
+
+test('runtime bootstrap and auth profile boundaries consume unified session-bootstrap endpoint', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+  const authApiSource = fs.readFileSync(path.join(__dirname, '..', 'core', 'auth', 'auth-api.js'), 'utf8');
+
+  assert.match(appSource, /readSessionBootstrapThroughApi/);
+  assert.match(appSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.doesNotMatch(appSource, /fetch\('\/api\/config'/);
+  assert.doesNotMatch(appSource, /fetch\('\/api\/role'/);
+  assert.match(authApiSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.doesNotMatch(authApiSource, /fetch\('\/api\/role'/);
+});
+
+test('runtime workspace and history boundaries request server restaurant-tools and scoped history', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
+
+  assert.match(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.match(appSource, /scope: canReadRestaurantTools \? 'restaurant' : 'menu'/);
+  assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
+});
+
+test('import route delegates landing parsing through a non-api helper module', () => {
+  const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'import.js'), 'utf8');
+  assert.match(importSource, /from '\.\.\/server\/_landing-import\.js'/);
+  assert.doesNotMatch(importSource, /from '\.\/_landing-import\.js'/);
 });

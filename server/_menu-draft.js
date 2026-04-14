@@ -3,17 +3,10 @@ import {
   readProfile,
   requireMenuAccess,
 } from './_auth.js';
-import {
-  getApiErrorMessage,
-  getSupabaseServerConfig,
-  readJsonSafe,
-  serviceHeaders,
-} from './_supabase.js';
 import { isSupportedMenuId } from './_menu-read.js';
 import {
-  assertExpectedRevision,
-  readMenuMeta,
-  readRevisionState,
+  inferAuditSource,
+  saveDraftStateForMenu,
 } from './_menu-write.js';
 
 function parseBody(req) {
@@ -79,6 +72,7 @@ export function parseDraftCommand(req) {
 }
 
 export async function saveSharedDraftCommand(req) {
+  const body = parseBody(req);
   const command = parseDraftCommand(req);
   const {
     menuId,
@@ -93,34 +87,30 @@ export async function saveSharedDraftCommand(req) {
   const role = profile?.role || 'none';
   if (role !== 'manager' && role !== 'admin') throw { status: 403, message: 'Forbidden' };
   await requireMenuAccess(uid, role, menuId);
+  const source = inferAuditSource({
+    id: uid,
+    name: String(profile?.name || '').trim(),
+    role,
+  }, body?.source || '');
+  const draftExists = hasSharedDraft(snapshot);
 
-  const meta = await readMenuMeta(menuId);
-  assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts || null, 'draft_revision', {
-    menuId,
-    command: 'menu-draft.v1',
-    currentRevisions: readRevisionState(meta),
-  });
-
-  const { sbUrl } = getSupabaseServerConfig();
-  const patchRes = await fetch(
-    `${sbUrl}/rest/v1/menu_meta?on_conflict=menu_id&select=menu_id,draft_state,draft_saved_ts`,
-    {
-      method: 'POST',
-      headers: serviceHeaders({
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=representation',
-      }),
-      body: JSON.stringify({
-        menu_id: menuId,
-        draft_state: snapshot,
-        draft_saved_ts: savedAt,
-      }),
-    }
-  );
-
-  if (!patchRes.ok) {
-    const payload = await readJsonSafe(patchRes);
-    if (isDraftMigrationMissing(payload)) {
+  let saveResult;
+  try {
+    saveResult = await saveDraftStateForMenu({
+      menuId,
+      snapshot,
+      savedAt,
+      expectedDraftRevision,
+      actor: {
+        id: uid,
+        name: String(profile?.name || '').trim(),
+        role,
+      },
+      source,
+    });
+  } catch (error) {
+    const message = `${error?.message || ''}`.toLowerCase();
+    if (isDraftMigrationMissing({ message })) {
       throw {
         status: 409,
         message: 'Save Draft requires the latest Supabase draft-state migration before it can persist shared drafts.',
@@ -130,30 +120,26 @@ export async function saveSharedDraftCommand(req) {
         },
       };
     }
-    throw {
-      status: 500,
-      message: getApiErrorMessage(payload, 'Failed to save shared draft'),
-    };
-  }
-  const rows = await readJsonSafe(patchRes);
-  if (!Array.isArray(rows) || !rows.some(row => row?.menu_id === menuId)) {
-    throw {
-      status: 500,
-      message: 'Failed to confirm shared draft persistence',
-    };
+    throw error;
   }
 
   return {
     ok: true,
-    status: 'draft_saved',
+    status: draftExists ? 'draft_saved' : 'draft_cleared',
     menuId,
-    savedAt,
-    hasSharedDraft: hasSharedDraft(snapshot),
+    savedAt: draftExists ? savedAt : null,
+    hasSharedDraft: draftExists,
+    sharedDraft: saveResult.sharedDraft,
     compatibility: {
       command: 'menu-draft.v1',
       acceptedLegacyPayload: true,
       usedClientSavedAt: command.usedClientSavedAt,
       snapshotVersion: Number.isFinite(Number(snapshot?.version)) ? Number(snapshot.version) : null,
+      downgradedFields: Array.isArray(saveResult?.downgradedFields) ? saveResult.downgradedFields : [],
+      includesDraftAuthorship: !Array.isArray(saveResult?.downgradedFields) || !saveResult.downgradedFields.some(field => (
+        field === 'draft_saved_by_user_id' || field === 'draft_saved_by_name'
+      )),
+      sourceStamped: !Array.isArray(saveResult?.downgradedFields) || !saveResult.downgradedFields.includes('draft_saved_source'),
     },
   };
 }

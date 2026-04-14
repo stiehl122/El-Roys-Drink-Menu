@@ -92,8 +92,7 @@ let _previewAuditAvailabilityPromise = { manager: null, admin: null };
 let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sellNote, displayOrder, confirmedAt, confirmedBy, item: {…}}]}]
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
-let _restaurantSpecialsCatalogKey = '';
-let _restaurantSpecialsCatalogPromise = null;
+let _workspaceRestaurantToolsReadable = false;
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const FALLBACK_ICON_COLOR_PALETTE = [
@@ -974,6 +973,8 @@ let _menuMetaSupportsDraftState = true;
 let _draftSaveOnlyChanges = new Map();
 let _hasSharedDraft = false;
 let _sharedDraftSavedTs = '';
+let _sharedDraftSavedBy = null;
+let _sharedDraftSource = '';
 let _previewModalState = null;
 let _previewSelectionState = {};
 let _lastAddItemCategoryId = '';
@@ -1017,13 +1018,42 @@ function hasSharedDraftState() {
 function getDraftSavedTs() {
   return _sharedDraftSavedTs || '';
 }
+function getSharedDraftInfo() {
+  return {
+    exists: !!_hasSharedDraft,
+    savedAt: _sharedDraftSavedTs || '',
+    savedBy: _sharedDraftSavedBy,
+    source: _sharedDraftSource || '',
+  };
+}
+function normalizeSharedDraftActor(actor = null) {
+  if (!actor || typeof actor !== 'object') return null;
+  const id = String(actor.id || '').trim();
+  const name = String(actor.name || '').trim();
+  if (!id && !name) return null;
+  return { id, name };
+}
 function clearSharedDraftState() {
   _hasSharedDraft = false;
   _sharedDraftSavedTs = '';
+  _sharedDraftSavedBy = null;
+  _sharedDraftSource = '';
 }
-function setSharedDraftState(savedTs = '') {
-  _hasSharedDraft = true;
-  _sharedDraftSavedTs = savedTs ? String(savedTs) : '';
+function setSharedDraftState(savedTs = '', details = {}) {
+  let nextSavedTs = savedTs;
+  let nextDetails = details;
+  if (savedTs && typeof savedTs === 'object') {
+    nextDetails = savedTs;
+    nextSavedTs = savedTs.savedAt || savedTs.saved_at || '';
+  }
+  _hasSharedDraft = nextDetails?.exists != null ? !!nextDetails.exists : true;
+  _sharedDraftSavedTs = nextSavedTs ? String(nextSavedTs) : '';
+  if (Object.prototype.hasOwnProperty.call(nextDetails || {}, 'savedBy')) {
+    _sharedDraftSavedBy = normalizeSharedDraftActor(nextDetails.savedBy);
+  }
+  if (Object.prototype.hasOwnProperty.call(nextDetails || {}, 'source')) {
+    _sharedDraftSource = String(nextDetails.source || '').trim();
+  }
 }
 function upsertDraftSaveOnlyChange(change) {
   if (!change?.key) return null;
@@ -1047,16 +1077,32 @@ function markSaveOnlyDraftChange(change) {
 function getDraftChangeCount() {
   return countDiffLines() + getDraftSaveOnlyChanges().length;
 }
+function isSharedDraftClearable({ hasLocalDraft = !!_dirty, hasSharedDraft = hasSharedDraftState(), changeCount = getDraftChangeCount() } = {}) {
+  return !!hasSharedDraft && !hasLocalDraft && Number(changeCount || 0) === 0;
+}
 function updateSaveBtn() {
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
   const hasLocalDraft = !!_dirty;
-  const hasDraftWork = hasLocalDraft || hasSharedDraftState();
-  const hasPendingUpdate = !hasDraftWork && countDiffLines() > 0;
-  if (saveBtn) saveBtn.disabled = !hasLocalDraft;
+  const hasSharedDraft = hasSharedDraftState();
+  const changeCount = getDraftChangeCount();
+  const hasClearableSharedDraft = isSharedDraftClearable({
+    hasLocalDraft,
+    hasSharedDraft,
+    changeCount,
+  });
+  const hasPublishableDraftWork = hasLocalDraft || (hasSharedDraft && !hasClearableSharedDraft);
+  const hasPendingUpdate = !hasLocalDraft && !hasSharedDraft && countDiffLines() > 0;
+  if (saveBtn) {
+    saveBtn.disabled = !hasLocalDraft && !hasClearableSharedDraft;
+    saveBtn.textContent = hasClearableSharedDraft ? 'Clear Draft' : 'Save Draft';
+    saveBtn.title = hasClearableSharedDraft
+      ? 'Remove the saved draft because it already matches the live menu'
+      : 'Save changes without notifying anyone';
+  }
   if (publishBtn) {
-    publishBtn.disabled = !hasDraftWork && !hasPendingUpdate;
-    publishBtn.textContent = !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save';
+    publishBtn.disabled = !hasPublishableDraftWork && !hasPendingUpdate;
+    publishBtn.textContent = !hasPublishableDraftWork && hasPendingUpdate ? 'Update' : 'Save';
   }
   updateManagerActionBar();
 }
@@ -1506,8 +1552,15 @@ function submitAddItemModalBarcodeLookup() {
   return beginAddItemBarcodeLookup(barcode);
 }
 
+function syncAddItemModalUiState() {
+  const body = document.body;
+  if (!body?.classList || typeof body.classList.toggle !== 'function') return;
+  body.classList.toggle('add-item-modal-open', !!_addItemModalState.isOpen && canOpenAddItemModal());
+}
+
 function renderAddItemModal(options = {}) {
   const host = document.getElementById('manager-add-item-modal-host');
+  syncAddItemModalUiState();
   if (!host) return;
   if (!_addItemModalState.isOpen || !canOpenAddItemModal()) {
     host.innerHTML = '';
@@ -2230,22 +2283,25 @@ function getMenuSessionPorts() {
       return patchMenuDraftState(snapshot, savedAt);
     },
     async publishMenuUpdate(options = {}) {
-      const preview = options.preview?.sections ? options.preview : buildMenuSessionPreview(buildMenuSessionSnapshot('preview'));
-      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
-      const mode = options.mode || (preview.mode === 'update-only'
+      const providedPreview = options.preview?.sections ? options.preview : null;
+      const selectedChangeIds = Array.isArray(options.selectedChangeIds)
+        ? options.selectedChangeIds
+        : (providedPreview?.notificationChanges || []).map(change => change.id);
+      const mode = options.mode || ((providedPreview?.mode === 'update-only')
         ? (options.notify === false ? 'save' : 'update-only')
         : (options.notify === false ? 'save' : 'save-and-update'));
-      const apiResult = await publishMenuThroughApi({ mode, preview, selectedChangeIds });
+      const apiResult = await publishMenuThroughApi({ mode, selectedChangeIds });
       if (!apiResult.ok) {
         return {
           ok: false,
-          preview,
+          preview: providedPreview,
           userHandled: false,
           userMessage: apiResult.payload?.error || 'Publish failed.',
           snapshot: buildMenuSessionSnapshot('publish-failed'),
         };
       }
       const result = apiResult.payload || {};
+      const canonicalPreview = result.preview && typeof result.preview === 'object' ? result.preview : providedPreview;
       const ts = Number(result.ts || Date.now());
       if (mode === 'save') {
         menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
@@ -2265,7 +2321,7 @@ function getMenuSessionPorts() {
         updateLastUpdatedLabel();
       } else if (mode === 'save-and-update' || mode === 'update-only') {
         _lastSentFeaturedIds = new Set(getCurrentFeaturedIds());
-        applySentState(preview.diff, ts);
+        applySentState(Array.isArray(canonicalPreview?.diff) ? canonicalPreview.diff : [], ts);
         _dirty = false;
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
@@ -2275,7 +2331,7 @@ function getMenuSessionPorts() {
       return {
         ...result,
         ok: result.ok !== false,
-        preview,
+        preview: canonicalPreview,
         snapshot: buildMenuSessionSnapshot((mode === 'save') ? 'saved-live' : 'publish-complete'),
       };
     },
@@ -2285,6 +2341,12 @@ function getMenuSessionPorts() {
     commitDraft(ts) {
       _dirty = false;
       setSharedDraftState(ts);
+      updateSaveBtn();
+    },
+    clearDraft() {
+      _dirty = false;
+      clearDraftSaveOnlyChanges();
+      clearSharedDraftState();
       updateSaveBtn();
     },
     commitLiveSave(ts) {
@@ -2328,9 +2390,6 @@ function getMenuSessionPorts() {
     },
     syncLocalCache(options = {}) {
       return syncLocalMenuCache(options);
-    },
-    async logUpdate(diff, patchMessage) {
-      return logUpdate(diff, patchMessage);
     },
     commitPublished({ diff, ts, featuredIds }) {
       _lastSentFeaturedIds = new Set(featuredIds);
@@ -2380,7 +2439,33 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
     async saveDraft(options = {}) {
       void options;
       const snapshot = buildSnapshot('draft');
+      const changeCount = countDiffLines(snapshot.notifyDiff || []) + (Array.isArray(snapshot.saveOnlyChanges) ? snapshot.saveOnlyChanges.length : 0);
+      const hasClearableSharedDraft = isSharedDraftClearable({
+        hasLocalDraft: !!snapshot.dirty,
+        hasSharedDraft: !!snapshot.hasSharedDraft,
+        changeCount,
+      });
       if (!snapshot.dirty) {
+        if (hasClearableSharedDraft) {
+          const ts = sessionPorts.now();
+          try {
+            await sessionPorts.patchMenuDraftState(null, ts);
+            sessionPorts.clearDraft?.();
+            return {
+              ok: true,
+              cleared: true,
+              ts,
+              snapshot: buildSnapshot('draft-cleared'),
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              userHandled: false,
+              userMessage: error?.message || 'Draft clear failed.',
+              snapshot: buildSnapshot('draft-clear-failed'),
+            };
+          }
+        }
         return {
           ok: false,
           noop: true,
@@ -2847,7 +2932,7 @@ function buildManagerWorkspaceModuleDeps() {
     updateActiveMenuBar: () => updateActiveMenuBar(),
     renderRecentChanges: () => renderRecentChanges(),
     renderFooter: () => renderFooter(),
-    initCollapsingHeader: () => initCollapsingHeader(),
+    initManagerMobileDrawerTrigger: () => initManagerMobileDrawerTrigger(),
     initDrawerSwipe: () => initDrawerSwipe(),
   };
 }
@@ -4917,19 +5002,120 @@ function getAuthorizedApiHeaders() {
   return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 }
 
+function getClientAuditSource() {
+  return currentUser?.role === 'admin' ? 'web_admin' : 'web_manager';
+}
+
+async function readSessionBootstrapThroughApi({ accessToken = '' } = {}) {
+  const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  return readApiJsonOrNull('/api/session-bootstrap', { headers });
+}
+
+function extractSupabaseConfigFromBootstrap(payload = {}) {
+  const config = payload?.config && typeof payload.config === 'object' ? payload.config : payload;
+  return {
+    supabaseUrl: String(config?.supabaseUrl || ''),
+    supabaseAnonKey: String(config?.supabaseAnonKey || ''),
+  };
+}
+
+function extractProfileFromBootstrap(payload = {}) {
+  const actor = payload?.actor && typeof payload.actor === 'object' ? payload.actor : payload;
+  const access = payload?.access && typeof payload.access === 'object' ? payload.access : payload;
+  return {
+    role: String(actor?.role || payload?.role || 'none'),
+    name: String(actor?.name || payload?.name || ''),
+    accessibleMenuIds: normalizeAccessibleMenuIds(access?.accessibleMenuIds || payload?.accessibleMenuIds || []),
+  };
+}
+
+function canReadRestaurantToolsFromWorkspace(workspace = {}) {
+  const permissions = workspace?.permissions && typeof workspace.permissions === 'object' ? workspace.permissions : {};
+  const capabilities = workspace?.capabilities && typeof workspace.capabilities === 'object' ? workspace.capabilities : {};
+  return !!(permissions.canReadRestaurantTools || capabilities.canReadRestaurantTools || capabilities.includesRestaurantTools);
+}
+
+function normalizeWorkspaceSiblingCatalog(catalog = []) {
+  return (Array.isArray(catalog) ? catalog : []).map(item => ({
+    id: item?.id || '',
+    name: item?.name || '',
+    cat: item?.cat || item?.category || '',
+    menuId: item?.menuId || item?.menu_id || '',
+    menuLabel: item?.menuLabel || item?.menu_label || '',
+    onMenu: item?.onMenu !== false && item?.on_menu !== false,
+    visibility: item?.visibility || 'public',
+  })).filter(item => item.id && item.name);
+}
+
+function normalizeWorkspaceFeaturedGroups(groups = []) {
+  return (Array.isArray(groups) ? groups : []).map(group => ({
+    id: group?.id || '',
+    name: group?.name || '',
+    displayOrder: Number.isFinite(Number(group?.displayOrder ?? group?.display_order))
+      ? Number(group?.displayOrder ?? group?.display_order)
+      : 0,
+    slots: (Array.isArray(group?.slots) ? group.slots : []).map(slot => {
+      const rawItem = slot?.item && typeof slot.item === 'object' ? slot.item : null;
+      const hydratedItem = rawItem && rawItem.id ? hydrateMenuItem(rawItem) : null;
+      return {
+        id: slot?.id || '',
+        itemId: slot?.itemId || slot?.item_id || '',
+        sellNote: slot?.sellNote || slot?.sell_note || '',
+        displayOrder: Number.isFinite(Number(slot?.displayOrder ?? slot?.display_order))
+          ? Number(slot?.displayOrder ?? slot?.display_order)
+          : 0,
+        confirmedAt: slot?.confirmedAt || slot?.confirmed_at || null,
+        confirmedBy: slot?.confirmedBy || slot?.confirmed_by || null,
+        item: hydratedItem,
+      };
+    }).filter(slot => slot.item && slot.itemId),
+  })).filter(group => group.id);
+}
+
+async function readMenuWorkspaceThroughApi({ menuId = MENU_ID, includeRestaurantTools = false } = {}) {
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!menuId || !authorizedHeaders.Authorization) return null;
+  const params = new URLSearchParams({ menu_id: menuId });
+  if (includeRestaurantTools) params.set('include', 'restaurant-tools');
+  return readApiJsonOrNull(`/api/menu-workspace?${params.toString()}`, {
+    headers: authorizedHeaders,
+  });
+}
+
+function applyWorkspaceRestaurantTools(workspacePayload = {}) {
+  const workspace = workspacePayload?.workspace && typeof workspacePayload.workspace === 'object'
+    ? workspacePayload.workspace
+    : {};
+  const tools = workspacePayload?.restaurantTools && typeof workspacePayload.restaurantTools === 'object'
+    ? workspacePayload.restaurantTools
+    : null;
+  const featuredGroups = tools && Array.isArray(tools.featuredGroups)
+    ? tools.featuredGroups
+    : (Array.isArray(workspacePayload?.featuredGroups) ? workspacePayload.featuredGroups : null);
+
+  _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
+  if (!featuredGroups && !tools) return false;
+
+  if (Array.isArray(featuredGroups)) {
+    _featuredGroups = normalizeWorkspaceFeaturedGroups(featuredGroups);
+  }
+  if (Array.isArray(tools?.siblingCatalog)) {
+    _restaurantSpecialsSiblingCatalog = normalizeWorkspaceSiblingCatalog(tools.siblingCatalog);
+  } else if (!tools) {
+    _restaurantSpecialsSiblingCatalog = [];
+  }
+  return true;
+}
+
 async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) {
   const menuId = request.requestedMenuId || MENU_ID;
   if (!menuId) return null;
 
   const pageMode = request.pageMode || _appPageMode;
   const isStaffMode = pageMode === 'manager' || pageMode === 'admin';
-  const authorizedHeaders = getAuthorizedApiHeaders();
 
-  if (isStaffMode && authorizedHeaders.Authorization) {
-    const params = new URLSearchParams({ menu_id: menuId });
-    const workspace = await readApiJsonOrNull(`/api/menu-workspace?${params.toString()}`, {
-      headers: authorizedHeaders,
-    });
+  if (isStaffMode) {
+    const workspace = await readMenuWorkspaceThroughApi({ menuId, includeRestaurantTools: true });
     if (workspace) return workspace;
   }
 
@@ -4942,6 +5128,21 @@ async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) 
   return null;
 }
 
+async function readMenuHistoryThroughApi({ menuId = MENU_ID, days = 7, limit = 25 } = {}) {
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!menuId || !authorizedHeaders.Authorization) return null;
+  const canReadRestaurantTools = _workspaceRestaurantToolsReadable || currentUserCanEditRestaurantSpecials(RESTAURANT_ID);
+  const params = new URLSearchParams({
+    menu_id: menuId,
+    days: String(days),
+    limit: String(limit),
+    scope: canReadRestaurantTools ? 'restaurant' : 'menu',
+  });
+  return readApiJsonOrNull(`/api/menu-history?${params.toString()}`, {
+    headers: authorizedHeaders,
+  });
+}
+
 async function saveDraftThroughApi(snapshot, savedAt) {
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
   const result = await postApiJson('/api/menu-draft', {
@@ -4949,6 +5150,7 @@ async function saveDraftThroughApi(snapshot, savedAt) {
     snapshot: snapshot || {},
     saved_at: savedAt || Date.now(),
     expected_draft_revision: getDraftSavedTs() || null,
+    source: getClientAuditSource(),
   }, {
     headers: getAuthorizedApiHeaders(),
   });
@@ -4967,18 +5169,39 @@ async function saveLiveMenuThroughApi(snapshot) {
   return result;
 }
 
-async function publishMenuThroughApi({ mode, preview, selectedChangeIds = [] }) {
-  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
-  const selectedChanges = (preview?.notificationChanges || []).filter(change => selectedChangeIds.includes(change.id));
-  const selectedSections = groupNotificationChangesBySection(selectedChanges);
-  const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+function buildPublishSnapshotPayload() {
+  return {
+    ...buildMenuCacheSnapshot(),
+    preview_context: {
+      dirty: !!_dirty,
+      has_shared_draft: hasSharedDraftState(),
+      save_only_changes: getDraftSaveOnlyChanges(),
+    },
+  };
+}
+
+async function requestPublishPreviewThroughApi() {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: false };
   return postApiJson('/api/menu-publish', {
+    action: 'preview',
+    menu_id: MENU_ID,
+    snapshot: buildPublishSnapshotPayload(),
+    expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+    expected_draft_revision: getDraftSavedTs() || null,
+  }, {
+    headers: getAuthorizedApiHeaders(),
+  });
+}
+
+async function publishMenuThroughApi({ mode, selectedChangeIds = [] }) {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
+  return postApiJson('/api/menu-publish', {
+    action: 'publish',
     menu_id: MENU_ID,
     mode,
-    snapshot: buildMenuCacheSnapshot(),
-    preview_diff: Array.isArray(preview?.diff) ? preview.diff : [],
-    selected_sections: serializeNotificationSectionsForLog(selectedSections),
-    patch_message: patchMessage,
+    source: getClientAuditSource(),
+    snapshot: buildPublishSnapshotPayload(),
+    selected_change_ids: Array.isArray(selectedChangeIds) ? selectedChangeIds : [],
     expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
     expected_draft_revision: getDraftSavedTs() || null,
   }, {
@@ -5205,27 +5428,33 @@ function getDesignSnapshot() {
   return JSON.stringify(currentDesign);
 }
 
-function getFeaturedSnapshot() {
-  return JSON.stringify(_featuredGroups.map(group => ({
+function buildFeaturedGroupsSnapshotValue() {
+  return _featuredGroups.map(group => ({
     id: group.id,
+    name: group.name || '',
+    display_order: Number.isFinite(Number(group.displayOrder)) ? Number(group.displayOrder) : 0,
     slots: group.slots.map(slot => ({
       id: slot.id,
       itemId: slot.itemId,
-      name: slot.item?.name || '',
-      eightySixed: !!slot.item?.eightySixed,
-      price: slot.item?.price || '',
-      desc: slot.item?.desc || '',
-      sellNote: slot.sellNote || '',
+      item_id: slot.itemId,
+      display_order: Number.isFinite(Number(slot.displayOrder)) ? Number(slot.displayOrder) : 0,
+      sell_note: slot.sellNote || '',
+      item: slot.item ? {
+        id: slot.item.id || '',
+        name: slot.item.name || '',
+      } : null,
     })),
-  })));
+  }));
+}
+
+function getFeaturedSnapshot() {
+  return JSON.stringify(buildFeaturedGroupsSnapshotValue());
 }
 
 function createRestaurantSpecialsService() {
   return {
     resetCatalog() {
       _restaurantSpecialsSiblingCatalog = [];
-      _restaurantSpecialsCatalogKey = '';
-      _restaurantSpecialsCatalogPromise = null;
       return [];
     },
 
@@ -5258,91 +5487,32 @@ function createRestaurantSpecialsService() {
       return [...this.buildCurrentMenuCatalog(), ..._restaurantSpecialsSiblingCatalog];
     },
 
-    async ensureGroup(restaurantId = RESTAURANT_ID) {
-      if (!restaurantId || !currentUser?.accessToken) return false;
-      try {
-        await fetch('/api/specials', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${currentUser.accessToken}`,
-          },
-          body: JSON.stringify({ action: 'ensure', restaurantId }),
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    },
-
-    async refreshCatalog(restaurantId = RESTAURANT_ID) {
-      const cacheKey = `${restaurantId || ''}:${MENU_ID || ''}`;
-      if (!restaurantId || !currentUserCanEditRestaurantSpecials(restaurantId)) {
-        return this.resetCatalog();
-      }
-      if (_restaurantSpecialsCatalogKey === cacheKey && _restaurantSpecialsCatalogPromise) {
-        return _restaurantSpecialsCatalogPromise;
-      }
-
-      const siblingMenuIds = (getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId))
-        .filter(menuId => menuId && menuId !== MENU_ID);
-      if (!siblingMenuIds.length) {
-        _restaurantSpecialsSiblingCatalog = [];
-        _restaurantSpecialsCatalogKey = cacheKey;
-        _restaurantSpecialsCatalogPromise = Promise.resolve([]);
-        return _restaurantSpecialsCatalogPromise;
-      }
-
-      _restaurantSpecialsCatalogKey = cacheKey;
-      _restaurantSpecialsCatalogPromise = (async () => {
-        const requestKey = cacheKey;
-        try {
-          const categories = await sbReadJsonOrThrow(
-            `${SUPABASE_URL}/rest/v1/categories?menu_id=in.(${siblingMenuIds.join(',')})&select=menu_id,key,label,items(id,name,visibility,on_menu)&order=display_order.asc`,
-            { headers: sbHeaders() }
-          );
-          const menusById = knownMenuList().reduce((acc, menu) => {
-            acc[menu.id] = menu;
-            return acc;
-          }, {});
-          const catalog = categories
-            .filter(category => !isLegacySpecialCategory(category.key))
-            .flatMap(category =>
-              (category.items || []).map(item => ({
-                id: item.id,
-                name: item.name,
-                cat: category.label || '',
-                menuId: category.menu_id,
-                menuLabel: getMenuTypeLabel(menusById[category.menu_id]?.type || ''),
-                onMenu: category.key === UNCATEGORIZED_ID ? true : item.on_menu,
-                visibility: category.key === UNCATEGORIZED_ID ? (item.visibility || 'off_menu') : (item.visibility || 'public'),
-              }))
-            );
-          if (_restaurantSpecialsCatalogKey === requestKey) {
-            _restaurantSpecialsSiblingCatalog = catalog;
-          }
-        } catch (_) {
-          if (_restaurantSpecialsCatalogKey === requestKey) {
-            _restaurantSpecialsSiblingCatalog = [];
-          }
-        }
-        return _restaurantSpecialsSiblingCatalog;
-      })();
-      return _restaurantSpecialsCatalogPromise;
-    },
-
     async refreshForActiveMenu(restaurantId = RESTAURANT_ID) {
       if (!restaurantId) {
         _featuredGroups = [];
         this.resetCatalog();
+        _workspaceRestaurantToolsReadable = false;
         return _featuredGroups;
       }
+
       if (currentUserCanEditRestaurantSpecials(restaurantId) && currentUser?.accessToken) {
-        await this.ensureGroup(restaurantId);
-        await this.refreshCatalog(restaurantId);
+        const workspace = await readMenuWorkspaceThroughApi({
+          menuId: MENU_ID,
+          includeRestaurantTools: true,
+        });
+        if (workspace && applyWorkspaceRestaurantTools(workspace)) {
+          return _featuredGroups;
+        }
       } else {
         this.resetCatalog();
       }
+
+      const publicParams = new URLSearchParams({ menu_id: MENU_ID });
+      const projection = await readApiJsonOrNull(`/api/menu-public?${publicParams.toString()}`);
+      if (projection && applyWorkspaceRestaurantTools(projection)) {
+        return _featuredGroups;
+      }
+
       _featuredGroups = await sbReadRestaurantSpecials(restaurantId);
       return _featuredGroups;
     },
@@ -5549,25 +5719,43 @@ function createMenuStateLoaderService(deps = {}) {
         const data = await readState({ request, source: options.source || 'network', options });
         if (data) {
           hydrateFromState(data);
+          const usedWorkspaceRestaurantTools = applyWorkspaceRestaurantTools(data);
+          const workspaceSharedDraft = data?.workspace?.sharedDraft && typeof data.workspace.sharedDraft === 'object'
+            ? data.workspace.sharedDraft
+            : null;
           const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
           setDirty(false);
-          if (!loadedDraft) clearDraftChanges();
+          if (includePersistedDraft && workspaceSharedDraft?.exists) {
+            const sharedDraftSavedAt = workspaceSharedDraft.savedAt || workspaceSharedDraft.saved_at || data.meta?.draft_saved_ts || '';
+            if (sharedDraftSavedAt) {
+              setSharedDraftState({
+                ...workspaceSharedDraft,
+                savedAt: sharedDraftSavedAt,
+              });
+            }
+          } else if (!loadedDraft) {
+            clearDraftChanges();
+          }
           if (persistCache) writeMenuCache(data);
+          if (includeFeatured && !usedWorkspaceRestaurantTools) await refreshFeatured();
         } else if (fallbackToDefault) {
           setDefaultState();
           setDirty(false);
           clearDraftChanges();
+          _workspaceRestaurantToolsReadable = false;
+          if (includeFeatured) await refreshFeatured();
         }
       } catch (error) {
         if (fallbackToDefault) {
           setDefaultState();
           setDirty(false);
           clearDraftChanges();
+          _workspaceRestaurantToolsReadable = false;
+          if (includeFeatured) await refreshFeatured();
         } else {
           throw error;
         }
       }
-      if (includeFeatured) await refreshFeatured();
       return buildSnapshot(options.source || 'network');
     },
 
@@ -5588,9 +5776,16 @@ function createMenuStateLoaderService(deps = {}) {
       }
 
       hydrateFromState(data);
+      const usedWorkspaceRestaurantTools = applyWorkspaceRestaurantTools(data);
+      const workspaceSharedDraft = data?.workspace?.sharedDraft && typeof data.workspace.sharedDraft === 'object'
+        ? data.workspace.sharedDraft
+        : null;
+      if (workspaceSharedDraft?.exists) {
+        setSharedDraftState(workspaceSharedDraft);
+      }
       writeMenuCache(data);
       const newTs = getLastUpdatedTs();
-      if (newTs !== oldTs) await refreshFeatured();
+      if (newTs !== oldTs && !usedWorkspaceRestaurantTools) await refreshFeatured();
 
       const afterCats = getCategorySnapshot();
       const newDesign = getDesignSnapshotValue();
@@ -5699,6 +5894,7 @@ function buildMenuCacheSnapshot() {
   const meta = {
     bot_id: BOT_ID || '',
     notifications: NOTIFICATIONS || {},
+    notification_menu_link: getNotificationMenuLink(),
     last_updated_ts: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
     last_sent_ts: menuState._meta?.lastSentTs ? Number(menuState._meta.lastSentTs) : null,
     last_sent_state: snapshotLastSentState(),
@@ -5715,7 +5911,14 @@ function buildMenuCacheSnapshot() {
         use_custom_design: _restaurantCustomDesignEnabled,
       }
     : null;
-  return { context, cats, meta, restaurant };
+  return {
+    context,
+    cats,
+    meta,
+    restaurant,
+    featured_groups: buildFeaturedGroupsSnapshotValue(),
+    save_only_changes: getDraftSaveOnlyChanges(),
+  };
 }
 
 function buildPersistedDraftStateSnapshot(savedAt = Date.now()) {
@@ -5774,6 +5977,9 @@ async function patchMenuMetaWithCompatibility(update) {
 async function patchMenuDraftState(snapshot, savedAt = Date.now()) {
   const apiResult = await saveDraftThroughApi(snapshot, savedAt);
   if (apiResult.ok) {
+    if (apiResult.payload?.sharedDraft) {
+      setSharedDraftState(apiResult.payload.sharedDraft);
+    }
     _menuMetaSupportsDraftState = true;
     return { downgradedFields: Array.isArray(apiResult.payload?.downgradedFields) ? apiResult.payload.downgradedFields : [] };
   }
@@ -6103,6 +6309,12 @@ function renderManagerOverviewStats() {
   const draftCount = getDraftChangeCount();
   const hasLocalDraft = !!_dirty;
   const hasSharedDraft = hasSharedDraftState();
+  const hasClearableSharedDraft = isSharedDraftClearable({
+    hasLocalDraft,
+    hasSharedDraft,
+    changeCount: draftCount,
+  });
+  const sharedDraftInfo = getSharedDraftInfo();
   const notifyCount = !hasSharedDraft && !hasLocalDraft ? countDiffLines() : 0;
   const statusValue = document.getElementById('manager-overview-status-value');
   const statusMeta = document.getElementById('manager-overview-status-meta');
@@ -6118,7 +6330,12 @@ function renderManagerOverviewStats() {
         ? `${draftCount} pending change${draftCount === 1 ? '' : 's'} on top of the saved draft`
         : `${draftCount} pending change${draftCount === 1 ? '' : 's'}`;
     } else if (hasSharedDraft) {
-      statusMeta.textContent = `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish`;
+      const sourceLabel = formatHistorySourceLabel(sharedDraftInfo.source);
+      const actorLabel = sharedDraftInfo.savedBy?.name ? ` by ${sharedDraftInfo.savedBy.name}` : '';
+      const sourceSuffix = sourceLabel ? ` via ${sourceLabel}` : '';
+      statusMeta.textContent = hasClearableSharedDraft
+        ? `Saved draft matches the live menu${actorLabel}${sourceSuffix}. Clear Draft removes it.`
+        : `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish${actorLabel}${sourceSuffix}`;
     } else if (notifyCount > 0) {
       statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
     } else {
@@ -6158,9 +6375,15 @@ function createDraftLedgerService(deps = {}) {
     getActionBarState({ isCompactViewport = false } = {}) {
       const hasDraftChanges = isDirty();
       const hasShared = hasSharedDraft();
-      const hasDraftWork = hasDraftChanges || hasShared;
-      const hasPendingUpdate = !hasDraftWork && getDiffLineCount() > 0;
       const changeCount = getDraftCount();
+      const hasClearableSharedDraft = isSharedDraftClearable({
+        hasLocalDraft: hasDraftChanges,
+        hasSharedDraft: hasShared,
+        changeCount,
+      });
+      const hasDraftWork = hasDraftChanges || hasShared;
+      const hasPublishableDraftWork = hasDraftChanges || (hasShared && !hasClearableSharedDraft);
+      const hasPendingUpdate = !hasDraftChanges && !hasShared && getDiffLineCount() > 0;
       const notifyCount = hasPendingUpdate ? getDiffLineCount() : 0;
 
       let summaryText = 'No Pending Changes';
@@ -6168,6 +6391,8 @@ function createDraftLedgerService(deps = {}) {
         summaryText = isCompactViewport
           ? `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft; Save publishes live.`
           : `${changeCount} pending change${changeCount === 1 ? '' : 's'}. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.`;
+      } else if (hasClearableSharedDraft) {
+        summaryText = 'Saved draft matches the live menu. Clear Draft removes it.';
       } else if (hasShared) {
         summaryText = `${changeCount} saved draft change${changeCount === 1 ? ' is' : 's are'} ready to publish.`;
       } else if (hasPendingUpdate) {
@@ -6177,11 +6402,14 @@ function createDraftLedgerService(deps = {}) {
       return {
         hasDraftChanges,
         hasSharedDraft: hasShared,
+        hasClearableSharedDraft,
         hasDraftWork,
+        hasPublishableDraftWork,
         hasPendingUpdate,
         changeCount,
         summaryText,
-        publishLabel: !hasDraftWork && hasPendingUpdate ? 'Update' : 'Save',
+        saveLabel: hasClearableSharedDraft ? 'Clear Draft' : 'Save Draft',
+        publishLabel: !hasPublishableDraftWork && hasPendingUpdate ? 'Update' : 'Save',
       };
     },
     getItemBadge({ item, catId, lastSentNames = null }) {
@@ -6235,13 +6463,19 @@ function updateManagerActionBar() {
   const publishBtn = document.getElementById('send-btn');
 
   if (primaryGroup) primaryGroup.hidden = false;
-  if (saveBtn) saveBtn.disabled = !ledgerState.hasDraftChanges;
+  if (saveBtn) {
+    saveBtn.disabled = !ledgerState.hasDraftChanges && !ledgerState.hasClearableSharedDraft;
+    saveBtn.textContent = ledgerState.saveLabel;
+    saveBtn.title = ledgerState.hasClearableSharedDraft
+      ? 'Remove the saved draft because it already matches the live menu'
+      : 'Save changes without notifying anyone';
+  }
   if (publishBtn) {
-    publishBtn.disabled = !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate;
+    publishBtn.disabled = !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate;
     publishBtn.textContent = ledgerState.publishLabel;
   }
   bar.hidden = false;
-  bar.classList.toggle('is-idle', !ledgerState.hasDraftWork && !ledgerState.hasPendingUpdate);
+  bar.classList.toggle('is-idle', !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate && !ledgerState.hasClearableSharedDraft);
   syncManagerActionBarStatus(syncEl);
 
   if (summary) summary.textContent = ledgerState.summaryText;
@@ -6291,7 +6525,7 @@ function renderManagerWorkspace(options = {}) {
   if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
   renderFooter();
-  initCollapsingHeader();
+  initManagerMobileDrawerTrigger();
   initDrawerSwipe();
 }
 
@@ -6664,10 +6898,9 @@ async function confirmAddCategory() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function loadSupabaseConfig() {
   try {
-    const r = await fetch('/api/config');
-    if (!r.ok) return;
-    const cfg = await r.json();
-    if (cfg.supabaseUrl)     SUPABASE_URL      = cfg.supabaseUrl;
+    const bootstrap = await readSessionBootstrapThroughApi();
+    const cfg = extractSupabaseConfigFromBootstrap(bootstrap || {});
+    if (cfg.supabaseUrl) SUPABASE_URL = cfg.supabaseUrl;
     if (cfg.supabaseAnonKey) SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
   } catch(e) {}
 }
@@ -7769,11 +8002,12 @@ function getAuthApiBoundary() {
       if (!response.ok) throw await response.json();
       return response.json();
     }),
-    getProfile: ({ accessToken = '' } = {}) => fetch('/api/role', {
+    getProfile: ({ accessToken = '' } = {}) => fetch('/api/session-bootstrap', {
       headers: { Authorization: `Bearer ${accessToken}` },
     }).then(async response => {
       if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
-      return response.json();
+      const payload = await response.json();
+      return extractProfileFromBootstrap(payload || {});
     }),
     resetPasswordForEmail: ({ supabaseUrl = '', anonKey = '', email = '', redirectTo = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/recover`, {
       method: 'POST',
@@ -7822,10 +8056,10 @@ async function sbRefreshToken(refreshToken) {
 }
 
 async function sbGetProfile(accessToken) {
-  const profile = await getAuthApiBoundary().getProfile({
+  const profile = extractProfileFromBootstrap(await getAuthApiBoundary().getProfile({
     accessToken,
-  });
-  const { role, name, accessibleMenuIds } = profile || {};
+  }) || {});
+  const { role, name, accessibleMenuIds } = profile;
   return { role: role || 'none', name: name || '', accessibleMenuIds: normalizeAccessibleMenuIds(accessibleMenuIds) };
 }
 
@@ -8003,6 +8237,8 @@ function renderUserHeader(options = {}) {
   const adminBtn  = document.getElementById('admin-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
   const drawerToggle = document.getElementById('settings-drawer-toggle');
+  const adminDrawerToggle = document.getElementById('admin-mobile-drawer-toggle');
+  const mobileDrawerTrigger = document.getElementById('manager-mobile-drawer-trigger');
   const lockedSignInBtn = document.getElementById('manager-locked-signin-btn');
 
   if (actionBtn) {
@@ -8018,13 +8254,15 @@ function renderUserHeader(options = {}) {
     adminDrawerBtn.style.display = (signedIn && isAdmin) ? '' : 'none';
     adminDrawerBtn.classList.toggle('active', isAdminMode);
   }
-  if (drawerToggle) {
-    drawerToggle.style.display = (!signedIn && isSettingsRoute) ? 'none' : '';
-  }
+  [drawerToggle, adminDrawerToggle, mobileDrawerTrigger].forEach(toggle => {
+    if (!toggle) return;
+    toggle.style.display = (!signedIn && isSettingsRoute) ? 'none' : '';
+  });
   if (lockedSignInBtn) {
     lockedSignInBtn.textContent = signedIn ? 'Resume Manager' : 'Sign In';
   }
   updateDrawerAddItemButton();
+  syncManagerMobileDrawerTrigger();
 
   _setDisplayBySelector('[data-route-manager]', (signedIn && canManageCurrentMenu) ? '' : 'none');
   _setDisplayBySelector('[data-route-admin]', (signedIn && isAdmin) ? '' : 'none');
@@ -8081,29 +8319,70 @@ function setActiveSettingsSection(sectionId) {
   });
 }
 
+function getSettingsDrawerDom() {
+  const adminDrawer = document.getElementById('admin-settings-rail');
+  const adminBackdrop = document.getElementById('admin-settings-drawer-backdrop');
+  const adminToggle = document.getElementById('admin-mobile-drawer-toggle');
+  const managerDrawer = document.getElementById('manager-settings-rail');
+  const managerBackdrop = document.getElementById('settings-drawer-backdrop');
+  const managerToggle = document.getElementById('settings-drawer-toggle');
+  const managerMobileTrigger = document.getElementById('manager-mobile-drawer-trigger');
+
+  const useAdminDrawer = (
+    _appPageMode === 'admin' ||
+    (document.body?.classList?.contains('admin-console-page') && !!adminDrawer) ||
+    (!managerDrawer && !!adminDrawer)
+  );
+
+  if (useAdminDrawer) {
+    return {
+      drawer: adminDrawer,
+      backdrop: adminBackdrop,
+      toggle: adminToggle,
+      mobileTrigger: null,
+      mobileWidth: 900,
+      bodyOpenClass: 'admin-settings-drawer-open',
+    };
+  }
+
+  return {
+    drawer: managerDrawer,
+    backdrop: managerBackdrop,
+    toggle: managerToggle,
+    mobileTrigger: managerMobileTrigger,
+    mobileWidth: 920,
+    bodyOpenClass: 'settings-drawer-open',
+  };
+}
+
 function setSettingsDrawerOpen(isOpen, options = {}) {
-  const drawer = document.getElementById('manager-settings-rail');
-  const backdrop = document.getElementById('settings-drawer-backdrop');
-  const toggle = document.getElementById('settings-drawer-toggle');
-  const isMobileDrawer = window.innerWidth <= 920;
+  const drawerDom = getSettingsDrawerDom();
+  const { drawer, backdrop, toggle, mobileTrigger, mobileWidth, bodyOpenClass } = drawerDom;
+  const isMobileDrawer = window.innerWidth <= mobileWidth;
   const shouldRestoreToggleFocus = options.restoreFocus !== false;
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
   backdrop.hidden = !(isOpen && isMobileDrawer);
-  document.body.classList.toggle('settings-drawer-open', !!isOpen && isMobileDrawer);
+  document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
+  document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);
   if (toggle) toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (mobileTrigger) mobileTrigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen && isMobileDrawer) {
     requestAnimationFrame(() => {
-      drawer.querySelector('.manager-shell-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
+      drawer.querySelector('.manager-shell-rail-close, .admin-console-rail-close, .settings-rail-btn.active, .settings-rail-btn')?.focus();
     });
-  } else if (!isOpen && isMobileDrawer && toggle && shouldRestoreToggleFocus) {
-    toggle.focus();
+  } else if (!isOpen && isMobileDrawer && shouldRestoreToggleFocus) {
+    const preferredFocusTarget = document.body.classList.contains('manager-mobile-drawer-trigger-visible')
+      ? mobileTrigger
+      : toggle;
+    preferredFocusTarget?.focus();
   }
+  syncManagerMobileDrawerTrigger();
 }
 
 function toggleSettingsDrawer() {
-  const drawer = document.getElementById('manager-settings-rail');
+  const { drawer } = getSettingsDrawerDom();
   if (!drawer) return;
   setSettingsDrawerOpen(!drawer.classList.contains('is-open'));
 }
@@ -8286,8 +8565,12 @@ document.addEventListener('click', function(e) {
 // Close dropdown on Escape
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Escape') return;
-  const drawer = document.getElementById('manager-settings-rail');
-  if (drawer?.classList.contains('is-open') || document.body.classList.contains('settings-drawer-open')) {
+  const { drawer } = getSettingsDrawerDom();
+  if (
+    drawer?.classList.contains('is-open') ||
+    document.body.classList.contains('settings-drawer-open') ||
+    document.body.classList.contains('admin-settings-drawer-open')
+  ) {
     closeSettingsDrawer();
   }
   document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
@@ -9863,7 +10146,9 @@ async function saveMenu() {
     const result = await ensureCurrentMenuSession().saveDraft();
     if (result?.noop) return;
     if (result?.ok) {
-      showToast(`✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
+      showToast(result?.cleared
+        ? `✅ ${_activeMenuName || 'Menu'} draft cleared.`
+        : `✅ ${_activeMenuName || 'Menu'} draft saved.`, 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       return;
@@ -10173,52 +10458,51 @@ function initSwipeGestures(containerEl) {
   });
 }
 
-// ─── COLLAPSING HEADER ───────────────────────────────────────────────────────
-let _lastScrollY = 0;
-let _collapsingHeaderBound = false;
+// ─── MANAGER MOBILE DRAWER TRIGGER ───────────────────────────────────────────
+let _managerMobileDrawerTriggerBound = false;
 
-function initCollapsingHeader() {
-  if (_collapsingHeaderBound) return;
-  _collapsingHeaderBound = true;
+function syncManagerMobileDrawerTrigger() {
+  const body = document.body;
+  if (!body) return;
+  const trigger = document.getElementById('manager-mobile-drawer-trigger');
+  const header = document.querySelector('#app-shell > header.manager-shell-topbar');
+  if (!trigger || !header) {
+    body.classList.remove('manager-mobile-drawer-trigger-visible');
+    return;
+  }
+  if (window.innerWidth > 920 || body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
+    body.classList.remove('manager-mobile-drawer-trigger-visible');
+    trigger.hidden = true;
+    return;
+  }
+  const rect = typeof header.getBoundingClientRect === 'function'
+    ? header.getBoundingClientRect()
+    : null;
+  const shouldShow = !!rect && rect.bottom <= 10;
+  body.classList.toggle('manager-mobile-drawer-trigger-visible', shouldShow);
+  trigger.hidden = !shouldShow;
+}
+
+function initManagerMobileDrawerTrigger() {
+  if (_managerMobileDrawerTriggerBound) return;
+  _managerMobileDrawerTriggerBound = true;
   let ticking = false;
-  const evaluate = () => {
-    const body = document.body;
-    const y = window.scrollY;
-    if (window.innerWidth > 920) {
-      if (body.classList.contains('settings-drawer-open')) closeSettingsDrawer();
-      body.classList.remove('header-compact', 'header-hidden');
-      _lastScrollY = y;
-      return;
-    }
-    const delta = y - _lastScrollY;
-    const scrollingDown = delta > 8;
-    const scrollingUp = delta < -8;
-    body.classList.toggle('header-compact', y > 32);
-    if (y <= 16) {
-      body.classList.remove('header-hidden');
-    } else if (y > 132 && scrollingDown) {
-      body.classList.add('header-hidden');
-    } else if (scrollingUp || y < 88) {
-      body.classList.remove('header-hidden');
-    }
-    _lastScrollY = y;
-  };
-  const requestEvaluate = () => {
+  const requestSync = () => {
     if (ticking) return;
     ticking = true;
     requestAnimationFrame(() => {
       ticking = false;
-      evaluate();
+      syncManagerMobileDrawerTrigger();
     });
   };
-  window.addEventListener('scroll', requestEvaluate, { passive: true });
-  window.addEventListener('resize', requestEvaluate);
-  requestEvaluate();
+  window.addEventListener('scroll', requestSync, { passive: true });
+  window.addEventListener('resize', requestSync);
+  requestSync();
 }
 
 // ─── DRAWER SWIPE TO CLOSE ───────────────────────────────────────────────────
 function initDrawerSwipe() {
-  const rail = document.getElementById('manager-settings-rail');
+  const { drawer: rail } = getSettingsDrawerDom();
   if (!rail || rail.dataset.swipeBound === 'true') return;
   rail.dataset.swipeBound = 'true';
   let startX = 0;
@@ -10588,9 +10872,7 @@ function computeDiff() {
   return results;
 }
 
-// ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
-function openPreview() {
-  const preview = ensureCurrentMenuSession().preview();
+function renderPreviewModal(preview) {
   const content = document.getElementById('preview-content');
   const saveMenuBtn = document.getElementById('save-menu-btn');
   const saveSendBtn = document.getElementById('save-send-btn');
@@ -10632,6 +10914,28 @@ function openPreview() {
   modal.setAttribute('aria-hidden', 'false');
   modal.classList.add('open');
 }
+
+// ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
+async function openPreview() {
+  const content = document.getElementById('preview-content');
+  const saveMenuBtn = document.getElementById('save-menu-btn');
+  const saveSendBtn = document.getElementById('save-send-btn');
+  const modal = document.getElementById('modal-bg');
+  if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
+
+  const apiResult = await requestPublishPreviewThroughApi();
+  if (!apiResult.ok) {
+    showToast(apiResult.payload?.error || 'Preview is unavailable right now.', 'error');
+    return;
+  }
+  const preview = apiResult.payload?.preview;
+  if (!preview || !Array.isArray(preview.sections) || !Array.isArray(preview.notificationChanges)) {
+    showToast('Preview response was invalid. Please try again.', 'error');
+    return;
+  }
+  renderPreviewModal(preview);
+}
+
 function closeModal() {
   const modal = document.getElementById('modal-bg');
   if (!modal) return;
@@ -10901,26 +11205,6 @@ function applySentState(diff, ts) {
   invalidateDiff();
 }
 
-async function logUpdate(diff, patchMessage) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return false;
-  try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/update_log`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({
-        menu_id:   MENU_ID,
-        user_id:   currentUser.uid,
-        user_name: currentUser.name || currentUser.email || '',
-        diff:      diff,
-        message:   patchMessage,
-      }),
-    });
-    return response.ok;
-  } catch (_) {
-    return false;
-  }
-}
-
 function setPreviewModalActionState(mode = '') {
   const cancelBtn = document.getElementById('cancel-preview-btn');
   const saveMenuBtn = document.getElementById('save-menu-btn');
@@ -10940,7 +11224,21 @@ function setPreviewModalActionState(mode = '') {
 }
 
 async function sendUpdate(options = {}) {
-  const preview = options.preview?.sections ? options.preview : (_previewModalState || ensureCurrentMenuSession().preview());
+  let preview = options.preview?.sections ? options.preview : _previewModalState;
+  if (!preview) {
+    const previewResult = await requestPublishPreviewThroughApi();
+    if (!previewResult.ok) {
+      showToast(previewResult.payload?.error || 'Preview is unavailable right now.', 'error');
+      return;
+    }
+    preview = previewResult.payload?.preview;
+    if (!preview || !Array.isArray(preview.notificationChanges)) {
+      showToast('Preview response was invalid. Please try again.', 'error');
+      return;
+    }
+    _previewModalState = preview;
+    _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
+  }
   if (!preview.hasChanges) { closeModal(); return; }
 
   if (preview.truncated) {
@@ -11095,6 +11393,34 @@ function buildHistoryDetailHtml(diff) {
   ).join('');
 }
 
+function buildHistoryMessageHtml(message = '') {
+  const normalizedMessage = String(message || '').trim();
+  if (!normalizedMessage) return '';
+  return `<div class="history-message"><strong>Sent message:</strong> ${escHtml(normalizedMessage)}</div>`;
+}
+
+function formatHistorySourceLabel(source = '') {
+  const normalized = String(source || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'web_admin') return 'Web Admin';
+  if (normalized === 'web_manager') return 'Web Manager';
+  if (normalized === 'ios' || normalized === 'ios_app') return 'iOS App';
+  if (normalized === 'server') return 'Server';
+  if (normalized === 'web') return 'Web';
+  return normalized.replace(/_/g, ' ');
+}
+
+function buildHistoryContextSummary(log = {}) {
+  const parts = [];
+  const menuName = log?.menu?.id
+    ? formatMenuDisplayName(log.menu.name, log.menu.type, log.menu.restaurantId)
+    : String(log?.menu?.name || '').trim();
+  const sourceLabel = formatHistorySourceLabel(log?.source || '');
+  if (menuName) parts.push(menuName);
+  if (sourceLabel) parts.push(sourceLabel);
+  return parts.join(' | ');
+}
+
 function buildChangeFeedHtml(logs) {
   const locale = navigator.languages?.[0] || navigator.language || undefined;
   const dateFormatter = new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -11103,15 +11429,17 @@ function buildChangeFeedHtml(logs) {
     const d = new Date(log.created_at);
     const dateStr = dateFormatter.format(d);
     const timeStr = timeFormatter.format(d);
-    const diff = log.diff || [];
+    const diff = Array.isArray(log.diff) ? log.diff : [];
     const summary = summarizeHistoryDiff(diff);
-    const detailHtml = buildHistoryDetailHtml(diff);
+    const contextSummary = buildHistoryContextSummary(log);
+    const summaryText = contextSummary ? `${summary} | ${contextSummary}` : summary;
+    const detailHtml = `${buildHistoryMessageHtml(log.message)}${buildHistoryDetailHtml(diff)}`;
 
     return `<div class="history-entry">
       <button class="history-header" type="button" aria-expanded="false" onclick="this.parentElement.classList.toggle('expanded'); this.setAttribute('aria-expanded', this.parentElement.classList.contains('expanded') ? 'true' : 'false');">
         <span class="history-date">${escHtml(dateStr)} ${escHtml(timeStr)}</span>
         <span class="history-user">${escHtml(log.user_name || 'Unknown')}</span>
-        <span class="history-summary">${escHtml(summary)}</span>
+        <span class="history-summary">${escHtml(summaryText)}</span>
         <span class="history-chevron">\u203A</span>
       </button>
       <div class="history-detail">${detailHtml}</div>
@@ -11134,7 +11462,7 @@ function buildChangeFeedHtml(logs) {
 async function renderRecentChanges() {
   const wrap = document.getElementById('recent-changes-wrap');
   if (!wrap) return;
-  if (!SUPABASE_URL || !currentUser?.accessToken) {
+  if (!currentUser?.accessToken) {
     wrap.innerHTML = '<p class="db-empty">Recent changes are unavailable until you are signed in.</p>';
     return;
   }
@@ -11145,15 +11473,14 @@ async function renderRecentChanges() {
 
   wrap.innerHTML = '<p class="db-empty">Loading\u2026</p>';
   try {
-    const sinceIso = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000)).toISOString();
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/update_log?menu_id=eq.${MENU_ID}&created_at=gte.${encodeURIComponent(sinceIso)}&select=*&order=created_at.desc&limit=25`,
-      { headers: sbHeaders() }
-    );
-    if (!r.ok) throw new Error('fetch failed');
-    const logs = await r.json();
+    const history = await readMenuHistoryThroughApi({ menuId: MENU_ID, days: 7, limit: 25 });
+    if (!history) throw new Error('fetch failed');
+    const scope = String(history?.history?.scope || 'menu');
+    const logs = Array.isArray(history?.logs) ? history.logs : [];
     if (!logs.length) {
-      wrap.innerHTML = '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
+      wrap.innerHTML = scope === 'restaurant'
+        ? '<p class="db-empty">No sent updates for this restaurant in the last 7 days.</p>'
+        : '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
       return;
     }
     wrap.innerHTML = buildChangeFeedHtml(logs);
