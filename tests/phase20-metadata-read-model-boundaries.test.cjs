@@ -26,12 +26,14 @@ test('workspace route can include restaurant tools without widening menu access 
 
 test('server write helpers degrade optional draft and source metadata cleanly', async () => {
   const helper = await importApiModule('server/_menu-write.js');
+  const helperSource = read('server/_menu-write.js');
 
   assert.equal(typeof helper.patchMenuMetaForMenuWithCompatibility, 'function');
   assert.equal(typeof helper.normalizeAuditSource, 'function');
   assert.equal(typeof helper.inferAuditSource, 'function');
   assert.equal(helper.normalizeAuditSource('WEB_ADMIN'), 'web_admin');
   assert.equal(helper.inferAuditSource({ role: 'manager' }, ''), 'web_manager');
+  assert.match(helperSource, /\/rest\/v1\/categories\?on_conflict=menu_id,key/);
 });
 
 test('session bootstrap route exposes config and readiness on the unified boundary', () => {

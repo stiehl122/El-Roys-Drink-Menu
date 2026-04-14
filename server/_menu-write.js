@@ -255,7 +255,7 @@ async function upsertCategories(menuId, normalizedSnapshot) {
     display_order: category.display_order,
   }));
   if (categoryRows.length) {
-    const response = await fetch(`${sbUrl}/rest/v1/categories`, {
+    const response = await fetch(`${sbUrl}/rest/v1/categories?on_conflict=menu_id,key`, {
       method: 'POST',
       headers: getContentHeaders(),
       body: JSON.stringify(categoryRows),
