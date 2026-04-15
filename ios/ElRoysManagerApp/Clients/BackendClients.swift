@@ -8,7 +8,6 @@ struct BackendErrorPayload: Decodable {
 
 enum BackendError: LocalizedError {
   case invalidBaseURL
-  case missingSupabaseConfig
   case unauthorized
   case server(message: String)
   case transport(message: String)
@@ -19,8 +18,6 @@ enum BackendError: LocalizedError {
     switch self {
     case .invalidBaseURL:
       return "The app environment is missing a valid API base URL."
-    case .missingSupabaseConfig:
-      return "Auth bootstrap is unavailable."
     case .unauthorized:
       return "Your session no longer has access for this action."
     case .server(let message):
@@ -40,10 +37,10 @@ protocol BootstrapClienting {
 }
 
 protocol AuthClienting {
-  func signIn(config: BootstrapConfig, email: String, password: String) async throws -> AuthSession
-  func signUp(config: BootstrapConfig, email: String, password: String, name: String) async throws -> AuthSession
-  func refresh(config: BootstrapConfig, session: AuthSession) async throws -> AuthSession
-  func sendReset(config: BootstrapConfig, email: String, redirectTo: URL) async throws
+  func signIn(email: String, password: String) async throws -> AuthSession
+  func signUp(email: String, password: String, name: String) async throws -> AuthSession
+  func refresh(session: AuthSession) async throws -> AuthSession
+  func sendReset(email: String, redirectTo: URL) async throws
 }
 
 protocol WorkspaceClienting {
@@ -380,7 +377,7 @@ final class AuthClient: AuthClienting {
     self.session = session
   }
 
-  func signIn(config: BootstrapConfig, email: String, password: String) async throws -> AuthSession {
+  func signIn(email: String, password: String) async throws -> AuthSession {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
@@ -390,7 +387,7 @@ final class AuthClient: AuthClienting {
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
-  func signUp(config: BootstrapConfig, email: String, password: String, name: String) async throws -> AuthSession {
+  func signUp(email: String, password: String, name: String) async throws -> AuthSession {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
@@ -400,7 +397,7 @@ final class AuthClient: AuthClienting {
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
-  func refresh(config: BootstrapConfig, session authSession: AuthSession) async throws -> AuthSession {
+  func refresh(session authSession: AuthSession) async throws -> AuthSession {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
@@ -410,7 +407,7 @@ final class AuthClient: AuthClienting {
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
-  func sendReset(config: BootstrapConfig, email: String, redirectTo: URL) async throws {
+  func sendReset(email: String, redirectTo: URL) async throws {
     let _: AuthResetResponse = try await http.request(
       path: "api/auth",
       method: .post,
