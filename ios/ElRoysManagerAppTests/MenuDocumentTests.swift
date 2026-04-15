@@ -526,10 +526,178 @@ final class MenuDocumentTests: XCTestCase {
     await model.saveRemoteDraft()
 
     XCTAssertFalse(model.editorDirty)
+    XCTAssertTrue(model.editorHasLiveChanges)
     XCTAssertNil(model.editorRefreshRequirement)
     XCTAssertNil(offlineStore.draft)
     XCTAssertTrue(model.editorHasSharedDraft)
+    XCTAssertTrue(model.canSaveLiveRemotely)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.draftRevision, 22)
+  }
+
+  @MainActor
+  func testLoadEditorUsesSharedDraftAsStartingWorkingCopy() async throws {
+    let baseWorkspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ])
+    var sharedDraftDocument = EditableMenuDocument(workspace: baseWorkspace)
+    guard var sharedBeer = sharedDraftDocument.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded beer item")
+      return
+    }
+    sharedBeer.name = "House Pilsner"
+    sharedDraftDocument.upsertItem(sharedBeer, categoryKey: "beer", originalCategoryKey: "beer")
+
+    let workspaceWithDraft = makeWorkspace(
+      categories: baseWorkspace.cats,
+      meta: MenuMetaPayload(
+        draftState: makeJSONValue(from: sharedDraftDocument),
+        draftSavedTs: 22
+      ),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 22,
+        savedBy: SharedDraftSavedBy(id: "staff-2", name: "Jordan"),
+        source: "web"
+      ),
+      revisions: WorkspaceRevisions(liveRevision: 10, draftRevision: 22, lastSentRevision: 10)
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspaceWithDraft]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+
+    XCTAssertEqual(model.currentEditorDocument?.itemRecord(for: "item-1")?.item.name, "House Pilsner")
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertTrue(model.editorHasLiveChanges)
+    XCTAssertTrue(model.editorHasSharedDraft)
+    XCTAssertTrue(model.canSaveLiveRemotely)
+    XCTAssertTrue(model.canLoadPublishPreview)
+  }
+
+  @MainActor
+  func testSaveLiveMenuClearsSharedDraftAndRebaselinesBothBaselines() async throws {
+    let offlineStore = TestOfflineDraftStore()
+    let sessionStore = TestSessionStore()
+    let baseWorkspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ])
+    var sharedDraftDocument = EditableMenuDocument(workspace: baseWorkspace)
+    guard var sharedBeer = sharedDraftDocument.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded beer item")
+      return
+    }
+    sharedBeer.name = "House Pilsner"
+    sharedDraftDocument.upsertItem(sharedBeer, categoryKey: "beer", originalCategoryKey: "beer")
+
+    let workspace = makeWorkspace(
+      categories: baseWorkspace.cats,
+      meta: MenuMetaPayload(
+        draftState: makeJSONValue(from: sharedDraftDocument),
+        draftSavedTs: 22
+      ),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 22,
+        savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
+        source: "ios_app"
+      ),
+      revisions: WorkspaceRevisions(liveRevision: 10, draftRevision: 22, lastSentRevision: 10)
+    )
+    let draftClient = StubDraftClient(
+      clearResponse: DraftCommandResponse(
+        ok: true,
+        status: "draft_cleared",
+        menuId: "menu",
+        savedAt: nil,
+        hasSharedDraft: false,
+        sharedDraft: SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+      )
+    )
+    let liveSaveClient = StubLiveSaveClient(
+      response: PublishResponse(
+        ok: true,
+        action: nil,
+        ts: 44,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(liveRevision: 44, draftRevision: 22, lastSentRevision: 10),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        draftClient: draftClient,
+        liveSaveClient: liveSaveClient
+      ),
+      sessionStore: sessionStore,
+      offlineDraftStore: offlineStore
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+
+    XCTAssertTrue(model.editorHasSharedDraft)
+    XCTAssertTrue(model.editorHasLiveChanges)
+
+    await model.saveLiveMenu()
+
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertFalse(model.editorHasLiveChanges)
+    XCTAssertFalse(model.editorHasSharedDraft)
+    XCTAssertFalse(model.showClearSharedDraft)
+    XCTAssertFalse(model.canSaveLiveRemotely)
+    XCTAssertEqual(liveSaveClient.saveCallCount, 1)
+    XCTAssertEqual(draftClient.clearCallCount, 1)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
+    XCTAssertNil(offlineStore.draft)
   }
 
   @MainActor
@@ -916,19 +1084,28 @@ final class MenuDocumentTests: XCTestCase {
 
   private func makeWorkspace(
     categories: [MenuCategoryPayload] = [],
+    meta: MenuMetaPayload = MenuMetaPayload(),
+    hasSharedDraft: Bool = false,
+    sharedDraft: SharedDraftInfo? = nil,
     revisions: WorkspaceRevisions = WorkspaceRevisions(liveRevision: 10, draftRevision: nil, lastSentRevision: 10)
   ) -> MenuWorkspacePayload {
-    MenuWorkspacePayload(
+    let resolvedSharedDraft = sharedDraft ?? SharedDraftInfo(
+      exists: hasSharedDraft,
+      savedAt: revisions.draftRevision,
+      savedBy: nil,
+      source: ""
+    )
+    return MenuWorkspacePayload(
       cats: categories,
-      meta: MenuMetaPayload(),
+      meta: meta,
       restaurant: RestaurantRecord(id: "leroys-lounge", slug: "leroyslounge", name: "Leroy's Lounge", canAccess: true, design: nil, useCustomDesign: nil),
       restaurantTools: nil,
       context: MenuContext(kind: "menu-workspace", menu: MenuRecord(id: "menu", slug: "drinks", name: "Drinks", type: "drinks", restaurantId: "leroys-lounge", canManage: true)),
       workspace: WorkspaceState(
         actor: ActorProfile(id: "1", name: "Test", role: "manager"),
         accessibleMenuIds: ["menu"],
-        hasSharedDraft: false,
-        sharedDraft: SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: ""),
+        hasSharedDraft: hasSharedDraft || resolvedSharedDraft.exists,
+        sharedDraft: resolvedSharedDraft,
         permissions: WorkspacePermissions(canManage: true, canAdmin: false, canEditRestaurantSpecials: false, canReadRestaurantTools: false),
         capabilities: WorkspaceCapabilities(
           canSaveDraft: true,
@@ -944,6 +1121,11 @@ final class MenuDocumentTests: XCTestCase {
       ),
       capabilities: nil
     )
+  }
+
+  private func makeJSONValue(from document: EditableMenuDocument) -> JSONValue {
+    let data = try? JSONEncoder().encode(document)
+    return (try? JSONDecoder().decode(JSONValue.self, from: data ?? Data())) ?? .object([:])
   }
 
   private func makeHistoryPayload() -> HistoryPayload {
@@ -1162,6 +1344,8 @@ private final class StubPublicMenuClient: PublicMenuClienting {
 private final class StubDraftClient: DraftClienting {
   var saveResponse: DraftCommandResponse?
   var clearResponse: DraftCommandResponse?
+  private(set) var saveCallCount = 0
+  private(set) var clearCallCount = 0
 
   init(saveResponse: DraftCommandResponse? = nil, clearResponse: DraftCommandResponse? = nil) {
     self.saveResponse = saveResponse
@@ -1169,6 +1353,7 @@ private final class StubDraftClient: DraftClienting {
   }
 
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
+    saveCallCount += 1
     guard let saveResponse else {
       throw TestError.message("Unused in this test")
     }
@@ -1176,6 +1361,7 @@ private final class StubDraftClient: DraftClienting {
   }
 
   func clear(menuId: String, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
+    clearCallCount += 1
     guard let clearResponse else {
       throw TestError.message("Unused in this test")
     }
@@ -1184,8 +1370,19 @@ private final class StubDraftClient: DraftClienting {
 }
 
 private final class StubLiveSaveClient: LiveSaveClienting {
+  var response: PublishResponse?
+  private(set) var saveCallCount = 0
+
+  init(response: PublishResponse? = nil) {
+    self.response = response
+  }
+
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String) async throws -> PublishResponse {
-    throw TestError.message("Unused in this test")
+    saveCallCount += 1
+    guard let response else {
+      throw TestError.message("Unused in this test")
+    }
+    return response
   }
 }
 

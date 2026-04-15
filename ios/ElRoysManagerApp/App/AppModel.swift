@@ -110,11 +110,13 @@ final class AppModel {
   var editorRefreshRequirement: EditorRefreshRequirement?
   var editorHasSharedDraft = false
   var editorDirty = false
+  var editorHasLiveChanges = false
 
   @ObservationIgnored private let services: AppServices
   @ObservationIgnored private let sessionStore: any SessionStoring
   @ObservationIgnored private let offlineDraftStore: any OfflineDraftStoring
-  @ObservationIgnored private var baselineDocumentData: Data?
+  @ObservationIgnored private var draftBaselineDocumentData: Data?
+  @ObservationIgnored private var liveBaselineDocumentData: Data?
   @ObservationIgnored private let encoder = JSONEncoder()
 
   init(
@@ -154,24 +156,37 @@ final class AppModel {
     currentEditorWorkspace?.workspace.capabilities
   }
 
+  var hasLocalDraftChanges: Bool { editorDirty }
+
+  var hasLiveMenuChanges: Bool { editorHasLiveChanges }
+
   var canMutateRemoteEditorState: Bool {
     isAuthenticated && currentEditorWorkspace != nil && editorRefreshRequirement == nil
   }
 
   var canSaveDraftRemotely: Bool {
-    canMutateRemoteEditorState && (editorCapabilities?.canSaveDraft ?? false)
+    canMutateRemoteEditorState &&
+      (editorCapabilities?.canSaveDraft ?? false) &&
+      (hasLocalDraftChanges || showClearSharedDraft)
   }
 
   var canSaveLiveRemotely: Bool {
-    canMutateRemoteEditorState && (editorCapabilities?.canSaveLiveMenu ?? false)
+    canMutateRemoteEditorState &&
+      (editorCapabilities?.canSaveLiveMenu ?? false) &&
+      hasLiveMenuChanges
   }
 
   var canLoadPublishPreview: Bool {
-    canMutateRemoteEditorState && (editorCapabilities?.canPublishUpdates ?? false)
+    canMutateRemoteEditorState &&
+      (editorCapabilities?.canPublishUpdates ?? false) &&
+      hasLiveMenuChanges
   }
 
   var canPublishRemotely: Bool {
-    canLoadPublishPreview
+    canMutateRemoteEditorState &&
+      (editorCapabilities?.canPublishUpdates ?? false) &&
+      currentEditorPreview != nil &&
+      hasLiveMenuChanges
   }
 
   var editorSharedDraftSummary: String? {
@@ -187,7 +202,7 @@ final class AppModel {
   }
 
   var showClearSharedDraft: Bool {
-    editorHasSharedDraft && !editorDirty
+    editorHasSharedDraft && !hasLocalDraftChanges && !hasLiveMenuChanges
   }
 
   func start() async {
@@ -276,6 +291,9 @@ final class AppModel {
     editorRefreshRequirement = nil
     editorHasSharedDraft = false
     editorDirty = false
+    editorHasLiveChanges = false
+    draftBaselineDocumentData = nil
+    liveBaselineDocumentData = nil
     notice = AppNotice(tone: .neutral, title: "Signed Out", message: "The stored device session has been cleared.")
   }
 
@@ -309,16 +327,7 @@ final class AppModel {
         #endif
       }
 
-      model.currentEditorWorkspace = workspace
-      model.currentEditorHistory = history
-      model.currentEditorDocument = EditableMenuDocument(workspace: workspace)
-      model.baselineDocumentData = try model.documentData(for: EditableMenuDocument(workspace: workspace))
-      model.currentEditorPreview = nil
-      model.selectedPreviewChangeIDs = []
-      model.editorHasSharedDraft = workspace.workspace.hasSharedDraft
-      model.editorDirty = false
-      model.editorRefreshRequirement = nil
-      model.currentPublicMenu = nil
+      try model.adoptEditorWorkspace(workspace, history: history)
 
       try model.restoreOfflineDraftIfNeeded()
     }
@@ -363,7 +372,7 @@ final class AppModel {
         freshWorkspace: workspace,
         freshHistory: history,
         localDraft: currentLocalDraftEnvelope(),
-        mergeBaseDocument: try? baselineEditorDocument()
+        mergeBaseDocument: try? draftBaselineEditorDocument()
       )
       currentEditorPreview = nil
       selectedPreviewChangeIDs = []
@@ -499,14 +508,26 @@ final class AppModel {
             source: "ios_app"
           )
 
+      let currentDocument = try model.requireCurrentEditorDocument()
+      let liveDocument = try model.currentLiveBaselineDocument() ?? currentDocument
+      let nextSharedDraft = response.sharedDraft ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
       model.currentEditorWorkspace?.workspace.hasSharedDraft = response.hasSharedDraft
-      model.currentEditorWorkspace?.workspace.sharedDraft = response.sharedDraft ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+      model.currentEditorWorkspace?.workspace.sharedDraft = nextSharedDraft
       model.currentEditorWorkspace?.workspace.revisions.draftRevision = response.savedAt
+      model.currentEditorWorkspace?.meta.draftState = response.hasSharedDraft ? model.jsonValue(for: currentDocument) : nil
+      model.currentEditorWorkspace?.meta.draftSavedTs = response.savedAt
+      model.currentEditorWorkspace?.meta.draftSavedByUserId = response.hasSharedDraft ? model.authSession?.userID : nil
+      model.currentEditorWorkspace?.meta.draftSavedByName = response.hasSharedDraft ? model.authSession?.name : nil
+      model.currentEditorWorkspace?.meta.draftSavedSource = response.hasSharedDraft ? "ios_app" : nil
       model.editorHasSharedDraft = response.hasSharedDraft
       model.rebaselineCurrentEditorToServer(
+        liveDocument: liveDocument,
+        sharedDraftDocument: response.hasSharedDraft
+          ? currentDocument
+          : liveDocument,
         revisions: model.currentEditorWorkspace?.workspace.revisions,
         hasSharedDraft: response.hasSharedDraft,
-        sharedDraft: model.currentEditorWorkspace?.workspace.sharedDraft
+        sharedDraft: nextSharedDraft
       )
       model.notice = AppNotice(
         tone: .success,
@@ -526,15 +547,44 @@ final class AppModel {
           let snapshot = editorSnapshot() else { return }
 
     await run("Saving Live Menu") { model in
-      _ = try await model.services.liveSave.save(
+      var currentDocument = try model.requireCurrentEditorDocument()
+      let response = try await model.services.liveSave.save(
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: workspace.workspace.revisions.liveRevision,
         expectedDraftRevision: workspace.workspace.revisions.draftRevision,
         accessToken: accessToken
       )
+      if model.editorHasSharedDraft {
+        _ = try await model.services.draft.clear(
+          menuId: menuId,
+          expectedDraftRevision: workspace.workspace.revisions.draftRevision,
+          accessToken: accessToken,
+          source: "ios_app"
+        )
+      }
+      if let ts = response.ts {
+        currentDocument.meta.lastUpdatedTs = ts
+        model.currentEditorWorkspace?.workspace.revisions.liveRevision = ts
+        model.currentEditorDocument = currentDocument
+        model.currentEditorWorkspace?.meta.lastUpdatedTs = ts
+      }
+      model.currentEditorWorkspace?.workspace.hasSharedDraft = false
+      model.currentEditorWorkspace?.workspace.sharedDraft = SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+      model.currentEditorWorkspace?.workspace.revisions.draftRevision = nil
+      model.currentEditorWorkspace?.meta.draftState = nil
+      model.currentEditorWorkspace?.meta.draftSavedTs = nil
+      model.currentEditorWorkspace?.meta.draftSavedByUserId = nil
+      model.currentEditorWorkspace?.meta.draftSavedByName = nil
+      model.currentEditorWorkspace?.meta.draftSavedSource = nil
+      model.rebaselineCurrentEditorToServer(
+        liveDocument: currentDocument,
+        sharedDraftDocument: currentDocument,
+        revisions: model.currentEditorWorkspace?.workspace.revisions,
+        hasSharedDraft: false,
+        sharedDraft: SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+      )
       model.notice = AppNotice(tone: .success, title: "Live Menu Saved", message: "The live menu now matches the current native editor state.")
-      await model.loadEditor(menuId: menuId)
     }
   }
 
@@ -584,7 +634,8 @@ final class AppModel {
         freshHistory = nil
       }
 
-      let remoteDocument = EditableMenuDocument(workspace: freshWorkspace)
+      let remoteLiveDocument = EditableMenuDocument(workspace: freshWorkspace)
+      let remoteDocument = model.sharedDraftEditorDocument(from: freshWorkspace, liveDocument: remoteLiveDocument)
       let nextDocument: EditableMenuDocument
       if let localDraft = requirement.localDraft {
         nextDocument = model.mergeLocalDraft(
@@ -601,6 +652,7 @@ final class AppModel {
         history: freshHistory,
         document: nextDocument
       )
+      model.persistOfflineDraftIfNeeded()
       model.notice = AppNotice(
         tone: .success,
         title: requirement.kind.title,
@@ -696,7 +748,9 @@ final class AppModel {
     guard var document = currentEditorDocument else { return }
     change(&document)
     currentEditorDocument = document
-    editorDirty = isDocumentDirty(document)
+    updateEditorStateFlags(for: document)
+    currentEditorPreview = nil
+    selectedPreviewChangeIDs = []
     persistOfflineDraftIfNeeded()
   }
 
@@ -733,7 +787,7 @@ final class AppModel {
       var normalized = envelope.document
       normalized.normalizeIdentifiersForRuntime()
       currentEditorDocument = normalized
-      editorDirty = isDocumentDirty(normalized)
+      updateEditorStateFlags(for: normalized)
       editorRefreshRequirement = nil
       if editorDirty {
         notice = AppNotice(
@@ -782,7 +836,7 @@ final class AppModel {
           let document = currentEditorDocument else { return }
 
     if editorDirty {
-      let baseDocument = try? baselineEditorDocument()
+      let baseDocument = try? draftBaselineEditorDocument()
       let envelope = LocalDraftEnvelope(
         userId: session.userID,
         menuId: document.menuId,
@@ -801,7 +855,7 @@ final class AppModel {
   }
 
   private func currentLocalDraftEnvelope() -> LocalDraftEnvelope? {
-    guard editorDirty,
+    guard hasLocalDraftChanges,
           let session = authSession,
           let workspace = currentEditorWorkspace,
           let document = currentEditorDocument else { return nil }
@@ -813,7 +867,7 @@ final class AppModel {
       savedAt: .now,
       baseLiveRevision: workspace.workspace.revisions.liveRevision,
       baseDraftRevision: workspace.workspace.revisions.draftRevision,
-      baseDocument: try? baselineEditorDocument(),
+      baseDocument: try? draftBaselineEditorDocument(),
       document: document
     )
   }
@@ -823,27 +877,29 @@ final class AppModel {
     history: HistoryPayload?,
     document: EditableMenuDocument? = nil
   ) throws {
-    let remoteDocument = EditableMenuDocument(workspace: workspace)
+    let liveDocument = EditableMenuDocument(workspace: workspace)
+    let sharedDraftDocument = sharedDraftEditorDocument(from: workspace, liveDocument: liveDocument)
     currentEditorWorkspace = workspace
     currentEditorHistory = history
-    currentEditorDocument = document ?? remoteDocument
-    baselineDocumentData = try documentData(for: remoteDocument)
+    currentEditorDocument = document ?? sharedDraftDocument
+    try setEditorBaselines(liveDocument: liveDocument, sharedDraftDocument: sharedDraftDocument)
     currentEditorPreview = nil
     selectedPreviewChangeIDs = []
     editorHasSharedDraft = workspace.workspace.hasSharedDraft
     editorRefreshRequirement = nil
     currentPublicMenu = nil
-    editorDirty = isDocumentDirty(currentEditorDocument ?? remoteDocument)
-    persistOfflineDraftIfNeeded()
+    updateEditorStateFlags(for: currentEditorDocument ?? sharedDraftDocument)
   }
 
   private func rebaselineCurrentEditorToServer(
+    liveDocument: EditableMenuDocument,
+    sharedDraftDocument: EditableMenuDocument,
     revisions: WorkspaceRevisions?,
     hasSharedDraft: Bool,
     sharedDraft: SharedDraftInfo?
   ) {
     guard let currentEditorDocument else { return }
-    baselineDocumentData = try? documentData(for: currentEditorDocument)
+    try? setEditorBaselines(liveDocument: liveDocument, sharedDraftDocument: sharedDraftDocument)
     if let revisions {
       currentEditorWorkspace?.workspace.revisions = revisions
     }
@@ -853,7 +909,7 @@ final class AppModel {
     }
     editorHasSharedDraft = hasSharedDraft
     editorRefreshRequirement = nil
-    editorDirty = false
+    updateEditorStateFlags(for: currentEditorDocument)
     currentEditorPreview = nil
     selectedPreviewChangeIDs = []
     persistOfflineDraftIfNeeded()
@@ -866,7 +922,8 @@ final class AppModel {
     localDraft: LocalDraftEnvelope?,
     mergeBaseDocument: EditableMenuDocument?
   ) -> EditorRefreshRequirement {
-    let remoteDocument = EditableMenuDocument(workspace: freshWorkspace)
+    let remoteLiveDocument = EditableMenuDocument(workspace: freshWorkspace)
+    let remoteDocument = sharedDraftEditorDocument(from: freshWorkspace, liveDocument: remoteLiveDocument)
     let baseDocument = mergeBaseDocument ?? localDraft?.baseDocument
     let overlap = buildOverlapLabels(
       base: baseDocument,
@@ -892,7 +949,7 @@ final class AppModel {
     into remoteDocument: EditableMenuDocument,
     strategy: EditorRefreshStrategy
   ) -> EditableMenuDocument {
-    guard let baseDocument = localDraft.baseDocument ?? (try? baselineEditorDocument()) else {
+    guard let baseDocument = localDraft.baseDocument ?? (try? draftBaselineEditorDocument()) else {
       var fallback = strategy == .keepLocalDrafts ? localDraft.document : remoteDocument
       fallback.context = remoteDocument.context
       fallback.meta = remoteDocument.meta
@@ -908,19 +965,68 @@ final class AppModel {
     )
   }
 
-  private func baselineEditorDocument() throws -> EditableMenuDocument? {
-    guard let baselineDocumentData else { return nil }
-    return try JSONDecoder().decode(EditableMenuDocument.self, from: baselineDocumentData)
+  private func draftBaselineEditorDocument() throws -> EditableMenuDocument? {
+    guard let draftBaselineDocumentData else { return nil }
+    return try JSONDecoder().decode(EditableMenuDocument.self, from: draftBaselineDocumentData)
+  }
+
+  private func currentLiveBaselineDocument() throws -> EditableMenuDocument? {
+    guard let liveBaselineDocumentData else { return nil }
+    return try JSONDecoder().decode(EditableMenuDocument.self, from: liveBaselineDocumentData)
   }
 
   private func isDocumentDirty(_ document: EditableMenuDocument) -> Bool {
-    guard let baselineDocumentData else { return true }
+    guard let draftBaselineDocumentData else { return true }
     guard let current = try? documentData(for: document) else { return true }
-    return current != baselineDocumentData
+    return current != draftBaselineDocumentData
+  }
+
+  private func isDocumentDifferentFromLive(_ document: EditableMenuDocument) -> Bool {
+    guard let liveBaselineDocumentData else { return true }
+    guard let current = try? documentData(for: document) else { return true }
+    return current != liveBaselineDocumentData
   }
 
   private func documentData(for document: EditableMenuDocument) throws -> Data {
     try encoder.encode(document)
+  }
+
+  private func jsonValue(for document: EditableMenuDocument) -> JSONValue? {
+    guard let data = try? documentData(for: document) else { return nil }
+    return try? JSONDecoder().decode(JSONValue.self, from: data)
+  }
+
+  private func requireCurrentEditorDocument() throws -> EditableMenuDocument {
+    guard let currentEditorDocument else {
+      throw NSError(domain: "AppModel", code: 1, userInfo: [NSLocalizedDescriptionKey: "The editor is not loaded yet."])
+    }
+    return currentEditorDocument
+  }
+
+  private func setEditorBaselines(liveDocument: EditableMenuDocument, sharedDraftDocument: EditableMenuDocument) throws {
+    liveBaselineDocumentData = try documentData(for: liveDocument)
+    draftBaselineDocumentData = try documentData(for: sharedDraftDocument)
+  }
+
+  private func sharedDraftEditorDocument(from workspace: MenuWorkspacePayload, liveDocument: EditableMenuDocument) -> EditableMenuDocument {
+    guard workspace.workspace.hasSharedDraft else { return liveDocument }
+    guard let draftState = workspace.meta.draftState,
+          let document = decodeEditorDocument(from: draftState) else {
+      return liveDocument
+    }
+    return document
+  }
+
+  private func decodeEditorDocument(from value: JSONValue) -> EditableMenuDocument? {
+    guard let data = try? JSONEncoder().encode(value) else { return nil }
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try? decoder.decode(EditableMenuDocument.self, from: data)
+  }
+
+  private func updateEditorStateFlags(for document: EditableMenuDocument) {
+    editorDirty = isDocumentDirty(document)
+    editorHasLiveChanges = isDocumentDifferentFromLive(document)
   }
 
   private func run(_ label: String, operation: @escaping @MainActor (AppModel) async throws -> Void) async {

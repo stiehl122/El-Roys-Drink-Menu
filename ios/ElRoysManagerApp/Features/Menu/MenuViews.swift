@@ -29,7 +29,8 @@ struct MenuEditorScreen: View {
             menu: menu,
             theme: theme,
             menuAccent: menuAccent,
-            isDirty: model.editorDirty,
+            hasLocalDraftChanges: model.hasLocalDraftChanges,
+            hasLiveMenuChanges: model.hasLiveMenuChanges,
             hasSharedDraft: model.editorHasSharedDraft,
             sharedDraftSummary: model.editorSharedDraftSummary
           )
@@ -47,7 +48,7 @@ struct MenuEditorScreen: View {
             onAddCategory: { showingAddCategory = true },
             onSaveDraft: saveDraft,
             onSaveLive: saveLive,
-            onLoadPreview: loadSendPreview
+            onSendUpdate: loadSendPreview
           )
 
           if let preview = model.currentEditorPreview {
@@ -300,7 +301,8 @@ private struct MenuEditorHeaderCard: View {
   let menu: MenuRecord
   let theme: MenuEditorTheme
   let menuAccent: Color
-  let isDirty: Bool
+  let hasLocalDraftChanges: Bool
+  let hasLiveMenuChanges: Bool
   let hasSharedDraft: Bool
   let sharedDraftSummary: String?
 
@@ -331,9 +333,14 @@ private struct MenuEditorHeaderCard: View {
 
       HStack(alignment: .top, spacing: 10) {
         MenuEditorBadge(
-          label: isDirty ? "Unsaved local edits" : "Aligned with live menu",
-          fill: isDirty ? theme.warningAccent.opacity(0.18) : theme.successAccent.opacity(0.18),
-          text: isDirty ? theme.warningAccent : theme.successAccent
+          label: hasLocalDraftChanges ? "Drafting locally" : "No local drafts",
+          fill: hasLocalDraftChanges ? theme.warningAccent.opacity(0.18) : theme.neutralAccent.opacity(0.16),
+          text: hasLocalDraftChanges ? theme.warningAccent : theme.neutralAccent
+        )
+        MenuEditorBadge(
+          label: hasLiveMenuChanges ? "Live menu behind working copy" : "Live menu aligned",
+          fill: hasLiveMenuChanges ? menuAccent.opacity(0.16) : theme.successAccent.opacity(0.18),
+          text: hasLiveMenuChanges ? menuAccent : theme.successAccent
         )
         if hasSharedDraft {
           MenuEditorBadge(
@@ -349,8 +356,25 @@ private struct MenuEditorHeaderCard: View {
           .font(EditorTypography.body(13))
           .foregroundStyle(theme.subtleText)
       }
+
+      Text(workflowSummary)
+        .font(EditorTypography.body(13, weight: .medium))
+        .foregroundStyle(theme.bodyText)
     }
     .menuEditorSurface(colors: [theme.headerTop, theme.headerBottom], border: theme.headerBorder)
+  }
+
+  private var workflowSummary: String {
+    if hasLiveMenuChanges && hasLocalDraftChanges {
+      return "Your working copy is ahead of both the shared draft and the live menu."
+    }
+    if hasLiveMenuChanges && hasSharedDraft {
+      return "This menu is showing the saved shared draft. Save Menu or Send Update to promote it live."
+    }
+    if hasLocalDraftChanges {
+      return "Your edits are only on this device until you save a shared draft or push them live."
+    }
+    return "This editor is aligned with the current shared draft and live menu state."
   }
 }
 
@@ -378,7 +402,7 @@ private struct MenuEditorActionPanel: View {
   let onAddCategory: () -> Void
   let onSaveDraft: () -> Void
   let onSaveLive: () -> Void
-  let onLoadPreview: () -> Void
+  let onSendUpdate: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -400,29 +424,51 @@ private struct MenuEditorActionPanel: View {
 
       HStack(spacing: 12) {
         Button(action: onSaveDraft) {
-          MenuEditorActionLabel(title: model.showClearSharedDraft ? "Clear Shared Draft" : "Save Draft", subtitle: "Update the shared draft", icon: "square.and.arrow.down.fill", accent: theme.neutralAccent)
+          MenuEditorActionLabel(
+            title: "Save Draft",
+            subtitle: model.hasLocalDraftChanges ? "Push the working copy to the shared draft" : "No local draft changes",
+            icon: "square.and.arrow.down.fill",
+            accent: theme.neutralAccent
+          )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSaveDraftRemotely || (!model.editorDirty && !model.showClearSharedDraft))
+        .disabled(!model.canSaveDraftRemotely)
 
         Button(action: onSaveLive) {
-          MenuEditorActionLabel(title: "Save Live", subtitle: "Overwrite the live menu", icon: "checkmark.seal.fill", accent: theme.successAccent)
+          MenuEditorActionLabel(
+            title: "Save Menu",
+            subtitle: model.hasLiveMenuChanges ? "Update the live menu without sending" : "Live menu already matches",
+            icon: "checkmark.seal.fill",
+            accent: theme.successAccent
+          )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSaveLiveRemotely || !model.editorDirty)
+        .disabled(!model.canSaveLiveRemotely)
       }
 
       HStack(spacing: 12) {
-        Button(action: onLoadPreview) {
-          MenuEditorActionLabel(title: "Load Send Preview", subtitle: "Inspect the outgoing patch", icon: "paperplane.fill", accent: menuAccent)
+        Button(action: onSendUpdate) {
+          MenuEditorActionLabel(
+            title: "Send Update",
+            subtitle: model.currentEditorPreview == nil ? "Review the outgoing update before sending" : "Preview loaded below",
+            icon: "paperplane.fill",
+            accent: menuAccent
+          )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canLoadPublishPreview || !model.editorDirty)
+        .disabled(!model.canLoadPublishPreview)
 
         NavigationLink(value: AppDestination.routePreview(menu)) {
           MenuEditorActionLabel(title: "Exact Route", subtitle: "See the true public route", icon: "safari.fill", accent: theme.neutralAccent)
         }
         .buttonStyle(.plain)
+      }
+
+      if model.showClearSharedDraft {
+        Button("Clear Shared Draft", action: onSaveDraft)
+          .font(EditorTypography.body(13, weight: .bold))
+          .foregroundStyle(theme.warningAccent)
+          .buttonStyle(.plain)
       }
     }
     .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
