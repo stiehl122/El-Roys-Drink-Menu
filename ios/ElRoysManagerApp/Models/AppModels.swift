@@ -46,6 +46,37 @@ enum JSONValue: Codable, Equatable, Hashable {
   }
 }
 
+private extension KeyedDecodingContainer {
+  func decodeString(forKey key: Key) throws -> String {
+    try decodeIfPresent(String.self, forKey: key) ?? ""
+  }
+
+  func decodeBool(forKey key: Key, default defaultValue: Bool = false) throws -> Bool {
+    try decodeIfPresent(Bool.self, forKey: key) ?? defaultValue
+  }
+
+  func decodeInt(forKey key: Key, default defaultValue: Int = 0) throws -> Int {
+    try decodeIfPresent(Int.self, forKey: key) ?? defaultValue
+  }
+
+  func decodeArray<T: Decodable>(_ type: [T].Type = [T].self, forKey key: Key) throws -> [T] {
+    try decodeIfPresent(type, forKey: key) ?? []
+  }
+
+  func decodeLossyStringArray(forKey key: Key) throws -> [String] {
+    if let values = try? decode([String].self, forKey: key) {
+      return values
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    }
+    if let value = try? decode(String.self, forKey: key) {
+      let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+      return trimmed.isEmpty ? [] : [trimmed]
+    }
+    return []
+  }
+}
+
 enum AppEnvironmentName: String, Codable {
   case production = "Production"
   case preview = "Preview"
@@ -169,6 +200,22 @@ struct SessionBootstrapPayload: Codable, Equatable {
 struct SharedDraftSavedBy: Codable, Equatable, Hashable {
   var id: String
   var name: String
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+  }
+
+  init(id: String, name: String) {
+    self.id = id
+    self.name = name
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.name = try container.decodeString(forKey: .name)
+  }
 }
 
 struct SharedDraftInfo: Codable, Equatable {
@@ -176,6 +223,28 @@ struct SharedDraftInfo: Codable, Equatable {
   var savedAt: Int?
   var savedBy: SharedDraftSavedBy?
   var source: String
+
+  enum CodingKeys: String, CodingKey {
+    case exists
+    case savedAt
+    case savedBy
+    case source
+  }
+
+  init(exists: Bool, savedAt: Int?, savedBy: SharedDraftSavedBy?, source: String) {
+    self.exists = exists
+    self.savedAt = savedAt
+    self.savedBy = savedBy
+    self.source = source
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.exists = try container.decodeBool(forKey: .exists)
+    self.savedAt = try container.decodeIfPresent(Int.self, forKey: .savedAt)
+    self.savedBy = try container.decodeIfPresent(SharedDraftSavedBy.self, forKey: .savedBy)
+    self.source = try container.decodeString(forKey: .source)
+  }
 }
 
 struct WorkspacePermissions: Codable, Equatable {
@@ -183,6 +252,28 @@ struct WorkspacePermissions: Codable, Equatable {
   var canAdmin: Bool
   var canEditRestaurantSpecials: Bool
   var canReadRestaurantTools: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case canManage
+    case canAdmin
+    case canEditRestaurantSpecials
+    case canReadRestaurantTools
+  }
+
+  init(canManage: Bool, canAdmin: Bool, canEditRestaurantSpecials: Bool, canReadRestaurantTools: Bool) {
+    self.canManage = canManage
+    self.canAdmin = canAdmin
+    self.canEditRestaurantSpecials = canEditRestaurantSpecials
+    self.canReadRestaurantTools = canReadRestaurantTools
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.canManage = try container.decodeBool(forKey: .canManage)
+    self.canAdmin = try container.decodeBool(forKey: .canAdmin)
+    self.canEditRestaurantSpecials = try container.decodeBool(forKey: .canEditRestaurantSpecials)
+    self.canReadRestaurantTools = try container.decodeBool(forKey: .canReadRestaurantTools)
+  }
 }
 
 struct WorkspaceCapabilities: Codable, Equatable {
@@ -194,6 +285,49 @@ struct WorkspaceCapabilities: Codable, Equatable {
   var canManageAdminSettings: Bool
   var includesDraftAuthorship: Bool
   var includesRestaurantTools: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case canSaveDraft
+    case canSaveLiveMenu
+    case canPublishUpdates
+    case canManageRestaurantSpecials
+    case canReadRestaurantTools
+    case canManageAdminSettings
+    case includesDraftAuthorship
+    case includesRestaurantTools
+  }
+
+  init(
+    canSaveDraft: Bool,
+    canSaveLiveMenu: Bool,
+    canPublishUpdates: Bool,
+    canManageRestaurantSpecials: Bool,
+    canReadRestaurantTools: Bool,
+    canManageAdminSettings: Bool,
+    includesDraftAuthorship: Bool,
+    includesRestaurantTools: Bool
+  ) {
+    self.canSaveDraft = canSaveDraft
+    self.canSaveLiveMenu = canSaveLiveMenu
+    self.canPublishUpdates = canPublishUpdates
+    self.canManageRestaurantSpecials = canManageRestaurantSpecials
+    self.canReadRestaurantTools = canReadRestaurantTools
+    self.canManageAdminSettings = canManageAdminSettings
+    self.includesDraftAuthorship = includesDraftAuthorship
+    self.includesRestaurantTools = includesRestaurantTools
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.canSaveDraft = try container.decodeBool(forKey: .canSaveDraft)
+    self.canSaveLiveMenu = try container.decodeBool(forKey: .canSaveLiveMenu)
+    self.canPublishUpdates = try container.decodeBool(forKey: .canPublishUpdates)
+    self.canManageRestaurantSpecials = try container.decodeBool(forKey: .canManageRestaurantSpecials)
+    self.canReadRestaurantTools = try container.decodeBool(forKey: .canReadRestaurantTools)
+    self.canManageAdminSettings = try container.decodeBool(forKey: .canManageAdminSettings)
+    self.includesDraftAuthorship = try container.decodeBool(forKey: .includesDraftAuthorship)
+    self.includesRestaurantTools = try container.decodeBool(forKey: .includesRestaurantTools)
+  }
 }
 
 struct WorkspaceRevisions: Codable, Equatable {
@@ -210,11 +344,91 @@ struct WorkspaceState: Codable, Equatable {
   var permissions: WorkspacePermissions
   var capabilities: WorkspaceCapabilities
   var revisions: WorkspaceRevisions
+
+  enum CodingKeys: String, CodingKey {
+    case actor
+    case accessibleMenuIds
+    case hasSharedDraft
+    case sharedDraft
+    case permissions
+    case capabilities
+    case revisions
+  }
+
+  init(
+    actor: ActorProfile?,
+    accessibleMenuIds: [String],
+    hasSharedDraft: Bool,
+    sharedDraft: SharedDraftInfo,
+    permissions: WorkspacePermissions,
+    capabilities: WorkspaceCapabilities,
+    revisions: WorkspaceRevisions
+  ) {
+    self.actor = actor
+    self.accessibleMenuIds = accessibleMenuIds
+    self.hasSharedDraft = hasSharedDraft
+    self.sharedDraft = sharedDraft
+    self.permissions = permissions
+    self.capabilities = capabilities
+    self.revisions = revisions
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let sharedDraft = try container.decodeIfPresent(
+      SharedDraftInfo.self,
+      forKey: .sharedDraft
+    ) ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+    self.actor = try container.decodeIfPresent(ActorProfile.self, forKey: .actor)
+    self.accessibleMenuIds = (try? container.decode([String].self, forKey: .accessibleMenuIds)) ?? []
+    self.hasSharedDraft = try container.decodeIfPresent(Bool.self, forKey: .hasSharedDraft) ?? sharedDraft.exists
+    self.sharedDraft = sharedDraft
+    self.permissions = try container.decodeIfPresent(
+      WorkspacePermissions.self,
+      forKey: .permissions
+    ) ?? WorkspacePermissions(
+      canManage: false,
+      canAdmin: false,
+      canEditRestaurantSpecials: false,
+      canReadRestaurantTools: false
+    )
+    self.capabilities = try container.decodeIfPresent(
+      WorkspaceCapabilities.self,
+      forKey: .capabilities
+    ) ?? WorkspaceCapabilities(
+      canSaveDraft: false,
+      canSaveLiveMenu: false,
+      canPublishUpdates: false,
+      canManageRestaurantSpecials: false,
+      canReadRestaurantTools: false,
+      canManageAdminSettings: false,
+      includesDraftAuthorship: false,
+      includesRestaurantTools: false
+    )
+    self.revisions = try container.decodeIfPresent(WorkspaceRevisions.self, forKey: .revisions)
+      ?? WorkspaceRevisions(liveRevision: nil, draftRevision: nil, lastSentRevision: nil)
+  }
 }
 
 struct MenuContext: Codable, Equatable {
   var kind: String
   var menu: MenuRecord?
+
+  enum CodingKeys: String, CodingKey {
+    case kind
+    case menu
+  }
+
+  init(kind: String, menu: MenuRecord?) {
+    self.kind = kind
+    self.menu = menu
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.kind = try container.decodeString(forKey: .kind)
+    self.menu = try container.decodeIfPresent(MenuRecord.self, forKey: .menu)
+  }
 }
 
 struct ItemUpcharge: Codable, Equatable, Hashable, Identifiable {
@@ -225,6 +439,17 @@ struct ItemUpcharge: Codable, Equatable, Hashable, Identifiable {
   enum CodingKeys: String, CodingKey {
     case label
     case price
+  }
+
+  init(label: String, price: String) {
+    self.label = label
+    self.price = price
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.label = try container.decodeString(forKey: .label)
+    self.price = try container.decodeString(forKey: .price)
   }
 }
 
@@ -297,13 +522,13 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     self.id = try container.decode(String.self, forKey: .id)
     self.name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
     self.desc = try container.decodeIfPresent(String.self, forKey: .desc) ?? ""
-    self.recipe = try container.decodeIfPresent([String].self, forKey: .recipe) ?? []
+    self.recipe = try container.decodeLossyStringArray(forKey: .recipe)
     self.price = try container.decodeIfPresent(String.self, forKey: .price) ?? ""
     self.isEightySixed = serverIsEightySixed ?? compactIsEightySixed ?? false
     self.displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? 0
     self.onMenu = explicitOnMenu ?? (visibility != "off_menu")
     self.visibility = visibility
-    self.upcharges = try container.decodeIfPresent([ItemUpcharge].self, forKey: .upcharges) ?? []
+    self.upcharges = (try? container.decode([ItemUpcharge].self, forKey: .upcharges)) ?? []
     self.showDescription = try container.decodeIfPresent(Bool.self, forKey: .showDescription) ?? true
     self.showRecipe = try container.decodeIfPresent(Bool.self, forKey: .showRecipe) ?? false
   }
@@ -336,6 +561,57 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
   var placeholder: String
   var displayOrder: Int
   var items: [MenuItemPayload]
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case menuId
+    case key
+    case label
+    case icon
+    case color
+    case sub
+    case placeholder
+    case displayOrder
+    case items
+  }
+
+  init(
+    id: String,
+    menuId: String?,
+    key: String,
+    label: String,
+    icon: String,
+    color: String,
+    sub: String,
+    placeholder: String,
+    displayOrder: Int,
+    items: [MenuItemPayload]
+  ) {
+    self.id = id
+    self.menuId = menuId
+    self.key = key
+    self.label = label
+    self.icon = icon
+    self.color = color
+    self.sub = sub
+    self.placeholder = placeholder
+    self.displayOrder = displayOrder
+    self.items = items
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.menuId = try container.decodeIfPresent(String.self, forKey: .menuId)
+    self.key = try container.decodeString(forKey: .key)
+    self.label = try container.decodeString(forKey: .label)
+    self.icon = try container.decodeString(forKey: .icon)
+    self.color = try container.decodeString(forKey: .color)
+    self.sub = try container.decodeString(forKey: .sub)
+    self.placeholder = try container.decodeString(forKey: .placeholder)
+    self.displayOrder = try container.decodeInt(forKey: .displayOrder)
+    self.items = (try? container.decode([MenuItemPayload].self, forKey: .items)) ?? []
+  }
 }
 
 struct MenuMetaPayload: Codable, Equatable {
@@ -352,6 +628,22 @@ struct MenuMetaPayload: Codable, Equatable {
   var draftSavedByUserId: String?
   var draftSavedByName: String?
   var draftSavedSource: String?
+
+  enum CodingKeys: String, CodingKey {
+    case botId
+    case notifications
+    case notificationMenuLink
+    case lastUpdatedTs
+    case lastSentTs
+    case lastSentState
+    case lastSentCategories
+    case lastSentFeatured
+    case draftState
+    case draftSavedTs
+    case draftSavedByUserId
+    case draftSavedByName
+    case draftSavedSource
+  }
 
   init(
     botId: String? = nil,
@@ -382,6 +674,23 @@ struct MenuMetaPayload: Codable, Equatable {
     self.draftSavedByName = draftSavedByName
     self.draftSavedSource = draftSavedSource
   }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.botId = try container.decodeIfPresent(String.self, forKey: .botId)
+    self.notifications = try container.decodeIfPresent(JSONValue.self, forKey: .notifications)
+    self.notificationMenuLink = try container.decodeIfPresent(String.self, forKey: .notificationMenuLink)
+    self.lastUpdatedTs = try container.decodeIfPresent(Int.self, forKey: .lastUpdatedTs)
+    self.lastSentTs = try container.decodeIfPresent(Int.self, forKey: .lastSentTs)
+    self.lastSentState = try container.decodeIfPresent(JSONValue.self, forKey: .lastSentState)
+    self.lastSentCategories = (try? container.decode([String].self, forKey: .lastSentCategories)) ?? []
+    self.lastSentFeatured = (try? container.decode([String].self, forKey: .lastSentFeatured)) ?? []
+    self.draftState = try container.decodeIfPresent(JSONValue.self, forKey: .draftState)
+    self.draftSavedTs = try container.decodeIfPresent(Int.self, forKey: .draftSavedTs)
+    self.draftSavedByUserId = try container.decodeIfPresent(String.self, forKey: .draftSavedByUserId)
+    self.draftSavedByName = try container.decodeIfPresent(String.self, forKey: .draftSavedByName)
+    self.draftSavedSource = try container.decodeIfPresent(String.self, forKey: .draftSavedSource)
+  }
 }
 
 struct FeaturedSlot: Codable, Equatable, Hashable, Identifiable {
@@ -392,6 +701,45 @@ struct FeaturedSlot: Codable, Equatable, Hashable, Identifiable {
   var confirmedAt: String?
   var confirmedBy: String?
   var item: MenuItemPayload?
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case itemId
+    case sellNote
+    case displayOrder
+    case confirmedAt
+    case confirmedBy
+    case item
+  }
+
+  init(
+    id: String,
+    itemId: String,
+    sellNote: String,
+    displayOrder: Int,
+    confirmedAt: String?,
+    confirmedBy: String?,
+    item: MenuItemPayload?
+  ) {
+    self.id = id
+    self.itemId = itemId
+    self.sellNote = sellNote
+    self.displayOrder = displayOrder
+    self.confirmedAt = confirmedAt
+    self.confirmedBy = confirmedBy
+    self.item = item
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.itemId = try container.decodeString(forKey: .itemId)
+    self.sellNote = try container.decodeString(forKey: .sellNote)
+    self.displayOrder = try container.decodeInt(forKey: .displayOrder)
+    self.confirmedAt = try container.decodeIfPresent(String.self, forKey: .confirmedAt)
+    self.confirmedBy = try container.decodeIfPresent(String.self, forKey: .confirmedBy)
+    self.item = try container.decodeIfPresent(MenuItemPayload.self, forKey: .item)
+  }
 }
 
 extension MenuRecord {
@@ -422,6 +770,28 @@ struct FeaturedGroup: Codable, Equatable, Hashable, Identifiable {
   var name: String
   var displayOrder: Int
   var slots: [FeaturedSlot]
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case displayOrder
+    case slots
+  }
+
+  init(id: String, name: String, displayOrder: Int, slots: [FeaturedSlot]) {
+    self.id = id
+    self.name = name
+    self.displayOrder = displayOrder
+    self.slots = slots
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.name = try container.decodeString(forKey: .name)
+    self.displayOrder = try container.decodeInt(forKey: .displayOrder)
+    self.slots = (try? container.decode([FeaturedSlot].self, forKey: .slots)) ?? []
+  }
 }
 
 struct SiblingCatalogItem: Codable, Equatable, Hashable, Identifiable {
@@ -437,6 +807,22 @@ struct SiblingCatalogItem: Codable, Equatable, Hashable, Identifiable {
 struct RestaurantToolsCompatibility: Codable, Equatable {
   var contract: String?
   var featuredSource: String?
+
+  enum CodingKeys: String, CodingKey {
+    case contract
+    case featuredSource
+  }
+
+  init(contract: String?, featuredSource: String?) {
+    self.contract = contract
+    self.featuredSource = featuredSource
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.contract = try container.decodeIfPresent(String.self, forKey: .contract)
+    self.featuredSource = try container.decodeIfPresent(String.self, forKey: .featuredSource)
+  }
 }
 
 struct RestaurantToolsPayload: Codable, Equatable {
@@ -444,6 +830,33 @@ struct RestaurantToolsPayload: Codable, Equatable {
   var featuredGroups: [FeaturedGroup]
   var siblingCatalog: [SiblingCatalogItem]
   var compatibility: RestaurantToolsCompatibility?
+
+  enum CodingKeys: String, CodingKey {
+    case restaurantId
+    case featuredGroups
+    case siblingCatalog
+    case compatibility
+  }
+
+  init(
+    restaurantId: String,
+    featuredGroups: [FeaturedGroup],
+    siblingCatalog: [SiblingCatalogItem],
+    compatibility: RestaurantToolsCompatibility?
+  ) {
+    self.restaurantId = restaurantId
+    self.featuredGroups = featuredGroups
+    self.siblingCatalog = siblingCatalog
+    self.compatibility = compatibility
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.restaurantId = try container.decodeString(forKey: .restaurantId)
+    self.featuredGroups = (try? container.decode([FeaturedGroup].self, forKey: .featuredGroups)) ?? []
+    self.siblingCatalog = (try? container.decode([SiblingCatalogItem].self, forKey: .siblingCatalog)) ?? []
+    self.compatibility = try container.decodeIfPresent(RestaurantToolsCompatibility.self, forKey: .compatibility)
+  }
 }
 
 struct MenuWorkspacePayload: Codable, Equatable {
@@ -476,6 +889,25 @@ struct HistoryContext: Codable, Equatable {
   var kind: String
   var menu: MenuRecord?
   var restaurant: RestaurantRecord?
+
+  enum CodingKeys: String, CodingKey {
+    case kind
+    case menu
+    case restaurant
+  }
+
+  init(kind: String, menu: MenuRecord?, restaurant: RestaurantRecord?) {
+    self.kind = kind
+    self.menu = menu
+    self.restaurant = restaurant
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.kind = try container.decodeString(forKey: .kind)
+    self.menu = try container.decodeIfPresent(MenuRecord.self, forKey: .menu)
+    self.restaurant = try container.decodeIfPresent(RestaurantRecord.self, forKey: .restaurant)
+  }
 }
 
 struct HistorySummary: Codable, Equatable {
@@ -484,12 +916,56 @@ struct HistorySummary: Codable, Equatable {
   var count: Int
   var scope: String
   var partial: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case days
+    case limit
+    case count
+    case scope
+    case partial
+  }
+
+  init(days: Int, limit: Int, count: Int, scope: String, partial: Bool) {
+    self.days = days
+    self.limit = limit
+    self.count = count
+    self.scope = scope
+    self.partial = partial
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.days = try container.decodeInt(forKey: .days, default: 7)
+    self.limit = try container.decodeInt(forKey: .limit, default: 25)
+    self.count = try container.decodeInt(forKey: .count)
+    self.scope = try container.decodeString(forKey: .scope)
+    self.partial = try container.decodeBool(forKey: .partial)
+  }
 }
 
 struct HistoryCapabilities: Codable, Equatable {
   var canReadHistory: Bool
   var includesMessage: Bool
   var includesSource: Bool
+
+  enum CodingKeys: String, CodingKey {
+    case canReadHistory
+    case includesMessage
+    case includesSource
+  }
+
+  init(canReadHistory: Bool, includesMessage: Bool, includesSource: Bool) {
+    self.canReadHistory = canReadHistory
+    self.includesMessage = includesMessage
+    self.includesSource = includesSource
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.canReadHistory = try container.decodeBool(forKey: .canReadHistory)
+    self.includesMessage = try container.decodeBool(forKey: .includesMessage, default: true)
+    self.includesSource = try container.decodeBool(forKey: .includesSource)
+  }
 }
 
 struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
@@ -502,6 +978,53 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
   var source: String
   var createdAt: String
   var menu: MenuRecord?
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case menuId
+    case userId
+    case userName
+    case diff
+    case message
+    case source
+    case createdAt
+    case menu
+  }
+
+  init(
+    id: String,
+    menuId: String,
+    userId: String,
+    userName: String,
+    diff: [JSONValue],
+    message: String,
+    source: String,
+    createdAt: String,
+    menu: MenuRecord?
+  ) {
+    self.id = id
+    self.menuId = menuId
+    self.userId = userId
+    self.userName = userName
+    self.diff = diff
+    self.message = message
+    self.source = source
+    self.createdAt = createdAt
+    self.menu = menu
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.menuId = try container.decodeString(forKey: .menuId)
+    self.userId = try container.decodeString(forKey: .userId)
+    self.userName = try container.decodeString(forKey: .userName)
+    self.diff = (try? container.decode([JSONValue].self, forKey: .diff)) ?? []
+    self.message = try container.decodeString(forKey: .message)
+    self.source = try container.decodeString(forKey: .source)
+    self.createdAt = try container.decodeString(forKey: .createdAt)
+    self.menu = try container.decodeIfPresent(MenuRecord.self, forKey: .menu)
+  }
 }
 
 struct HistoryPayload: Codable, Equatable {
@@ -636,6 +1159,7 @@ struct LocalDraftEnvelope: Codable, Equatable, Identifiable {
   var savedAt: Date
   var baseLiveRevision: Int?
   var baseDraftRevision: Int?
+  var baseDocument: EditableMenuDocument?
   var document: EditableMenuDocument
 
   var id: String {
@@ -658,7 +1182,10 @@ struct EditableMenuDocument: Codable, Equatable {
       restaurantId: workspace.context.menu?.restaurantId ?? "",
       menuType: workspace.context.menu?.type ?? "drinks"
     )
-    cats = workspace.cats.sorted { $0.displayOrder < $1.displayOrder }
+    cats = Self.normalizeIdentifiers(
+      in: workspace.cats.sorted { $0.displayOrder < $1.displayOrder },
+      menuId: workspace.context.menu?.id ?? ""
+    )
     meta = workspace.meta
     restaurant = workspace.restaurant
     featuredGroups = workspace.restaurantTools?.featuredGroups ?? []
@@ -668,12 +1195,33 @@ struct EditableMenuDocument: Codable, Equatable {
   var restaurantId: String { context.restaurantId }
   var isFoodMenu: Bool { context.menuType.lowercased() == "food" }
 
+  mutating func normalizeIdentifiersForRuntime() {
+    cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
+  }
+
   var uncategorizedItems: [MenuItemPayload] {
     cats.first(where: { $0.key == Self.uncategorizedKey })?.items ?? []
   }
 
   var visibleCategories: [MenuCategoryPayload] {
     cats.filter { $0.key != Self.uncategorizedKey }
+  }
+
+  func category(for key: String) -> MenuCategoryPayload? {
+    cats.first(where: { $0.key == key })
+  }
+
+  func categoryLabel(for key: String) -> String {
+    category(for: key)?.label.nilIfBlank ?? key
+  }
+
+  func itemRecord(for itemID: String) -> (item: MenuItemPayload, categoryKey: String)? {
+    for category in cats {
+      if let item = category.items.first(where: { $0.id == itemID }) {
+        return (item, category.key)
+      }
+    }
+    return nil
   }
 
   func hasDuplicate(named name: String, in categoryKey: String, excluding excludedID: String? = nil) -> Bool {
@@ -776,9 +1324,9 @@ struct EditableMenuDocument: Codable, Equatable {
     guard let categoryIndex = cats.firstIndex(where: { $0.key == categoryKey }) else { return }
     guard let itemIndex = cats[categoryIndex].items.firstIndex(where: { $0.id == itemID }) else { return }
     ensureUncategorizedCategory()
+    guard let uncategorizedIndex = cats.firstIndex(where: { $0.key == Self.uncategorizedKey }) else { return }
     var item = cats[categoryIndex].items.remove(at: itemIndex)
     item.onMenu = false
-    let uncategorizedIndex = cats.firstIndex(where: { $0.key == Self.uncategorizedKey })!
     cats[uncategorizedIndex].items.append(item)
     renumberItems(for: categoryKey)
     renumberItems(for: Self.uncategorizedKey)
@@ -820,6 +1368,31 @@ struct EditableMenuDocument: Codable, Equatable {
     guard let index = cats.firstIndex(where: { $0.key == categoryKey }) else { return }
     cats[index].items.removeAll { $0.id == itemID }
     renumberItems(for: categoryKey)
+  }
+
+  mutating func upsertCategoryStructure(from category: MenuCategoryPayload) {
+    let preservedItems = self.category(for: category.key)?.items ?? []
+    var nextCategory = category
+    nextCategory.menuId = menuId
+    nextCategory.items = preservedItems
+
+    if let existingIndex = cats.firstIndex(where: { $0.key == category.key }) {
+      cats[existingIndex] = nextCategory
+    } else {
+      cats.append(nextCategory)
+    }
+
+    let regular = cats
+      .filter { $0.key != Self.uncategorizedKey }
+      .sorted { lhs, rhs in
+        if lhs.displayOrder == rhs.displayOrder {
+          return lhs.label.localizedCaseInsensitiveCompare(rhs.label) == .orderedAscending
+        }
+        return lhs.displayOrder < rhs.displayOrder
+      }
+    let uncategorized = cats.first(where: { $0.key == Self.uncategorizedKey })
+    cats = regular + (uncategorized.map { [$0] } ?? [])
+    renumberCategories()
   }
 
   func makeSnapshot(hasUnsavedChanges: Bool, hasSharedDraft: Bool) -> MenuSnapshotPayload {
@@ -877,5 +1450,60 @@ struct EditableMenuDocument: Codable, Equatable {
       next.onMenu = categoryKey != Self.uncategorizedKey ? item.onMenu : false
       return next
     }
+  }
+
+  private static func normalizeIdentifiers(in categories: [MenuCategoryPayload], menuId: String) -> [MenuCategoryPayload] {
+    var usedCategoryIDs: Set<String> = []
+    var usedItemIDs: Set<String> = []
+    return categories.enumerated().map { categoryIndex, category in
+      var nextCategory = category
+      if nextCategory.menuId == nil || nextCategory.menuId?.isEmpty == true {
+        nextCategory.menuId = menuId
+      }
+      let categoryFallback = nextCategory.key.isEmpty ? "cat-\(categoryIndex)" : "cat-\(nextCategory.key)"
+      nextCategory.id = uniqueIdentifier(
+        base: normalizedBaseIdentifier(nextCategory.id, fallback: categoryFallback),
+        used: &usedCategoryIDs
+      )
+      nextCategory.items = category.items.enumerated().map { itemIndex, item in
+        var nextItem = item
+        let itemFallback = "item-\(categoryIndex)-\(itemIndex)"
+        nextItem.id = uniqueIdentifier(
+          base: normalizedBaseIdentifier(item.id, fallback: itemFallback),
+          used: &usedItemIDs
+        )
+        return nextItem
+      }
+      return nextCategory
+    }
+  }
+
+  private static func normalizedBaseIdentifier(_ raw: String, fallback: String) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? fallback : trimmed
+  }
+
+  private static func uniqueIdentifier(base: String, used: inout Set<String>) -> String {
+    let seed = base.trimmingCharacters(in: .whitespacesAndNewlines)
+    let initial = seed.isEmpty ? "id" : seed
+    if !used.contains(initial) {
+      used.insert(initial)
+      return initial
+    }
+    var suffix = 2
+    var candidate = "\(initial)-\(suffix)"
+    while used.contains(candidate) {
+      suffix += 1
+      candidate = "\(initial)-\(suffix)"
+    }
+    used.insert(candidate)
+    return candidate
+  }
+}
+
+private extension String {
+  var nilIfBlank: String? {
+    let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 }

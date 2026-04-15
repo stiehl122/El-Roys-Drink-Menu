@@ -16,9 +16,39 @@ struct AppNotice: Identifiable, Equatable {
   var message: String
 }
 
-struct EditorConflictState: Equatable {
-  var envelope: LocalDraftEnvelope
-  var loadedIntoEditor: Bool = false
+enum EditorRefreshStrategy {
+  case keepLocalDrafts
+  case updateDrafts
+}
+
+enum RemoteMenuUpdateKind: Equatable {
+  case sharedDraft
+  case liveMenu
+  case liveAndDraft
+
+  var title: String {
+    switch self {
+    case .sharedDraft:
+      return "Shared Draft Updated"
+    case .liveMenu:
+      return "Live Menu Updated"
+    case .liveAndDraft:
+      return "Live Menu And Draft Updated"
+    }
+  }
+}
+
+struct EditorRefreshRequirement: Equatable {
+  var kind: RemoteMenuUpdateKind
+  var localDraft: LocalDraftEnvelope?
+  var mergeBaseDocument: EditableMenuDocument?
+  var remoteWorkspace: MenuWorkspacePayload
+  var remoteHistory: HistoryPayload?
+  var overlappingLabels: [String]
+  var usesLegacyFallback: Bool
+
+  var hasLocalDrafts: Bool { localDraft != nil }
+  var hasOverlap: Bool { !overlappingLabels.isEmpty || usesLegacyFallback }
 }
 
 struct AppServices {
@@ -77,7 +107,7 @@ final class AppModel {
 
   var currentMenuId: String?
   var selectedPreviewChangeIDs: Set<String> = []
-  var editorConflictState: EditorConflictState?
+  var editorRefreshRequirement: EditorRefreshRequirement?
   var editorHasSharedDraft = false
   var editorDirty = false
 
@@ -125,7 +155,7 @@ final class AppModel {
   }
 
   var canMutateRemoteEditorState: Bool {
-    isAuthenticated && currentEditorWorkspace != nil && editorConflictState == nil
+    isAuthenticated && currentEditorWorkspace != nil && editorRefreshRequirement == nil
   }
 
   var canSaveDraftRemotely: Bool {
@@ -243,7 +273,7 @@ final class AppModel {
     currentToolsMenus = [:]
     currentToolsHistories = [:]
     currentMenuId = nil
-    editorConflictState = nil
+    editorRefreshRequirement = nil
     editorHasSharedDraft = false
     editorDirty = false
     notice = AppNotice(tone: .neutral, title: "Signed Out", message: "The stored device session has been cleared.")
@@ -268,10 +298,16 @@ final class AppModel {
     }
     currentMenuId = menuId
     await run("Loading Editor") { model in
-      async let workspaceResult = model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
-      async let historyResult = model.services.history.fetch(menuId: menuId, accessToken: accessToken)
-      let workspace = try await workspaceResult
-      let history = try await historyResult
+      let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let history: HistoryPayload?
+      do {
+        history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
+      } catch {
+        history = nil
+        #if DEBUG
+          print("Menu editor history unavailable for \(menuId): \(error)")
+        #endif
+      }
 
       model.currentEditorWorkspace = workspace
       model.currentEditorHistory = history
@@ -281,10 +317,64 @@ final class AppModel {
       model.selectedPreviewChangeIDs = []
       model.editorHasSharedDraft = workspace.workspace.hasSharedDraft
       model.editorDirty = false
-      model.editorConflictState = nil
+      model.editorRefreshRequirement = nil
       model.currentPublicMenu = nil
 
       try model.restoreOfflineDraftIfNeeded()
+    }
+  }
+
+  func monitorEditorRemoteChanges(for menuId: String) async {
+    while !Task.isCancelled {
+      do {
+        try await Task.sleep(for: .seconds(12))
+      } catch {
+        return
+      }
+      if Task.isCancelled {
+        return
+      }
+      await checkForRemoteMenuUpdate(menuId: menuId)
+    }
+  }
+
+  func checkForRemoteMenuUpdate(menuId: String, force: Bool = false) async {
+    guard let accessToken = authSession?.accessToken,
+          currentMenuId == menuId,
+          currentEditorWorkspace != nil,
+          currentEditorDocument != nil,
+          editorRefreshRequirement == nil else { return }
+    if isWorking && !force {
+      return
+    }
+
+    do {
+      let workspace = try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      guard let currentWorkspace = currentEditorWorkspace else { return }
+      guard workspace.workspace.revisions != currentWorkspace.workspace.revisions else { return }
+      let history: HistoryPayload?
+      do {
+        history = try await services.history.fetch(menuId: menuId, accessToken: accessToken)
+      } catch {
+        history = nil
+      }
+      editorRefreshRequirement = makeRefreshRequirement(
+        currentWorkspace: currentWorkspace,
+        freshWorkspace: workspace,
+        freshHistory: history,
+        localDraft: currentLocalDraftEnvelope(),
+        mergeBaseDocument: try? baselineEditorDocument()
+      )
+      currentEditorPreview = nil
+      selectedPreviewChangeIDs = []
+    } catch {
+      if force {
+        notice = AppNotice(
+          tone: .danger,
+          title: "Refresh Check Failed",
+          message: error.localizedDescription
+        )
+      }
     }
   }
 
@@ -298,17 +388,27 @@ final class AppModel {
     await run("Loading Restaurant Tools") { model in
       var menus: [String: MenuWorkspacePayload] = [:]
       var histories: [String: HistoryPayload] = [:]
-      try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload).self) { group in
+      try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload?).self) { group in
         for menuId in menuIds {
           group.addTask {
-            async let workspace = model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
-            async let history = model.services.history.fetch(menuId: menuId, accessToken: accessToken)
-            return try await (menuId, workspace, history)
+            let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+            let history: HistoryPayload?
+            do {
+              history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
+            } catch {
+              history = nil
+              #if DEBUG
+                print("Restaurant tools history unavailable for \(menuId): \(error)")
+              #endif
+            }
+            return (menuId, workspace, history)
           }
         }
         for try await (menuId, workspace, history) in group {
           menus[menuId] = workspace
-          histories[menuId] = history
+          if let history {
+            histories[menuId] = history
+          }
         }
       }
       model.currentToolsMenus = menus
@@ -403,6 +503,11 @@ final class AppModel {
       model.currentEditorWorkspace?.workspace.sharedDraft = response.sharedDraft ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
       model.currentEditorWorkspace?.workspace.revisions.draftRevision = response.savedAt
       model.editorHasSharedDraft = response.hasSharedDraft
+      model.rebaselineCurrentEditorToServer(
+        revisions: model.currentEditorWorkspace?.workspace.revisions,
+        hasSharedDraft: response.hasSharedDraft,
+        sharedDraft: model.currentEditorWorkspace?.workspace.sharedDraft
+      )
       model.notice = AppNotice(
         tone: .success,
         title: response.hasSharedDraft ? "Draft Saved" : "Draft Cleared",
@@ -465,25 +570,43 @@ final class AppModel {
     !(currentEditorDocument?.hasDuplicate(named: name, in: categoryKey, excluding: itemID) ?? false)
   }
 
-  func loadPendingLocalDraftIntoEditor() {
-    guard let envelope = editorConflictState?.envelope else { return }
-    currentEditorDocument = envelope.document
-    editorConflictState?.loadedIntoEditor = true
-    editorDirty = true
-  }
+  func refreshEditorAfterRemoteUpdate(strategy: EditorRefreshStrategy) async {
+    guard let requirement = editorRefreshRequirement,
+          let accessToken = authSession?.accessToken,
+          let menuId = currentMenuId else { return }
 
-  func discardPendingLocalDraft() {
-    guard let envelope = editorConflictState?.envelope ?? localDraftEnvelope else { return }
-    try? offlineDraftStore.removeDraft(userId: envelope.userId, menuId: envelope.menuId)
-    if let baseline = try? baselineEditorDocument() {
-      currentEditorDocument = baseline
-      editorDirty = false
+    await run("Refreshing Menu") { model in
+      let freshWorkspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let freshHistory: HistoryPayload?
+      do {
+        freshHistory = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
+      } catch {
+        freshHistory = nil
+      }
+
+      let remoteDocument = EditableMenuDocument(workspace: freshWorkspace)
+      let nextDocument: EditableMenuDocument
+      if let localDraft = requirement.localDraft {
+        nextDocument = model.mergeLocalDraft(
+          localDraft,
+          into: remoteDocument,
+          strategy: strategy
+        )
+      } else {
+        nextDocument = remoteDocument
+      }
+
+      try model.adoptEditorWorkspace(
+        freshWorkspace,
+        history: freshHistory,
+        document: nextDocument
+      )
+      model.notice = AppNotice(
+        tone: .success,
+        title: requirement.kind.title,
+        message: messageForRefreshCompletion(requirement: requirement, strategy: strategy, isDirty: model.editorDirty)
+      )
     }
-    editorConflictState = nil
-  }
-
-  var localDraftEnvelope: LocalDraftEnvelope? {
-    editorConflictState?.envelope
   }
 
   func exactRoutePreviewURL(for menu: MenuRecord) -> URL {
@@ -569,6 +692,7 @@ final class AppModel {
   }
 
   private func mutateEditorDocument(_ change: (inout EditableMenuDocument) -> Void) {
+    guard editorRefreshRequirement == nil else { return }
     guard var document = currentEditorDocument else { return }
     change(&document)
     currentEditorDocument = document
@@ -586,7 +710,19 @@ final class AppModel {
           let workspace = currentEditorWorkspace,
           let document = currentEditorDocument else { return }
 
-    let maybeEnvelope = try offlineDraftStore.loadDraft(userId: session.userID, menuId: document.menuId)
+    let maybeEnvelope: LocalDraftEnvelope?
+    do {
+      maybeEnvelope = try offlineDraftStore.loadDraft(userId: session.userID, menuId: document.menuId)
+    } catch {
+      // A malformed local draft should never block the server-backed editor.
+      try? offlineDraftStore.removeDraft(userId: session.userID, menuId: document.menuId)
+      notice = AppNotice(
+        tone: .warning,
+        title: "Local Draft Cleared",
+        message: "A saved device draft was unreadable and has been removed so the live editor can open."
+      )
+      return
+    }
     guard let envelope = maybeEnvelope else { return }
 
     let revisions = workspace.workspace.revisions
@@ -594,18 +730,49 @@ final class AppModel {
       envelope.baseDraftRevision == revisions.draftRevision
 
     if matchesServer {
-      currentEditorDocument = envelope.document
-      editorDirty = isDocumentDirty(envelope.document)
-      editorConflictState = EditorConflictState(envelope: envelope, loadedIntoEditor: true)
-      notice = AppNotice(tone: .neutral, title: "Local Draft Restored", message: "This editor reopened with the last device-only draft for this menu.")
+      var normalized = envelope.document
+      normalized.normalizeIdentifiersForRuntime()
+      currentEditorDocument = normalized
+      editorDirty = isDocumentDirty(normalized)
+      editorRefreshRequirement = nil
+      if editorDirty {
+        notice = AppNotice(
+          tone: .neutral,
+          title: "Local Draft Restored",
+          message: "This editor reopened with the last device-only draft for this menu."
+        )
+      } else {
+        try? offlineDraftStore.removeDraft(userId: envelope.userId, menuId: envelope.menuId)
+      }
     } else {
-      editorConflictState = EditorConflictState(envelope: envelope, loadedIntoEditor: false)
-      editorDirty = false
-      notice = AppNotice(
-        tone: .warning,
-        title: "Reconciliation Required",
-        message: "A local draft exists from older menu revisions. Review it before any remote save or publish."
+      editorRefreshRequirement = makeRefreshRequirement(
+        currentWorkspace: MenuWorkspacePayload(
+          cats: envelope.baseDocument?.cats ?? [],
+          meta: envelope.baseDocument?.meta ?? workspace.meta,
+          restaurant: envelope.baseDocument?.restaurant ?? workspace.restaurant,
+          restaurantTools: workspace.restaurantTools,
+          context: workspace.context,
+          workspace: WorkspaceState(
+            actor: workspace.workspace.actor,
+            accessibleMenuIds: workspace.workspace.accessibleMenuIds,
+            hasSharedDraft: envelope.baseDraftRevision != nil,
+            sharedDraft: workspace.workspace.sharedDraft,
+            permissions: workspace.workspace.permissions,
+            capabilities: workspace.workspace.capabilities,
+            revisions: WorkspaceRevisions(
+              liveRevision: envelope.baseLiveRevision,
+              draftRevision: envelope.baseDraftRevision,
+              lastSentRevision: workspace.workspace.revisions.lastSentRevision
+            )
+          ),
+          capabilities: workspace.capabilities
+        ),
+        freshWorkspace: workspace,
+        freshHistory: currentEditorHistory,
+        localDraft: envelope,
+        mergeBaseDocument: envelope.baseDocument
       )
+      editorDirty = false
     }
   }
 
@@ -615,6 +782,7 @@ final class AppModel {
           let document = currentEditorDocument else { return }
 
     if editorDirty {
+      let baseDocument = try? baselineEditorDocument()
       let envelope = LocalDraftEnvelope(
         userId: session.userID,
         menuId: document.menuId,
@@ -623,18 +791,121 @@ final class AppModel {
         savedAt: .now,
         baseLiveRevision: workspace.workspace.revisions.liveRevision,
         baseDraftRevision: workspace.workspace.revisions.draftRevision,
+        baseDocument: baseDocument,
         document: document
       )
       try? offlineDraftStore.saveDraft(envelope)
-      if editorConflictState != nil {
-        editorConflictState?.envelope = envelope
-      }
     } else {
       try? offlineDraftStore.removeDraft(userId: session.userID, menuId: document.menuId)
-      if editorConflictState?.loadedIntoEditor == true {
-        editorConflictState = nil
-      }
     }
+  }
+
+  private func currentLocalDraftEnvelope() -> LocalDraftEnvelope? {
+    guard editorDirty,
+          let session = authSession,
+          let workspace = currentEditorWorkspace,
+          let document = currentEditorDocument else { return nil }
+    return LocalDraftEnvelope(
+      userId: session.userID,
+      menuId: document.menuId,
+      restaurantId: document.restaurantId,
+      menuName: currentMenuRecord?.name ?? document.context.menuType.capitalized,
+      savedAt: .now,
+      baseLiveRevision: workspace.workspace.revisions.liveRevision,
+      baseDraftRevision: workspace.workspace.revisions.draftRevision,
+      baseDocument: try? baselineEditorDocument(),
+      document: document
+    )
+  }
+
+  private func adoptEditorWorkspace(
+    _ workspace: MenuWorkspacePayload,
+    history: HistoryPayload?,
+    document: EditableMenuDocument? = nil
+  ) throws {
+    let remoteDocument = EditableMenuDocument(workspace: workspace)
+    currentEditorWorkspace = workspace
+    currentEditorHistory = history
+    currentEditorDocument = document ?? remoteDocument
+    baselineDocumentData = try documentData(for: remoteDocument)
+    currentEditorPreview = nil
+    selectedPreviewChangeIDs = []
+    editorHasSharedDraft = workspace.workspace.hasSharedDraft
+    editorRefreshRequirement = nil
+    currentPublicMenu = nil
+    editorDirty = isDocumentDirty(currentEditorDocument ?? remoteDocument)
+    persistOfflineDraftIfNeeded()
+  }
+
+  private func rebaselineCurrentEditorToServer(
+    revisions: WorkspaceRevisions?,
+    hasSharedDraft: Bool,
+    sharedDraft: SharedDraftInfo?
+  ) {
+    guard let currentEditorDocument else { return }
+    baselineDocumentData = try? documentData(for: currentEditorDocument)
+    if let revisions {
+      currentEditorWorkspace?.workspace.revisions = revisions
+    }
+    currentEditorWorkspace?.workspace.hasSharedDraft = hasSharedDraft
+    if let sharedDraft {
+      currentEditorWorkspace?.workspace.sharedDraft = sharedDraft
+    }
+    editorHasSharedDraft = hasSharedDraft
+    editorRefreshRequirement = nil
+    editorDirty = false
+    currentEditorPreview = nil
+    selectedPreviewChangeIDs = []
+    persistOfflineDraftIfNeeded()
+  }
+
+  private func makeRefreshRequirement(
+    currentWorkspace: MenuWorkspacePayload,
+    freshWorkspace: MenuWorkspacePayload,
+    freshHistory: HistoryPayload?,
+    localDraft: LocalDraftEnvelope?,
+    mergeBaseDocument: EditableMenuDocument?
+  ) -> EditorRefreshRequirement {
+    let remoteDocument = EditableMenuDocument(workspace: freshWorkspace)
+    let baseDocument = mergeBaseDocument ?? localDraft?.baseDocument
+    let overlap = buildOverlapLabels(
+      base: baseDocument,
+      local: localDraft?.document,
+      remote: remoteDocument
+    )
+    return EditorRefreshRequirement(
+      kind: classifyRemoteUpdateKind(
+        previous: currentWorkspace.workspace.revisions,
+        next: freshWorkspace.workspace.revisions
+      ),
+      localDraft: localDraft,
+      mergeBaseDocument: baseDocument,
+      remoteWorkspace: freshWorkspace,
+      remoteHistory: freshHistory,
+      overlappingLabels: overlap.labels,
+      usesLegacyFallback: overlap.usedFallback
+    )
+  }
+
+  private func mergeLocalDraft(
+    _ localDraft: LocalDraftEnvelope,
+    into remoteDocument: EditableMenuDocument,
+    strategy: EditorRefreshStrategy
+  ) -> EditableMenuDocument {
+    guard let baseDocument = localDraft.baseDocument ?? (try? baselineEditorDocument()) else {
+      var fallback = strategy == .keepLocalDrafts ? localDraft.document : remoteDocument
+      fallback.context = remoteDocument.context
+      fallback.meta = remoteDocument.meta
+      fallback.restaurant = remoteDocument.restaurant
+      fallback.featuredGroups = remoteDocument.featuredGroups
+      return fallback
+    }
+    return mergeDocuments(
+      base: baseDocument,
+      local: localDraft.document,
+      remote: remoteDocument,
+      strategy: strategy
+    )
   }
 
   private func baselineEditorDocument() throws -> EditableMenuDocument? {
@@ -659,6 +930,215 @@ final class AppModel {
       try await operation(self)
     } catch {
       notice = AppNotice(tone: .danger, title: label, message: error.localizedDescription)
+    }
+  }
+}
+
+private struct ItemDocumentState: Equatable {
+  var item: MenuItemPayload
+  var categoryKey: String
+}
+
+private struct ItemDocumentChange: Equatable {
+  var state: ItemDocumentState?
+  var relatedCategoryKeys: Set<String>
+}
+
+private struct CategoryStructureState: Equatable {
+  var category: MenuCategoryPayload?
+}
+
+private struct DocumentDelta {
+  var itemChanges: [String: ItemDocumentChange]
+  var categoryChanges: [String: CategoryStructureState]
+}
+
+private struct OverlapSummary {
+  var labels: [String]
+  var usedFallback: Bool
+}
+
+private func messageForRefreshCompletion(
+  requirement: EditorRefreshRequirement,
+  strategy: EditorRefreshStrategy,
+  isDirty: Bool
+) -> String {
+  if !requirement.hasLocalDrafts {
+    return "The latest server version is loaded. You can continue editing."
+  }
+  switch strategy {
+  case .keepLocalDrafts:
+    return isDirty
+      ? "The menu refreshed and your local drafts were reapplied on top of the latest server data."
+      : "The menu refreshed and your local drafts already matched the latest server data."
+  case .updateDrafts:
+    return isDirty
+      ? "The menu refreshed, overlapping drafts were updated from the server, and your non-overlapping local drafts were kept."
+      : "The menu refreshed and the incoming server changes replaced the overlapping local drafts."
+  }
+}
+
+private func classifyRemoteUpdateKind(previous: WorkspaceRevisions, next: WorkspaceRevisions) -> RemoteMenuUpdateKind {
+  let liveChanged = previous.liveRevision != next.liveRevision
+  let draftChanged = previous.draftRevision != next.draftRevision
+  switch (liveChanged, draftChanged) {
+  case (true, true):
+    return .liveAndDraft
+  case (true, false):
+    return .liveMenu
+  case (false, true), (false, false):
+    return .sharedDraft
+  }
+}
+
+private func buildOverlapLabels(
+  base: EditableMenuDocument?,
+  local: EditableMenuDocument?,
+  remote: EditableMenuDocument
+) -> OverlapSummary {
+  guard let local else {
+    return OverlapSummary(labels: [], usedFallback: false)
+  }
+  guard let base else {
+    return OverlapSummary(labels: [], usedFallback: true)
+  }
+
+  let localDelta = makeDocumentDelta(base: base, updated: local)
+  let remoteDelta = makeDocumentDelta(base: base, updated: remote)
+  let overlappingItemIDs = Set(localDelta.itemChanges.keys).intersection(remoteDelta.itemChanges.keys)
+  let overlappingCategoryKeys = Set(localDelta.categoryChanges.keys).intersection(remoteDelta.categoryChanges.keys)
+
+  var labels: [String] = []
+  for itemID in overlappingItemIDs.sorted() {
+    let label = local.itemRecord(for: itemID)?.item.name.nilIfBlank
+      ?? remote.itemRecord(for: itemID)?.item.name.nilIfBlank
+      ?? base.itemRecord(for: itemID)?.item.name.nilIfBlank
+      ?? itemID
+    labels.append(label)
+  }
+  for key in overlappingCategoryKeys.sorted() {
+    let label = local.categoryLabel(for: key).nilIfBlank
+      ?? remote.categoryLabel(for: key).nilIfBlank
+      ?? base.categoryLabel(for: key).nilIfBlank
+      ?? key
+    labels.append("Category: \(label)")
+  }
+
+  return OverlapSummary(labels: Array(Set(labels)).sorted(), usedFallback: false)
+}
+
+private func mergeDocuments(
+  base: EditableMenuDocument,
+  local: EditableMenuDocument,
+  remote: EditableMenuDocument,
+  strategy: EditorRefreshStrategy
+) -> EditableMenuDocument {
+  let localDelta = makeDocumentDelta(base: base, updated: local)
+  let remoteDelta = makeDocumentDelta(base: base, updated: remote)
+  let remoteItemIDs = Set(remoteDelta.itemChanges.keys)
+  let remoteCategoryKeys = Set(remoteDelta.categoryChanges.keys)
+
+  var merged = remote
+
+  for key in localDelta.categoryChanges.keys.sorted(by: { lhs, rhs in
+    let lhsOrder = localDelta.categoryChanges[lhs]?.category?.displayOrder ?? Int.max
+    let rhsOrder = localDelta.categoryChanges[rhs]?.category?.displayOrder ?? Int.max
+    if lhsOrder == rhsOrder { return lhs < rhs }
+    return lhsOrder < rhsOrder
+  }) {
+    guard let categoryChange = localDelta.categoryChanges[key] else { continue }
+    if strategy == .updateDrafts && remoteCategoryKeys.contains(key) {
+      continue
+    }
+    merged.applyCategoryChange(key: key, change: categoryChange)
+  }
+
+  for itemID in localDelta.itemChanges.keys.sorted() {
+    guard let itemChange = localDelta.itemChanges[itemID] else { continue }
+    let hasRemoteItemConflict = remoteItemIDs.contains(itemID)
+    let hasRemoteCategoryConflict = !remoteCategoryKeys.isDisjoint(with: itemChange.relatedCategoryKeys)
+    if strategy == .updateDrafts && (hasRemoteItemConflict || hasRemoteCategoryConflict) {
+      continue
+    }
+    merged.applyItemChange(itemID: itemID, change: itemChange)
+  }
+
+  merged.context = remote.context
+  merged.meta = remote.meta
+  merged.restaurant = remote.restaurant
+  merged.featuredGroups = remote.featuredGroups
+  merged.normalizeIdentifiersForRuntime()
+  return merged
+}
+
+private func makeDocumentDelta(base: EditableMenuDocument, updated: EditableMenuDocument) -> DocumentDelta {
+  let baseItems = itemStateMap(for: base)
+  let updatedItems = itemStateMap(for: updated)
+  let baseCategories = categoryStateMap(for: base)
+  let updatedCategories = categoryStateMap(for: updated)
+
+  var itemChanges: [String: ItemDocumentChange] = [:]
+  let itemIDs = Set(baseItems.keys).union(updatedItems.keys)
+  for itemID in itemIDs {
+    let baseState = baseItems[itemID]
+    let updatedState = updatedItems[itemID]
+    if baseState == updatedState {
+      continue
+    }
+    var relatedKeys: Set<String> = []
+    if let baseState {
+      relatedKeys.insert(baseState.categoryKey)
+    }
+    if let updatedState {
+      relatedKeys.insert(updatedState.categoryKey)
+    }
+    itemChanges[itemID] = ItemDocumentChange(state: updatedState, relatedCategoryKeys: relatedKeys)
+  }
+
+  var categoryChanges: [String: CategoryStructureState] = [:]
+  let categoryKeys = Set(baseCategories.keys).union(updatedCategories.keys)
+  for key in categoryKeys where baseCategories[key] != updatedCategories[key] {
+    categoryChanges[key] = CategoryStructureState(category: updated.category(for: key))
+  }
+
+  return DocumentDelta(itemChanges: itemChanges, categoryChanges: categoryChanges)
+}
+
+private func itemStateMap(for document: EditableMenuDocument) -> [String: ItemDocumentState] {
+  var states: [String: ItemDocumentState] = [:]
+  for category in document.cats {
+    for item in category.items {
+      states[item.id] = ItemDocumentState(item: item, categoryKey: category.key)
+    }
+  }
+  return states
+}
+
+private func categoryStateMap(for document: EditableMenuDocument) -> [String: CategoryStructureState] {
+  var states: [String: CategoryStructureState] = [:]
+  for category in document.cats where category.key != EditableMenuDocument.uncategorizedKey {
+    var next = category
+    next.items = []
+    states[category.key] = CategoryStructureState(category: next)
+  }
+  return states
+}
+
+private extension EditableMenuDocument {
+  mutating func applyCategoryChange(key: String, change: CategoryStructureState) {
+    guard let category = change.category else {
+      deleteCategory(key: key)
+      return
+    }
+    upsertCategoryStructure(from: category)
+  }
+
+  mutating func applyItemChange(itemID: String, change: ItemDocumentChange) {
+    if let state = change.state {
+      let originalCategoryKey = itemRecord(for: itemID)?.categoryKey
+      upsertItem(state.item, categoryKey: state.categoryKey, originalCategoryKey: originalCategoryKey)
+    } else if let existingCategoryKey = itemRecord(for: itemID)?.categoryKey {
+      deleteItem(itemID: itemID, categoryKey: existingCategoryKey)
     }
   }
 }

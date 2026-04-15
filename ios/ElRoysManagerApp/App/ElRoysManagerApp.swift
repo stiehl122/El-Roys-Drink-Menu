@@ -2,7 +2,7 @@ import SwiftUI
 
 enum AppDestination: Hashable {
   case restaurantHub(RestaurantRecord)
-  case publicMenu(RestaurantRecord)
+  case publicMenu(RestaurantRecord, initialType: String)
   case editor(MenuRecord)
   case restaurantTools(RestaurantRecord)
   case routePreview(MenuRecord)
@@ -52,8 +52,8 @@ private struct RootView: View {
               switch destination {
               case .restaurantHub(let restaurant):
                 RestaurantHubView(model: model, restaurant: restaurant)
-              case .publicMenu(let restaurant):
-                PublicMenuScreen(model: model, restaurant: restaurant)
+              case .publicMenu(let restaurant, let initialType):
+                PublicMenuScreen(model: model, restaurant: restaurant, initialType: initialType)
               case .editor(let menu):
                 MenuEditorScreen(model: model, menu: menu)
               case .restaurantTools(let restaurant):

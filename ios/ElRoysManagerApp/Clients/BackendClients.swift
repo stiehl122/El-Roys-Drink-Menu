@@ -13,6 +13,7 @@ enum BackendError: LocalizedError {
   case server(message: String)
   case transport(message: String)
   case invalidResponse
+  case decoding(message: String)
 
   var errorDescription: String? {
     switch self {
@@ -28,6 +29,8 @@ enum BackendError: LocalizedError {
       return message
     case .invalidResponse:
       return "The server returned an unexpected response."
+    case .decoding(let message):
+      return message
     }
   }
 }
@@ -252,7 +255,13 @@ private final class HTTPService {
     if data.isEmpty {
       throw BackendError.invalidResponse
     }
-    return try decoder.decode(Response.self, from: data)
+    do {
+      return try decoder.decode(Response.self, from: data)
+    } catch let error as DecodingError {
+      throw BackendError.decoding(message: describeDecodingError(error, endpoint: path))
+    } catch {
+      throw error
+    }
   }
 
   func requestVoid<Body: Encodable>(
@@ -262,6 +271,37 @@ private final class HTTPService {
     body: Body?
   ) async throws {
     let _: EmptyResponse = try await request(path: path, method: method, accessToken: accessToken, body: body)
+  }
+
+  private func describeDecodingError(_ error: DecodingError, endpoint: String) -> String {
+    switch error {
+    case .keyNotFound(let key, let context):
+      let path = describeCodingPath(context.codingPath + [key])
+      return "The \(endpoint) response is missing `\(path)`."
+    case .valueNotFound(_, let context):
+      let path = describeCodingPath(context.codingPath)
+      return "The \(endpoint) response is missing a value near `\(path)`."
+    case .typeMismatch(_, let context):
+      let path = describeCodingPath(context.codingPath)
+      return "The \(endpoint) response changed shape near `\(path)`."
+    case .dataCorrupted(let context):
+      let path = describeCodingPath(context.codingPath)
+      return "The \(endpoint) response contains unreadable data near `\(path)`."
+    @unknown default:
+      return "The \(endpoint) response could not be decoded."
+    }
+  }
+
+  private func describeCodingPath(_ path: [CodingKey]) -> String {
+    let value = path
+      .map { key in
+        if let intValue = key.intValue {
+          return "[\(intValue)]"
+        }
+        return key.stringValue
+      }
+      .joined(separator: ".")
+    return value.isEmpty ? "root" : value
   }
 }
 

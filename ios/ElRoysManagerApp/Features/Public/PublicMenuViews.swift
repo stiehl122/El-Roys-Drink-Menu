@@ -3,7 +3,13 @@ import SwiftUI
 struct PublicMenuScreen: View {
   @Bindable var model: AppModel
   let restaurant: RestaurantRecord
-  @State private var selectedType = "drinks"
+  @State private var selectedType: String
+
+  init(model: AppModel, restaurant: RestaurantRecord, initialType: String = "drinks") {
+    self.model = model
+    self.restaurant = restaurant
+    _selectedType = State(initialValue: initialType)
+  }
 
   var body: some View {
     ScrollView {
