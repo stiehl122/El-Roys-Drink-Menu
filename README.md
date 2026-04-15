@@ -19,7 +19,7 @@ Route rewrites live in [`vercel.json`](vercel.json).
 
 ## Architecture
 
-- Shared runtime: [`app.js`](app.js) for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
+- Shared runtime: [`app.js`](app.js) for menu resolution, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
 - Shared styles entrypoint: [`style.css`](style.css) layering [`styles/tokens.css`](styles/tokens.css), [`styles/shared-shell.css`](styles/shared-shell.css), [`styles/public-fallback.css`](styles/public-fallback.css), [`styles/components/menu-picker.css`](styles/components/menu-picker.css), [`styles/components/toast.css`](styles/components/toast.css)
 - Shared auth boundary modules: [`core/auth/auth-api.js`](core/auth/auth-api.js), [`core/auth/auth-session-service.js`](core/auth/auth-session-service.js), [`core/auth/auth-overlay-template.js`](core/auth/auth-overlay-template.js), [`core/auth/auth-overlay-controller.js`](core/auth/auth-overlay-controller.js), [`core/auth/auth-overlay-unified.css`](core/auth/auth-overlay-unified.css)
 - Shared domain constants/defaults: [`core/domain/constants.js`](core/domain/constants.js), [`core/domain/category-defaults.js`](core/domain/category-defaults.js)
@@ -28,9 +28,8 @@ Route rewrites live in [`vercel.json`](vercel.json).
 - Shared Phase 4 route boundary: [`routes/shared/public-route-core.js`](routes/shared/public-route-core.js)
 - Route-owned public shells: [`leroyslounge/index.html`](leroyslounge/index.html), [`leroyslounge/style.css`](leroyslounge/style.css), [`leroyslounge/app.js`](leroyslounge/app.js), [`elroyscantina/index.html`](elroyscantina/index.html), [`elroyscantina/style.css`](elroyscantina/style.css), [`elroyscantina/app.js`](elroyscantina/app.js)
 - Shared settings shells: [`manager/index.html`](manager/index.html), [`admin/index.html`](admin/index.html)
-- Serverless API routes: [`api/config.js`](api/config.js), [`api/role.js`](api/role.js), [`api/users.js`](api/users.js), [`api/specials.js`](api/specials.js), [`api/send-notification.js`](api/send-notification.js)
-- Shared server helpers: [`server/_auth.js`](server/_auth.js), [`server/_supabase.js`](server/_supabase.js), [`server/_notification-gateway.js`](server/_notification-gateway.js)
-- Legacy `/api/send-groupme` requests now rewrite to [`api/send-notification.js`](api/send-notification.js) for Hobby-plan function-count compatibility.
+- Consolidated serverless API routes: [`api/auth.js`](api/auth.js), [`api/public.js`](api/public.js), [`api/manager.js`](api/manager.js), [`api/admin.js`](api/admin.js)
+- Shared server helpers: [`server/_auth.js`](server/_auth.js), [`server/_auth-proxy.js`](server/_auth-proxy.js), [`server/_supabase.js`](server/_supabase.js), [`server/_notification-gateway.js`](server/_notification-gateway.js), [`server/_landing-page-state.js`](server/_landing-page-state.js), [`server/_product-lookup.js`](server/_product-lookup.js), [`server/_font-proxy.js`](server/_font-proxy.js)
 
 Supabase is the source of truth for menus, categories, items, featured groups, history, notification config, and auth-backed access. Local storage is still used for session/cache support, but live menu state is database-backed.
 
@@ -76,18 +75,18 @@ Categories stay admin-configurable at runtime. Deleting a category moves its ite
 
 ## Auth And Access
 
-- Client auth uses Supabase Auth email/password flows.
+- Client auth uses same-origin `/api/auth` flows backed by Supabase on the server.
 - Auth overlay markup and behavior are centralized through `core/auth/*`; entry shells should not inline auth overlay markup.
 - Auth overlay styling is centralized in [`core/auth/auth-overlay-unified.css`](core/auth/auth-overlay-unified.css); shared root [`style.css`](style.css) no longer owns auth overlay styles.
 - Public route staff sign-in entry uses footer staff actions (`data-route-footer-signin` / `data-route-staff-signin`), not route header login buttons.
-- Role and per-menu access checks are enforced through [`api/role.js`](api/role.js) and [`api/users.js`](api/users.js).
+- Role and per-menu access checks are enforced through [`api/auth.js`](api/auth.js) and [`api/admin.js`](api/admin.js).
 - New accounts start with `role: none`.
 - Managers can edit only their assigned menus.
 - Admins can manage all four menus, users, categories, notifications, and settings shells.
 
 ## Notifications
 
-Notification sends go through [`api/send-notification.js`](api/send-notification.js).
+Notification sends go through [`api/manager.js`](api/manager.js) with `action=send_notification`.
 
 Supported channels:
 
@@ -131,9 +130,9 @@ Optional notification variables:
 1. Import the repo into Vercel.
 2. Set the environment variables.
 3. Deploy.
-4. Verify `/api/config` returns the Supabase config payload.
+4. Verify `/api/auth?mode=bootstrap` returns the server bootstrap payload.
 
-Vercel is required for full functionality. Static-only hosting will not support authenticated writes, config delivery, role lookup, or notifications.
+Vercel is required for full functionality. Static-only hosting will not support authenticated writes, server-owned auth/bootstrap, role lookup, or notifications.
 
 ## Development Guardrails
 

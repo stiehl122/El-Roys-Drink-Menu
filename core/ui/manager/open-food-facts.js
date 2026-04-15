@@ -35,25 +35,31 @@
       : (typeof globalScope.fetch === 'function' ? globalScope.fetch.bind(globalScope) : null);
     if (typeof fetchImpl !== 'function') return null;
 
-    const baseUrl = cleanText(deps.baseUrl || 'https://world.openfoodfacts.org');
-    const requestUrl = `${baseUrl}/api/v2/product/${encodeURIComponent(normalizedBarcode)}.json?fields=product_name,product_name_en,generic_name,generic_name_en,ingredients_text,ingredients_text_en,brands,quantity,packaging,packaging_text,status`;
+    const endpoint = cleanText(deps.endpoint || '/api/manager');
+    const headers = deps.headers && typeof deps.headers === 'object' ? deps.headers : {};
 
     try {
-      const response = await fetchImpl(requestUrl, {
-        headers: { Accept: 'application/json' },
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          ...headers,
+        },
+        body: JSON.stringify({
+          action: 'product_lookup',
+          barcode: normalizedBarcode,
+        }),
       });
       if (!response || response.status === 404 || !response.ok) return null;
 
       const payload = await response.json();
-      if (!payload || payload.status !== 1 || !payload.product) return null;
-
-      const product = payload.product;
-      const name = cleanText(product.product_name_en || product.product_name);
+      const name = cleanText(payload?.name);
       if (!name) return null;
 
       return {
         name,
-        description: buildDescription(product),
+        description: cleanText(payload?.description) || buildDescription(payload?.product || {}),
       };
     } catch (_) {
       return null;

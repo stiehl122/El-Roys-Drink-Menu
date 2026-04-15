@@ -120,20 +120,16 @@ test('wave 4 server modules harden actor authorization and check revisions befor
   assert.match(adminSettings, /serverOwned: true/);
 });
 
-test('wave 4 write routes preserve structured API error bodies and explicit input guards', () => {
-  const menuDraft = read('api/menu-draft.js');
-  const menuLive = read('api/menu-live.js');
-  const menuPublish = read('api/menu-publish.js');
-  const adminSettings = read('api/admin-settings.js');
+test('consolidated write routes preserve structured API error bodies and explicit input guards', () => {
+  const manager = read('api/manager.js');
+  const adminSettings = read('api/admin.js');
 
-  assert.match(menuDraft, /return res\.status\(error\?\.\s*status \|\| 500\)\.json\(error\?\.body \|\| \{/);
-  assert.match(menuLive, /return res\.status\(error\?\.\s*status \|\| 500\)\.json\(error\?\.body \|\| \{ error:/);
-  assert.match(menuPublish, /return res\.status\(error\?\.\s*status \|\| 500\)\.json\(error\?\.body \|\| \{/);
+  assert.match(manager, /return res\.status\(error\?\.\s*status \|\| 500\)\.json\(error\?\.body \|\| \{/);
   assert.match(adminSettings, /return res\.status\(error\?\.\s*status \|\| 500\)\.json\(error\?\.body \|\| \{/);
 
-  assert.match(menuPublish, /if \(!menuId\) return res\.status\(400\)\.json\(\{ error: 'Missing menu_id' \}\)/);
-  assert.match(menuPublish, /expected_live_revision/);
-  assert.match(menuPublish, /expected_draft_revision/);
-  assert.match(adminSettings, /status: 'admin_settings_invalid_request'/);
-  assert.match(adminSettings, /error: 'Missing action'/);
+  assert.match(manager, /if \(!menuId\) return res\.status\(400\)\.json\(\{ error: 'Missing menu_id' \}\)/);
+  assert.match(manager, /expectedLiveRevision/);
+  assert.match(manager, /expectedDraftRevision/);
+  assert.match(adminSettings, /status: 'admin_unauthorized'/);
+  assert.match(adminSettings, /Unsupported admin action/);
 });

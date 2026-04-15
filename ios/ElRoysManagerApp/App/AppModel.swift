@@ -76,7 +76,7 @@ struct AppServices {
       history: HistoryClient(environment: environment),
       featuredTools: FeaturedToolsClient(environment: environment),
       preview: PreviewClient(environment: environment),
-      productLookup: ProductLookupClient()
+      productLookup: ProductLookupClient(environment: environment)
     )
   }
 }
@@ -210,7 +210,7 @@ final class AppModel {
     do {
       let anonymousBootstrap = try await services.bootstrap.fetch(accessToken: nil)
       bootstrap = anonymousBootstrap
-      await restoreSession(using: anonymousBootstrap.config)
+      await restoreSession()
     } catch {
       notice = AppNotice(tone: .danger, title: "Bootstrap Failed", message: error.localizedDescription)
     }
@@ -218,16 +218,12 @@ final class AppModel {
   }
 
   func signIn() async {
-    guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
-      return
-    }
     guard !email.isEmpty, !password.isEmpty else {
       notice = AppNotice(tone: .warning, title: "Missing Fields", message: "Email and password are required.")
       return
     }
     await run("Signing In") { model in
-      let session = try await model.services.auth.signIn(config: config, email: model.email, password: model.password)
+      let session = try await model.services.auth.signIn(email: model.email, password: model.password)
       try model.persistSession(session)
       try await model.refreshAuthenticatedBootstrap(accessToken: session.accessToken, adoptedSession: session)
       model.password = ""
@@ -236,16 +232,12 @@ final class AppModel {
   }
 
   func signUp() async {
-    guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
-      return
-    }
     guard !email.isEmpty, !password.isEmpty, !displayName.isEmpty else {
       notice = AppNotice(tone: .warning, title: "Missing Fields", message: "Name, email, and password are required.")
       return
     }
     await run("Creating Account") { model in
-      let session = try await model.services.auth.signUp(config: config, email: model.email, password: model.password, name: model.displayName)
+      let session = try await model.services.auth.signUp(email: model.email, password: model.password, name: model.displayName)
       try model.persistSession(session)
       try await model.refreshAuthenticatedBootstrap(accessToken: session.accessToken, adoptedSession: session)
       model.password = ""
@@ -254,17 +246,13 @@ final class AppModel {
   }
 
   func sendPasswordReset() async {
-    guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
-      return
-    }
     guard !email.isEmpty else {
       notice = AppNotice(tone: .warning, title: "Email Required", message: "Enter the staff email you want to reset.")
       return
     }
     await run("Requesting Reset") { model in
       let redirect = model.environment.publicOrigin.appendingPathComponent("manager")
-      try await model.services.auth.sendReset(config: config, email: model.email, redirectTo: redirect)
+      try await model.services.auth.sendReset(email: model.email, redirectTo: redirect)
       model.notice = AppNotice(
         tone: .success,
         title: "Reset Sent",
@@ -666,7 +654,10 @@ final class AppModel {
   }
 
   func lookupBarcode(_ barcode: String) async throws -> ProductLookupResult {
-    try await services.productLookup.lookup(upc: barcode)
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.productLookup.lookup(upc: barcode, accessToken: accessToken)
   }
 
   func updatePreviewSelection(_ id: String, selected: Bool) {
@@ -704,12 +695,11 @@ final class AppModel {
     }
   }
 
-  private func restoreSession(using config: BootstrapConfig?) async {
-    guard let config else { return }
+  private func restoreSession() async {
     do {
       var storedSession = try await sessionStore.loadSession(promptForBiometrics: true)
       if storedSession.isExpired {
-        storedSession = try await services.auth.refresh(config: config, session: storedSession)
+        storedSession = try await services.auth.refresh(session: storedSession)
         try persistSession(storedSession)
       }
       try await refreshAuthenticatedBootstrap(accessToken: storedSession.accessToken, adoptedSession: storedSession)

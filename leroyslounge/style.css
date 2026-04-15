@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Space+Grotesk:wght@400;500;700&family=Work+Sans:wght@300;400;500;600&display=swap');
+@import url('/api/public?action=font_css&set=leroys-route');
 
 html {
   background: rgb(125 127 124 / 1);

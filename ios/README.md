@@ -30,18 +30,14 @@ The app lives in-repo so backend contracts, parity tracking, and native client b
 
 ## Backend Contracts
 
-The app consumes the existing shared server boundaries and does not talk to Supabase tables directly:
+The app consumes the consolidated shared server boundaries and does not talk to Supabase or third-party services directly:
 
-- `/api/session-bootstrap`
-- `/api/menu-workspace`
-- `/api/menu-public`
-- `/api/menu-draft`
-- `/api/menu-live`
-- `/api/menu-publish`
-- `/api/menu-history`
-- `/api/specials`
+- `/api/auth`
+- `/api/public`
+- `/api/manager`
+- `/api/admin`
 
-Supabase auth is used through REST parity with Keychain-backed session persistence.
+Supabase auth remains the source of truth, but only the server talks to it; iOS persists sessions in Keychain-backed storage.
 
 ## Regenerate The Project
 
