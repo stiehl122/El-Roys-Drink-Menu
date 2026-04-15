@@ -19,25 +19,25 @@ test('phase 5 shared api transport helper exports config, headers, and response 
   assert.doesNotMatch(source, /export\s+async\s+function\s+fetchSupabaseJson/);
 });
 
-test('api routes consume shared supabase transport helper', () => {
-  const users = read('api/users.js');
-  const specials = read('api/specials.js');
+test('consolidated api routes consume shared supabase transport helper', () => {
+  const admin = read('api/admin.js');
+  const manager = read('api/manager.js');
 
-  assert.match(users, /from '\.\.\/server\/_supabase\.js'/);
-  assert.match(specials, /from '\.\.\/server\/_supabase\.js'/);
-  assert.doesNotMatch(specials, /function\s+serviceHeaders\s*\(/);
-  assert.doesNotMatch(specials, /function\s+readJsonSafe\s*\(/);
-  assert.doesNotMatch(specials, /queryAction/);
-  assert.doesNotMatch(specials, /action\s*===\s*'migrate'/);
+  assert.match(admin, /from '\.\.\/server\/_admin-read-models\.js'/);
+  assert.match(manager, /from '\.\.\/server\/_supabase\.js'/);
+  assert.doesNotMatch(manager, /function\s+serviceHeaders\s*\(/);
+  assert.doesNotMatch(manager, /function\s+readJsonSafe\s*\(/);
+  assert.doesNotMatch(manager, /queryAction/);
+  assert.doesNotMatch(manager, /action\s*===\s*'migrate'/);
 });
 
-test('notification route composes shared authorization and delivery boundaries', () => {
-  const notify = read('api/send-notification.js');
+test('manager route composes shared authorization and delivery boundaries', () => {
+  const notify = read('api/manager.js');
 
   assert.match(notify, /from '\.\.\/server\/_notification-gateway\.js'/);
   assert.match(notify, /authorizeNotificationRequest/);
   assert.match(notify, /from '\.\.\/server\/_notification-delivery\.js'/);
   assert.match(notify, /deliverMenuNotification/);
-  assert.doesNotMatch(notify, /from '\.\.\/server\/_supabase\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_supabase\.js'/);
   assert.doesNotMatch(notify, /serviceHeaders\s*\(/);
 });

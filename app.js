@@ -10,7 +10,7 @@ const IS_PREVIEW = (window.location.hostname.endsWith('.vercel.app') &&
   window.location.hostname !== 'el-roys-drink-menu.vercel.app') ||
   window.location.hostname === 'localhost' ||
   window.location.hostname === '127.0.0.1';
-const PREVIEW_AUDIT_SESSION_ENDPOINT = '/api/session-bootstrap';
+const PREVIEW_AUDIT_SESSION_ENDPOINT = '/api/auth';
 
 const LS_KEYS = {
   menuId:       'hf_menu_id',
@@ -1519,7 +1519,9 @@ async function beginAddItemBarcodeLookup(rawBarcode) {
   await stopAddItemModalScanner();
   renderAddItemModal({ focusFieldId: 'add-item-name-input' });
 
-  const product = await lookupOpenFoodFactsProduct(barcode);
+  const product = await lookupOpenFoodFactsProduct(barcode, {
+    headers: getAuthorizedApiHeaders(),
+  });
   if (!_addItemModalState.isOpen || _addItemModalState.lookupRequestId !== requestId) {
     return { ok: false, reason: 'stale' };
   }
@@ -2242,11 +2244,10 @@ function getMenuSessionPorts() {
       return buildMenuSessionSnapshot(source, request);
     },
     async resolveMenu() {
-      if (!SUPABASE_URL) return null;
       return sbResolveMenu();
     },
     canLoadFromNetwork() {
-      return !!(SUPABASE_URL && MENU_ID);
+      return !!MENU_ID;
     },
     restoreFallback({ expectedRestaurantId = '', request = {} } = {}) {
       const requestedMenu = getMenuById(request.requestedMenuId) || getMenuBySlug(request.requestedMenuSlug || '');
@@ -3541,8 +3542,8 @@ async function sbReadJsonOrThrow(url, options = {}) {
   return text ? JSON.parse(text) : null;
 }
 
-function getLandingPageEndpoint() {
-  return `${SUPABASE_URL}/rest/v1/landing_page_state`;
+function getLandingPageEndpoint(includeDraft = false) {
+  return includeDraft ? '/api/admin?action=landing_page_state' : '/api/public?action=landing';
 }
 
 function hasLandingRootShell() {
@@ -3573,23 +3574,22 @@ function syncLandingDirtyFlag(value = false) {
   return _landingPageDirty;
 }
 
-async function fetchLandingPageRecordFromSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Landing page config is unavailable.');
-  const query = 'id,draft_content,live_content,draft_saved_ts,live_published_ts';
-  const url = `${getLandingPageEndpoint()}?id=eq.${encodeURIComponent(LANDING_PAGE_STATE_ID)}&select=${query}&limit=1`;
-  const rows = await sbReadJsonOrThrow(url, { headers: sbHeaders() });
-  const row = Array.isArray(rows) ? rows[0] : rows;
-  if (!row) throw new Error('Landing page state is missing.');
-  return normalizeLandingPageRecord(row);
+async function fetchLandingPageRecordFromSupabase(options = {}) {
+  const includeDraft = options.includeDraft === true;
+  const payload = await readApiJsonOrNull(getLandingPageEndpoint(includeDraft), {
+    headers: includeDraft ? getAuthorizedApiHeaders() : {},
+  });
+  if (!payload) throw new Error('Landing page state is missing.');
+  return normalizeLandingPageRecord(payload);
 }
 
 async function ensureLandingPageStateLoaded(options = {}) {
-  const { force = false } = options;
+  const { force = false, includeDraft = hasLandingAdminShell() } = options;
   if (_landingPageState && !force) return _landingPageState;
   if (_landingPageLoadPromise && !force) return _landingPageLoadPromise;
   _landingPageLoadPromise = (async () => {
     try {
-      const record = await fetchLandingPageRecordFromSupabase();
+      const record = await fetchLandingPageRecordFromSupabase({ includeDraft });
       _landingPageLoadError = '';
       setLandingPageState(record, { dirty: false });
       syncLandingDirtyFlag(false);
@@ -3604,19 +3604,16 @@ async function ensureLandingPageStateLoaded(options = {}) {
   return _landingPageLoadPromise;
 }
 
-async function upsertLandingPageRecord(payload = {}) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) throw new Error('Sign in as an admin to edit the landing page.');
-  const response = await sbReadJsonOrThrow(getLandingPageEndpoint(), {
-    method: 'POST',
-    headers: sbHeaders({
-      Prefer: 'resolution=merge-duplicates,return=representation',
-    }),
-    body: JSON.stringify([{
-      id: LANDING_PAGE_STATE_ID,
-      ...payload,
-    }]),
+async function upsertLandingPageRecord(payload = {}, action = 'save_landing_page_draft') {
+  if (!currentUser?.accessToken) throw new Error('Sign in as an admin to edit the landing page.');
+  const result = await postApiJson('/api/admin', {
+    action,
+    ...payload,
+  }, {
+    headers: getAuthorizedApiHeaders(),
   });
-  const row = Array.isArray(response) ? response[0] : response;
+  if (!result.ok) throw new Error(result.payload?.error || 'Landing page save failed.');
+  const row = result.payload?.record || result.payload;
   return normalizeLandingPageRecord(row);
 }
 
@@ -4492,24 +4489,16 @@ function findLandingReviewItemByUrl(items = [], url = '') {
     item?.href === candidate || item?.importMeta?.sourceUrl === candidate
   )) || null;
 }
-async function requestLandingImport(endpoint = '', payload = {}) {
+async function requestLandingImport(kind = 'import_news', payload = {}) {
   if (!currentUser?.accessToken) throw new Error('Sign in as an admin to import landing-page content.');
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${currentUser.accessToken}`,
-    },
-    body: JSON.stringify(payload),
+  const result = await postApiJson('/api/admin', {
+    action: kind,
+    ...payload,
+  }, {
+    headers: getAuthorizedApiHeaders(),
   });
-  let data = null;
-  try {
-    data = await response.json();
-  } catch (_) {
-    data = null;
-  }
-  if (!response.ok) throw new Error(data?.error || data?.message || 'Import failed.');
-  return data || {};
+  if (!result.ok) throw new Error(result.payload?.error || result.payload?.message || 'Import failed.');
+  return result.payload || {};
 }
 function applyLandingImportMeta(currentMeta = {}, result = {}) {
   const attemptedAt = result?.attemptedAt ? String(result.attemptedAt) : String(Date.now());
@@ -4671,7 +4660,7 @@ async function importLandingNewsDraft() {
   const url = String(urlInput?.value || '').trim();
   if (!url) return;
   try {
-    const result = await requestLandingImport('/api/import-news', { url, target });
+    const result = await requestLandingImport('import_news', { url, target });
     upsertLandingNewsDraftFromImport(target, result);
     if (urlInput) urlInput.value = '';
     showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} news draft.`, 'success');
@@ -4688,7 +4677,7 @@ async function refreshLandingNewsItem(itemId = '') {
     return;
   }
   try {
-    const result = await requestLandingImport('/api/import-news', { url: sourceUrl, target: item.target });
+    const result = await requestLandingImport('import_news', { url: sourceUrl, target: item.target });
     upsertLandingNewsDraftFromImport(item.target, result);
     showToast('✅ News draft refreshed.', 'success');
   } catch (error) {
@@ -4700,7 +4689,7 @@ async function importLandingReviewDraft(restaurantId = '') {
   const url = String(urlInput?.value || '').trim();
   if (!url) return;
   try {
-    const result = await requestLandingImport('/api/import-review', { url, restaurantId });
+    const result = await requestLandingImport('import_review', { url, restaurantId });
     upsertLandingReviewDraftFromImport(restaurantId, result);
     if (urlInput) urlInput.value = '';
     showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} review draft.`, 'success');
@@ -4717,7 +4706,7 @@ async function refreshLandingReviewItem(restaurantId = '', itemId = '') {
     return;
   }
   try {
-    const result = await requestLandingImport('/api/import-review', { url: sourceUrl, restaurantId });
+    const result = await requestLandingImport('import_review', { url: sourceUrl, restaurantId });
     upsertLandingReviewDraftFromImport(restaurantId, result);
     showToast('✅ Review draft refreshed.', 'success');
   } catch (error) {
@@ -4734,7 +4723,7 @@ async function saveLandingPageDraft() {
       live_content: record.liveContent,
       draft_saved_ts: timestamp,
       live_published_ts: record.livePublishedTs ? Number(record.livePublishedTs) : null,
-    });
+    }, 'save_landing_page_draft');
     setLandingPageState(nextRecord, { dirty: false });
     syncLandingDirtyFlag(false);
     renderLandingAdminWorkspace();
@@ -4819,7 +4808,7 @@ async function publishLandingPageSections() {
       live_content: nextLiveRecord.liveContent,
       draft_saved_ts: currentRecord.draftSavedTs ? Number(currentRecord.draftSavedTs) : null,
       live_published_ts: timestamp,
-    });
+    }, 'publish_landing_sections');
     setLandingPageState({
       ...persistedRecord,
       liveContent: nextLiveRecord.liveContent,
@@ -4838,45 +4827,34 @@ async function publishLandingPageSections() {
 // Resolve which menu to load based on ?menu={slug}, localStorage cache, or
 // the hardcoded default order. Sets MENU_ID and normalizes legacy slugs.
 async function sbResolveMenu() {
+  const menuIndex = await readPublicMenuIndexThroughApi();
+  const menus = sortKnownMenus(Array.isArray(menuIndex?.allMenus) ? menuIndex.allMenus : []);
+  if (!menus.length) return;
+
+  _hasMultipleMenus = menus.filter(menu => !menu.archived).length > 1;
   const rawSlug = new URLSearchParams(location.search).get('menu');
   const slug = normalizeKnownMenuSlug(rawSlug, { restaurantId: _siteRestaurant?.id || '' });
 
   if (slug) {
-    const [menuRes, allMenusRes] = await Promise.all([
-      fetch(
-        `${SUPABASE_URL}/rest/v1/menus?slug=eq.${encodeURIComponent(slug)}&select=id,name,type,restaurant_id`,
-        { headers: sbHeaders() }
-      ),
-      fetch(
-        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`,
-        { headers: sbHeaders() }
-      ),
-    ]);
-    if (allMenusRes.ok) {
-      const siblings = await allMenusRes.json();
-      _hasMultipleMenus = siblings.filter(menu => !menu.archived).length > 1;
-    }
-    if (menuRes.ok) {
-      const [menu] = await menuRes.json();
-      if (menu?.id) {
-        if (!isValidRestaurant(menu.restaurant_id)) {
-          redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
-          return;
-        }
-        if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
-          redirectToRestaurantPath(menu.restaurant_id, slug);
-          return;
-        }
-        MENU_ID          = menu.id;
-        if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
-        lsSet(LS_KEYS.menuId, MENU_ID);
-        const publicHref = getPublicHrefForMenuId(menu.id);
-        const currentHref = `${window.location.pathname}${window.location.search}`;
-        if (publicHref && publicHref !== currentHref) {
-          history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-        }
+    const menu = menus.find(candidate => candidate.slug === slug) || null;
+    if (menu?.id) {
+      if (!isValidRestaurant(menu.restaurant_id)) {
+        redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
         return;
       }
+      if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
+        redirectToRestaurantPath(menu.restaurant_id, slug);
+        return;
+      }
+      MENU_ID = menu.id;
+      if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
+      lsSet(LS_KEYS.menuId, MENU_ID);
+      const publicHref = getPublicHrefForMenuId(menu.id);
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (publicHref && publicHref !== currentHref) {
+        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
+      }
+      return;
     }
     const invalidSlug = rawSlug || slug;
     _clearActiveMenuContext({ clearCache: true });
@@ -4889,60 +4867,45 @@ async function sbResolveMenu() {
   }
 
   if (MENU_ID) {
-    const [nameRes, allMenusRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=eq.${MENU_ID}&select=name,slug,type,restaurant_id,archived`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,archived`, { headers: sbHeaders() }),
-    ]);
-    if (nameRes.ok) {
-      const [menu] = await nameRes.json();
-      if (menu && !isValidRestaurant(menu.restaurant_id)) {
-        redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
+    const menu = menus.find(candidate => candidate.id === MENU_ID) || null;
+    if (menu && !isValidRestaurant(menu.restaurant_id)) {
+      redirectToRestaurantPath(RESTAURANTS.LEROYS.id, '', 'Unsupported restaurant menu requested. Redirected to Leroy\'s Lounge.');
+      return;
+    }
+    if (menu?.archived === true) {
+      _clearActiveMenuContext({ clearCache: true });
+    } else if (menu) {
+      if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
+        redirectToRestaurantPath(menu.restaurant_id, menu.slug || '');
         return;
       }
-      if (menu?.archived === true) {
-        _clearActiveMenuContext({ clearCache: true });
-      } else if (menu) {
-        if (_siteRestaurant?.id && menu.restaurant_id !== _siteRestaurant.id) {
-          redirectToRestaurantPath(menu.restaurant_id, menu.slug || '');
-          return;
-        }
-        if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
-        const publicHref = getPublicHrefForMenuId(MENU_ID);
-        const currentHref = `${window.location.pathname}${window.location.search}`;
-        if (publicHref && publicHref !== currentHref) {
-          history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-        }
-      } else {
-        _clearActiveMenuContext({ clearCache: true });
+      if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
+      const publicHref = getPublicHrefForMenuId(MENU_ID);
+      const currentHref = `${window.location.pathname}${window.location.search}`;
+      if (publicHref && publicHref !== currentHref) {
+        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
       }
-    }
-    if (allMenusRes.ok) {
-      const siblings = await allMenusRes.json();
-      _hasMultipleMenus = siblings.filter(menu => !menu.archived).length > 1;
+    } else {
+      _clearActiveMenuContext({ clearCache: true });
     }
     if (MENU_ID) return;
   }
 
-  const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,slug,name,type,restaurant_id,archived`,
-    { headers: sbHeaders() }
-  );
-  if (!res.ok) return;
-  const menus = sortKnownMenus((await res.json()).filter(menu => !menu.archived));
-  _hasMultipleMenus = menus.length > 1;
+  const activeMenus = menus.filter(menu => !menu.archived);
+  _hasMultipleMenus = activeMenus.length > 1;
 
   let defaultMenu = null;
   if (_siteRestaurant?.id) {
-    defaultMenu = menus.find(menu => (
+    defaultMenu = activeMenus.find(menu => (
       menu.restaurant_id === _siteRestaurant.id &&
       (menu.type || '').toLowerCase() === 'food'
     ));
   }
   if (!defaultMenu && currentUser?.role === 'manager') {
-    defaultMenu = menus.find(menu => normalizeAccessibleMenuIds(currentUser.accessibleMenuIds).includes(menu.id));
+    defaultMenu = activeMenus.find(menu => normalizeAccessibleMenuIds(currentUser.accessibleMenuIds).includes(menu.id));
   }
-  if (!defaultMenu) defaultMenu = menus.find(menu => menu.id === MENUS.LEROYS_FOOD.id);
-  if (!defaultMenu) defaultMenu = menus[0];
+  if (!defaultMenu) defaultMenu = activeMenus.find(menu => menu.id === MENUS.LEROYS_FOOD.id);
+  if (!defaultMenu) defaultMenu = activeMenus[0];
 
   if (defaultMenu) {
     MENU_ID          = defaultMenu.id;
@@ -5008,14 +4971,14 @@ function getClientAuditSource() {
 
 async function readSessionBootstrapThroughApi({ accessToken = '' } = {}) {
   const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
-  return readApiJsonOrNull('/api/session-bootstrap', { headers });
+  return readApiJsonOrNull('/api/auth?mode=bootstrap', { headers });
 }
 
 function extractSupabaseConfigFromBootstrap(payload = {}) {
   const config = payload?.config && typeof payload.config === 'object' ? payload.config : payload;
   return {
-    supabaseUrl: String(config?.supabaseUrl || ''),
-    supabaseAnonKey: String(config?.supabaseAnonKey || ''),
+    supabaseUrl: String(config?.supabaseUrl || 'server-managed'),
+    supabaseAnonKey: String(config?.supabaseAnonKey || 'server-managed'),
   };
 }
 
@@ -5072,12 +5035,45 @@ function normalizeWorkspaceFeaturedGroups(groups = []) {
   })).filter(group => group.id);
 }
 
+async function readPublicMenuIndexThroughApi() {
+  const payload = await readApiJsonOrNull('/api/public?action=menu_index');
+  if (!payload) return null;
+  return {
+    restaurants: sortKnownRestaurants(Array.isArray(payload.restaurants) ? payload.restaurants : []),
+    allMenus: sortKnownMenus(Array.isArray(payload.allMenus) ? payload.allMenus : payload.menus || []),
+  };
+}
+
+async function readAdminCatalogThroughApi() {
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!authorizedHeaders.Authorization) return null;
+  const payload = await readApiJsonOrNull('/api/admin?action=catalog', {
+    headers: authorizedHeaders,
+  });
+  if (!payload) return null;
+  return {
+    restaurants: sortKnownRestaurants(Array.isArray(payload.restaurants) ? payload.restaurants : []),
+    allMenus: sortKnownMenus(Array.isArray(payload.allMenus) ? payload.allMenus : payload.menus || []),
+  };
+}
+
+async function readAdminSettingsContextThroughApi({ menuId = '', restaurantId = '' } = {}) {
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!authorizedHeaders.Authorization) return null;
+  const params = new URLSearchParams({ action: 'settings_context' });
+  if (menuId) params.set('menu_id', menuId);
+  if (restaurantId) params.set('restaurant_id', restaurantId);
+  return readApiJsonOrNull(`/api/admin?${params.toString()}`, {
+    headers: authorizedHeaders,
+  });
+}
+
 async function readMenuWorkspaceThroughApi({ menuId = MENU_ID, includeRestaurantTools = false } = {}) {
   const authorizedHeaders = getAuthorizedApiHeaders();
   if (!menuId || !authorizedHeaders.Authorization) return null;
-  const params = new URLSearchParams({ menu_id: menuId });
+  const params = new URLSearchParams({ action: 'workspace', menu_id: menuId });
   if (includeRestaurantTools) params.set('include', 'restaurant-tools');
-  return readApiJsonOrNull(`/api/menu-workspace?${params.toString()}`, {
+  return readApiJsonOrNull(`/api/manager?${params.toString()}`, {
     headers: authorizedHeaders,
   });
 }
@@ -5120,8 +5116,8 @@ async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) 
   }
 
   if (pageMode === 'public' || pageMode === 'picker') {
-    const params = new URLSearchParams({ menu_id: menuId });
-    const projection = await readApiJsonOrNull(`/api/menu-public?${params.toString()}`);
+    const params = new URLSearchParams({ action: 'menu', menu_id: menuId });
+    const projection = await readApiJsonOrNull(`/api/public?${params.toString()}`);
     if (projection) return projection;
   }
 
@@ -5133,19 +5129,21 @@ async function readMenuHistoryThroughApi({ menuId = MENU_ID, days = 7, limit = 2
   if (!menuId || !authorizedHeaders.Authorization) return null;
   const canReadRestaurantTools = _workspaceRestaurantToolsReadable || currentUserCanEditRestaurantSpecials(RESTAURANT_ID);
   const params = new URLSearchParams({
+    action: 'history',
     menu_id: menuId,
     days: String(days),
     limit: String(limit),
     scope: canReadRestaurantTools ? 'restaurant' : 'menu',
   });
-  return readApiJsonOrNull(`/api/menu-history?${params.toString()}`, {
+  return readApiJsonOrNull(`/api/manager?${params.toString()}`, {
     headers: authorizedHeaders,
   });
 }
 
 async function saveDraftThroughApi(snapshot, savedAt) {
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
-  const result = await postApiJson('/api/menu-draft', {
+  const result = await postApiJson('/api/manager', {
+    action: 'save_draft',
     menu_id: MENU_ID,
     snapshot: snapshot || {},
     saved_at: savedAt || Date.now(),
@@ -5159,7 +5157,8 @@ async function saveDraftThroughApi(snapshot, savedAt) {
 
 async function saveLiveMenuThroughApi(snapshot) {
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
-  const result = await postApiJson('/api/menu-live', {
+  const result = await postApiJson('/api/manager', {
+    action: 'save_live',
     menu_id: MENU_ID,
     snapshot,
     expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
@@ -5182,8 +5181,8 @@ function buildPublishSnapshotPayload() {
 
 async function requestPublishPreviewThroughApi() {
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: false };
-  return postApiJson('/api/menu-publish', {
-    action: 'preview',
+  return postApiJson('/api/manager', {
+    action: 'preview_publish',
     menu_id: MENU_ID,
     snapshot: buildPublishSnapshotPayload(),
     expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
@@ -5195,7 +5194,7 @@ async function requestPublishPreviewThroughApi() {
 
 async function publishMenuThroughApi({ mode, selectedChangeIds = [] }) {
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
-  return postApiJson('/api/menu-publish', {
+  return postApiJson('/api/manager', {
     action: 'publish',
     menu_id: MENU_ID,
     mode,
@@ -5211,7 +5210,7 @@ async function publishMenuThroughApi({ mode, selectedChangeIds = [] }) {
 
 async function saveAdminSettingsThroughApi(action, payload = {}) {
   if (!getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: true };
-  return postApiJson('/api/admin-settings', {
+  return postApiJson('/api/admin', {
     action,
     ...payload,
   }, {
@@ -5224,30 +5223,7 @@ async function persistStateDirect(options = {}) {
 }
 
 async function sbRead() {
-  if (!SUPABASE_URL || !MENU_ID) return null;
-  const restaurantFetch = RESTAURANT_ID
-    ? fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=eq.${RESTAURANT_ID}&select=id,name,design,use_custom_design`, { headers: sbHeaders() })
-    : Promise.resolve(null);
-  const [catsRes, metaRes, restRes] = await Promise.all([
-    fetch(
-      `${SUPABASE_URL}/rest/v1/categories?menu_id=eq.${MENU_ID}&select=*,items(*)&order=display_order.asc`,
-      { headers: sbHeaders() }
-    ),
-    fetch(
-      `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${MENU_ID}&select=*`,
-      { headers: sbHeaders() }
-    ),
-    restaurantFetch,
-  ]);
-  if (!catsRes.ok || !metaRes.ok) throw new Error('Supabase read failed');
-  const cats = await catsRes.json();
-  const [meta] = await metaRes.json();
-  let restaurant = null;
-  if (restRes?.ok) {
-    const [rest] = await restRes.json();
-    if (rest) restaurant = rest;
-  }
-  return { cats, meta: meta || null, restaurant };
+  return null;
 }
 
 function itemUpchargeArray(upcharges) {
@@ -5507,13 +5483,13 @@ function createRestaurantSpecialsService() {
         this.resetCatalog();
       }
 
-      const publicParams = new URLSearchParams({ menu_id: MENU_ID });
-      const projection = await readApiJsonOrNull(`/api/menu-public?${publicParams.toString()}`);
+      const publicParams = new URLSearchParams({ action: 'menu', menu_id: MENU_ID });
+      const projection = await readApiJsonOrNull(`/api/public?${publicParams.toString()}`);
       if (projection && applyWorkspaceRestaurantTools(projection)) {
         return _featuredGroups;
       }
 
-      _featuredGroups = await sbReadRestaurantSpecials(restaurantId);
+      _featuredGroups = [];
       return _featuredGroups;
     },
 
@@ -5537,14 +5513,15 @@ function createRestaurantSpecialsService() {
     },
 
     async request(action, payload = {}) {
-      const response = await fetch('/api/specials', {
+      const response = await fetch('/api/manager', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
         },
         body: JSON.stringify({
-          action,
+          action: 'specials',
+          specials_action: action,
           restaurantId: RESTAURANT_ID,
           ...payload,
         }),
@@ -5630,9 +5607,7 @@ function withMenuStateLoaderDefaults(deps = {}) {
     readState: typeof deps.readState === 'function'
       ? deps.readState
       : async ({ request } = {}) => {
-          const apiState = await readMenuStateThroughApi(request || buildCurrentMenuPageRequest());
-          if (apiState) return apiState;
-          return sbRead();
+          return readMenuStateThroughApi(request || buildCurrentMenuPageRequest());
         },
     hydrateFromState: typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data)),
     applyPersistedDraftState: typeof deps.applyPersistedDraftState === 'function'
@@ -5813,17 +5788,9 @@ async function loadActiveMenuState(options = {}) {
 }
 
 async function sbPatchMenuMetaForMenu(menuId, update) {
-  if (!SUPABASE_URL || !menuId || !currentUser?.accessToken) return;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${menuId}`, {
-    method:  'PATCH',
-    headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-    body:    JSON.stringify(update),
-  });
-  if (!r.ok) {
-    let detail = '';
-    try { detail = (await r.text()).trim(); } catch (_) { /* ignore */ }
-    throw new Error(detail ? `menu_meta patch: ${r.status} ${detail}` : `menu_meta patch: ${r.status}`);
-  }
+  void menuId;
+  void update;
+  return { downgradedFields: [] };
 }
 
 function snapshotCurrentItemsAsLastSent() {
@@ -5998,144 +5965,19 @@ async function sbPatchRestaurantDesign(restaurantId, design = {}) {
 }
 
 async function sbGetRestaurantSpecialGroup(restaurantId = RESTAURANT_ID, options = {}) {
-  const { createIfMissing = false } = options;
-  const config = getRestaurantSpecialConfig(restaurantId);
-  if (!SUPABASE_URL || !config?.name) return null;
-  try {
-    if (config.canonicalId) {
-      const canonicalGroups = await sbReadJsonOrThrow(
-        `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
-        { headers: sbHeaders() }
-      );
-      if (canonicalGroups?.[0]) return canonicalGroups[0];
-    }
-    const legacyGroups = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
-      { headers: sbHeaders() }
-    );
-    if (legacyGroups?.[0]) {
-      if (config.canonicalId && !legacyGroups[0].canonical_id) {
-        await fetch(`${SUPABASE_URL}/rest/v1/featured_groups?id=eq.${legacyGroups[0].id}`, {
-          method: 'PATCH',
-          headers: sbHeaders({ 'Prefer': 'return=minimal' }),
-          body: JSON.stringify({ canonical_id: config.canonicalId }),
-        });
-      }
-      return legacyGroups[0];
-    }
-    if (!createIfMissing || !currentUser?.accessToken) return null;
-    const created = await sbReadJsonOrThrow(`${SUPABASE_URL}/rest/v1/featured_groups`, {
-      method: 'POST',
-      headers: sbHeaders({ 'Prefer': 'return=representation' }),
-      body: JSON.stringify(config.canonicalId
-        ? { name: config.name, canonical_id: config.canonicalId }
-        : { name: config.name }),
-    });
-    return created?.[0] || null;
-  } catch (e) {
-    if (!createIfMissing) return null;
-    try {
-      const retryGroups = config.canonicalId
-        ? await sbReadJsonOrThrow(
-          `${SUPABASE_URL}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id,name,canonical_id&limit=1`,
-          { headers: sbHeaders() }
-        )
-        : await sbReadJsonOrThrow(
-          `${SUPABASE_URL}/rest/v1/featured_groups?name=eq.${encodeURIComponent(config.name)}&select=id,name,canonical_id&limit=1`,
-          { headers: sbHeaders() }
-        );
-      return retryGroups?.[0] || null;
-    } catch (_) {
-      return null;
-    }
-  }
+  void restaurantId;
+  void options;
+  return null;
 }
 
 async function sbReadLegacyFeatured(menuId = MENU_ID) {
-  if (!SUPABASE_URL || !menuId) return [];
-  try {
-    const menuGroups = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/menu_featured_groups?menu_id=eq.${menuId}&select=display_order,featured_groups(id,name)&order=display_order.asc`,
-      { headers: sbHeaders() }
-    );
-    if (!menuGroups.length) return [];
-    const groupIds = menuGroups.map(menuGroup => menuGroup.featured_groups.id);
-    const allSlots = await sbReadJsonOrThrow(
-      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=in.(${groupIds.join(',')})&select=*,items(id,name,price,visibility,is_eighty_sixed,desc,recipe,upcharges,show_description,show_recipe)&order=display_order.asc`,
-      { headers: sbHeaders() }
-    );
-    return menuGroups.map(menuGroup => ({
-      id: menuGroup.featured_groups.id,
-      name: menuGroup.featured_groups.name,
-      displayOrder: menuGroup.display_order,
-      slots: allSlots
-        .filter(slot => slot.featured_group_id === menuGroup.featured_groups.id)
-        .map(slot => ({
-          id: slot.id,
-          itemId: slot.item_id,
-          sellNote: slot.sell_note || '',
-          displayOrder: slot.display_order,
-          confirmedAt: slot.confirmed_at,
-          confirmedBy: slot.confirmed_by,
-          item: slot.items ? {
-            id: slot.items.id,
-            name: slot.items.name,
-            price: slot.items.price || '',
-            visibility: slot.items.visibility || 'public',
-            eightySixed: slot.items.is_eighty_sixed,
-            desc: slot.items.desc || '',
-            recipe: recipeArray(slot.items.recipe),
-            upcharges: itemUpchargeArray(slot.items.upcharges),
-            showDescription: slot.items.show_description !== false,
-            showRecipe: !!slot.items.show_recipe,
-          } : null,
-        }))
-        .filter(slot => slot.item !== null),
-    }));
-  } catch (_) {
-    return [];
-  }
+  void menuId;
+  return [];
 }
 
 async function sbReadRestaurantSpecials(restaurantId = RESTAURANT_ID) {
-  if (!SUPABASE_URL || !restaurantId) return [];
-  try {
-    const group = await sbGetRestaurantSpecialGroup(restaurantId);
-    if (!group?.id) return sbReadLegacyFeatured(MENU_ID);
-    const slotsRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/featured_slots?featured_group_id=eq.${group.id}&select=*,items(id,name,price,visibility,is_eighty_sixed,desc,recipe,upcharges,show_description,show_recipe)&order=display_order.asc`,
-      { headers: sbHeaders() }
-    );
-    if (!slotsRes.ok) return [];
-    const allSlots = await slotsRes.json();
-    return [{
-      id: group.id,
-      name: group.name,
-      displayOrder: 0,
-      slots: allSlots
-        .map(s => ({
-          id: s.id,
-          itemId: s.item_id,
-          sellNote: s.sell_note || '',
-          displayOrder: s.display_order,
-          confirmedAt: s.confirmed_at,
-          confirmedBy: s.confirmed_by,
-          item: s.items ? {
-            id: s.items.id,
-            name: s.items.name,
-            price: s.items.price || '',
-            visibility: s.items.visibility || 'public',
-            eightySixed: s.items.is_eighty_sixed,
-            desc: s.items.desc || '',
-            recipe: recipeArray(s.items.recipe),
-            upcharges: itemUpchargeArray(s.items.upcharges),
-            showDescription: s.items.show_description !== false,
-            showRecipe: !!s.items.show_recipe,
-          } : null,
-        }))
-        .filter(s => s.item !== null),
-    }];
-  } catch(e) { return []; }
+  void restaurantId;
+  return [];
 }
 
 // ─── LOCAL NOTIFICATIONS CONFIG ───────────────────────────────────────────────
@@ -6195,19 +6037,11 @@ function lightenHex(hex, amount) {
 
 function loadGoogleFont(fontName) {
   if (!fontName) return;
-  // Default fonts are self-hosted in lib/fonts/ — no external request needed.
-  if (['DM Sans','Lilita One','Permanent Marker'].includes(fontName)) return;
   const id = 'gfont-' + fontName.replace(/\s+/g,'-').toLowerCase();
   if (document.getElementById(id)) return;
   const link = document.createElement('link');
   link.id = id; link.rel = 'stylesheet';
-  // NOTE (#148): Google Fonts CDN serves dynamically-generated CSS responses, so
-  // Subresource Integrity (SRI) hashes cannot be applied — the response content
-  // changes with each request. The default fonts (DM Sans, Lilita One, Permanent
-  // Marker) are self-hosted in lib/fonts/ for full SRI compliance. Any additional
-  // fonts selected via the Design panel are loaded from the CDN without SRI.
-  // TODO: self-host additional fonts for SRI compliance.
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontName).replace(/%20/g,'+')}:wght@400;700&display=swap`;
+  link.href = `/api/public?action=font_css&font=${encodeURIComponent(fontName)}`;
   document.head.appendChild(link);
 }
 
@@ -6900,8 +6734,8 @@ async function loadSupabaseConfig() {
   try {
     const bootstrap = await readSessionBootstrapThroughApi();
     const cfg = extractSupabaseConfigFromBootstrap(bootstrap || {});
-    if (cfg.supabaseUrl) SUPABASE_URL = cfg.supabaseUrl;
-    if (cfg.supabaseAnonKey) SUPABASE_ANON_KEY = cfg.supabaseAnonKey;
+    SUPABASE_URL = cfg.supabaseUrl || 'server-managed';
+    SUPABASE_ANON_KEY = cfg.supabaseAnonKey || 'server-managed';
   } catch(e) {}
 }
 
@@ -7978,49 +7812,49 @@ function getAuthApiBoundary() {
     return globalThis.__HF_AUTH_API__;
   }
   return {
-    signUp: ({ supabaseUrl = '', anonKey = '', email = '', password = '', name = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/signup`, {
+    signUp: ({ email = '', password = '', name = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey },
-      body: JSON.stringify({ email, password, data: { name } }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sign_up', email, password, name }),
     }).then(async response => {
       if (!response.ok) throw await response.json();
       return response.json();
     }),
-    signIn: ({ supabaseUrl = '', anonKey = '', email = '', password = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    signIn: ({ email = '', password = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey },
-      body: JSON.stringify({ email, password }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'sign_in', email, password }),
     }).then(async response => {
       if (!response.ok) throw await response.json();
       return response.json();
     }),
-    refreshToken: ({ supabaseUrl = '', anonKey = '', refreshToken = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    refreshToken: ({ refreshToken = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'refresh', refresh_token: refreshToken }),
     }).then(async response => {
       if (!response.ok) throw await response.json();
       return response.json();
     }),
-    getProfile: ({ accessToken = '' } = {}) => fetch('/api/session-bootstrap', {
+    getProfile: ({ accessToken = '' } = {}) => fetch('/api/auth?mode=profile', {
       headers: { Authorization: `Bearer ${accessToken}` },
     }).then(async response => {
       if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
       const payload = await response.json();
       return extractProfileFromBootstrap(payload || {});
     }),
-    resetPasswordForEmail: ({ supabaseUrl = '', anonKey = '', email = '', redirectTo = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/recover`, {
+    resetPasswordForEmail: ({ email = '', redirectTo = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey },
-      body: JSON.stringify({ email, redirect_to: redirectTo }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_password', email, redirect_to: redirectTo }),
     }).then(async response => {
       if (!response.ok) throw await response.json();
       return null;
     }),
-    updatePassword: ({ supabaseUrl = '', anonKey = '', accessToken = '', newPassword = '' } = {}) => fetch(`${supabaseUrl}/auth/v1/user`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', apikey: anonKey, Authorization: `Bearer ${accessToken}` },
-      body: JSON.stringify({ password: newPassword }),
+    updatePassword: ({ accessToken = '', newPassword = '' } = {}) => fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ action: 'update_password', new_password: newPassword }),
     }).then(async response => {
       if (!response.ok) throw await response.json();
       return response.json();
@@ -8680,12 +8514,9 @@ async function showMenuPicker(afterSelect, opts) {
           archived: false,
         }))
     );
-  } else if (SUPABASE_URL) {
-    const url = `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,restaurant_id,archived`;
-    try {
-      const res = await fetch(url, { headers: sbHeaders() });
-      if (res.ok) menus = sortKnownMenus(await res.json());
-    } catch(e) {}
+  } else {
+    const payload = await readPublicMenuIndexThroughApi();
+    menus = sortKnownMenus(Array.isArray(payload?.allMenus) ? payload.allMenus : []);
   }
 
   if (currentUser?.role !== 'admin') {
@@ -9046,7 +8877,7 @@ async function handlePreviewAuditSignIn() {
     const response = await fetch(PREVIEW_AUDIT_SESSION_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: requestedMode }),
+      body: JSON.stringify({ action: 'preview_audit_sign_in', mode: requestedMode }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || !payload?.session?.access_token) {
@@ -9347,18 +9178,16 @@ function exitManager() {
 async function checkAdminSupabaseStatus() {
   const el = document.getElementById('admin-supabase-status');
   if (!el) return;
-  if (!SUPABASE_URL) { el.textContent = '⚠️ Supabase URL not configured'; el.className = 'db-status db-status--error'; return; }
-  if (!SUPABASE_ANON_KEY) { el.textContent = '⚠️ Supabase key not configured'; el.className = 'db-status db-status--error'; return; }
+  if (!currentUser?.accessToken) { el.textContent = '⚠️ Sign in as an admin'; el.className = 'db-status db-status--error'; return; }
   el.textContent = 'Checking…'; el.className = 'db-status';
   try {
-    // Ping the restaurants table (lightweight, always accessible via RLS SELECT)
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id&limit=1`, {
-      headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` },
+    const payload = await readApiJsonOrNull('/api/admin?action=readiness', {
+      headers: getAuthorizedApiHeaders(),
     });
-    if (res.ok || res.status === 200) {
+    if (payload?.connected) {
       el.textContent = '✓ Connected'; el.className = 'db-status db-status--ok';
     } else {
-      el.textContent = `✗ Unreachable (${res.status})`; el.className = 'db-status db-status--error';
+      el.textContent = `✗ Unreachable (${payload?.statusCode || 0})`; el.className = 'db-status db-status--error';
     }
   } catch(e) {
     el.textContent = '✗ Unreachable'; el.className = 'db-status db-status--error';
@@ -9385,18 +9214,9 @@ function _populateAdminNotificationsPanel(n) {
 }
 
 async function fetchMenuNotificationsConfig(menuId) {
-  if (!SUPABASE_URL || !currentUser?.accessToken || !menuId) return {};
-  try {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/menu_meta?menu_id=eq.${encodeURIComponent(menuId)}&select=notifications`,
-      { headers: sbHeaders() }
-    );
-    if (!r.ok) return {};
-    const [meta] = await r.json();
-    return meta?.notifications || {};
-  } catch (_) {
-    return {};
-  }
+  if (!currentUser?.accessToken || !menuId) return {};
+  const payload = await readAdminSettingsContextThroughApi({ menuId });
+  return payload?.notifications || {};
 }
 
 async function saveNotifications() {
@@ -9517,14 +9337,11 @@ async function saveMenuUrl() {
 
 async function loadAdminSwitcherData() {
   if (_adminRestaurants.length && _adminAllMenus.length) return; // already cached
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  if (!currentUser?.accessToken) return;
   try {
-    const [restRes, menuRes] = await Promise.all([
-      fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id,name,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
-      fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id,archived&order=name.asc`, { headers: sbHeaders() }),
-    ]);
-    if (restRes.ok) _adminRestaurants = sortKnownRestaurants(await restRes.json());
-    if (menuRes.ok) _adminAllMenus    = sortKnownMenus(await menuRes.json());
+    const payload = await readAdminCatalogThroughApi();
+    if (payload?.restaurants) _adminRestaurants = payload.restaurants;
+    if (payload?.allMenus) _adminAllMenus = payload.allMenus;
   } catch(e) { /* non-fatal */ }
 }
 
@@ -9575,7 +9392,7 @@ async function onAdminSwitcherMenuChange(context) {
 }
 
 async function _loadAdminTabData(context) {
-  if (!SUPABASE_URL || !currentUser?.accessToken) return;
+  if (!currentUser?.accessToken) return;
   if (context === 'notif') {
     const menuId       = _adminSwitcherState.notif.menuId;
     const restaurantId = _adminSwitcherState.notif.restaurantId;
@@ -9601,14 +9418,8 @@ async function _loadAdminTabData(context) {
     }
     // Load per-restaurant credential keys
     if (restaurantId) {
-      try {
-        const r = await fetch(
-          `${SUPABASE_URL}/rest/v1/restaurants?id=eq.${encodeURIComponent(restaurantId)}&select=notifications_config`,
-          { headers: sbHeaders() }
-        );
-        const [rest] = r.ok ? await r.json() : [{}];
-        _populateNotifCredKeys(rest?.notifications_config || {});
-      } catch { _populateNotifCredKeys({}); }
+      const payload = await readAdminSettingsContextThroughApi({ restaurantId });
+      _populateNotifCredKeys(payload?.notifications_config || {});
     } else { _populateNotifCredKeys({}); }
   }
 }
@@ -11097,10 +10908,10 @@ function createNotificationDeliveryService(deps = {}) {
 
       let response;
       try {
-        response = await fetchImpl('/api/send-notification', {
+        response = await fetchImpl('/api/manager', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ menu_id: menuId, text: patchMessage }),
+          body: JSON.stringify({ action: 'send_notification', menu_id: menuId, text: patchMessage }),
         });
       } catch (_) {
         return {
@@ -11350,15 +11161,9 @@ async function loadUsers() {
   wrap.innerHTML = '<div class="db-empty">Loading…</div>';
   window._adminUserList = null;
   try {
-    // Fetch menus list for menu access checkboxes
-    if (SUPABASE_URL) {
-      const menusRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,type,restaurant_id&archived=eq.false&order=created_at.asc`,
-        { headers: sbHeaders() }
-      );
-      if (menusRes.ok) window._adminMenuList = await menusRes.json();
-    }
-    const r = await fetch('/api/users', {
+    const catalog = await readAdminCatalogThroughApi();
+    window._adminMenuList = (catalog?.allMenus || []).filter(menu => !menu.archived);
+    const r = await fetch('/api/admin?action=users', {
       headers: { 'Authorization': `Bearer ${currentUser?.accessToken}` }
     });
     if (!r.ok) throw new Error(await r.text());
@@ -11588,13 +11393,14 @@ function renderMenuAccessForUser(userId) {
 }
 
 async function patchUser(payload) {
-  const r = await fetch('/api/users', {
-    method: 'PATCH',
-    headers: { 'Authorization': `Bearer ${currentUser?.accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  const result = await postApiJson('/api/admin', {
+    action: 'update_user',
+    ...payload,
+  }, {
+    headers: { 'Authorization': `Bearer ${currentUser?.accessToken}` },
   });
-  if (!r.ok) throw new Error((await r.json()).error || 'Request failed.');
-  return r;
+  if (!result.ok) throw new Error(result.payload?.error || 'Request failed.');
+  return result;
 }
 
 function updateUserRoleBadge(select, role) {
@@ -12077,13 +11883,10 @@ initAuthOverlayKeyboardSupport();
 // ─── RESTAURANT & MENU MANAGEMENT ─────────────────────────────────────────────
 
 async function fetchRestaurantMenuIndex() {
-  const [restRes, menuRes] = await Promise.all([
-    fetch(`${SUPABASE_URL}/rest/v1/restaurants?id=in.(${KNOWN_RESTAURANT_ORDER.join(',')})&select=id,name,slug,use_custom_design&order=name.asc`, { headers: sbHeaders() }),
-    fetch(`${SUPABASE_URL}/rest/v1/menus?id=in.(${KNOWN_MENU_ORDER.join(',')})&select=id,name,slug,type,archived,restaurant_id&order=name.asc`, { headers: sbHeaders() }),
-  ]);
-  if (!restRes.ok || !menuRes.ok) throw new Error('fetch failed');
-  const restaurants = sortKnownRestaurants(await restRes.json());
-  const allMenus = sortKnownMenus(await menuRes.json());
+  const payload = await readAdminCatalogThroughApi();
+  if (!payload) throw new Error('fetch failed');
+  const restaurants = sortKnownRestaurants(payload.restaurants || []);
+  const allMenus = sortKnownMenus(payload.allMenus || []);
   _adminRestaurants = restaurants;
   _adminAllMenus = allMenus;
   return { restaurants, allMenus };

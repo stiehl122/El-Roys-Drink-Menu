@@ -20,7 +20,7 @@ enum BackendError: LocalizedError {
     case .invalidBaseURL:
       return "The app environment is missing a valid API base URL."
     case .missingSupabaseConfig:
-      return "Supabase config is unavailable from bootstrap."
+      return "Auth bootstrap is unavailable."
     case .unauthorized:
       return "Your session no longer has access for this action."
     case .server(let message):
@@ -81,7 +81,7 @@ protocol PreviewClienting {
 }
 
 protocol ProductLookupClienting {
-  func lookup(upc: String) async throws -> ProductLookupResult
+  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult
 }
 
 private struct EmptyBody: Encodable {}
@@ -110,6 +110,20 @@ private struct AuthRequest: Encodable {
   var password: String
 }
 
+private struct AuthActionRequest: Encodable {
+  var action: String
+  var email: String?
+  var password: String?
+  var name: String?
+  var refreshToken: String?
+  var redirectTo: String?
+  var newPassword: String?
+}
+
+private struct AuthResetResponse: Decodable {
+  var ok: Bool?
+}
+
 private struct SignUpRequest: Encodable {
   var email: String
   var password: String
@@ -130,6 +144,7 @@ private struct ResetRequest: Encodable {
 }
 
 private struct DraftSaveRequest: Encodable {
+  var action: String
   var menuId: String
   var snapshot: MenuSnapshotPayload
   var expectedDraftRevision: Int?
@@ -138,6 +153,7 @@ private struct DraftSaveRequest: Encodable {
 }
 
 private struct DraftClearRequest: Encodable {
+  var action: String
   var menuId: String
   var snapshot: [String: String]
   var expectedDraftRevision: Int?
@@ -145,6 +161,7 @@ private struct DraftClearRequest: Encodable {
 }
 
 private struct LiveSaveRequest: Encodable {
+  var action: String
   var menuId: String
   var snapshot: MenuSnapshotPayload
   var expectedLiveRevision: Int?
@@ -163,11 +180,27 @@ private struct PublishRequest: Encodable {
 
 private struct SpecialsRequest: Encodable {
   var action: String
+  var specialsAction: String?
   var restaurantId: String
   var itemId: String?
   var slotId: String?
   var note: String?
   var direction: Int?
+
+  enum CodingKeys: String, CodingKey {
+    case action
+    case specialsAction = "specials_action"
+    case restaurantId
+    case itemId
+    case slotId
+    case note
+    case direction
+  }
+}
+
+private struct ProductLookupRequest: Encodable {
+  var action: String
+  var barcode: String
 }
 
 private enum HTTPMethod: String {
@@ -327,99 +360,62 @@ final class BootstrapClient: BootstrapClienting {
   }
 
   func fetch(accessToken: String?) async throws -> SessionBootstrapPayload {
-    try await http.request(path: "api/session-bootstrap", method: .get, accessToken: accessToken)
+    try await http.request(
+      path: "api/auth",
+      method: .get,
+      queryItems: [URLQueryItem(name: "mode", value: "bootstrap")],
+      accessToken: accessToken
+    )
   }
 }
 
 final class AuthClient: AuthClienting {
+  private let http: HTTPService
   private let environment: AppEnvironment
   private let session: URLSession
 
   init(environment: AppEnvironment, session: URLSession = .shared) {
+    self.http = HTTPService(environment: environment, session: session)
     self.environment = environment
     self.session = session
   }
 
   func signIn(config: BootstrapConfig, email: String, password: String) async throws -> AuthSession {
-    let auth = try await supabaseAuth(
-      url: config.supabaseUrl,
-      anonKey: config.supabaseAnonKey,
-      path: "auth/v1/token?grant_type=password",
-      body: AuthRequest(email: email, password: password)
+    let auth: SupabaseAuthResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      body: AuthActionRequest(action: "sign_in", email: email, password: password, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
   func signUp(config: BootstrapConfig, email: String, password: String, name: String) async throws -> AuthSession {
-    let auth = try await supabaseAuth(
-      url: config.supabaseUrl,
-      anonKey: config.supabaseAnonKey,
-      path: "auth/v1/signup",
-      body: SignUpRequest(email: email, password: password, data: .init(name: name))
+    let auth: SupabaseAuthResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      body: AuthActionRequest(action: "sign_up", email: email, password: password, name: name, refreshToken: nil, redirectTo: nil, newPassword: nil)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
   func refresh(config: BootstrapConfig, session authSession: AuthSession) async throws -> AuthSession {
-    let auth = try await supabaseAuth(
-      url: config.supabaseUrl,
-      anonKey: config.supabaseAnonKey,
-      path: "auth/v1/token?grant_type=refresh_token",
-      body: RefreshRequest(refreshToken: authSession.refreshToken)
+    let auth: SupabaseAuthResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      body: AuthActionRequest(action: "refresh", email: nil, password: nil, name: nil, refreshToken: authSession.refreshToken, redirectTo: nil, newPassword: nil)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
   }
 
   func sendReset(config: BootstrapConfig, email: String, redirectTo: URL) async throws {
-    let url = try authURL(base: config.supabaseUrl, path: "auth/v1/recover")
-    var request = URLRequest(url: url)
-    request.httpMethod = "POST"
-    request.setValue(config.supabaseAnonKey, forHTTPHeaderField: "apikey")
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.httpBody = try JSONEncoder.snakeCase.encode(ResetRequest(email: email, redirectTo: redirectTo.absoluteString))
-    let (_, response) = try await session.data(for: request)
-    guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-      throw BackendError.server(message: "Password reset could not be requested.")
-    }
-  }
-
-  private func supabaseAuth<Body: Encodable>(url: String, anonKey: String, path: String, body: Body) async throws -> SupabaseAuthResponse {
-    let targetURL = try authURL(base: url, path: path)
-    var request = URLRequest(url: targetURL)
-    request.httpMethod = "POST"
-    request.setValue(anonKey, forHTTPHeaderField: "apikey")
-    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    request.setValue("application/json", forHTTPHeaderField: "Accept")
-    request.httpBody = try JSONEncoder.snakeCase.encode(body)
-    let (data, response): (Data, URLResponse)
-    do {
-      (data, response) = try await session.data(for: request)
-    } catch {
-      throw BackendError.transport(message: error.localizedDescription)
-    }
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw BackendError.invalidResponse
-    }
-    guard (200...299).contains(httpResponse.statusCode) else {
-      let payload = try? JSONDecoder.backend.decode(BackendErrorPayload.self, from: data)
-      throw BackendError.server(message: payload?.error ?? payload?.message ?? "Authentication failed.")
-    }
-    return try JSONDecoder.backend.decode(SupabaseAuthResponse.self, from: data)
-  }
-
-  private func authURL(base: String, path: String) throws -> URL {
-    guard var components = URLComponents(string: base) else { throw BackendError.invalidBaseURL }
-    let split = path.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
-    let pathComponent = split.first.map(String.init) ?? path
-    components.path = (components.path + "/" + pathComponent).replacingOccurrences(of: "//", with: "/")
-    if split.count > 1 {
-      components.percentEncodedQuery = String(split[1])
-    }
-    guard let url = components.url else { throw BackendError.invalidBaseURL }
-    return url
+    let _: AuthResetResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      body: AuthActionRequest(action: "reset_password", email: email, password: nil, name: nil, refreshToken: nil, redirectTo: redirectTo.absoluteString, newPassword: nil)
+    )
   }
 }
 
@@ -432,9 +428,10 @@ final class WorkspaceClient: WorkspaceClienting {
 
   func fetch(menuId: String, accessToken: String) async throws -> MenuWorkspacePayload {
     try await http.request(
-      path: "api/menu-workspace",
+      path: "api/manager",
       method: .get,
       queryItems: [
+        URLQueryItem(name: "action", value: "workspace"),
         URLQueryItem(name: "menu_id", value: menuId),
         URLQueryItem(name: "include", value: "restaurant-tools"),
       ],
@@ -452,9 +449,12 @@ final class PublicMenuClient: PublicMenuClienting {
 
   func fetch(menuId: String, accessToken: String?) async throws -> PublicMenuPayload {
     try await http.request(
-      path: "api/menu-public",
+      path: "api/public",
       method: .get,
-      queryItems: [URLQueryItem(name: "menu_id", value: menuId)],
+      queryItems: [
+        URLQueryItem(name: "action", value: "menu"),
+        URLQueryItem(name: "menu_id", value: menuId),
+      ],
       accessToken: accessToken
     )
   }
@@ -469,10 +469,11 @@ final class DraftClient: DraftClienting {
 
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
     try await http.request(
-      path: "api/menu-draft",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: DraftSaveRequest(
+        action: "save_draft",
         menuId: menuId,
         snapshot: snapshot,
         expectedDraftRevision: expectedDraftRevision,
@@ -484,10 +485,11 @@ final class DraftClient: DraftClienting {
 
   func clear(menuId: String, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
     try await http.request(
-      path: "api/menu-draft",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: DraftClearRequest(
+        action: "clear_draft",
         menuId: menuId,
         snapshot: [:],
         expectedDraftRevision: expectedDraftRevision,
@@ -506,10 +508,11 @@ final class LiveSaveClient: LiveSaveClienting {
 
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String) async throws -> PublishResponse {
     try await http.request(
-      path: "api/menu-live",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: LiveSaveRequest(
+        action: "save_live",
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: expectedLiveRevision,
@@ -528,11 +531,11 @@ final class PublishClient: PublishClienting {
 
   func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     try await http.request(
-      path: "api/menu-publish",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: PublishRequest(
-        action: "preview",
+        action: "preview_publish",
         menuId: menuId,
         snapshot: snapshot,
         source: source,
@@ -545,7 +548,7 @@ final class PublishClient: PublishClienting {
 
   func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     try await http.request(
-      path: "api/menu-publish",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: PublishRequest(
@@ -570,9 +573,12 @@ final class HistoryClient: HistoryClienting {
 
   func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload {
     try await http.request(
-      path: "api/menu-history",
+      path: "api/manager",
       method: .get,
-      queryItems: [URLQueryItem(name: "menu_id", value: menuId)],
+      queryItems: [
+        URLQueryItem(name: "action", value: "history"),
+        URLQueryItem(name: "menu_id", value: menuId),
+      ],
       accessToken: accessToken
     )
   }
@@ -587,11 +593,12 @@ final class FeaturedToolsClient: FeaturedToolsClienting {
 
   func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
     try await http.requestVoid(
-      path: "api/specials",
+      path: "api/manager",
       method: .post,
       accessToken: accessToken,
       body: SpecialsRequest(
-        action: action,
+        action: "specials",
+        specialsAction: action,
         restaurantId: restaurantId,
         itemId: itemId,
         slotId: slotId,
@@ -622,48 +629,23 @@ final class PreviewClient: PreviewClienting {
 }
 
 final class ProductLookupClient: ProductLookupClienting {
-  private let session: URLSession
-  private let decoder = JSONDecoder.backend
+  private let http: HTTPService
 
-  init(session: URLSession = .shared) {
-    self.session = session
+  init(environment: AppEnvironment, session: URLSession = .shared) {
+    self.http = HTTPService(environment: environment, session: session)
   }
 
-  func lookup(upc: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
     let trimmed = upc.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
       throw BackendError.server(message: "Enter a barcode first.")
     }
-    let url = URL(string: "https://world.openfoodfacts.org/api/v2/product/\(trimmed).json")!
-    let (data, response): (Data, URLResponse)
-    do {
-      (data, response) = try await session.data(from: url)
-    } catch {
-      throw BackendError.transport(message: error.localizedDescription)
-    }
-    guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-      throw BackendError.server(message: "Open Food Facts is unavailable right now.")
-    }
-
-    struct OFFPayload: Decodable {
-      struct Product: Decodable {
-        var productName: String?
-        var genericName: String?
-        var brands: String?
-      }
-      var product: Product?
-      var status: Int?
-    }
-
-    let payload = try decoder.decode(OFFPayload.self, from: data)
-    guard payload.status == 1, let product = payload.product else {
-      throw BackendError.server(message: "No product was found for that barcode.")
-    }
-    let name = [product.productName, product.brands]
-      .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-      .first(where: { !$0.isEmpty }) ?? "Scanned Item"
-    let description = product.genericName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return ProductLookupResult(barcode: trimmed, name: name, description: description)
+    return try await http.request(
+      path: "api/manager",
+      method: .post,
+      accessToken: accessToken,
+      body: ProductLookupRequest(action: "product_lookup", barcode: trimmed)
+    )
   }
 }
 

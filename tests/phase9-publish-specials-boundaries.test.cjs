@@ -15,15 +15,15 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave3=${Date.now()}-${Math.random()}`);
 }
 
-test('wave 3 publish route delegates auth and command execution through shared server modules', () => {
-  const publishRoute = read('api/menu-publish.js');
+test('manager route delegates publish auth and command execution through shared server modules', () => {
+  const publishRoute = read('api/manager.js');
 
   assert.match(publishRoute, /from '\.\.\/server\/_menu-write\.js'/);
   assert.match(publishRoute, /readAuthorizedMenuActor/);
   assert.match(publishRoute, /from '\.\.\/server\/_menu-publish\.js'/);
   assert.match(publishRoute, /previewMenuUpdateForMenu/);
   assert.match(publishRoute, /publishMenuUpdateForMenu/);
-  assert.match(publishRoute, /body\?\.action/);
+  assert.match(publishRoute, /parsePublishBody/);
 });
 
 test('wave 3 publish command module owns notification delivery and persistence composition', async () => {
@@ -45,21 +45,21 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /resolveSelectedChanges/);
 });
 
-test('wave 3 app runtime prefers publish and specials server boundaries', () => {
+test('app runtime prefers consolidated publish and specials server boundaries', () => {
   const source = read('app.js');
 
   assert.match(source, /async function publishMenuThroughApi/);
   assert.match(source, /async function requestPublishPreviewThroughApi/);
-  assert.match(source, /\/api\/menu-publish/);
-  assert.match(source, /action: 'preview'/);
+  assert.match(source, /\/api\/manager/);
+  assert.match(source, /action: 'preview_publish'/);
   assert.match(source, /selected_change_ids/);
   assert.match(source, /await ensureCurrentMenuSession\(\)\.publishUpdate/);
-  assert.match(source, /await fetch\('\/api\/specials'/);
+  assert.match(source, /await fetch\('\/api\/manager'/);
   assert.match(source, /async request\(action,\s*payload = \{\}\)/);
 });
 
-test('wave 3 specials route keeps restaurant-special mutations behind shared auth and server transport helpers', () => {
-  const specialsRoute = read('api/specials.js');
+test('manager route keeps restaurant-special mutations behind shared auth and server transport helpers', () => {
+  const specialsRoute = read('api/manager.js');
   const specialsCommand = read('server/_specials-command.js');
 
   assert.match(specialsRoute, /from '\.\.\/server\/_auth\.js'/);

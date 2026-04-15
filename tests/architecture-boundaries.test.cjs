@@ -399,7 +399,8 @@ test('notification delivery service normalizes API channel results', async () =>
   assert.deepEqual(Array.from(result.summary.failedChannels || []), ['sms']);
   assert.deepEqual(Array.from(result.summary.skippedChannels || []), ['discord']);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/send-notification');
+  assert.equal(requests[0][0], '/api/manager');
+  assert.equal(JSON.parse(requests[0][1].body).action, 'send_notification');
   assert.equal(requests[0][1].headers.Authorization, 'Bearer token-1');
 });
 
@@ -624,7 +625,8 @@ test('save draft persists a shared draft snapshot without publishing the live me
 
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/menu-draft');
+  assert.equal(requests[0][0], '/api/manager');
+  assert.equal(requests[0][1].action, 'save_draft');
   assert.ok(Array.isArray(requests[0][1].snapshot.cats));
   assert.equal(getState(sandbox, '_dirty'), false);
   assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
@@ -696,7 +698,8 @@ test('save draft clears a shared draft that already matches live', async () => {
   assert.equal(result.ok, true);
   assert.equal(result.cleared, true);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/menu-draft');
+  assert.equal(requests[0][0], '/api/manager');
+  assert.equal(requests[0][1].action, 'save_draft');
   assert.deepEqual(requests[0][1].snapshot, {});
   assert.equal(getState(sandbox, 'hasSharedDraftState()'), false);
   assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE');
@@ -739,7 +742,7 @@ test('save menu publishes a shared draft to live and leaves unsent changes behin
 
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/menu-publish');
+  assert.equal(requests[0][0], '/api/manager');
   assert.equal(requests[0][1].action, 'publish');
   assert.equal(requests[0][1].mode, 'save');
   assert.ok(Array.isArray(requests[0][1].selected_change_ids));
@@ -948,15 +951,18 @@ test('sbResolveMenu defaults bare restaurant routes to that restaurant food menu
   sandbox.location.assign = url => assigned.push(url);
   sandbox.history.replaceState = (_, __, url) => replaceCalls.push(url);
   sandbox.fetch = async url => {
-    if (String(url).includes('/rest/v1/menus?id=in.(')) {
+    if (String(url) === '/api/public?action=menu_index') {
       return {
         ok: true,
-        json: async () => [
-          { ...menus.LEROYS_DRINKS, restaurant_id: menus.LEROYS_DRINKS.restaurantId, archived: false },
-          { ...menus.LEROYS_FOOD, restaurant_id: menus.LEROYS_FOOD.restaurantId, archived: false },
-          { ...menus.ELROYS_DRINKS, restaurant_id: menus.ELROYS_DRINKS.restaurantId, archived: false },
-          { ...menus.ELROYS_FOOD, restaurant_id: menus.ELROYS_FOOD.restaurantId, archived: false },
-        ],
+        text: async () => JSON.stringify({
+          menus: [
+            { ...menus.LEROYS_DRINKS, restaurant_id: menus.LEROYS_DRINKS.restaurantId, archived: false },
+            { ...menus.LEROYS_FOOD, restaurant_id: menus.LEROYS_FOOD.restaurantId, archived: false },
+            { ...menus.ELROYS_DRINKS, restaurant_id: menus.ELROYS_DRINKS.restaurantId, archived: false },
+            { ...menus.ELROYS_FOOD, restaurant_id: menus.ELROYS_FOOD.restaurantId, archived: false },
+          ],
+          restaurants: [restaurants.LEROYS, restaurants.ELROYS],
+        }),
       };
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -993,29 +999,18 @@ test('sbResolveMenu treats ?menu=drinks as restaurant-relative public state', as
   sandbox.history.replaceState = (_, __, url) => replaceCalls.push(url);
   sandbox.fetch = async url => {
     const text = String(url);
-    if (text.includes(`slug=eq.${encodeURIComponent(menus.ELROYS_DRINKS.slug)}`)) {
+    if (text === '/api/public?action=menu_index') {
       return {
         ok: true,
-        json: async () => [{
-          id: menus.ELROYS_DRINKS.id,
-          name: menus.ELROYS_DRINKS.name,
-          type: menus.ELROYS_DRINKS.type,
-          restaurant_id: menus.ELROYS_DRINKS.restaurantId,
-        }],
-      };
-    }
-    if (text.includes('slug=eq.drinks')) {
-      return { ok: true, json: async () => [] };
-    }
-    if (text.includes('/rest/v1/menus?id=in.(')) {
-      return {
-        ok: true,
-        json: async () => [
-          { id: menus.LEROYS_DRINKS.id, archived: false },
-          { id: menus.LEROYS_FOOD.id, archived: false },
-          { id: menus.ELROYS_DRINKS.id, archived: false },
-          { id: menus.ELROYS_FOOD.id, archived: false },
-        ],
+        text: async () => JSON.stringify({
+          menus: [
+            { ...menus.LEROYS_DRINKS, restaurant_id: menus.LEROYS_DRINKS.restaurantId, archived: false },
+            { ...menus.LEROYS_FOOD, restaurant_id: menus.LEROYS_FOOD.restaurantId, archived: false },
+            { ...menus.ELROYS_DRINKS, restaurant_id: menus.ELROYS_DRINKS.restaurantId, archived: false },
+            { ...menus.ELROYS_FOOD, restaurant_id: menus.ELROYS_FOOD.restaurantId, archived: false },
+          ],
+          restaurants: [restaurants.LEROYS, restaurants.ELROYS],
+        }),
       };
     }
     throw new Error(`Unexpected fetch: ${url}`);
@@ -1602,7 +1597,7 @@ test('picker init bootstraps shared session state without requiring the app shel
   const calls = [];
 
   sandbox.fetch = async url => {
-    if (String(url) === '/api/session-bootstrap') {
+    if (String(url) === '/api/auth?mode=bootstrap') {
       calls.push('bootstrap');
       return {
         ok: true,
@@ -1843,37 +1838,35 @@ test('featured view policy filters sell notes by explicit staff visibility', () 
   assert.equal(managerSnapshot.featuredGroups[0].slots[0].sellNote, 'Staff-only note');
 });
 
-test('notification routes rely on the shared notification gateway authorization boundary', () => {
-  const notifySource = fs.readFileSync(path.join(__dirname, '..', 'api', 'send-notification.js'), 'utf8');
+test('manager route keeps notification delivery behind the shared authorization boundary', () => {
+  const notifySource = fs.readFileSync(path.join(__dirname, '..', 'api', 'manager.js'), 'utf8');
   const vercelConfig = fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8');
 
   assert.match(notifySource, /authorizeNotificationRequest/);
-  assert.doesNotMatch(notifySource, /requireMenuAccess, requireRole/);
-  assert.match(vercelConfig, /"source": "\/api\/send-groupme", "destination": "\/api\/send-notification"/);
-  assert.match(vercelConfig, /"source": "\/api\/config", "destination": "\/api\/session-bootstrap\?mode=config"/);
-  assert.match(vercelConfig, /"source": "\/api\/role", "destination": "\/api\/session-bootstrap\?mode=profile"/);
+  assert.match(notifySource, /deliverMenuNotification/);
+  assert.doesNotMatch(vercelConfig, /\/api\/send-groupme/);
+  assert.doesNotMatch(vercelConfig, /\/api\/config/);
+  assert.doesNotMatch(vercelConfig, /\/api\/role/);
 });
 
-test('session bootstrap route handles profile and config modes via shared auth helper boundaries', () => {
-  const bootstrapSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'session-bootstrap.js'), 'utf8');
+test('auth route handles bootstrap and profile modes via shared auth helper boundaries', () => {
+  const bootstrapSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'auth.js'), 'utf8');
 
-  assert.match(bootstrapSource, /requireAuthenticatedUser/);
-  assert.match(bootstrapSource, /readProfile/);
-  assert.match(bootstrapSource, /mode === 'config'/);
+  assert.match(bootstrapSource, /createBootstrapResponse/);
+  assert.match(bootstrapSource, /createProfileResponse/);
+  assert.match(bootstrapSource, /executeAuthAction/);
   assert.match(bootstrapSource, /mode === 'profile'/);
-  assert.doesNotMatch(bootstrapSource, /auth\/v1\/user/);
-  assert.doesNotMatch(bootstrapSource, /profiles\?id=eq\.\$\{uid\}/);
 });
 
-test('runtime bootstrap and auth profile boundaries consume unified session-bootstrap endpoint', () => {
+test('runtime bootstrap and auth profile boundaries consume the consolidated auth endpoint', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   const authApiSource = fs.readFileSync(path.join(__dirname, '..', 'core', 'auth', 'auth-api.js'), 'utf8');
 
   assert.match(appSource, /readSessionBootstrapThroughApi/);
-  assert.match(appSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.match(appSource, /\/api\/auth\?mode=bootstrap/);
   assert.doesNotMatch(appSource, /fetch\('\/api\/config'/);
   assert.doesNotMatch(appSource, /fetch\('\/api\/role'/);
-  assert.match(authApiSource, /fetch\('\/api\/session-bootstrap'/);
+  assert.match(authApiSource, /\/api\/auth\?mode=profile/);
   assert.doesNotMatch(authApiSource, /fetch\('\/api\/role'/);
 });
 
@@ -1885,8 +1878,8 @@ test('runtime workspace and history boundaries request server restaurant-tools a
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });
 
-test('import route delegates landing parsing through a non-api helper module', () => {
-  const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'import.js'), 'utf8');
+test('admin route delegates landing parsing through a non-api helper module', () => {
+  const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'admin.js'), 'utf8');
   assert.match(importSource, /from '\.\.\/server\/_landing-import\.js'/);
   assert.doesNotMatch(importSource, /from '\.\/_landing-import\.js'/);
 });

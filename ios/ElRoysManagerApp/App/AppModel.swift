@@ -76,7 +76,7 @@ struct AppServices {
       history: HistoryClient(environment: environment),
       featuredTools: FeaturedToolsClient(environment: environment),
       preview: PreviewClient(environment: environment),
-      productLookup: ProductLookupClient()
+      productLookup: ProductLookupClient(environment: environment)
     )
   }
 }
@@ -219,7 +219,7 @@ final class AppModel {
 
   func signIn() async {
     guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
+      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Auth bootstrap is unavailable.")
       return
     }
     guard !email.isEmpty, !password.isEmpty else {
@@ -237,7 +237,7 @@ final class AppModel {
 
   func signUp() async {
     guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
+      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Auth bootstrap is unavailable.")
       return
     }
     guard !email.isEmpty, !password.isEmpty, !displayName.isEmpty else {
@@ -255,7 +255,7 @@ final class AppModel {
 
   func sendPasswordReset() async {
     guard let config = bootstrap?.config else {
-      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Supabase config is missing from bootstrap.")
+      notice = AppNotice(tone: .danger, title: "Unavailable", message: "Auth bootstrap is unavailable.")
       return
     }
     guard !email.isEmpty else {
@@ -666,7 +666,10 @@ final class AppModel {
   }
 
   func lookupBarcode(_ barcode: String) async throws -> ProductLookupResult {
-    try await services.productLookup.lookup(upc: barcode)
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.productLookup.lookup(upc: barcode, accessToken: accessToken)
   }
 
   func updatePreviewSelection(_ id: String, selected: Bool) {

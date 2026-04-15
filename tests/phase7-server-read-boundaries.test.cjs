@@ -15,10 +15,10 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave1=${Date.now()}-${Math.random()}`);
 }
 
-test('wave 1 server read routes delegate through shared menu-read helpers', () => {
-  const workspaceSource = read('api/menu-workspace.js');
-  const publicSource = read('api/menu-public.js');
-  const bootstrapSource = read('api/session-bootstrap.js');
+test('consolidated read routes delegate through shared menu-read helpers', () => {
+  const workspaceSource = read('api/manager.js');
+  const publicSource = read('api/public.js');
+  const bootstrapSource = read('api/auth.js');
 
   assert.match(workspaceSource, /from '\.\.\/server\/_menu-read\.js'/);
   assert.match(workspaceSource, /createMenuWorkspacePayload/);
@@ -30,11 +30,9 @@ test('wave 1 server read routes delegate through shared menu-read helpers', () =
   assert.match(publicSource, /createPublicMenuPayload/);
   assert.match(publicSource, /readMenuStateBundle/);
 
-  assert.match(bootstrapSource, /from '\.\.\/server\/_menu-read\.js'/);
-  assert.match(bootstrapSource, /createSessionBootstrapPayload/);
-  assert.match(bootstrapSource, /requireAuthenticatedUser/);
-  assert.match(bootstrapSource, /readMenuAccessForUser/);
-  assert.match(bootstrapSource, /mode === 'config'/);
+  assert.match(bootstrapSource, /createBootstrapResponse/);
+  assert.match(bootstrapSource, /createProfileResponse/);
+  assert.match(bootstrapSource, /executeAuthAction/);
   assert.match(bootstrapSource, /mode === 'profile'/);
 });
 
@@ -50,10 +48,10 @@ test('shared menu read helper exposes stable wave 1 contract builders', async ()
   assert.equal(typeof helper.createSessionBootstrapPayload, 'function');
 });
 
-test('wave 1 server read routes export request handlers', async () => {
-  const workspaceRoute = await importApiModule('api/menu-workspace.js');
-  const publicRoute = await importApiModule('api/menu-public.js');
-  const bootstrapRoute = await importApiModule('api/session-bootstrap.js');
+test('consolidated read routes export request handlers', async () => {
+  const workspaceRoute = await importApiModule('api/manager.js');
+  const publicRoute = await importApiModule('api/public.js');
+  const bootstrapRoute = await importApiModule('api/auth.js');
 
   assert.equal(typeof workspaceRoute.default, 'function');
   assert.equal(typeof publicRoute.default, 'function');
@@ -193,10 +191,10 @@ test('session bootstrap payload exposes actor capabilities against the fixed men
   assert.equal(payload.menus.filter(menu => menu.canManage).length, 1);
 });
 
-test('app runtime prefers wave 1 server read routes before direct supabase reads', () => {
+test('app runtime prefers consolidated server read routes before direct supabase reads', () => {
   const source = read('app.js');
-  assert.match(source, /\/api\/menu-workspace\?/);
-  assert.match(source, /\/api\/menu-public\?/);
+  assert.match(source, /\/api\/manager\?/);
+  assert.match(source, /\/api\/public\?/);
   assert.match(source, /if \(workspace\) return workspace;/);
   assert.match(source, /if \(projection\) return projection;/);
 });

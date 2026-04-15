@@ -15,8 +15,8 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?phase20=${Date.now()}-${Math.random()}`);
 }
 
-test('workspace route can include restaurant tools without widening menu access checks', () => {
-  const routeSource = read('api/menu-workspace.js');
+test('manager route can include restaurant tools without widening menu access checks', () => {
+  const routeSource = read('api/manager.js');
 
   assert.match(routeSource, /readIncludeFlags/);
   assert.match(routeSource, /includeFlags\.includes\('restaurant-tools'\)/);
@@ -36,12 +36,12 @@ test('server write helpers degrade optional draft and source metadata cleanly', 
   assert.match(helperSource, /\/rest\/v1\/categories\?on_conflict=menu_id,key/);
 });
 
-test('session bootstrap route exposes config and readiness on the unified boundary', () => {
-  const routeSource = read('api/session-bootstrap.js');
+test('auth bootstrap route exposes compatibility config and readiness on the unified boundary', () => {
+  const routeSource = read('server/_auth-proxy.js');
 
-  assert.match(routeSource, /function readBootstrapConfig\(/);
+  assert.match(routeSource, /function buildCompatibilityConfig\(/);
   assert.match(routeSource, /function buildBootstrapReadiness\(/);
-  assert.match(routeSource, /config,/);
+  assert.match(routeSource, /config: buildCompatibilityConfig\(\)/);
   assert.match(routeSource, /readiness:/);
   assert.match(routeSource, /includesConfig: true/);
 });

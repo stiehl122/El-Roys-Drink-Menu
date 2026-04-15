@@ -15,15 +15,14 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave2=${Date.now()}-${Math.random()}`);
 }
 
-test('wave 2 write routes delegate through dedicated command modules', () => {
-  const draftRoute = read('api/menu-draft.js');
-  const liveRoute = read('api/menu-live.js');
-  const adminRoute = read('api/admin-settings.js');
+test('consolidated manager and admin routes delegate through dedicated command modules', () => {
+  const managerRoute = read('api/manager.js');
+  const adminRoute = read('api/admin.js');
 
-  assert.match(draftRoute, /from '\.\.\/server\/_menu-draft\.js'/);
-  assert.match(draftRoute, /saveSharedDraftCommand/);
-  assert.match(liveRoute, /from '\.\.\/server\/_menu-live\.js'/);
-  assert.match(liveRoute, /saveLiveMenuCommand/);
+  assert.match(managerRoute, /from '\.\.\/server\/_menu-draft\.js'/);
+  assert.match(managerRoute, /saveSharedDraftCommand/);
+  assert.match(managerRoute, /from '\.\.\/server\/_menu-live\.js'/);
+  assert.match(managerRoute, /saveLiveMenuCommand/);
   assert.match(adminRoute, /from '\.\.\/server\/_admin-settings\.js'/);
   assert.match(adminRoute, /executeAdminSettingsAction/);
 });
@@ -40,15 +39,16 @@ test('wave 2 write helpers export stable command functions', async () => {
   assert.equal(typeof adminSettings.executeAdminSettingsAction, 'function');
 });
 
-test('wave 2 app runtime prefers write command endpoints before direct table writes', () => {
+test('app runtime prefers consolidated write command endpoints before direct table writes', () => {
   const source = read('app.js');
 
   assert.match(source, /async function saveDraftThroughApi/);
-  assert.match(source, /\/api\/menu-draft/);
+  assert.match(source, /\/api\/manager/);
+  assert.match(source, /action: 'save_draft'/);
   assert.match(source, /async function saveLiveMenuThroughApi/);
-  assert.match(source, /\/api\/menu-live/);
+  assert.match(source, /action: 'save_live'/);
   assert.match(source, /async function saveAdminSettingsThroughApi/);
-  assert.match(source, /\/api\/admin-settings/);
+  assert.match(source, /\/api\/admin/);
   assert.match(source, /const apiResult = await saveDraftThroughApi/);
   assert.match(source, /const apiResult = await saveLiveMenuThroughApi/);
   assert.match(source, /const apiResult = await saveAdminSettingsThroughApi\('save_notifications'/);

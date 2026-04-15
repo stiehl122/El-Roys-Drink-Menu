@@ -22,8 +22,8 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?phase18=${Date.now()}-${Math.random()}`);
 }
 
-test('wave 6 history read route delegates through the shared menu history helper', () => {
-  const routeSource = read('api/menu-history.js');
+test('manager route delegates history reads through the shared menu history helper', () => {
+  const routeSource = read('api/manager.js');
 
   assert.match(routeSource, /from '\.\.\/server\/_menu-history\.js'/);
   assert.match(routeSource, /readMenuHistoryForRequest/);
@@ -124,7 +124,7 @@ test('restaurant history payload adds menu metadata while preserving flat log ro
   assert.equal(payload.logs[0].source, 'web_manager');
 });
 
-test('app runtime routes recent changes through the server-owned menu history endpoint', () => {
+test('app runtime routes recent changes through the consolidated manager endpoint', () => {
   const source = read('app.js');
   const readHistorySource = sliceFunction(
     source,
@@ -137,7 +137,7 @@ test('app runtime routes recent changes through the server-owned menu history en
     'function renderUsersTab('
   );
 
-  assert.match(readHistorySource, /\/api\/menu-history\?/);
+  assert.match(readHistorySource, /\/api\/manager\?/);
   assert.match(readHistorySource, /getAuthorizedApiHeaders\(\)/);
   assert.match(renderRecentSource, /readMenuHistoryThroughApi/);
   assert.doesNotMatch(renderRecentSource, /rest\/v1\/update_log/);

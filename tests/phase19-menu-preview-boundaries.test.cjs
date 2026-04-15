@@ -15,12 +15,12 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave4=${Date.now()}-${Math.random()}`);
 }
 
-test('wave 4 publish route supports server-owned preview and publish actions on one boundary', () => {
-  const publishRoute = read('api/menu-publish.js');
+test('manager route supports server-owned preview and publish actions on one boundary', () => {
+  const publishRoute = read('api/manager.js');
 
   assert.match(publishRoute, /previewMenuUpdateForMenu/);
   assert.match(publishRoute, /publishMenuUpdateForMenu/);
-  assert.match(publishRoute, /body\?\.action/);
+  assert.match(publishRoute, /parsePublishBody/);
   assert.match(publishRoute, /selected_change_ids/);
 });
 
@@ -36,7 +36,7 @@ test('wave 4 publish command module exports canonical preview and selected-chang
   assert.doesNotMatch(publishModuleSource, /previewDiff/);
 });
 
-test('wave 4 app runtime requests canonical preview and no longer posts legacy preview payload fields', () => {
+test('app runtime requests canonical preview and no longer posts legacy preview payload fields', () => {
   const source = read('app.js');
   const publishApiStart = source.indexOf('async function requestPublishPreviewThroughApi()');
   const publishApiEnd = source.indexOf('async function saveAdminSettingsThroughApi', publishApiStart);
@@ -45,7 +45,7 @@ test('wave 4 app runtime requests canonical preview and no longer posts legacy p
   const openPreviewEnd = source.indexOf('function closeModal()', openPreviewStart);
   const openPreviewSource = source.slice(openPreviewStart, openPreviewEnd);
 
-  assert.match(publishApiSource, /action:\s*'preview'/);
+  assert.match(publishApiSource, /action:\s*'preview_publish'/);
   assert.match(publishApiSource, /action:\s*'publish'/);
   assert.match(publishApiSource, /selected_change_ids/);
   assert.doesNotMatch(publishApiSource, /preview_diff/);
