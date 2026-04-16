@@ -32,66 +32,45 @@
           ), 0);
       return diffLineCount + saveOnlyChanges.length;
     };
-    const isSharedDraftClearable = snapshot => {
-      const changeCount = resolveDraftChangeCount(snapshot);
-      if (typeof globalScope.isSharedDraftClearable === 'function') {
-        return globalScope.isSharedDraftClearable({
-          hasLocalDraft: !!snapshot?.dirty,
-          hasSharedDraft: !!snapshot?.hasSharedDraft,
-          changeCount,
-        });
-      }
-      return !!snapshot?.hasSharedDraft && !snapshot?.dirty && changeCount === 0;
-    };
+    const buildSaveDraftNoop = (preview, snapshot, source = 'draft-noop') => ({
+      ok: false,
+      noop: true,
+      preview,
+      snapshot: buildSnapshot(source),
+    });
 
     return {
       async saveDraft(options = {}) {
-        void options;
         const snapshot = buildSnapshot('draft');
-        if (!snapshot.dirty) {
-          if (isSharedDraftClearable(snapshot)) {
-            const ts = sessionPorts.now();
-            try {
-              await sessionPorts.patchMenuDraftState(null, ts);
-              sessionPorts.clearDraft?.();
-              return {
-                ok: true,
-                cleared: true,
-                ts,
-                snapshot: buildSnapshot('draft-cleared'),
-              };
-            } catch (error) {
-              return {
-                ok: false,
-                userHandled: false,
-                userMessage: error?.message || 'Draft clear failed.',
-                snapshot: buildSnapshot('draft-clear-failed'),
-              };
-            }
-          }
-          return {
-            ok: false,
-            noop: true,
-            snapshot: buildSnapshot('draft-noop'),
-          };
+        const preview = options.preview?.sections ? options.preview : buildPreview();
+        const hasLocalDraft = !!snapshot?.dirty || !!preview?.hasLocalDraft;
+        const hasChanges = !!preview?.hasChanges || resolveDraftChangeCount(snapshot) > 0;
+
+        if (!hasLocalDraft || !hasChanges) {
+          return buildSaveDraftNoop(preview, snapshot);
         }
-        const ts = sessionPorts.now();
-        try {
-          await sessionPorts.patchMenuDraftState(globalScope.buildPersistedDraftStateSnapshot(ts), ts);
-          sessionPorts.commitDraft(ts);
-          return {
-            ok: true,
-            ts,
-            snapshot: buildSnapshot('draft-saved'),
-          };
-        } catch (error) {
-          return {
-            ok: false,
-            userHandled: false,
-            userMessage: error?.message || 'Draft save failed.',
-            snapshot: buildSnapshot('draft-save-failed'),
-          };
+
+        const request = {
+          ...options,
+          preview,
+          mode: 'save',
+          notify: false,
+        };
+
+        if (typeof sessionPorts.publishMenuUpdate === 'function') {
+          return sessionPorts.publishMenuUpdate(request);
         }
+        if (fallbackService && typeof fallbackService.publishUpdate === 'function') {
+          return fallbackService.publishUpdate(request);
+        }
+
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: 'Publish service is unavailable.',
+          preview,
+          snapshot: buildSnapshot('save-unavailable'),
+        };
       },
 
       async publishUpdate(options = {}) {

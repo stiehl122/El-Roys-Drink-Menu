@@ -159,15 +159,17 @@ final class MenuDocumentTests: XCTestCase {
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
     let rootURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    let store = OfflineDraftStore(rootURL: rootURL)
+    let store = OfflineDraftStore(rootURL: rootURL, clientScopeId: "ios-phone")
     let envelope = LocalDraftEnvelope(
       userId: "staff-1",
       menuId: "menu-drinks",
+      clientScopeId: "ios-phone",
       restaurantId: "leroys-lounge",
       menuName: "Drinks",
       savedAt: Date(timeIntervalSince1970: 1234),
       baseLiveRevision: 8,
       baseDraftRevision: 9,
+      baseNotificationBaselineRevision: 7,
       baseDocument: EditableMenuDocument(workspace: makeWorkspace()),
       document: EditableMenuDocument(workspace: makeWorkspace())
     )
@@ -178,6 +180,31 @@ final class MenuDocumentTests: XCTestCase {
 
     try store.removeDraft(userId: "staff-1", menuId: "menu-drinks")
     XCTAssertNil(try store.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
+  }
+
+  func testOfflineDraftStoreScopesDraftsByClientDevice() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let phoneStore = OfflineDraftStore(rootURL: rootURL, clientScopeId: "ios-phone")
+    let tabletStore = OfflineDraftStore(rootURL: rootURL, clientScopeId: "ios-tablet")
+    let envelope = LocalDraftEnvelope(
+      userId: "staff-1",
+      menuId: "menu-drinks",
+      clientScopeId: "ios-phone",
+      restaurantId: "leroys-lounge",
+      menuName: "Drinks",
+      savedAt: Date(timeIntervalSince1970: 1234),
+      baseLiveRevision: 8,
+      baseDraftRevision: 9,
+      baseNotificationBaselineRevision: 7,
+      baseDocument: EditableMenuDocument(workspace: makeWorkspace()),
+      document: EditableMenuDocument(workspace: makeWorkspace())
+    )
+
+    try phoneStore.saveDraft(envelope)
+
+    XCTAssertNotNil(try phoneStore.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
+    XCTAssertNil(try tabletStore.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
   }
 
   func testCompactFeaturedItemProjectionDecodesWithDefaults() throws {
@@ -310,6 +337,51 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.visibility, "off_menu")
   }
 
+  func testWorkspacePayloadDecodesQueueStatusFields() throws {
+    let data = Data("""
+    {
+      "cats": [],
+      "meta": {
+        "last_updated_ts": 200,
+        "last_sent_ts": 150
+      },
+      "context": {
+        "kind": "menu-workspace",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "workspace": {
+        "menu_status": "Live | Unsent",
+        "has_unsent_changes": true,
+        "accessible_menu_ids": ["menu"],
+        "shared_draft": { "exists": false },
+        "permissions": { "can_manage": true },
+        "capabilities": {
+          "can_save_draft": true,
+          "can_save_live_menu": true,
+          "can_publish_updates": true
+        },
+        "revisions": {
+          "live_revision": 200,
+          "notification_baseline_revision": 150
+        }
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(MenuWorkspacePayload.self, from: data)
+
+    XCTAssertEqual(payload.workspace.menuStatus, "Live | Unsent")
+    XCTAssertEqual(payload.workspace.hasUnsentChanges, true)
+    XCTAssertEqual(payload.workspace.revisions.liveRevision, 200)
+    XCTAssertEqual(payload.workspace.revisions.notificationBaselineRevision, 150)
+  }
+
   func testHistoryPayloadDecodesWhenSourceFieldsAreMissing() throws {
     let data = Data("""
     {
@@ -344,6 +416,44 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.logs[0].source, "")
     XCTAssertTrue(payload.capabilities.includesMessage)
     XCTAssertFalse(payload.capabilities.includesSource)
+  }
+
+  func testHistoryPayloadDecodesOperationMetadata() throws {
+    let data = Data("""
+    {
+      "logs": [
+        {
+          "id": "log-1",
+          "menu_id": "menu",
+          "user_id": "user-1",
+          "user_name": "Alex",
+          "operation_id": "op-42",
+          "event_type": "send_failed",
+          "diff": [],
+          "message": "Delivery failed",
+          "source": "ios_app",
+          "created_at": "2026-04-14T06:00:00.000Z"
+        }
+      ],
+      "context": {
+        "kind": "menu-history"
+      },
+      "history": {
+        "days": 7,
+        "limit": 25,
+        "count": 1,
+        "scope": "menu"
+      },
+      "capabilities": {
+        "can_read_history": true
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(HistoryPayload.self, from: data)
+
+    XCTAssertEqual(payload.logs.first?.operationId, "op-42")
+    XCTAssertEqual(payload.logs.first?.eventType, "send_failed")
   }
 
   func testDraftCommandResponseDecodesServerShape() throws {
@@ -421,6 +531,8 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.selectedChangeIds, ["beer::added::ipa"])
     XCTAssertEqual(payload.preview?.metadata.contract, "menu-publish-preview.v1")
     XCTAssertEqual(payload.preview?.metadata.currentFeaturedIds, ["item-1"])
+    XCTAssertEqual(payload.preview?.menuStatus, "Live | Unsent")
+    XCTAssertEqual(payload.preview?.hasUnsentChanges, true)
   }
 
   @MainActor
@@ -469,7 +581,7 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
-  func testSaveDraftRebaselinesLocalStateAndClearsOfflineDraft() async {
+  func testDiscardLocalDraftRestoresServerStateAndClearsOfflineDraft() async {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
     let workspaceClient = StubWorkspaceClient(payloads: [makeWorkspace(categories: [
@@ -486,21 +598,6 @@ final class MenuDocumentTests: XCTestCase {
         items: [makeItem(id: "item-1", name: "Pilsner")]
       )
     ])])
-    let draftClient = StubDraftClient(
-      saveResponse: DraftCommandResponse(
-        ok: true,
-        status: "draft_saved",
-        menuId: "menu",
-        savedAt: 22,
-        hasSharedDraft: true,
-        sharedDraft: SharedDraftInfo(
-          exists: true,
-          savedAt: 22,
-          savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
-          source: "ios_app"
-        )
-      )
-    )
     let model = AppModel(
       environment: AppEnvironment(
         name: .preview,
@@ -510,8 +607,7 @@ final class MenuDocumentTests: XCTestCase {
       ),
       services: makeServices(
         workspaceClient: workspaceClient,
-        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
-        draftClient: draftClient
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
       ),
       sessionStore: sessionStore,
       offlineDraftStore: offlineStore
@@ -523,15 +619,14 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(model.editorDirty)
     XCTAssertNotNil(offlineStore.draft)
 
-    await model.saveRemoteDraft()
+    model.discardLocalDraft()
 
     XCTAssertFalse(model.editorDirty)
-    XCTAssertTrue(model.editorHasLiveChanges)
+    XCTAssertFalse(model.editorHasLiveChanges)
     XCTAssertNil(model.editorRefreshRequirement)
     XCTAssertNil(offlineStore.draft)
-    XCTAssertTrue(model.editorHasSharedDraft)
-    XCTAssertTrue(model.canSaveLiveRemotely)
-    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.draftRevision, 22)
+    XCTAssertEqual(model.currentEditorDocument?.category(for: "beer")?.label, "Beer")
+    XCTAssertEqual(model.notice?.title, "Draft Discarded")
   }
 
   @MainActor
@@ -594,13 +689,14 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(model.currentEditorDocument?.itemRecord(for: "item-1")?.item.name, "House Pilsner")
     XCTAssertFalse(model.editorDirty)
     XCTAssertTrue(model.editorHasLiveChanges)
-    XCTAssertTrue(model.editorHasSharedDraft)
+    XCTAssertTrue(model.hasServerUnsentChanges)
     XCTAssertTrue(model.canSaveLiveRemotely)
     XCTAssertTrue(model.canLoadPublishPreview)
+    XCTAssertEqual(model.menuStatusLabel, "Live | Unsent")
   }
 
   @MainActor
-  func testSaveLiveMenuClearsSharedDraftAndRebaselinesBothBaselines() async throws {
+  func testSaveQuietlyRebaselinesAndKeepsQueueStateForLaterSend() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
     let baseWorkspace = makeWorkspace(categories: [
@@ -640,16 +736,6 @@ final class MenuDocumentTests: XCTestCase {
       ),
       revisions: WorkspaceRevisions(liveRevision: 10, draftRevision: 22, lastSentRevision: 10)
     )
-    let draftClient = StubDraftClient(
-      clearResponse: DraftCommandResponse(
-        ok: true,
-        status: "draft_cleared",
-        menuId: "menu",
-        savedAt: nil,
-        hasSharedDraft: false,
-        sharedDraft: SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
-      )
-    )
     let liveSaveClient = StubLiveSaveClient(
       response: PublishResponse(
         ok: true,
@@ -674,7 +760,6 @@ final class MenuDocumentTests: XCTestCase {
       services: makeServices(
         workspaceClient: StubWorkspaceClient(payloads: [workspace]),
         historyClient: StubHistoryClient(payload: makeHistoryPayload()),
-        draftClient: draftClient,
         liveSaveClient: liveSaveClient
       ),
       sessionStore: sessionStore,
@@ -684,20 +769,71 @@ final class MenuDocumentTests: XCTestCase {
 
     await model.loadEditor(menuId: "menu")
 
-    XCTAssertTrue(model.editorHasSharedDraft)
+    XCTAssertTrue(model.hasServerUnsentChanges)
     XCTAssertTrue(model.editorHasLiveChanges)
 
     await model.saveLiveMenu()
 
     XCTAssertFalse(model.editorDirty)
     XCTAssertFalse(model.editorHasLiveChanges)
-    XCTAssertFalse(model.editorHasSharedDraft)
-    XCTAssertFalse(model.showClearSharedDraft)
+    XCTAssertTrue(model.hasServerUnsentChanges)
     XCTAssertFalse(model.canSaveLiveRemotely)
     XCTAssertEqual(liveSaveClient.saveCallCount, 1)
-    XCTAssertEqual(draftClient.clearCallCount, 1)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
     XCTAssertNil(offlineStore.draft)
+    XCTAssertEqual(model.notice?.title, "Saved Quietly")
+  }
+
+  @MainActor
+  func testLiveUnsentStatusEnablesSendWithoutLocalDraft() async throws {
+    let workspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      revisions: WorkspaceRevisions(
+        liveRevision: 30,
+        draftRevision: nil,
+        lastSentRevision: 20,
+        notificationBaselineRevision: 20
+      ),
+      menuStatus: "Live | Unsent",
+      hasUnsentChanges: true
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+
+    XCTAssertFalse(model.hasLocalDraftChanges)
+    XCTAssertFalse(model.hasLiveMenuChanges)
+    XCTAssertTrue(model.hasServerUnsentChanges)
+    XCTAssertEqual(model.menuStatusLabel, "Live | Unsent")
+    XCTAssertTrue(model.canLoadPublishPreview)
+    XCTAssertFalse(model.canSaveQuietlyRemotely)
   }
 
   @MainActor
@@ -1044,11 +1180,13 @@ final class MenuDocumentTests: XCTestCase {
     offlineStore.draft = LocalDraftEnvelope(
       userId: "staff-1",
       menuId: "menu",
+      clientScopeId: offlineStore.clientScopeId,
       restaurantId: "leroys-lounge",
       menuName: "Drinks",
       savedAt: Date(timeIntervalSince1970: 1234),
       baseLiveRevision: 10,
       baseDraftRevision: 2,
+      baseNotificationBaselineRevision: 2,
       baseDocument: staleBase,
       document: malformedDocument
     )
@@ -1087,7 +1225,9 @@ final class MenuDocumentTests: XCTestCase {
     meta: MenuMetaPayload = MenuMetaPayload(),
     hasSharedDraft: Bool = false,
     sharedDraft: SharedDraftInfo? = nil,
-    revisions: WorkspaceRevisions = WorkspaceRevisions(liveRevision: 10, draftRevision: nil, lastSentRevision: 10)
+    revisions: WorkspaceRevisions = WorkspaceRevisions(liveRevision: 10, draftRevision: nil, lastSentRevision: 10, notificationBaselineRevision: 10),
+    menuStatus: String = "",
+    hasUnsentChanges: Bool? = nil
   ) -> MenuWorkspacePayload {
     let resolvedSharedDraft = sharedDraft ?? SharedDraftInfo(
       exists: hasSharedDraft,
@@ -1106,6 +1246,8 @@ final class MenuDocumentTests: XCTestCase {
         accessibleMenuIds: ["menu"],
         hasSharedDraft: hasSharedDraft || resolvedSharedDraft.exists,
         sharedDraft: resolvedSharedDraft,
+        menuStatus: menuStatus,
+        hasUnsentChanges: hasUnsentChanges,
         permissions: WorkspacePermissions(canManage: true, canAdmin: false, canEditRestaurantSpecials: false, canReadRestaurantTools: false),
         capabilities: WorkspaceCapabilities(
           canSaveDraft: true,
@@ -1218,6 +1360,7 @@ private enum TestError: LocalizedError {
 }
 
 private final class TestOfflineDraftStore: OfflineDraftStoring {
+  var clientScopeId: String = "test-device"
   var draft: LocalDraftEnvelope?
   var loadError: Error?
   var savedEnvelopes: [LocalDraftEnvelope] = []
@@ -1303,19 +1446,19 @@ private final class StubBootstrapClient: BootstrapClienting {
 }
 
 private final class StubAuthClient: AuthClienting {
-  func signIn(config: BootstrapConfig, email: String, password: String) async throws -> AuthSession {
+  func signIn(email: String, password: String) async throws -> AuthSession {
     throw TestError.message("Unused in this test")
   }
 
-  func signUp(config: BootstrapConfig, email: String, password: String, name: String) async throws -> AuthSession {
+  func signUp(email: String, password: String, name: String) async throws -> AuthSession {
     throw TestError.message("Unused in this test")
   }
 
-  func refresh(config: BootstrapConfig, session: AuthSession) async throws -> AuthSession {
+  func refresh(session: AuthSession) async throws -> AuthSession {
     throw TestError.message("Unused in this test")
   }
 
-  func sendReset(config: BootstrapConfig, email: String, redirectTo: URL) async throws {
+  func sendReset(email: String, redirectTo: URL) async throws {
     throw TestError.message("Unused in this test")
   }
 }
@@ -1421,7 +1564,7 @@ private final class StubPreviewClient: PreviewClienting {
 }
 
 private final class StubProductLookupClient: ProductLookupClienting {
-  func lookup(upc: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
     throw TestError.message("Unused in this test")
   }
 }

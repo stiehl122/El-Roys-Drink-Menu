@@ -10,6 +10,7 @@ struct MenuEditorScreen: View {
   @State private var showingItemSheet = false
   @State private var renameTarget: MenuCategoryPayload?
   @State private var renameText = ""
+  @State private var showingDiscardDraftConfirm = false
 
   private var theme: MenuEditorTheme {
     .theme(for: menu)
@@ -31,8 +32,8 @@ struct MenuEditorScreen: View {
             menuAccent: menuAccent,
             hasLocalDraftChanges: model.hasLocalDraftChanges,
             hasLiveMenuChanges: model.hasLiveMenuChanges,
-            hasSharedDraft: model.editorHasSharedDraft,
-            sharedDraftSummary: model.editorSharedDraftSummary
+            hasServerUnsentChanges: model.hasServerUnsentChanges,
+            menuStatusLabel: model.menuStatusLabel
           )
 
           if let notice = model.notice {
@@ -46,9 +47,9 @@ struct MenuEditorScreen: View {
             menuAccent: menuAccent,
             onAddItem: presentNewItem,
             onAddCategory: { showingAddCategory = true },
-            onSaveDraft: saveDraft,
-            onSaveLive: saveLive,
-            onSendUpdate: loadSendPreview
+            onSaveQuietly: saveQuietly,
+            onSendUpdate: loadSendPreview,
+            onDiscardDraft: { showingDiscardDraftConfirm = true }
           )
 
           if let preview = model.currentEditorPreview {
@@ -159,6 +160,14 @@ struct MenuEditorScreen: View {
       }
       Button("Cancel", role: .cancel) {}
     }
+    .alert("Discard Local Draft?", isPresented: $showingDiscardDraftConfirm) {
+      Button("Discard Draft", role: .destructive) {
+        model.discardLocalDraft()
+      }
+      Button("Keep Editing", role: .cancel) {}
+    } message: {
+      Text("This only removes unsaved edits from this device and does not modify the shared server queue.")
+    }
   }
 
   private func presentNewItem() {
@@ -174,11 +183,7 @@ struct MenuEditorScreen: View {
     }
   }
 
-  private func saveDraft() {
-    Task { await model.saveRemoteDraft() }
-  }
-
-  private func saveLive() {
+  private func saveQuietly() {
     Task { await model.saveLiveMenu() }
   }
 
@@ -258,8 +263,8 @@ private struct PublishPreviewCard: View {
   let onPublish: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Send Update Preview")
+    VStack(alignment: .leading, spacing: 12) {
+      Text(previewTitle)
         .font(EditorTypography.display(20, weight: .bold))
         .foregroundStyle(theme.titleText)
       if !preview.patchMessage.isEmpty {
@@ -267,33 +272,92 @@ private struct PublishPreviewCard: View {
           .font(EditorTypography.body(14))
           .foregroundStyle(theme.subtleText)
       }
-      ForEach(Array(preview.sections.enumerated()), id: \.offset) { _, section in
+
+      if preview.hasNotificationChanges {
         VStack(alignment: .leading, spacing: 6) {
-          Text(section.label)
+          Text("Will Send")
             .font(EditorTypography.body(14, weight: .bold))
             .foregroundStyle(theme.titleText)
-          ForEach(Array(section.changes.enumerated()), id: \.offset) { _, change in
-            Toggle(isOn: Binding(
-              get: { model.selectedPreviewChangeIDs.contains(change.id) },
-              set: { model.updatePreviewSelection(change.id, selected: $0) }
-            )) {
-              Text(change.text)
+          ForEach(Array(preview.sections.enumerated()), id: \.offset) { _, section in
+            VStack(alignment: .leading, spacing: 6) {
+              Text(section.label)
+                .font(EditorTypography.body(13, weight: .semibold))
+                .foregroundStyle(theme.subtleText)
+              ForEach(Array(section.changes.enumerated()), id: \.offset) { _, change in
+                Toggle(isOn: Binding(
+                  get: { model.selectedPreviewChangeIDs.contains(change.id) },
+                  set: { model.updatePreviewSelection(change.id, selected: $0) }
+                )) {
+                  Text(change.text)
+                    .font(EditorTypography.body(13))
+                    .foregroundStyle(theme.bodyText)
+                }
+                .tint(menuAccent)
+              }
+            }
+          }
+        }
+        .padding(12)
+        .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+        if !uncheckedChanges.isEmpty {
+          VStack(alignment: .leading, spacing: 6) {
+            Text("Will Clear Without Sending")
+              .font(EditorTypography.body(14, weight: .bold))
+              .foregroundStyle(theme.titleText)
+            ForEach(Array(uncheckedChanges.enumerated()), id: \.offset) { _, change in
+              Text("\(change.sectionLabel): \(change.text)")
                 .font(EditorTypography.body(13))
                 .foregroundStyle(theme.bodyText)
             }
-            .tint(menuAccent)
+          }
+          .padding(12)
+          .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+      }
+
+      if !preview.saveOnlyChanges.isEmpty {
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Will Save Only")
+            .font(EditorTypography.body(14, weight: .bold))
+            .foregroundStyle(theme.titleText)
+          ForEach(Array(preview.saveOnlyChanges.enumerated()), id: \.offset) { _, change in
+            Text(change.label.nilIfBlank ?? change.message)
+              .font(EditorTypography.body(13))
+              .foregroundStyle(theme.bodyText)
           }
         }
         .padding(12)
         .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
       }
-      Button("Save And Send") {
+
+      Button(actionButtonTitle) {
         onPublish()
       }
       .buttonStyle(PrimaryGlassButtonStyle())
       .disabled(!model.canPublishRemotely)
     }
     .menuEditorSurface(colors: [theme.previewTop, theme.previewBottom], border: theme.previewBorder)
+  }
+
+  private var previewTitle: String {
+    if !preview.hasNotificationChanges {
+      return "Save Preview"
+    }
+    return model.hasLocalDraftChanges ? "Save & Send Preview" : "Send Preview"
+  }
+
+  private var actionButtonTitle: String {
+    if !preview.hasNotificationChanges {
+      return "Save"
+    }
+    return model.hasLocalDraftChanges ? "Save & Send" : "Send"
+  }
+
+  private var uncheckedChanges: [PreviewChange] {
+    preview.sections
+      .flatMap(\.changes)
+      .filter { !model.selectedPreviewChangeIDs.contains($0.id) }
   }
 }
 
@@ -303,8 +367,8 @@ private struct MenuEditorHeaderCard: View {
   let menuAccent: Color
   let hasLocalDraftChanges: Bool
   let hasLiveMenuChanges: Bool
-  let hasSharedDraft: Bool
-  let sharedDraftSummary: String?
+  let hasServerUnsentChanges: Bool
+  let menuStatusLabel: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -333,6 +397,11 @@ private struct MenuEditorHeaderCard: View {
 
       HStack(alignment: .top, spacing: 10) {
         MenuEditorBadge(
+          label: menuStatusLabel,
+          fill: hasServerUnsentChanges ? menuAccent.opacity(0.16) : theme.successAccent.opacity(0.18),
+          text: hasServerUnsentChanges ? menuAccent : theme.successAccent
+        )
+        MenuEditorBadge(
           label: hasLocalDraftChanges ? "Drafting locally" : "No local drafts",
           fill: hasLocalDraftChanges ? theme.warningAccent.opacity(0.18) : theme.neutralAccent.opacity(0.16),
           text: hasLocalDraftChanges ? theme.warningAccent : theme.neutralAccent
@@ -342,19 +411,6 @@ private struct MenuEditorHeaderCard: View {
           fill: hasLiveMenuChanges ? menuAccent.opacity(0.16) : theme.successAccent.opacity(0.18),
           text: hasLiveMenuChanges ? menuAccent : theme.successAccent
         )
-        if hasSharedDraft {
-          MenuEditorBadge(
-            label: "Shared draft on server",
-            fill: menuAccent.opacity(0.16),
-            text: menuAccent
-          )
-        }
-      }
-
-      if let sharedDraftSummary {
-        Text(sharedDraftSummary)
-          .font(EditorTypography.body(13))
-          .foregroundStyle(theme.subtleText)
       }
 
       Text(workflowSummary)
@@ -365,16 +421,19 @@ private struct MenuEditorHeaderCard: View {
   }
 
   private var workflowSummary: String {
-    if hasLiveMenuChanges && hasLocalDraftChanges {
-      return "Your working copy is ahead of both the shared draft and the live menu."
-    }
-    if hasLiveMenuChanges && hasSharedDraft {
-      return "This menu is showing the saved shared draft. Save Menu or Send Update to promote it live."
+    if hasLocalDraftChanges && hasServerUnsentChanges {
+      return "This device has unsaved local edits, and the server queue still has unsent menu changes."
     }
     if hasLocalDraftChanges {
-      return "Your edits are only on this device until you save a shared draft or push them live."
+      return "Your draft is local to this device until you Save Quietly or Save & Send."
     }
-    return "This editor is aligned with the current shared draft and live menu state."
+    if hasServerUnsentChanges {
+      return "The menu is live with unsent queue work. Use Send to notify channels or clear remaining queue groups."
+    }
+    if hasLiveMenuChanges {
+      return "Your working copy differs from live. Save Quietly to stage it live without sending."
+    }
+    return "Live state and notification baseline are aligned."
   }
 }
 
@@ -400,9 +459,9 @@ private struct MenuEditorActionPanel: View {
   let menuAccent: Color
   let onAddItem: () -> Void
   let onAddCategory: () -> Void
-  let onSaveDraft: () -> Void
-  let onSaveLive: () -> Void
+  let onSaveQuietly: () -> Void
   let onSendUpdate: () -> Void
+  let onDiscardDraft: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
@@ -423,52 +482,49 @@ private struct MenuEditorActionPanel: View {
       }
 
       HStack(spacing: 12) {
-        Button(action: onSaveDraft) {
+        Button(action: onSaveQuietly) {
           MenuEditorActionLabel(
-            title: "Save Draft",
-            subtitle: model.hasLocalDraftChanges ? "Push the working copy to the shared draft" : "No local draft changes",
-            icon: "square.and.arrow.down.fill",
-            accent: theme.neutralAccent
-          )
-        }
-        .buttonStyle(.plain)
-        .disabled(!model.canSaveDraftRemotely)
-
-        Button(action: onSaveLive) {
-          MenuEditorActionLabel(
-            title: "Save Menu",
-            subtitle: model.hasLiveMenuChanges ? "Update the live menu without sending" : "Live menu already matches",
+            title: "Save Quietly",
+            subtitle: model.hasLiveMenuChanges ? "Save live without sending notifications" : "Live menu already matches",
             icon: "checkmark.seal.fill",
             accent: theme.successAccent
           )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSaveLiveRemotely)
-      }
+        .disabled(!model.canSaveQuietlyRemotely)
 
-      HStack(spacing: 12) {
         Button(action: onSendUpdate) {
           MenuEditorActionLabel(
-            title: "Send Update",
-            subtitle: model.currentEditorPreview == nil ? "Review the outgoing update before sending" : "Preview loaded below",
+            title: model.hasLocalDraftChanges ? "Save & Send" : "Send",
+            subtitle: model.currentEditorPreview == nil
+              ? (model.hasLocalDraftChanges
+                  ? "Save live, then choose what to send or clear"
+                  : "Choose which unsent queue groups to send or clear")
+              : "Preview loaded below",
             icon: "paperplane.fill",
             accent: menuAccent
           )
         }
         .buttonStyle(.plain)
         .disabled(!model.canLoadPublishPreview)
+      }
+
+      HStack(spacing: 12) {
+        Button(action: onDiscardDraft) {
+          MenuEditorActionLabel(
+            title: "Discard Draft",
+            subtitle: model.hasLocalDraftChanges ? "Remove local edits on this device" : "No local draft to discard",
+            icon: "trash.fill",
+            accent: theme.warningAccent
+          )
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canDiscardLocalDraft)
 
         NavigationLink(value: AppDestination.routePreview(menu)) {
           MenuEditorActionLabel(title: "Exact Route", subtitle: "See the true public route", icon: "safari.fill", accent: theme.neutralAccent)
         }
         .buttonStyle(.plain)
-      }
-
-      if model.showClearSharedDraft {
-        Button("Clear Shared Draft", action: onSaveDraft)
-          .font(EditorTypography.body(13, weight: .bold))
-          .foregroundStyle(theme.warningAccent)
-          .buttonStyle(.plain)
       }
     }
     .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)

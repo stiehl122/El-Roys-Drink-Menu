@@ -10,6 +10,7 @@ import {
   readJsonSafe,
   serviceHeaders,
 } from './_supabase.js';
+import { buildCategoryQueueState } from './_menu-queue.js';
 
 const domainConstants = (globalThis.__HF_DOMAIN_CONSTANTS__ && typeof globalThis.__HF_DOMAIN_CONSTANTS__ === 'object')
   ? globalThis.__HF_DOMAIN_CONSTANTS__
@@ -77,6 +78,29 @@ async function fetchJsonOrThrow(url, fallbackMessage) {
   throw new Error(getApiErrorMessage(payload, fallbackMessage));
 }
 
+export async function readCurrentFeaturedIdsForRestaurant(restaurantId = '') {
+  const config = getRestaurantSpecialConfig(restaurantId);
+  if (!config?.canonicalId) return [];
+
+  const { sbUrl } = getSupabaseServerConfig();
+  const groupResponse = await fetch(
+    `${sbUrl}/rest/v1/featured_groups?canonical_id=eq.${encodeURIComponent(config.canonicalId)}&select=id&limit=1`,
+    { headers: serviceHeaders() }
+  );
+  if (!groupResponse.ok) return [];
+  const groups = await groupResponse.json();
+  const groupId = groups?.[0]?.id;
+  if (!groupId) return [];
+
+  const slotsResponse = await fetch(
+    `${sbUrl}/rest/v1/featured_slots?featured_group_id=eq.${groupId}&select=item_id`,
+    { headers: serviceHeaders() }
+  );
+  if (!slotsResponse.ok) return [];
+  const slots = await slotsResponse.json();
+  return Array.from(new Set((Array.isArray(slots) ? slots : []).map(slot => slot?.item_id).filter(Boolean)));
+}
+
 export async function readMenuStateBundle(menuId) {
   if (!isSupportedMenuId(menuId)) {
     throw { status: 400, message: 'Unsupported menu_id' };
@@ -107,6 +131,7 @@ export async function readMenuStateBundle(menuId) {
     `${sbUrl}/rest/v1/restaurants?id=eq.${menuRow.restaurant_id}&select=id,name,slug,design,use_custom_design&limit=1`,
     'Failed to load restaurant'
   );
+  const featuredCurrentIds = await readCurrentFeaturedIdsForRestaurant(menuRow.restaurant_id || '');
 
   return {
     menu: {
@@ -119,6 +144,7 @@ export async function readMenuStateBundle(menuId) {
     cats: Array.isArray(cats) ? cats : [],
     meta: metaRows?.[0] || {},
     restaurant: restaurantRows?.[0] || null,
+    featuredCurrentIds,
   };
 }
 
@@ -253,9 +279,35 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
       : null,
     source: String(draftMeta?.draft_saved_source || '').trim(),
   };
+  const lastSentState = draftMeta?.last_sent_state && typeof draftMeta.last_sent_state === 'object'
+    ? draftMeta.last_sent_state
+    : {};
+  const queueState = buildCategoryQueueState({
+    snapshot: { cats: bundle?.cats || [] },
+    lastSentState,
+  });
+  const currentFeaturedIds = Array.isArray(bundle?.featuredCurrentIds)
+    ? bundle.featuredCurrentIds.filter(Boolean)
+    : [];
+  const baselineFeaturedIds = Array.isArray(draftMeta?.last_sent_featured)
+    ? draftMeta.last_sent_featured.filter(Boolean)
+    : [];
+  const currentFeaturedSet = new Set(currentFeaturedIds);
+  const baselineFeaturedSet = new Set(baselineFeaturedIds);
+  const unsentFeaturedIds = Array.from(new Set([
+    ...currentFeaturedIds.filter(itemId => !baselineFeaturedSet.has(itemId)),
+    ...baselineFeaturedIds.filter(itemId => !currentFeaturedSet.has(itemId)),
+  ]));
+  const unsentItemIds = Array.from(new Set([
+    ...queueState.unsentItemIds,
+    ...unsentFeaturedIds,
+  ]));
+  const hasUnsentChanges = queueState.hasNotificationChanges || unsentFeaturedIds.length > 0;
+  const publishStatus = hasUnsentChanges ? 'live_unsent' : 'live';
   const workspaceCapabilities = {
     canSaveDraft: canManage,
     canSaveLiveMenu: canManage,
+    canSaveQuietly: canManage,
     canPublishUpdates: canManage,
     canManageRestaurantSpecials: canEditRestaurantSpecials,
     canReadRestaurantTools: canEditRestaurantSpecials,
@@ -278,6 +330,22 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
       accessibleMenuIds,
       hasSharedDraft,
       sharedDraft,
+      publishState: {
+        status: publishStatus,
+        statusLabel: hasUnsentChanges ? 'Live | Unsent' : 'Live',
+        hasUnsentChanges,
+        revisions: {
+          liveRevision: bundle?.meta?.last_updated_ts || null,
+          notificationRevision: bundle?.meta?.last_sent_ts || null,
+        },
+        queue: {
+          contract: 'menu-queue.v1',
+          unsentItemIds,
+          unsentFeaturedIds,
+          sections: queueState.diff,
+          selectableGroupIds: queueState.groups.map(group => group.id),
+        },
+      },
       permissions: {
         canManage,
         canAdmin: normalizedActor?.role === 'admin',
@@ -292,10 +360,12 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
     },
     capabilities: workspaceCapabilities,
     compatibility: {
-      contract: 'menu-workspace.v3',
+      contract: 'menu-workspace.v4',
       actorStamped: !!normalizedActor?.id,
       permissionShape: 'workspace.permissions.v1',
       capabilityShape: 'workspace.capabilities.v1',
+      publishStateShape: 'workspace.publish-state.v1',
+      sharedDraftDeprecated: true,
     },
   };
 }

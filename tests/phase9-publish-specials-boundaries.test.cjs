@@ -40,9 +40,9 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /saveLiveMenuForMenu/);
   assert.match(publishModuleSource, /patchMenuMetaForMenu/);
   assert.match(publishModuleSource, /insertUpdateLog/);
-  assert.match(publishModuleSource, /menu-publish-preview\.v1/);
+  assert.match(publishModuleSource, /menu-publish-preview\.v2/);
   assert.match(publishModuleSource, /buildCanonicalPreviewForMenu/);
-  assert.match(publishModuleSource, /resolveSelectedChanges/);
+  assert.match(publishModuleSource, /resolveSelection/);
 });
 
 test('app runtime prefers consolidated publish and specials server boundaries', () => {

@@ -464,9 +464,18 @@ export async function patchMenuMetaForMenuWithCompatibility(menuId, update = {},
   }
 }
 
-export async function insertUpdateLog({ menuId, actor = null, diff = [], message = '', source = '' }) {
+export async function insertUpdateLog({
+  menuId,
+  actor = null,
+  diff = [],
+  message = '',
+  source = '',
+  operationId = '',
+  eventType = '',
+} = {}) {
   if (!message) return true;
   const { sbUrl } = getSupabaseServerConfig();
+  const normalizedEventType = String(eventType || '').trim().toLowerCase();
   const requestBody = {
     menu_id: menuId,
     user_id: actor?.id || null,
@@ -474,36 +483,39 @@ export async function insertUpdateLog({ menuId, actor = null, diff = [], message
     diff: Array.isArray(diff) ? diff : [],
     message: String(message || ''),
     source: normalizeAuditSource(source, { fallback: inferAuditSource(actor) }),
+    operation_id: operationId || undefined,
+    event_type: normalizedEventType || undefined,
   };
   const baseHeaders = serviceHeaders({
     'Content-Type': 'application/json',
     Prefer: 'return=minimal',
   });
-  let response = await fetch(`${sbUrl}/rest/v1/update_log`, {
-    method: 'POST',
-    headers: baseHeaders,
-    body: JSON.stringify(requestBody),
-  });
-  if (!response.ok) {
+
+  const downgradedFields = [];
+  const removableFields = ['source', 'operation_id', 'event_type'];
+  const requestPayload = { ...requestBody };
+
+  while (true) {
+    const response = await fetch(`${sbUrl}/rest/v1/update_log`, {
+      method: 'POST',
+      headers: baseHeaders,
+      body: JSON.stringify(requestPayload),
+    });
+    if (response.ok) break;
+
     const payload = await readJsonSafe(response);
-    if (isMissingColumnIssue(payload, 'source')) {
-      const { source: _ignored, ...fallbackBody } = requestBody;
-      response = await fetch(`${sbUrl}/rest/v1/update_log`, {
-        method: 'POST',
-        headers: baseHeaders,
-        body: JSON.stringify(fallbackBody),
-      });
-      if (response.ok) {
-        return {
-          downgradedFields: ['source'],
-        };
-      }
-      const fallbackPayload = await readJsonSafe(response);
-      throw new Error(getApiErrorMessage(fallbackPayload, 'Failed to write update log'));
+    const missingField = removableFields.find(fieldName => (
+      Object.prototype.hasOwnProperty.call(requestPayload, fieldName) &&
+      isMissingColumnIssue(payload, fieldName)
+    ));
+    if (!missingField) {
+      throw new Error(getApiErrorMessage(payload, 'Failed to write update log'));
     }
-    throw new Error(getApiErrorMessage(payload, 'Failed to write update log'));
+    delete requestPayload[missingField];
+    if (!downgradedFields.includes(missingField)) downgradedFields.push(missingField);
   }
+
   return {
-    downgradedFields: [],
+    downgradedFields,
   };
 }

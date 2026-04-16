@@ -103,15 +103,16 @@ test('wave 4 server modules harden actor authorization and check revisions befor
   assert.match(menuWrite, /reconnect:/);
 
   assert.match(menuPublish, /const currentRevisions = readRevisionState\(meta\)/);
-  assert.match(menuPublish, /command: 'menu-publish\.v1'/);
+  assert.match(menuPublish, /command: 'menu-publish\.v2'/);
   assert.match(menuPublish, /assertExpectedRevision\(expectedLiveRevision, meta\?\.last_updated_ts \|\| null, 'live_revision', \{/);
-  assert.match(menuPublish, /assertExpectedRevision\(expectedDraftRevision, meta\?\.draft_saved_ts \|\| null, 'draft_revision', \{/);
+  assert.match(menuPublish, /const notificationBaselineRevision = expectedNotificationRevision \?\? expectedDraftRevision \?\? null;/);
+  assert.match(menuPublish, /assertExpectedRevision\(notificationBaselineRevision, meta\?\.last_sent_ts \|\| null, 'notification_revision', \{/);
   const liveRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts || null, 'live_revision', {");
-  const draftRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts || null, 'draft_revision', {");
+  const notificationRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(notificationBaselineRevision, meta?.last_sent_ts || null, 'notification_revision', {");
   const saveLiveIndex = menuPublish.indexOf('await saveLiveMenuForMenu({');
   const notifyIndex = menuPublish.indexOf('await deliverMenuNotification(');
   assert.ok(liveRevisionCheckIndex > -1 && liveRevisionCheckIndex < saveLiveIndex);
-  assert.ok(draftRevisionCheckIndex > -1 && draftRevisionCheckIndex < notifyIndex);
+  assert.ok(notificationRevisionCheckIndex > -1 && notificationRevisionCheckIndex < notifyIndex);
 
   assert.match(adminSettings, /export async function authorizeAdminSettingsRequest\(req\)/);
   assert.match(adminSettings, /requireRole\(req, 'admin'\)/);
@@ -130,6 +131,7 @@ test('consolidated write routes preserve structured API error bodies and explici
   assert.match(manager, /if \(!menuId\) return res\.status\(400\)\.json\(\{ error: 'Missing menu_id' \}\)/);
   assert.match(manager, /expectedLiveRevision/);
   assert.match(manager, /expectedDraftRevision/);
+  assert.match(manager, /expectedNotificationRevision/);
   assert.match(adminSettings, /status: 'admin_unauthorized'/);
   assert.match(adminSettings, /Unsupported admin action/);
 });

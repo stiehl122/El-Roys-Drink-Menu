@@ -243,7 +243,7 @@
                 <h2>Add, remove, and 86 items.</h2>
               </div>
               <div class="manager-shell-section-actions">
-                <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay in draft until you Save Draft or publish them live.</p>
+                <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay on this device until you save them live or send the queue.</p>
                 <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal({ mode: 'manual' })" style="display:none">Add Item(s)</button>
               </div>
             </div>
@@ -387,8 +387,9 @@
       </div>
       <div class="manager-shell-actionbar-groups">
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group">
-          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Draft</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Save</button>
+          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Send</button>
+          <button class="btn-small" id="discard-draft-btn" onclick="discardLocalDraft()" hidden>Discard Draft</button>
         </div>
       </div>
       <div class="manager-shell-actionbar-status">
@@ -401,8 +402,8 @@
 
 <div class="modal-bg" id="modal-bg" hidden aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <h2 id="modal-title">Patch Notes Preview</h2>
-    <div class="modal-sub" id="modal-subtitle">Review the changes before publishing them to the live menu.</div>
+    <h2 id="modal-title">Send Preview</h2>
+    <div class="modal-sub" id="modal-subtitle">Review how these changes will save, send, or clear.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
       <button class="btn-cancel" id="cancel-preview-btn" onclick="closeModal()">Cancel</button>

@@ -37,7 +37,6 @@ function createMenuSessionPorts(overrides = {}) {
     persistState: async () => true,
     patchMenuMeta: async () => ({ downgradedFields: [] }),
     patchMenuMetaForMenu: async () => ({ downgradedFields: [] }),
-    patchMenuDraftState: async () => ({ downgradedFields: [] }),
     commitDraft() {},
     commitLiveSave() {},
     buildPreview: snapshot => ({
@@ -74,11 +73,32 @@ function createMenuSessionPorts(overrides = {}) {
 
 test('menu publish service boundary saves drafts and publishes updates', async () => {
   const sandbox = loadAppSandbox();
-  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts());
+  const saveCalls = [];
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
+    publishMenuUpdate: async options => {
+      saveCalls.push(options);
+      if (options?.mode === 'save') {
+        return {
+          ok: true,
+          successMessage: 'quiet save',
+          snapshot: { source: 'saved-live' },
+        };
+      }
+      return {
+        ok: true,
+        successMessage: '✅ Main Menu saved to the live menu.',
+        notificationStatus: null,
+      };
+    },
+  }));
 
   const draftResult = await lifecycle.saveDraft();
   assert.equal(draftResult.ok, true);
-  assert.equal(draftResult.snapshot.source, 'draft-saved');
+  assert.equal(draftResult.snapshot.source, 'saved-live');
+  assert.equal(saveCalls.length, 1);
+  assert.equal(saveCalls[0].mode, 'save');
+  assert.equal(saveCalls[0].notify, false);
+  assert.equal(saveCalls[0].preview.mode, 'update-only');
 
   const publishResult = await lifecycle.publishUpdate({ notify: false });
   assert.equal(publishResult.ok, true);

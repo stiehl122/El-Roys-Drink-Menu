@@ -54,12 +54,17 @@
       if (!response || response.status === 404 || !response.ok) return null;
 
       const payload = await response.json();
-      const name = cleanText(payload?.name);
+      const product = payload?.status === 1 && payload?.product
+        ? payload.product
+        : (payload?.product && typeof payload.product === 'object' ? payload.product : null);
+      const name = cleanText(payload?.name)
+        || cleanText(product?.product_name_en || product?.product_name)
+        || cleanText(product?.brands);
       if (!name) return null;
 
       return {
         name,
-        description: cleanText(payload?.description) || buildDescription(payload?.product || {}),
+        description: cleanText(payload?.description) || buildDescription(product || {}),
       };
     } catch (_) {
       return null;

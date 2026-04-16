@@ -59,23 +59,33 @@ test('menu history payload preserves diff and message fields for manager consume
       diff: [{ id: 'beer', label: 'Beer', added: ['Lager'] }],
       message: 'Heads up: taps moved.',
       source: 'web_manager',
+      operation_id: 'operation-1',
+      event_type: 'send_notification',
       created_at: '2026-04-13T12:00:00.000Z',
     }],
     days: 7,
     limit: 25,
     includesSource: true,
+    includesOperationId: true,
+    includesEventType: true,
   });
 
   assert.equal(payload.context.kind, 'menu-history');
   assert.equal(payload.logs.length, 1);
   assert.equal(payload.logs[0].message, 'Heads up: taps moved.');
-   assert.equal(payload.logs[0].source, 'web_manager');
+  assert.equal(payload.logs[0].source, 'web_manager');
+  assert.equal(payload.logs[0].operation_id, 'operation-1');
+  assert.equal(payload.logs[0].event_type, 'send_notification');
   assert.deepEqual(payload.logs[0].diff, [{ id: 'beer', label: 'Beer', added: ['Lager'] }]);
+  assert.equal(payload.operations.length, 1);
+  assert.equal(payload.operations[0].operation_id, 'operation-1');
+  assert.equal(payload.operations[0].event_count, 1);
   assert.equal(payload.capabilities.canReadHistory, true);
   assert.equal(payload.capabilities.includesMessage, true);
   assert.equal(payload.capabilities.includesSource, true);
+  assert.equal(payload.capabilities.includesOperationGrouping, true);
   assert.equal(payload.history.scope, 'menu');
-  assert.equal(payload.compatibility.contract, 'menu-history.v2');
+  assert.equal(payload.compatibility.contract, 'menu-history.v3');
 });
 
 test('restaurant history payload adds menu metadata while preserving flat log rows', async () => {
@@ -102,6 +112,8 @@ test('restaurant history payload adds menu metadata while preserving flat log ro
       diff: [{ id: 'beer', label: 'Beer', added: ['Lager'] }],
       message: 'Heads up: taps moved.',
       source: 'web_manager',
+      operation_id: 'operation-1',
+      event_type: 'send_notification',
       created_at: '2026-04-13T12:00:00.000Z',
       menu: {
         id: '00000000-0000-0000-0000-000000000020',
@@ -115,6 +127,8 @@ test('restaurant history payload adds menu metadata while preserving flat log ro
     limit: 25,
     scope: 'restaurant',
     includesSource: true,
+    includesOperationId: true,
+    includesEventType: true,
   });
 
   assert.equal(payload.context.kind, 'restaurant-history');
@@ -122,6 +136,7 @@ test('restaurant history payload adds menu metadata while preserving flat log ro
   assert.equal(payload.history.scope, 'restaurant');
   assert.equal(payload.logs[0].menu.slug, 'leroys-lounge-drinks');
   assert.equal(payload.logs[0].source, 'web_manager');
+  assert.equal(payload.logs[0].event_type, 'send_notification');
 });
 
 test('app runtime routes recent changes through the consolidated manager endpoint', () => {

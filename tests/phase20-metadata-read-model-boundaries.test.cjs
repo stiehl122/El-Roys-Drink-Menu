@@ -34,6 +34,8 @@ test('server write helpers degrade optional draft and source metadata cleanly', 
   assert.equal(helper.normalizeAuditSource('WEB_ADMIN'), 'web_admin');
   assert.equal(helper.inferAuditSource({ role: 'manager' }, ''), 'web_manager');
   assert.match(helperSource, /\/rest\/v1\/categories\?on_conflict=menu_id,key/);
+  assert.match(helperSource, /operation_id/);
+  assert.match(helperSource, /event_type/);
 });
 
 test('auth bootstrap route exposes compatibility config and readiness on the unified boundary', () => {

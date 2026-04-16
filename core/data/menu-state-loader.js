@@ -8,9 +8,6 @@
   function createMenuStateLoaderServiceImpl(deps = {}) {
     const readState = typeof deps.readState === 'function' ? deps.readState : (() => globalScope.sbRead?.());
     const hydrateFromState = typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => globalScope.hydrateState?.(data));
-    const applyDraftState = typeof deps.applyPersistedDraftState === 'function'
-      ? deps.applyPersistedDraftState
-      : (draftState => globalScope.applyPersistedDraftState?.(draftState));
     const setDefaultState = typeof deps.setDefaultState === 'function'
       ? deps.setDefaultState
       : (() => globalScope.resetMenuStateToDefaults?.());
@@ -21,6 +18,21 @@
           globalScope.clearDraftSaveOnlyChanges?.();
           globalScope.clearSharedDraftState?.();
         });
+    const isDirty = typeof deps.isDirty === 'function'
+      ? deps.isDirty
+      : (() => !!globalScope._dirty);
+    const readStoredLocalDraftEnvelope = typeof deps.readStoredLocalDraftEnvelope === 'function'
+      ? deps.readStoredLocalDraftEnvelope
+      : (() => globalScope.readStoredLocalDraftEnvelope?.());
+    const buildCurrentLocalDraftEnvelope = typeof deps.buildCurrentLocalDraftEnvelope === 'function'
+      ? deps.buildCurrentLocalDraftEnvelope
+      : (() => globalScope.buildCurrentLocalDraftEnvelope?.());
+    const applyLocalDraftEnvelope = typeof deps.applyLocalDraftEnvelope === 'function'
+      ? deps.applyLocalDraftEnvelope
+      : ((envelope, options = {}) => globalScope.applyLocalDraftEnvelope?.(envelope, options));
+    const clearCurrentLocalDraft = typeof deps.clearCurrentLocalDraft === 'function'
+      ? deps.clearCurrentLocalDraft
+      : ((options = {}) => globalScope.clearCurrentLocalDraft?.(options));
     const writeMenuCache = typeof deps.writeMenuCache === 'function'
       ? deps.writeMenuCache
       : (() => {});
@@ -42,6 +54,9 @@
     const getFeaturedSnapshotValue = typeof deps.getFeaturedSnapshot === 'function'
       ? deps.getFeaturedSnapshot
       : (() => globalScope.getFeaturedSnapshot?.());
+    const syncLocalDraftDirtyState = typeof deps.syncLocalDraftDirtyState === 'function'
+      ? deps.syncLocalDraftDirtyState
+      : (() => globalScope.syncLocalDraftDirtyState?.());
 
     return {
       async load(options = {}) {
@@ -56,9 +71,28 @@
           const data = await readState({ request, source: options.source || 'network', options });
           if (data) {
             hydrateFromState(data);
-            const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
-            setDirty(false);
-            if (!loadedDraft) clearDraftChanges();
+            const persistedDraftEnvelope = includePersistedDraft ? readStoredLocalDraftEnvelope() : null;
+            let loadedDraft = false;
+            if (includePersistedDraft) {
+              if (persistedDraftEnvelope) {
+                loadedDraft = !!applyLocalDraftEnvelope(persistedDraftEnvelope, { markDirty: false });
+              }
+              if (loadedDraft) {
+                const hasLocalDraft = !!syncLocalDraftDirtyState();
+                if (hasLocalDraft) {
+                  setDirty(true);
+                } else {
+                  clearCurrentLocalDraft();
+                  setDirty(false);
+                  clearDraftChanges();
+                }
+              }
+            }
+            if (!loadedDraft) {
+              clearCurrentLocalDraft(persistedDraftEnvelope ? {} : { clearStorage: false });
+              setDirty(false);
+              clearDraftChanges();
+            }
             if (persistCache) writeMenuCache(data);
           } else if (fallbackToDefault) {
             setDefaultState();
@@ -94,7 +128,24 @@
           };
         }
 
+        const activeDraftEnvelope = isDirty()
+          ? buildCurrentLocalDraftEnvelope()
+          : readStoredLocalDraftEnvelope();
         hydrateFromState(data);
+        if (activeDraftEnvelope) {
+          const reappliedDraft = applyLocalDraftEnvelope(activeDraftEnvelope, { markDirty: false });
+          if (reappliedDraft && syncLocalDraftDirtyState()) {
+            setDirty(true);
+          } else {
+            clearCurrentLocalDraft(reappliedDraft ? {} : { clearStorage: false });
+            setDirty(false);
+            clearDraftChanges();
+          }
+        } else {
+          clearCurrentLocalDraft({ clearStorage: false });
+          setDirty(false);
+          clearDraftChanges();
+        }
         writeMenuCache(data);
         const newTs = getLastUpdatedTs();
         if (newTs !== oldTs) await refreshFeatured();
