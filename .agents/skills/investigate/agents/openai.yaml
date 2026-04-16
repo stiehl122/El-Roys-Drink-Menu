@@ -1,0 +1,7 @@
+interface:
+  display_name: "Investigate"
+  short_description: "Dual-agent explicit investigation"
+  default_prompt: "Use $investigate to spawn Codemonkey and Sherlock for a read-only investigation of a bug, behavior, architecture question, or code path, then reconcile their findings."
+
+policy:
+  allow_implicit_invocation: false
