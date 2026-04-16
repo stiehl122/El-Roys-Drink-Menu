@@ -125,6 +125,7 @@ export default async function handler(req, res) {
           legacySelectedSections: Array.isArray(body?.selected_sections) ? body.selected_sections : [],
           expectedLiveRevision: body?.expected_live_revision ?? null,
           expectedDraftRevision: body?.expected_draft_revision ?? null,
+          expectedNotificationRevision: body?.expected_notification_revision ?? null,
         });
         return res.status(200).json(result);
       }

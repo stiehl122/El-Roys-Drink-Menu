@@ -56,6 +56,8 @@ test('app runtime requests canonical preview and no longer posts legacy preview 
   assert.match(publishApiSource, /action:\s*'preview_publish'/);
   assert.match(publishApiSource, /action:\s*'publish'/);
   assert.match(publishApiSource, /selected_change_ids/);
+  assert.match(publishApiSource, /expected_notification_revision/);
+  assert.doesNotMatch(publishApiSource, /expected_draft_revision:\s*draftEnvelope\?\.baseLastSentRevision/);
   assert.doesNotMatch(publishApiSource, /preview_diff/);
   assert.doesNotMatch(publishApiSource, /selected_sections/);
   assert.doesNotMatch(publishApiSource, /patch_message/);

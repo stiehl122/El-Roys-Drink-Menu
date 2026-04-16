@@ -8,9 +8,6 @@
   function createMenuStateLoaderServiceImpl(deps = {}) {
     const readState = typeof deps.readState === 'function' ? deps.readState : (() => globalScope.sbRead?.());
     const hydrateFromState = typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => globalScope.hydrateState?.(data));
-    const applyDraftState = typeof deps.applyPersistedDraftState === 'function'
-      ? deps.applyPersistedDraftState
-      : (draftState => globalScope.applyPersistedDraftState?.(draftState));
     const setDefaultState = typeof deps.setDefaultState === 'function'
       ? deps.setDefaultState
       : (() => globalScope.resetMenuStateToDefaults?.());
@@ -57,6 +54,9 @@
     const getFeaturedSnapshotValue = typeof deps.getFeaturedSnapshot === 'function'
       ? deps.getFeaturedSnapshot
       : (() => globalScope.getFeaturedSnapshot?.());
+    const syncLocalDraftDirtyState = typeof deps.syncLocalDraftDirtyState === 'function'
+      ? deps.syncLocalDraftDirtyState
+      : (() => globalScope.syncLocalDraftDirtyState?.());
 
     return {
       async load(options = {}) {
@@ -71,17 +71,25 @@
           const data = await readState({ request, source: options.source || 'network', options });
           if (data) {
             hydrateFromState(data);
+            const persistedDraftEnvelope = includePersistedDraft ? readStoredLocalDraftEnvelope() : null;
             let loadedDraft = false;
             if (includePersistedDraft) {
-              const persistedDraftEnvelope = readStoredLocalDraftEnvelope();
               if (persistedDraftEnvelope) {
-                loadedDraft = !!applyLocalDraftEnvelope(persistedDraftEnvelope, { markDirty: true });
-              } else if (data?.meta?.draft_state) {
-                loadedDraft = !!applyDraftState(data.meta.draft_state || null);
+                loadedDraft = !!applyLocalDraftEnvelope(persistedDraftEnvelope, { markDirty: false });
+              }
+              if (loadedDraft) {
+                const hasLocalDraft = !!syncLocalDraftDirtyState();
+                if (hasLocalDraft) {
+                  setDirty(true);
+                } else {
+                  clearCurrentLocalDraft();
+                  setDirty(false);
+                  clearDraftChanges();
+                }
               }
             }
             if (!loadedDraft) {
-              clearCurrentLocalDraft({ clearStorage: false });
+              clearCurrentLocalDraft(persistedDraftEnvelope ? {} : { clearStorage: false });
               setDirty(false);
               clearDraftChanges();
             }
@@ -125,9 +133,11 @@
           : readStoredLocalDraftEnvelope();
         hydrateFromState(data);
         if (activeDraftEnvelope) {
-          const reappliedDraft = applyLocalDraftEnvelope(activeDraftEnvelope, { markDirty: true });
-          if (!reappliedDraft) {
-            clearCurrentLocalDraft({ clearStorage: false });
+          const reappliedDraft = applyLocalDraftEnvelope(activeDraftEnvelope, { markDirty: false });
+          if (reappliedDraft && syncLocalDraftDirtyState()) {
+            setDirty(true);
+          } else {
+            clearCurrentLocalDraft(reappliedDraft ? {} : { clearStorage: false });
             setDirty(false);
             clearDraftChanges();
           }

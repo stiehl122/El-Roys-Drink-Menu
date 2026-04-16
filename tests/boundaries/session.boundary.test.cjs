@@ -122,6 +122,7 @@ test('menu state loader boundary reapplies the stored local draft envelope on to
       appliedEnvelope = envelope;
       return true;
     },
+    syncLocalDraftDirtyState: () => true,
     setDefaultState: () => {
       throw new Error('should not fall back');
     },
@@ -145,4 +146,52 @@ test('menu state loader boundary reapplies the stored local draft envelope on to
   assert.deepEqual(appliedEnvelope, draftEnvelope);
   assert.equal(cached, apiProjection);
   assert.equal(clearCalls, 0);
+});
+
+test('menu state loader boundary clears no-op stored local drafts instead of entering drafting state', async () => {
+  const sandbox = loadAppSandbox();
+  const clearDraftOptions = [];
+  const dirtyStates = [];
+  let clearCalls = 0;
+
+  const service = sandbox.createMenuStateLoaderService({
+    readState: async () => ({
+      cats: [{ key: 'beer', items: [{ id: 'lager' }] }],
+      meta: {},
+      restaurant: { id: 'restaurant-main', name: 'Main Restaurant' },
+      workspace: {
+        actor: { id: 'user-1', role: 'manager' },
+        permissions: { canManage: true },
+      },
+    }),
+    hydrateFromState: () => {},
+    readStoredLocalDraftEnvelope: () => ({
+      baseSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }] },
+      draftSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }] },
+    }),
+    applyLocalDraftEnvelope: () => true,
+    syncLocalDraftDirtyState: () => false,
+    clearCurrentLocalDraft: options => {
+      clearDraftOptions.push(options);
+    },
+    setDirty: value => {
+      dirtyStates.push(value);
+    },
+    clearDraftChanges: () => {
+      clearCalls += 1;
+    },
+    writeMenuCache: () => {},
+    refreshFeatured: async () => {},
+    buildSnapshot: source => ({ source }),
+  });
+
+  const snapshot = await service.load({
+    request: { pageMode: 'manager' },
+    source: 'network',
+  });
+
+  assert.equal(snapshot.source, 'network');
+  assert.deepEqual(clearDraftOptions, [undefined]);
+  assert.deepEqual(dirtyStates, [false]);
+  assert.equal(clearCalls, 1);
 });

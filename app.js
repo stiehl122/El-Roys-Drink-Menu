@@ -5359,7 +5359,6 @@ async function requestPublishPreviewThroughApi() {
     menu_id: MENU_ID,
     snapshot: buildPublishSnapshotPayload(),
     expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
-    expected_draft_revision: draftEnvelope?.baseLastSentRevision ?? null,
     expected_notification_revision: draftEnvelope?.baseLastSentRevision ?? null,
   }, {
     headers: getAuthorizedApiHeaders(),
@@ -5377,7 +5376,6 @@ async function publishMenuThroughApi({ mode, selectedChangeIds = [] }) {
     snapshot: buildPublishSnapshotPayload(),
     selected_change_ids: Array.isArray(selectedChangeIds) ? selectedChangeIds : [],
     expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
-    expected_draft_revision: draftEnvelope?.baseLastSentRevision ?? null,
     expected_notification_revision: draftEnvelope?.baseLastSentRevision ?? null,
   }, {
     headers: getAuthorizedApiHeaders(),
@@ -5829,6 +5827,9 @@ function withMenuStateLoaderDefaults(deps = {}) {
     getFeaturedSnapshot: typeof deps.getFeaturedSnapshot === 'function'
       ? deps.getFeaturedSnapshot
       : (() => getFeaturedSnapshot()),
+    syncLocalDraftDirtyState: typeof deps.syncLocalDraftDirtyState === 'function'
+      ? deps.syncLocalDraftDirtyState
+      : (() => syncLocalDraftDirtyState()),
     isDirty: typeof deps.isDirty === 'function'
       ? deps.isDirty
       : (() => !!_dirty),
@@ -5876,6 +5877,7 @@ function createMenuStateLoaderService(deps = {}) {
   const getCategorySnapshot = resolvedDeps.getCategorySnapshot;
   const getDesignSnapshotValue = resolvedDeps.getDesignSnapshot;
   const getFeaturedSnapshotValue = resolvedDeps.getFeaturedSnapshot;
+  const syncDraftDirtyState = resolvedDeps.syncLocalDraftDirtyState;
   const readStoredLocalDraft = resolvedDeps.readStoredLocalDraftEnvelope;
   const buildCurrentDraftEnvelope = resolvedDeps.buildCurrentLocalDraftEnvelope;
   const applyLocalDraft = resolvedDeps.applyLocalDraftEnvelope;
@@ -5899,14 +5901,20 @@ function createMenuStateLoaderService(deps = {}) {
           const localDraftEnvelope = includePersistedDraft ? readStoredLocalDraft() : null;
           const loadedDraft = includePersistedDraft
             ? (localDraftEnvelope
-                ? !!applyLocalDraft(localDraftEnvelope, { markDirty: true })
+                ? !!applyLocalDraft(localDraftEnvelope, { markDirty: false })
                 : !!applyDraftState(null))
             : false;
           if (loadedDraft) {
             setLocalDraftBaseSnapshot(localDraftEnvelope?.baseSnapshot || getServerLiveSnapshot());
-            setDirty(true);
+            if (syncDraftDirtyState()) {
+              setDirty(true);
+            } else {
+              clearCurrentDraft();
+              setDirty(false);
+              clearDraftChanges();
+            }
           } else {
-            clearCurrentDraft({ clearStorage: false });
+            clearCurrentDraft(localDraftEnvelope ? {} : { clearStorage: false });
             setDirty(false);
             clearDraftChanges();
           }
@@ -5953,7 +5961,14 @@ function createMenuStateLoaderService(deps = {}) {
       hydrateFromState(data);
       const usedWorkspaceRestaurantTools = applyWorkspaceRestaurantTools(data);
       if (activeDraftEnvelope?.draftSnapshot) {
-        applyLocalDraft(activeDraftEnvelope, { markDirty: true });
+        const reappliedDraft = applyLocalDraft(activeDraftEnvelope, { markDirty: false });
+        if (reappliedDraft && syncDraftDirtyState()) {
+          setDirty(true);
+        } else {
+          clearCurrentDraft();
+          setDirty(false);
+          clearDraftChanges();
+        }
       } else {
         clearCurrentDraft({ clearStorage: false });
         setDirty(false);
@@ -6351,7 +6366,11 @@ function applyLocalDraftEnvelope(envelope = null, options = {}) {
   const applied = applyPersistedDraftState(normalized.draftSnapshot);
   if (!applied) return false;
   setLocalDraftBaseSnapshot(normalized.baseSnapshot || getServerLiveSnapshot());
-  _dirty = options.markDirty !== false;
+  if (options.markDirty === false) {
+    _dirty = false;
+  } else {
+    _dirty = hasActualLocalDraftChanges();
+  }
   return true;
 }
 

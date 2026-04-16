@@ -486,16 +486,18 @@ async function buildCanonicalPreviewForMenu({
 function assertPublishRevisions({
   expectedLiveRevision,
   expectedDraftRevision,
+  expectedNotificationRevision,
   meta,
   menuId,
 }) {
   const currentRevisions = readRevisionState(meta);
+  const notificationBaselineRevision = expectedNotificationRevision ?? expectedDraftRevision ?? null;
   assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts || null, 'live_revision', {
     menuId,
     command: 'menu-publish.v2',
     currentRevisions,
   });
-  assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts || null, 'draft_revision', {
+  assertExpectedRevision(notificationBaselineRevision, meta?.last_sent_ts || null, 'notification_revision', {
     menuId,
     command: 'menu-publish.v2',
     currentRevisions,
@@ -552,6 +554,7 @@ export async function previewMenuUpdateForMenu({
   snapshot = {},
   expectedLiveRevision = null,
   expectedDraftRevision = null,
+  expectedNotificationRevision = null,
 }) {
   void actor;
   void source;
@@ -564,6 +567,7 @@ export async function previewMenuUpdateForMenu({
   const currentRevisions = assertPublishRevisions({
     expectedLiveRevision,
     expectedDraftRevision,
+    expectedNotificationRevision,
     meta,
     menuId,
   });
@@ -596,6 +600,7 @@ export async function publishMenuUpdateForMenu({
   legacySelectedSections = [],
   expectedLiveRevision = null,
   expectedDraftRevision = null,
+  expectedNotificationRevision = null,
 }) {
   const knownMenu = getKnownMenuById(menuId);
   if (!knownMenu) {
@@ -606,6 +611,7 @@ export async function publishMenuUpdateForMenu({
   const currentRevisions = assertPublishRevisions({
     expectedLiveRevision,
     expectedDraftRevision,
+    expectedNotificationRevision,
     meta,
     menuId,
   });
