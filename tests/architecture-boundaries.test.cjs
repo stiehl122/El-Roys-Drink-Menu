@@ -255,41 +255,46 @@ test('menu session lifecycle routes poll and manual refreshes through one bounda
   ]);
 });
 
-test('menu session lifecycle saveDraft persists and patches last-updated metadata', async () => {
+test('menu session lifecycle saveDraft routes quiet saves through the publish boundary', async () => {
   const sandbox = loadAppSandbox();
-  const patchDraftCalls = [];
-  const commitCalls = [];
+  const publishCalls = [];
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
     buildSnapshot: (source, request) => ({ source, request, dirty: true }),
-    patchMenuDraftState: async (snapshot, ts) => {
-      patchDraftCalls.push([snapshot, ts]);
-      return { downgradedFields: [] };
-    },
-    commitDraft: ts => {
-      commitCalls.push(ts);
+    publishMenuUpdate: async options => {
+      publishCalls.push(options);
+      return {
+        ok: true,
+        successMessage: 'quiet save',
+        snapshot: { source: 'saved-live' },
+      };
     },
   }));
 
   const result = await lifecycle.saveDraft();
 
   assert.equal(result.ok, true);
-  assert.equal(result.snapshot.source, 'draft-saved');
-  assert.equal(patchDraftCalls.length, 1);
-  assert.ok(Array.isArray(patchDraftCalls[0][0].cats));
-  assert.equal(patchDraftCalls[0][1], 1712705100000);
-  assert.deepEqual(commitCalls, [1712705100000]);
+  assert.equal(result.snapshot.source, 'saved-live');
+  assert.equal(publishCalls.length, 1);
+  assert.equal(publishCalls[0].mode, 'save');
+  assert.equal(publishCalls[0].notify, false);
+  assert.equal(publishCalls[0].preview.mode, 'update-only');
 });
 
-test('menu publish service exposes draft-save and publish boundaries directly', async () => {
+test('menu publish service exposes quiet-save and publish boundaries directly', async () => {
   const sandbox = loadAppSandbox();
-  const patchDraftCalls = [];
+  const quietSaveCalls = [];
 
   const ports = createMenuSessionPorts({
     buildSnapshot: source => ({ source, dirty: true }),
-    patchMenuDraftState: async (_snapshot, ts) => {
-      patchDraftCalls.push(ts);
-      return { downgradedFields: [] };
+    publishMenuUpdate: async options => {
+      quietSaveCalls.push(options);
+      return {
+        ok: true,
+        snapshot: { source: 'saved-live' },
+        notificationStatus: null,
+        warnings: [],
+      };
     },
     syncLocalCache: () => true,
     logUpdate: async () => true,
@@ -304,8 +309,10 @@ test('menu publish service exposes draft-save and publish boundaries directly', 
 
   const draftResult = await service.saveDraft();
   assert.equal(draftResult.ok, true);
-  assert.equal(draftResult.snapshot.source, 'draft-saved');
-  assert.deepEqual(patchDraftCalls, [1712705100000]);
+  assert.equal(draftResult.snapshot.source, 'saved-live');
+  assert.equal(quietSaveCalls.length, 1);
+  assert.equal(quietSaveCalls[0].mode, 'save');
+  assert.equal(quietSaveCalls[0].notify, false);
 
   const publishResult = await service.publishUpdate({ notify: false });
   assert.equal(publishResult.ok, true);
@@ -410,7 +417,7 @@ test('draft ledger service provides action-bar and item badge state through one 
     isDirty: () => true,
     hasSharedDraft: () => false,
     getDraftChangeCount: () => 2,
-    getDiffLinesCount: () => 0,
+    getDiffLinesCount: () => 1,
     getDiffSections: () => [{
       id: 'beer',
       added: ['Lager'],
@@ -423,8 +430,9 @@ test('draft ledger service provides action-bar and item badge state through one 
   const actionBarState = service.getActionBarState({ isCompactViewport: false });
   assert.equal(actionBarState.hasDraftChanges, true);
   assert.equal(actionBarState.hasPendingUpdate, false);
-  assert.equal(actionBarState.publishLabel, 'Save');
-  assert.equal(actionBarState.summaryText, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
+  assert.equal(actionBarState.saveLabel, 'Save Quietly');
+  assert.equal(actionBarState.publishLabel, 'Save & Send');
+  assert.equal(actionBarState.summaryText, '2 pending changes. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.');
 
   const draftBadge = service.getItemBadge({
     item: { id: 'item-1', name: 'Lager', eightySixed: false },
@@ -478,10 +486,11 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   assert.equal(bar.hidden, false);
   assert.equal(primaryGroup.hidden, false);
-  assert.equal(summary.textContent, 'No Pending Changes');
+  assert.equal(summary.textContent, 'No pending changes');
   assert.equal(saveBtn.disabled, true);
-  assert.equal(saveBtn.textContent, 'Save Draft');
+  assert.equal(saveBtn.textContent, 'Save');
   assert.equal(sendBtn.disabled, true);
+  assert.equal(sendBtn.textContent, 'Send');
   assert.equal(bar.classList.contains('is-idle'), true);
 
   setState(sandbox, {
@@ -502,15 +511,15 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   sandbox.updateManagerActionBar();
 
-  assert.equal(summary.textContent, '2 pending changes. Save Draft updates the shared draft. Save opens Patch Notes Preview to publish live.');
+  assert.equal(summary.textContent, '2 pending changes. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.');
   assert.equal(saveBtn.disabled, false);
-  assert.equal(saveBtn.textContent, 'Save Draft');
+  assert.equal(saveBtn.textContent, 'Save Quietly');
   assert.equal(sendBtn.disabled, false);
+  assert.equal(sendBtn.textContent, 'Save & Send');
   assert.equal(bar.classList.contains('is-idle'), false);
 
   setState(sandbox, {
     _dirty: false,
-    _hasSharedDraft: true,
     _diffDirty: false,
     _diffCache: [
       {
@@ -527,26 +536,11 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   sandbox.updateManagerActionBar();
 
-  assert.equal(summary.textContent, '1 saved draft change is ready to publish.');
+  assert.equal(summary.textContent, '1 update line is live and ready to send.');
   assert.equal(saveBtn.disabled, true);
-  assert.equal(saveBtn.textContent, 'Save Draft');
+  assert.equal(saveBtn.hidden, true);
   assert.equal(sendBtn.disabled, false);
-  assert.equal(sendBtn.textContent, 'Save');
-
-  setState(sandbox, {
-    _dirty: false,
-    _hasSharedDraft: true,
-    _diffDirty: false,
-    _diffCache: [],
-  });
-
-  sandbox.updateManagerActionBar();
-
-  assert.equal(summary.textContent, 'Saved draft matches the live menu. Clear Draft removes it.');
-  assert.equal(saveBtn.disabled, false);
-  assert.equal(saveBtn.textContent, 'Clear Draft');
-  assert.equal(sendBtn.disabled, true);
-  assert.equal(sendBtn.textContent, 'Save');
+  assert.equal(sendBtn.textContent, 'Send');
 });
 
 test('save-only menu edits stay in the draft session until save', async () => {
@@ -582,7 +576,7 @@ test('save-only menu edits stay in the draft session until save', async () => {
   assert.equal(getState(sandbox, 'getDraftSaveOnlyChanges().length'), 1);
 });
 
-test('save draft persists a shared draft snapshot without publishing the live menu', async () => {
+test('save draft routes a quiet live save through the publish boundary and leaves the queue unsent', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
 
@@ -626,94 +620,22 @@ test('save draft persists a shared draft snapshot without publishing the live me
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0][0], '/api/manager');
-  assert.equal(requests[0][1].action, 'save_draft');
+  assert.equal(requests[0][1].action, 'publish');
+  assert.equal(requests[0][1].mode, 'save');
   assert.ok(Array.isArray(requests[0][1].snapshot.cats));
   assert.equal(getState(sandbox, '_dirty'), false);
-  assert.equal(getState(sandbox, 'hasSharedDraftState()'), true);
-  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'DRAFTED');
-});
-
-test('save draft clears a shared draft that already matches live', async () => {
-  const sandbox = loadAppSandbox();
-  const requests = [];
-
-  setState(sandbox, {
-    MENU_ID: 'menu-main',
-    currentUser: { accessToken: 'token-1', uid: 'user-1' },
-    _dirty: false,
-    _hasSharedDraft: true,
-    _diffDirty: false,
-    _diffCache: [],
-    menuState: {
-      beer: {
-        items: [
-          {
-            id: 'item-1',
-            name: 'Lager',
-            desc: '',
-            recipe: [],
-            price: '$8',
-            eightySixed: false,
-            onMenu: true,
-            visibility: 'public',
-            upcharges: [],
-            showDescription: true,
-            showRecipe: false,
-          },
-        ],
-        lastSent: [
-          {
-            id: 'item-1',
-            name: 'Lager',
-            desc: '',
-            recipe: [],
-            price: '$8',
-            eightySixed: false,
-            onMenu: true,
-            visibility: 'public',
-            upcharges: [],
-            showDescription: true,
-            showRecipe: false,
-          },
-        ],
-      },
-      _meta: {},
-    },
-  });
-  sandbox.fetch = async (url, options = {}) => {
-    requests.push([url, JSON.parse(options.body || '{}')]);
-    return {
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({
-        ok: true,
-        status: 'draft_cleared',
-        sharedDraft: { exists: false, savedAt: null, savedBy: null, source: '' },
-      }),
-    };
-  };
-
-  const result = await sandbox.ensureCurrentMenuSession().saveDraft();
-
-  assert.equal(result.ok, true);
-  assert.equal(result.cleared, true);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/manager');
-  assert.equal(requests[0][1].action, 'save_draft');
-  assert.deepEqual(requests[0][1].snapshot, {});
   assert.equal(getState(sandbox, 'hasSharedDraftState()'), false);
-  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE');
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE | UNSENT');
 });
 
-test('save menu publishes a shared draft to live and leaves unsent changes behind', async () => {
+test('save menu quietly writes a local draft to live and leaves unsent changes behind', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
     _activeMenuName: 'Main Menu',
-    _dirty: false,
-    _hasSharedDraft: true,
+    _dirty: true,
     _diffDirty: false,
     _diffCache: [
       {

@@ -21,6 +21,21 @@
           globalScope.clearDraftSaveOnlyChanges?.();
           globalScope.clearSharedDraftState?.();
         });
+    const isDirty = typeof deps.isDirty === 'function'
+      ? deps.isDirty
+      : (() => !!globalScope._dirty);
+    const readStoredLocalDraftEnvelope = typeof deps.readStoredLocalDraftEnvelope === 'function'
+      ? deps.readStoredLocalDraftEnvelope
+      : (() => globalScope.readStoredLocalDraftEnvelope?.());
+    const buildCurrentLocalDraftEnvelope = typeof deps.buildCurrentLocalDraftEnvelope === 'function'
+      ? deps.buildCurrentLocalDraftEnvelope
+      : (() => globalScope.buildCurrentLocalDraftEnvelope?.());
+    const applyLocalDraftEnvelope = typeof deps.applyLocalDraftEnvelope === 'function'
+      ? deps.applyLocalDraftEnvelope
+      : ((envelope, options = {}) => globalScope.applyLocalDraftEnvelope?.(envelope, options));
+    const clearCurrentLocalDraft = typeof deps.clearCurrentLocalDraft === 'function'
+      ? deps.clearCurrentLocalDraft
+      : ((options = {}) => globalScope.clearCurrentLocalDraft?.(options));
     const writeMenuCache = typeof deps.writeMenuCache === 'function'
       ? deps.writeMenuCache
       : (() => {});
@@ -56,9 +71,20 @@
           const data = await readState({ request, source: options.source || 'network', options });
           if (data) {
             hydrateFromState(data);
-            const loadedDraft = includePersistedDraft ? applyDraftState(data.meta?.draft_state || null) : false;
-            setDirty(false);
-            if (!loadedDraft) clearDraftChanges();
+            let loadedDraft = false;
+            if (includePersistedDraft) {
+              const persistedDraftEnvelope = readStoredLocalDraftEnvelope();
+              if (persistedDraftEnvelope) {
+                loadedDraft = !!applyLocalDraftEnvelope(persistedDraftEnvelope, { markDirty: true });
+              } else if (data?.meta?.draft_state) {
+                loadedDraft = !!applyDraftState(data.meta.draft_state || null);
+              }
+            }
+            if (!loadedDraft) {
+              clearCurrentLocalDraft({ clearStorage: false });
+              setDirty(false);
+              clearDraftChanges();
+            }
             if (persistCache) writeMenuCache(data);
           } else if (fallbackToDefault) {
             setDefaultState();
@@ -94,7 +120,22 @@
           };
         }
 
+        const activeDraftEnvelope = isDirty()
+          ? buildCurrentLocalDraftEnvelope()
+          : readStoredLocalDraftEnvelope();
         hydrateFromState(data);
+        if (activeDraftEnvelope) {
+          const reappliedDraft = applyLocalDraftEnvelope(activeDraftEnvelope, { markDirty: true });
+          if (!reappliedDraft) {
+            clearCurrentLocalDraft({ clearStorage: false });
+            setDirty(false);
+            clearDraftChanges();
+          }
+        } else {
+          clearCurrentLocalDraft({ clearStorage: false });
+          setDirty(false);
+          clearDraftChanges();
+        }
         writeMenuCache(data);
         const newTs = getLastUpdatedTs();
         if (newTs !== oldTs) await refreshFeatured();

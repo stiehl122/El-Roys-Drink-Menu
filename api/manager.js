@@ -40,7 +40,7 @@ function parsePublishBody(req) {
   const body = parseRequestBody(req);
   return {
     body,
-    menuId: String(body?.menu_id || '').trim(),
+    menuId: String(body?.menu_id || parseMenuId(req) || '').trim(),
     action: String(body?.action || '').trim().toLowerCase(),
   };
 }
@@ -104,6 +104,7 @@ export default async function handler(req, res) {
         return res.status(200).json(await saveSharedDraftCommand(req));
       case 'save_live':
         return res.status(200).json(await saveLiveMenuCommand(req));
+      case 'save_quietly':
       case 'preview_publish':
       case 'publish': {
         const { body, menuId, action: bodyAction } = parsePublishBody(req);
@@ -115,10 +116,12 @@ export default async function handler(req, res) {
         const result = await command({
           actor,
           menuId,
-          mode: String(body?.mode || '').trim(),
+          mode: action === 'save_quietly' ? 'save' : String(body?.mode || '').trim(),
           source: String(body?.source || '').trim(),
           snapshot: body?.snapshot || {},
-          selectedChangeIds: Array.isArray(body?.selected_change_ids) ? body.selected_change_ids : null,
+          selectedChangeIds: Array.isArray(body?.selected_change_ids)
+            ? body.selected_change_ids
+            : (Array.isArray(body?.selected_group_ids) ? body.selected_group_ids : null),
           legacySelectedSections: Array.isArray(body?.selected_sections) ? body.selected_sections : [],
           expectedLiveRevision: body?.expected_live_revision ?? null,
           expectedDraftRevision: body?.expected_draft_revision ?? null,

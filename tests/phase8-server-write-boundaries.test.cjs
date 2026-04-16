@@ -111,5 +111,7 @@ test('category deletion no longer performs direct Supabase writes before the ser
 
   assert.doesNotMatch(deleteCategorySource, /await sbDeleteCategory/);
   assert.doesNotMatch(deleteCategorySource, /rest\/v1\/items/);
-  assert.match(deleteCategorySource, /await persistState\(\)/);
+  assert.doesNotMatch(deleteCategorySource, /await persistState\(\)/);
+  assert.match(deleteCategorySource, /invalidateDiff\(\)/);
+  assert.match(deleteCategorySource, /updateDraftIndicator\(\)/);
 });

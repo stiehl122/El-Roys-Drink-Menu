@@ -72,6 +72,8 @@ export function normalizeHistoryLogEntry(entry = {}, options = {}) {
     diff: Array.isArray(entry?.diff) ? entry.diff : [],
     message: String(entry?.message || '').trim(),
     source: String(entry?.source || '').trim(),
+    operation_id: String(entry?.operation_id || '').trim(),
+    event_type: String(entry?.event_type || '').trim(),
     created_at: String(entry?.created_at || ''),
     ...(includeMenu ? { menu: entry?.menu && typeof entry.menu === 'object' ? entry.menu : null } : {}),
   };
@@ -95,12 +97,31 @@ export function createMenuHistoryPayload({
   limit = 25,
   scope = 'menu',
   includesSource = false,
+  includesOperationId = false,
+  includesEventType = false,
 } = {}) {
   const normalizedScope = normalizeHistoryScope(scope);
   const normalizedLogs = (Array.isArray(logs) ? logs : [])
     .map(entry => normalizeHistoryLogEntry(entry, { includeMenu: normalizedScope === 'restaurant' }));
+  const operationGroups = new Map();
+  normalizedLogs.forEach(entry => {
+    const operationId = String(entry?.operation_id || '').trim() || `legacy:${entry.id}`;
+    if (!operationGroups.has(operationId)) {
+      operationGroups.set(operationId, {
+        operation_id: operationId,
+        created_at: entry.created_at,
+        menu_id: entry.menu_id,
+        event_count: 0,
+        events: [],
+      });
+    }
+    const operation = operationGroups.get(operationId);
+    operation.events.push(entry);
+    operation.event_count += 1;
+  });
   return {
     logs: normalizedLogs,
+    operations: Array.from(operationGroups.values()),
     context: {
       kind: normalizedScope === 'restaurant' ? 'restaurant-history' : 'menu-history',
       menu: menu || null,
@@ -113,15 +134,21 @@ export function createMenuHistoryPayload({
       count: normalizedLogs.length,
       scope: normalizedScope,
       partial: false,
+      operationCount: operationGroups.size,
     },
     capabilities: {
       canReadHistory: true,
       includesMessage: true,
       includesSource: !!includesSource,
+      includesOperationId: !!includesOperationId,
+      includesEventType: !!includesEventType,
+      includesOperationGrouping: !!includesOperationId,
     },
     compatibility: {
-      contract: 'menu-history.v2',
+      contract: 'menu-history.v3',
       sourceStamped: !!includesSource,
+      operationGrouping: !!includesOperationId,
+      typedEvents: !!includesEventType,
     },
   };
 }
@@ -131,6 +158,12 @@ async function fetchJsonOrThrow(url, fallbackMessage) {
   if (response.ok) return response.json();
   const payload = await readJsonSafe(response);
   throw { status: 500, message: getApiErrorMessage(payload, fallbackMessage) };
+}
+
+function isMissingColumnIssue(error, columnName) {
+  const message = `${error?.error || error?.message || error?.hint || error?.details || ''}`.toLowerCase();
+  return message.includes(columnName.toLowerCase()) &&
+    (message.includes('column') || message.includes('schema cache'));
 }
 
 async function readAuthorizedHistoryActor(req, menuId) {
@@ -153,36 +186,49 @@ async function readAuthorizedHistoryActor(req, menuId) {
 
 async function readHistoryLogsForMenuIds(menuIds = [], { days = 7, limit = 25, includeSource = true } = {}) {
   const safeMenuIds = Array.isArray(menuIds) ? menuIds.filter(Boolean) : [];
-  if (!safeMenuIds.length) return { logs: [], includesSource: false };
+  if (!safeMenuIds.length) {
+    return {
+      logs: [],
+      includesSource: false,
+      includesOperationId: false,
+      includesEventType: false,
+    };
+  }
   const { sbUrl } = getSupabaseServerConfig();
   const sinceIso = new Date(Date.now() - (normalizeHistoryDays(days) * 24 * 60 * 60 * 1000)).toISOString();
   const menuFilter = safeMenuIds.length === 1
     ? `menu_id=eq.${safeMenuIds[0]}`
     : `menu_id=in.(${safeMenuIds.join(',')})`;
   const baseUrl = `${sbUrl}/rest/v1/update_log?${menuFilter}&created_at=gte.${encodeURIComponent(sinceIso)}&order=created_at.desc&limit=${normalizeHistoryLimit(limit)}`;
-  const withSourceSelect = 'id,menu_id,user_id,user_name,diff,message,source,created_at';
-  const fallbackSelect = 'id,menu_id,user_id,user_name,diff,message,created_at';
+  const requiredFields = ['id', 'menu_id', 'user_id', 'user_name', 'diff', 'message', 'created_at'];
+  const optionalFields = [
+    ...(includeSource ? ['source'] : []),
+    'operation_id',
+    'event_type',
+  ];
+  const disabledFields = new Set();
 
-  const readRows = async select => fetchJsonOrThrow(
-    `${baseUrl}&select=${select}`,
-    'Failed to load menu history'
-  );
-
-  if (!includeSource) {
-    const logs = await readRows(fallbackSelect);
-    return { logs, includesSource: false };
-  }
-
-  try {
-    const logs = await readRows(withSourceSelect);
-    return { logs, includesSource: true };
-  } catch (error) {
-    const message = `${error?.message || ''}`.toLowerCase();
-    if (!message.includes('source') || (!message.includes('column') && !message.includes('schema cache'))) {
-      throw error;
+  while (true) {
+    const select = [...requiredFields, ...optionalFields.filter(field => !disabledFields.has(field))].join(',');
+    try {
+      const logs = await fetchJsonOrThrow(
+        `${baseUrl}&select=${select}`,
+        'Failed to load menu history'
+      );
+      return {
+        logs,
+        includesSource: includeSource && !disabledFields.has('source'),
+        includesOperationId: !disabledFields.has('operation_id'),
+        includesEventType: !disabledFields.has('event_type'),
+      };
+    } catch (error) {
+      const missingField = optionalFields.find(field => (
+        !disabledFields.has(field) &&
+        isMissingColumnIssue(error, field)
+      ));
+      if (!missingField) throw error;
+      disabledFields.add(missingField);
     }
-    const logs = await readRows(fallbackSelect);
-    return { logs, includesSource: false };
   }
 }
 
@@ -216,6 +262,8 @@ export async function readMenuHistoryForRequest(req) {
       limit,
       scope,
       includesSource: historyResult.includesSource,
+      includesOperationId: historyResult.includesOperationId,
+      includesEventType: historyResult.includesEventType,
     });
   }
 
@@ -234,5 +282,7 @@ export async function readMenuHistoryForRequest(req) {
     limit,
     scope: 'menu',
     includesSource: historyResult.includesSource,
+    includesOperationId: historyResult.includesOperationId,
+    includesEventType: historyResult.includesEventType,
   });
 }

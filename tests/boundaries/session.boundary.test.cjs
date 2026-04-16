@@ -33,7 +33,6 @@ function createMenuSessionPorts(overrides = {}) {
     persistState: async () => true,
     patchMenuMeta: async () => ({ downgradedFields: [] }),
     patchMenuMetaForMenu: async () => ({ downgradedFields: [] }),
-    patchMenuDraftState: async () => ({ downgradedFields: [] }),
     commitDraft() {},
     commitLiveSave() {},
     buildPreview: snapshot => ({
@@ -90,7 +89,7 @@ test('menu session lifecycle boundary handles redirect and fallback', async () =
   assert.equal(fallback.snapshot.source, 'cache');
 });
 
-test('menu state loader boundary forwards wave 1 api projections through one loader contract', async () => {
+test('menu state loader boundary reapplies the stored local draft envelope on top of live workspace data', async () => {
   const sandbox = loadAppSandbox();
   const apiProjection = {
     cats: [{ key: 'beer', items: [{ id: 'lager' }] }],
@@ -105,17 +104,22 @@ test('menu state loader boundary forwards wave 1 api projections through one loa
     },
   };
   let hydrated = null;
-  let draftState = null;
+  let appliedEnvelope = null;
   let cached = null;
   let clearCalls = 0;
+  const draftEnvelope = {
+    baseSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }] },
+    draftSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager', name: 'Draft Lager' }] }] },
+  };
 
   const service = sandbox.createMenuStateLoaderService({
     readState: async () => apiProjection,
     hydrateFromState: data => {
       hydrated = data;
     },
-    applyPersistedDraftState: draft => {
-      draftState = draft;
+    readStoredLocalDraftEnvelope: () => draftEnvelope,
+    applyLocalDraftEnvelope: envelope => {
+      appliedEnvelope = envelope;
       return true;
     },
     setDefaultState: () => {
@@ -138,7 +142,7 @@ test('menu state loader boundary forwards wave 1 api projections through one loa
 
   assert.equal(snapshot.source, 'network');
   assert.equal(hydrated, apiProjection);
-  assert.deepEqual(draftState, apiProjection.meta.draft_state);
+  assert.deepEqual(appliedEnvelope, draftEnvelope);
   assert.equal(cached, apiProjection);
   assert.equal(clearCalls, 0);
 });

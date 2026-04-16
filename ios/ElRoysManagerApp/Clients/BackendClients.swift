@@ -163,6 +163,7 @@ private struct LiveSaveRequest: Encodable {
   var snapshot: MenuSnapshotPayload
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
+  var expectedNotificationBaselineRevision: Int?
 }
 
 private struct PublishRequest: Encodable {
@@ -173,6 +174,7 @@ private struct PublishRequest: Encodable {
   var selectedChangeIds: [String]?
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
+  var expectedNotificationBaselineRevision: Int?
 }
 
 private struct SpecialsRequest: Encodable {
@@ -513,7 +515,8 @@ final class LiveSaveClient: LiveSaveClienting {
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: expectedLiveRevision,
-        expectedDraftRevision: expectedDraftRevision
+        expectedDraftRevision: expectedDraftRevision,
+        expectedNotificationBaselineRevision: expectedDraftRevision
       )
     )
   }
@@ -538,7 +541,8 @@ final class PublishClient: PublishClienting {
         source: source,
         selectedChangeIds: nil,
         expectedLiveRevision: expectedLiveRevision,
-        expectedDraftRevision: expectedDraftRevision
+        expectedDraftRevision: expectedDraftRevision,
+        expectedNotificationBaselineRevision: expectedDraftRevision
       )
     )
   }
@@ -555,7 +559,8 @@ final class PublishClient: PublishClienting {
         source: source,
         selectedChangeIds: selectedChangeIds,
         expectedLiveRevision: expectedLiveRevision,
-        expectedDraftRevision: expectedDraftRevision
+        expectedDraftRevision: expectedDraftRevision,
+        expectedNotificationBaselineRevision: expectedDraftRevision
       )
     )
   }

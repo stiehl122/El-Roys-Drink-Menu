@@ -20,8 +20,10 @@ test('manager route supports server-owned preview and publish actions on one bou
 
   assert.match(publishRoute, /previewMenuUpdateForMenu/);
   assert.match(publishRoute, /publishMenuUpdateForMenu/);
+  assert.match(publishRoute, /save_quietly/);
   assert.match(publishRoute, /parsePublishBody/);
   assert.match(publishRoute, /selected_change_ids/);
+  assert.match(publishRoute, /selected_group_ids/);
 });
 
 test('wave 4 publish command module exports canonical preview and selected-change publish contract', async () => {
@@ -30,9 +32,15 @@ test('wave 4 publish command module exports canonical preview and selected-chang
 
   assert.equal(typeof publishModule.previewMenuUpdateForMenu, 'function');
   assert.equal(typeof publishModule.publishMenuUpdateForMenu, 'function');
-  assert.match(publishModuleSource, /menu-publish-preview\.v1/);
+  assert.match(publishModuleSource, /menu-publish-preview\.v2/);
   assert.match(publishModuleSource, /serverOwned: true/);
+  assert.match(publishModuleSource, /Will Save Only/);
+  assert.match(publishModuleSource, /operation_id/);
+  assert.match(publishModuleSource, /eventType: 'send_failed'/);
+  assert.match(publishModuleSource, /__featured__/);
   assert.match(publishModuleSource, /selected_change_ids/);
+  assert.match(publishModuleSource, /legacy_selected_change_ids/);
+  assert.match(publishModuleSource, /sections_by_outcome/);
   assert.doesNotMatch(publishModuleSource, /previewDiff/);
 });
 

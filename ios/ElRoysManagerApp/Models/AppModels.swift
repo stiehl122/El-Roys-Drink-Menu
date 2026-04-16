@@ -77,6 +77,22 @@ private extension KeyedDecodingContainer {
   }
 }
 
+private extension Array {
+  mutating func moveItems(fromOffsets source: IndexSet, toOffset destination: Int) {
+    let validOffsets = source.sorted().filter { indices.contains($0) }
+    guard !validOffsets.isEmpty else { return }
+
+    let movingItems = validOffsets.map { self[$0] }
+    for index in validOffsets.reversed() {
+      remove(at: index)
+    }
+
+    let removedBeforeDestination = validOffsets.filter { $0 < destination }.count
+    let insertionIndex = Swift.max(0, Swift.min(destination - removedBeforeDestination, count))
+    insert(contentsOf: movingItems, at: insertionIndex)
+  }
+}
+
 enum AppEnvironmentName: String, Codable {
   case production = "Production"
   case preview = "Preview"
@@ -334,6 +350,54 @@ struct WorkspaceRevisions: Codable, Equatable {
   var liveRevision: Int?
   var draftRevision: Int?
   var lastSentRevision: Int?
+  var notificationBaselineRevision: Int?
+
+  enum CodingKeys: String, CodingKey {
+    case liveRevision
+    case draftRevision
+    case lastSentRevision
+    case notificationBaselineRevision
+    case notificationRevision
+    case baselineRevision
+  }
+
+  init(
+    liveRevision: Int?,
+    draftRevision: Int?,
+    lastSentRevision: Int?,
+    notificationBaselineRevision: Int? = nil
+  ) {
+    self.liveRevision = liveRevision
+    self.draftRevision = draftRevision
+    self.lastSentRevision = lastSentRevision
+    self.notificationBaselineRevision = notificationBaselineRevision ?? lastSentRevision ?? draftRevision
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let liveRevision = try container.decodeIfPresent(Int.self, forKey: .liveRevision)
+    let draftRevision = try container.decodeIfPresent(Int.self, forKey: .draftRevision)
+    let lastSentRevision = try container.decodeIfPresent(Int.self, forKey: .lastSentRevision)
+    let notificationBaselineRevision = try container.decodeIfPresent(Int.self, forKey: .notificationBaselineRevision)
+      ?? (try container.decodeIfPresent(Int.self, forKey: .notificationRevision))
+      ?? (try container.decodeIfPresent(Int.self, forKey: .baselineRevision))
+      ?? lastSentRevision
+      ?? draftRevision
+    self.init(
+      liveRevision: liveRevision,
+      draftRevision: draftRevision,
+      lastSentRevision: lastSentRevision,
+      notificationBaselineRevision: notificationBaselineRevision
+    )
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(liveRevision, forKey: .liveRevision)
+    try container.encodeIfPresent(draftRevision, forKey: .draftRevision)
+    try container.encodeIfPresent(lastSentRevision, forKey: .lastSentRevision)
+    try container.encodeIfPresent(notificationBaselineRevision, forKey: .notificationBaselineRevision)
+  }
 }
 
 struct WorkspaceState: Codable, Equatable {
@@ -341,6 +405,8 @@ struct WorkspaceState: Codable, Equatable {
   var accessibleMenuIds: [String]
   var hasSharedDraft: Bool
   var sharedDraft: SharedDraftInfo
+  var menuStatus: String
+  var hasUnsentChanges: Bool?
   var permissions: WorkspacePermissions
   var capabilities: WorkspaceCapabilities
   var revisions: WorkspaceRevisions
@@ -350,6 +416,12 @@ struct WorkspaceState: Codable, Equatable {
     case accessibleMenuIds
     case hasSharedDraft
     case sharedDraft
+    case menuStatus
+    case publishStatus
+    case status
+    case hasUnsentChanges
+    case hasPendingUpdate
+    case hasNotificationQueue
     case permissions
     case capabilities
     case revisions
@@ -360,6 +432,8 @@ struct WorkspaceState: Codable, Equatable {
     accessibleMenuIds: [String],
     hasSharedDraft: Bool,
     sharedDraft: SharedDraftInfo,
+    menuStatus: String = "",
+    hasUnsentChanges: Bool? = nil,
     permissions: WorkspacePermissions,
     capabilities: WorkspaceCapabilities,
     revisions: WorkspaceRevisions
@@ -368,6 +442,8 @@ struct WorkspaceState: Codable, Equatable {
     self.accessibleMenuIds = accessibleMenuIds
     self.hasSharedDraft = hasSharedDraft
     self.sharedDraft = sharedDraft
+    self.menuStatus = menuStatus
+    self.hasUnsentChanges = hasUnsentChanges
     self.permissions = permissions
     self.capabilities = capabilities
     self.revisions = revisions
@@ -379,10 +455,20 @@ struct WorkspaceState: Codable, Equatable {
       SharedDraftInfo.self,
       forKey: .sharedDraft
     ) ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+    let menuStatusPrimary = try container.decodeIfPresent(String.self, forKey: .menuStatus)
+    let menuStatusLegacy = try container.decodeIfPresent(String.self, forKey: .publishStatus)
+    let menuStatusFallback = try container.decodeIfPresent(String.self, forKey: .status)
+    let menuStatus = menuStatusPrimary ?? menuStatusLegacy ?? menuStatusFallback ?? ""
+    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
+    let unsentLegacy = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
+    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasNotificationQueue)
+    let hasUnsentChanges = unsentPrimary ?? unsentLegacy ?? unsentFallback
     self.actor = try container.decodeIfPresent(ActorProfile.self, forKey: .actor)
     self.accessibleMenuIds = (try? container.decode([String].self, forKey: .accessibleMenuIds)) ?? []
     self.hasSharedDraft = try container.decodeIfPresent(Bool.self, forKey: .hasSharedDraft) ?? sharedDraft.exists
     self.sharedDraft = sharedDraft
+    self.menuStatus = menuStatus
+    self.hasUnsentChanges = hasUnsentChanges
     self.permissions = try container.decodeIfPresent(
       WorkspacePermissions.self,
       forKey: .permissions
@@ -406,7 +492,20 @@ struct WorkspaceState: Codable, Equatable {
       includesRestaurantTools: false
     )
     self.revisions = try container.decodeIfPresent(WorkspaceRevisions.self, forKey: .revisions)
-      ?? WorkspaceRevisions(liveRevision: nil, draftRevision: nil, lastSentRevision: nil)
+      ?? WorkspaceRevisions(liveRevision: nil, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encodeIfPresent(actor, forKey: .actor)
+    try container.encode(accessibleMenuIds, forKey: .accessibleMenuIds)
+    try container.encode(hasSharedDraft, forKey: .hasSharedDraft)
+    try container.encode(sharedDraft, forKey: .sharedDraft)
+    try container.encode(menuStatus, forKey: .menuStatus)
+    try container.encodeIfPresent(hasUnsentChanges, forKey: .hasUnsentChanges)
+    try container.encode(permissions, forKey: .permissions)
+    try container.encode(capabilities, forKey: .capabilities)
+    try container.encode(revisions, forKey: .revisions)
   }
 }
 
@@ -973,6 +1072,8 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
   var menuId: String
   var userId: String
   var userName: String
+  var operationId: String?
+  var eventType: String?
   var diff: [JSONValue]
   var message: String
   var source: String
@@ -984,6 +1085,8 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
     case menuId
     case userId
     case userName
+    case operationId
+    case eventType
     case diff
     case message
     case source
@@ -996,6 +1099,8 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
     menuId: String,
     userId: String,
     userName: String,
+    operationId: String?,
+    eventType: String?,
     diff: [JSONValue],
     message: String,
     source: String,
@@ -1006,6 +1111,8 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
     self.menuId = menuId
     self.userId = userId
     self.userName = userName
+    self.operationId = operationId
+    self.eventType = eventType
     self.diff = diff
     self.message = message
     self.source = source
@@ -1019,6 +1126,8 @@ struct HistoryLogEntry: Codable, Equatable, Hashable, Identifiable {
     self.menuId = try container.decodeString(forKey: .menuId)
     self.userId = try container.decodeString(forKey: .userId)
     self.userName = try container.decodeString(forKey: .userName)
+    self.operationId = try container.decodeIfPresent(String.self, forKey: .operationId)
+    self.eventType = try container.decodeIfPresent(String.self, forKey: .eventType)
     self.diff = (try? container.decode([JSONValue].self, forKey: .diff)) ?? []
     self.message = try container.decodeString(forKey: .message)
     self.source = try container.decodeString(forKey: .source)
@@ -1077,8 +1186,10 @@ struct PreviewMetadata: Codable, Equatable {
 
 struct MenuPreviewPayload: Codable, Equatable {
   var mode: String
+  var menuStatus: String
   var hasChanges: Bool
   var hasLocalDraft: Bool
+  var hasUnsentChanges: Bool
   var hasSharedDraft: Bool
   var hasNotificationChanges: Bool
   var hasSaveOnlyChanges: Bool
@@ -1090,6 +1201,74 @@ struct MenuPreviewPayload: Codable, Equatable {
   var truncated: Bool
   var selectionDefaults: [String]
   var metadata: PreviewMetadata
+
+  enum CodingKeys: String, CodingKey {
+    case mode
+    case menuStatus
+    case hasChanges
+    case hasLocalDraft
+    case hasUnsentChanges
+    case hasPendingUpdate
+    case hasSharedDraft
+    case hasNotificationChanges
+    case hasSaveOnlyChanges
+    case diff
+    case sections
+    case notificationChanges
+    case saveOnlyChanges
+    case patchMessage
+    case truncated
+    case selectionDefaults
+    case metadata
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.mode = try container.decodeString(forKey: .mode)
+    self.hasChanges = try container.decodeBool(forKey: .hasChanges)
+    self.hasLocalDraft = try container.decodeBool(forKey: .hasLocalDraft)
+    let sharedDraftFallback = try container.decodeBool(forKey: .hasSharedDraft)
+    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
+    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
+    self.hasUnsentChanges = unsentPrimary ?? unsentFallback ?? sharedDraftFallback
+    self.hasSharedDraft = sharedDraftFallback
+    self.hasNotificationChanges = try container.decodeBool(forKey: .hasNotificationChanges)
+    self.hasSaveOnlyChanges = try container.decodeBool(forKey: .hasSaveOnlyChanges)
+    self.diff = try container.decodeArray([PreviewDiffSection].self, forKey: .diff)
+    self.sections = try container.decodeArray([PreviewSection].self, forKey: .sections)
+    self.notificationChanges = try container.decodeArray([PreviewChange].self, forKey: .notificationChanges)
+    self.saveOnlyChanges = try container.decodeArray([SaveOnlyChange].self, forKey: .saveOnlyChanges)
+    self.patchMessage = try container.decodeString(forKey: .patchMessage)
+    self.truncated = try container.decodeBool(forKey: .truncated)
+    self.selectionDefaults = try container.decodeArray([String].self, forKey: .selectionDefaults)
+    self.metadata = try container.decodeIfPresent(PreviewMetadata.self, forKey: .metadata)
+      ?? PreviewMetadata(serverOwned: false, contract: "", currentFeaturedIds: [])
+    let decodedStatus = try container.decodeIfPresent(String.self, forKey: .menuStatus)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    self.menuStatus = (decodedStatus?.isEmpty == false)
+      ? (decodedStatus ?? "")
+      : (self.hasUnsentChanges ? "Live | Unsent" : "Live")
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(mode, forKey: .mode)
+    try container.encode(menuStatus, forKey: .menuStatus)
+    try container.encode(hasChanges, forKey: .hasChanges)
+    try container.encode(hasLocalDraft, forKey: .hasLocalDraft)
+    try container.encode(hasUnsentChanges, forKey: .hasUnsentChanges)
+    try container.encode(hasSharedDraft, forKey: .hasSharedDraft)
+    try container.encode(hasNotificationChanges, forKey: .hasNotificationChanges)
+    try container.encode(hasSaveOnlyChanges, forKey: .hasSaveOnlyChanges)
+    try container.encode(diff, forKey: .diff)
+    try container.encode(sections, forKey: .sections)
+    try container.encode(notificationChanges, forKey: .notificationChanges)
+    try container.encode(saveOnlyChanges, forKey: .saveOnlyChanges)
+    try container.encode(patchMessage, forKey: .patchMessage)
+    try container.encode(truncated, forKey: .truncated)
+    try container.encode(selectionDefaults, forKey: .selectionDefaults)
+    try container.encode(metadata, forKey: .metadata)
+  }
 }
 
 struct NotificationStatus: Codable, Equatable {
@@ -1137,8 +1316,48 @@ struct MenuSnapshotContext: Codable, Equatable {
 
 struct SnapshotPreviewContext: Codable, Equatable {
   var dirty: Bool
+  var hasUnsentChanges: Bool
   var hasSharedDraft: Bool
   var saveOnlyChanges: [SaveOnlyChange]
+
+  enum CodingKeys: String, CodingKey {
+    case dirty
+    case hasUnsentChanges
+    case hasPendingUpdate
+    case hasSharedDraft
+    case saveOnlyChanges
+  }
+
+  init(
+    dirty: Bool,
+    hasUnsentChanges: Bool,
+    hasSharedDraft: Bool,
+    saveOnlyChanges: [SaveOnlyChange]
+  ) {
+    self.dirty = dirty
+    self.hasUnsentChanges = hasUnsentChanges
+    self.hasSharedDraft = hasSharedDraft
+    self.saveOnlyChanges = saveOnlyChanges
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let hasSharedDraft = try container.decodeBool(forKey: .hasSharedDraft)
+    self.dirty = try container.decodeBool(forKey: .dirty)
+    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
+    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
+    self.hasUnsentChanges = unsentPrimary ?? unsentFallback ?? hasSharedDraft
+    self.hasSharedDraft = hasSharedDraft
+    self.saveOnlyChanges = try container.decodeArray([SaveOnlyChange].self, forKey: .saveOnlyChanges)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(dirty, forKey: .dirty)
+    try container.encode(hasUnsentChanges, forKey: .hasUnsentChanges)
+    try container.encode(hasSharedDraft, forKey: .hasSharedDraft)
+    try container.encode(saveOnlyChanges, forKey: .saveOnlyChanges)
+  }
 }
 
 struct MenuSnapshotPayload: Codable, Equatable {
@@ -1154,16 +1373,93 @@ struct MenuSnapshotPayload: Codable, Equatable {
 struct LocalDraftEnvelope: Codable, Equatable, Identifiable {
   var userId: String
   var menuId: String
+  var clientScopeId: String
   var restaurantId: String
   var menuName: String
   var savedAt: Date
   var baseLiveRevision: Int?
   var baseDraftRevision: Int?
+  var baseNotificationBaselineRevision: Int?
   var baseDocument: EditableMenuDocument?
   var document: EditableMenuDocument
 
   var id: String {
-    "\(userId)::\(menuId)"
+    "\(userId)::\(menuId)::\(clientScopeId)"
+  }
+
+  enum CodingKeys: String, CodingKey {
+    case userId
+    case menuId
+    case clientScopeId
+    case clientId
+    case restaurantId
+    case menuName
+    case savedAt
+    case baseLiveRevision
+    case baseDraftRevision
+    case baseNotificationBaselineRevision
+    case baseDocument
+    case document
+  }
+
+  init(
+    userId: String,
+    menuId: String,
+    clientScopeId: String,
+    restaurantId: String,
+    menuName: String,
+    savedAt: Date,
+    baseLiveRevision: Int?,
+    baseDraftRevision: Int?,
+    baseNotificationBaselineRevision: Int?,
+    baseDocument: EditableMenuDocument?,
+    document: EditableMenuDocument
+  ) {
+    self.userId = userId
+    self.menuId = menuId
+    self.clientScopeId = clientScopeId
+    self.restaurantId = restaurantId
+    self.menuName = menuName
+    self.savedAt = savedAt
+    self.baseLiveRevision = baseLiveRevision
+    self.baseDraftRevision = baseDraftRevision
+    self.baseNotificationBaselineRevision = baseNotificationBaselineRevision
+    self.baseDocument = baseDocument
+    self.document = document
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let baseDraftRevision = try container.decodeIfPresent(Int.self, forKey: .baseDraftRevision)
+    self.userId = try container.decodeString(forKey: .userId)
+    self.menuId = try container.decodeString(forKey: .menuId)
+    let scopeFromPrimary = try container.decodeIfPresent(String.self, forKey: .clientScopeId)
+    let scopeFromFallback = try container.decodeIfPresent(String.self, forKey: .clientId)
+    self.clientScopeId = scopeFromPrimary ?? scopeFromFallback ?? "legacy"
+    self.restaurantId = try container.decodeString(forKey: .restaurantId)
+    self.menuName = try container.decodeString(forKey: .menuName)
+    self.savedAt = try container.decodeIfPresent(Date.self, forKey: .savedAt) ?? .distantPast
+    self.baseLiveRevision = try container.decodeIfPresent(Int.self, forKey: .baseLiveRevision)
+    self.baseDraftRevision = baseDraftRevision
+    self.baseNotificationBaselineRevision = try container.decodeIfPresent(Int.self, forKey: .baseNotificationBaselineRevision)
+      ?? baseDraftRevision
+    self.baseDocument = try container.decodeIfPresent(EditableMenuDocument.self, forKey: .baseDocument)
+    self.document = try container.decode(EditableMenuDocument.self, forKey: .document)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(userId, forKey: .userId)
+    try container.encode(menuId, forKey: .menuId)
+    try container.encode(clientScopeId, forKey: .clientScopeId)
+    try container.encode(restaurantId, forKey: .restaurantId)
+    try container.encode(menuName, forKey: .menuName)
+    try container.encode(savedAt, forKey: .savedAt)
+    try container.encodeIfPresent(baseLiveRevision, forKey: .baseLiveRevision)
+    try container.encodeIfPresent(baseDraftRevision, forKey: .baseDraftRevision)
+    try container.encodeIfPresent(baseNotificationBaselineRevision, forKey: .baseNotificationBaselineRevision)
+    try container.encodeIfPresent(baseDocument, forKey: .baseDocument)
+    try container.encode(document, forKey: .document)
   }
 }
 
@@ -1295,7 +1591,7 @@ struct EditableMenuDocument: Codable, Equatable {
 
   mutating func moveVisibleCategories(from source: IndexSet, to destination: Int) {
     var regular = visibleCategories
-    regular.move(fromOffsets: source, toOffset: destination)
+    regular.moveItems(fromOffsets: source, toOffset: destination)
     let uncategorized = cats.first(where: { $0.key == Self.uncategorizedKey })
     cats = regular + (uncategorized.map { [$0] } ?? [])
     renumberCategories()
@@ -1395,7 +1691,7 @@ struct EditableMenuDocument: Codable, Equatable {
     renumberCategories()
   }
 
-  func makeSnapshot(hasUnsavedChanges: Bool, hasSharedDraft: Bool) -> MenuSnapshotPayload {
+  func makeSnapshot(hasUnsavedChanges: Bool, hasServerUnsentChanges: Bool) -> MenuSnapshotPayload {
     MenuSnapshotPayload(
       context: context,
       cats: orderedSnapshotCategories(),
@@ -1405,7 +1701,8 @@ struct EditableMenuDocument: Codable, Equatable {
       saveOnlyChanges: [],
       previewContext: SnapshotPreviewContext(
         dirty: hasUnsavedChanges,
-        hasSharedDraft: hasSharedDraft,
+        hasUnsentChanges: hasServerUnsentChanges,
+        hasSharedDraft: hasServerUnsentChanges,
         saveOnlyChanges: []
       )
     )

@@ -12,7 +12,6 @@
     const getMenuState = typeof deps.getMenuState === 'function' ? deps.getMenuState : (() => ({}));
     const getDraftChangeCount = typeof deps.getDraftChangeCount === 'function' ? deps.getDraftChangeCount : (() => 0);
     const isDirty = typeof deps.isDirty === 'function' ? deps.isDirty : (() => false);
-    const hasSharedDraft = typeof deps.hasSharedDraft === 'function' ? deps.hasSharedDraft : (() => false);
     const countDiffLines = typeof deps.countDiffLines === 'function' ? deps.countDiffLines : (() => 0);
     const createDraftLedgerService = typeof deps.createDraftLedgerService === 'function'
       ? deps.createDraftLedgerService
@@ -46,8 +45,7 @@
       ), 0);
       const draftCount = getDraftChangeCount();
       const hasLocalDraft = !!isDirty();
-      const hasShared = hasSharedDraft();
-      const notifyCount = !hasShared && !hasLocalDraft ? countDiffLines() : 0;
+      const notifyCount = !hasLocalDraft ? countDiffLines() : 0;
       const statusValue = documentRef.getElementById('manager-overview-status-value');
       const statusMeta = documentRef.getElementById('manager-overview-status-meta');
       const activeValue = documentRef.getElementById('manager-overview-active-value');
@@ -55,16 +53,10 @@
       const eightysixValue = documentRef.getElementById('manager-overview-86-value');
       const eightysixMeta = documentRef.getElementById('manager-overview-86-meta');
 
-      if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (hasShared ? 'Drafted' : (notifyCount > 0 ? 'Live | Unsent' : 'Live'));
+      if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (notifyCount > 0 ? 'Live | Unsent' : 'Live');
       if (statusMeta) {
         if (hasLocalDraft) {
-          statusMeta.textContent = hasShared
-            ? `${draftCount} pending change${draftCount === 1 ? '' : 's'} on top of the saved draft`
-            : `${draftCount} pending change${draftCount === 1 ? '' : 's'}`;
-        } else if (hasShared) {
-          statusMeta.textContent = ledgerState.hasClearableSharedDraft
-            ? 'Saved draft matches the live menu. Clear Draft removes it.'
-            : `${draftCount} saved draft change${draftCount === 1 ? '' : 's'} ready to publish`;
+          statusMeta.textContent = `${draftCount} pending change${draftCount === 1 ? '' : 's'} on this device.`;
         } else if (notifyCount > 0) {
           statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
         } else {
@@ -93,21 +85,25 @@
       const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
       const saveBtn = documentRef.getElementById('save-btn');
       const publishBtn = documentRef.getElementById('send-btn');
+      const discardBtn = documentRef.getElementById('discard-draft-btn');
 
       if (primaryGroup) primaryGroup.hidden = false;
       if (saveBtn) {
-        saveBtn.disabled = !ledgerState.hasDraftChanges && !ledgerState.hasClearableSharedDraft;
-        saveBtn.textContent = ledgerState.saveLabel;
-        saveBtn.title = ledgerState.hasClearableSharedDraft
-          ? 'Remove the saved draft because it already matches the live menu'
-          : 'Save changes without notifying anyone';
+        saveBtn.disabled = !!ledgerState.saveDisabled;
+        saveBtn.textContent = ledgerState.saveLabel || 'Save';
+        saveBtn.hidden = !ledgerState.saveLabel;
+        saveBtn.title = ledgerState.hasDraftChanges ? 'Save the live menu without notifying anyone yet' : '';
       }
       if (publishBtn) {
-        publishBtn.disabled = !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate;
+        publishBtn.disabled = !!ledgerState.publishDisabled;
         publishBtn.textContent = ledgerState.publishLabel;
       }
+      if (discardBtn) {
+        discardBtn.hidden = !ledgerState.showDiscard;
+        discardBtn.disabled = !ledgerState.showDiscard;
+      }
       bar.hidden = false;
-      bar.classList.toggle('is-idle', !ledgerState.hasPublishableDraftWork && !ledgerState.hasPendingUpdate && !ledgerState.hasClearableSharedDraft);
+      bar.classList.toggle('is-idle', ledgerState.saveDisabled && ledgerState.publishDisabled && !ledgerState.showDiscard);
       syncManagerActionBarStatus(syncEl);
 
       if (summary) summary.textContent = ledgerState.summaryText;

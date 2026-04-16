@@ -103,7 +103,7 @@ test('wave 4 server modules harden actor authorization and check revisions befor
   assert.match(menuWrite, /reconnect:/);
 
   assert.match(menuPublish, /const currentRevisions = readRevisionState\(meta\)/);
-  assert.match(menuPublish, /command: 'menu-publish\.v1'/);
+  assert.match(menuPublish, /command: 'menu-publish\.v2'/);
   assert.match(menuPublish, /assertExpectedRevision\(expectedLiveRevision, meta\?\.last_updated_ts \|\| null, 'live_revision', \{/);
   assert.match(menuPublish, /assertExpectedRevision\(expectedDraftRevision, meta\?\.draft_saved_ts \|\| null, 'draft_revision', \{/);
   const liveRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts || null, 'live_revision', {");

@@ -68,9 +68,14 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
       type: 'drinks',
       name: "Leroy's Lounge Drinks",
     },
-    cats: [{ key: 'beer', items: [{ id: 'draft-lager', on_menu: true, visibility: 'public' }] }],
+    cats: [{ key: 'beer', items: [{ id: 'draft-lager', name: 'Draft Lager', on_menu: true, visibility: 'public' }] }],
     meta: {
       last_updated_ts: 1712705100000,
+      last_sent_ts: 1712705100000,
+      last_sent_state: {
+        beer: [{ id: 'draft-lager', name: 'Draft Lager', onMenu: true, visibility: 'public', eightySixed: false }],
+      },
+      last_sent_featured: [],
       draft_state: { cats: [{ key: 'beer', items: [] }] },
       draft_saved_ts: 1712705200000,
       draft_saved_by_user_id: 'user-1',
@@ -114,10 +119,48 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
   assert.equal(payload.workspace.sharedDraft.savedAt, 1712705200000);
   assert.deepEqual(payload.workspace.sharedDraft.savedBy, { id: 'user-1', name: 'Alex' });
   assert.equal(payload.workspace.sharedDraft.source, 'web_manager');
+  assert.equal(payload.workspace.publishState.status, 'live');
+  assert.equal(payload.workspace.publishState.statusLabel, 'Live');
+  assert.equal(payload.workspace.publishState.hasUnsentChanges, false);
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
   assert.equal(payload.workspace.capabilities.includesDraftAuthorship, true);
   assert.equal(payload.workspace.capabilities.includesRestaurantTools, true);
+  assert.equal(payload.workspace.capabilities.canSaveQuietly, true);
   assert.equal(payload.restaurantTools.restaurantId, '00000000-0000-0000-0000-000000000010');
   assert.equal(payload.context.kind, 'menu-workspace');
+  assert.equal(payload.compatibility.contract, 'menu-workspace.v4');
+});
+
+test('workspace payload projects server-owned Live | Unsent queue state from stable item IDs', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createMenuWorkspacePayload({
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [{ key: 'beer', label: 'Beer', icon: '🍺', items: [{ id: 'item-1', name: 'New Lager', on_menu: true, visibility: 'public' }] }],
+    meta: {
+      last_updated_ts: 1712705300000,
+      last_sent_ts: 1712705100000,
+      last_sent_state: {
+        beer: [{ id: 'item-1', name: 'Old Lager', onMenu: true, visibility: 'public', eightySixed: false }],
+      },
+      last_sent_featured: [],
+    },
+    featuredCurrentIds: [],
+    restaurant: null,
+  }, {
+    actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+  });
+
+  assert.equal(payload.workspace.publishState.status, 'live_unsent');
+  assert.equal(payload.workspace.publishState.statusLabel, 'Live | Unsent');
+  assert.equal(payload.workspace.publishState.hasUnsentChanges, true);
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, ['item-1']);
+  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
 });
 
 test('public payload strips staff-only menu metadata and filters non-public items', async () => {
