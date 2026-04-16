@@ -11,7 +11,9 @@
     const getCategoryDefs = typeof deps.getCategoryDefs === 'function' ? deps.getCategoryDefs : (() => []);
     const getMenuState = typeof deps.getMenuState === 'function' ? deps.getMenuState : (() => ({}));
     const getDraftChangeCount = typeof deps.getDraftChangeCount === 'function' ? deps.getDraftChangeCount : (() => 0);
-    const isDirty = typeof deps.isDirty === 'function' ? deps.isDirty : (() => false);
+    const isDirty = typeof deps.isDirty === 'function'
+      ? deps.isDirty
+      : (() => !!globalScope.syncLocalDraftDirtyState?.());
     const countDiffLines = typeof deps.countDiffLines === 'function' ? deps.countDiffLines : (() => 0);
     const createDraftLedgerService = typeof deps.createDraftLedgerService === 'function'
       ? deps.createDraftLedgerService

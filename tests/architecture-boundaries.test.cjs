@@ -543,6 +543,102 @@ test('manager action bar stays visible and reflects idle and active draft states
   assert.equal(sendBtn.textContent, 'Send');
 });
 
+test('manager action bar reconciles stale dirty flags against the actual local draft state', () => {
+  const sandbox = loadAppSandbox();
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  const summary = sandbox.document._registerElement('manager-action-bar-summary', createElement('div', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  const saveBtn = sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  const sendBtn = sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+
+  sandbox.setLocalDraftBaseSnapshot(sandbox.buildPersistedDraftStateSnapshot());
+  setState(sandbox, {
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [],
+  });
+
+  sandbox.updateManagerActionBar();
+
+  assert.equal(summary.textContent, 'No pending changes');
+  assert.equal(saveBtn.disabled, true);
+  assert.equal(saveBtn.textContent, 'Save');
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(sendBtn.textContent, 'Send');
+  assert.equal(bar.classList.contains('is-idle'), true);
+  assert.equal(getState(sandbox, '_dirty'), false);
+});
+
+test('save actions blur the focused editor before publishing workspace changes', async () => {
+  const sandbox = loadAppSandbox();
+  let blurred = false;
+  const requests = [];
+
+  sandbox.document.activeElement = {
+    tagName: 'INPUT',
+    blur() {
+      blurred = true;
+    },
+  };
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    _activeMenuName: 'Main Menu',
+    _dirty: true,
+    _diffDirty: false,
+    _diffCache: [
+      {
+        id: 'beer',
+        icon: '🍺',
+        label: 'Beers on Tap',
+        added: ['Draft Lager'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      },
+    ],
+    currentUser: { accessToken: 'token-1', uid: 'user-1' },
+  });
+
+  sandbox.fetch = async (url, options = {}) => {
+    const body = JSON.parse(options.body || '{}');
+    requests.push(body.action);
+    if (body.action === 'preview_publish') {
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          ok: true,
+          preview: {
+            hasChanges: true,
+            hasLocalDraft: true,
+            hasSharedDraft: false,
+            hasNotificationChanges: true,
+            hasSaveOnlyChanges: false,
+            diff: [{ id: 'beer', icon: '🍺', label: 'Beers on Tap', added: ['Draft Lager'], removed: [], eightySixed: [], restored: [] }],
+            sections: [{ id: 'beer', icon: '🍺', label: 'Beers on Tap', changes: [{ id: 'beer:add:Draft Lager', kind: 'added', text: '+ Draft Lager', name: 'Draft Lager' }] }],
+            notificationChanges: [{ id: 'beer:add:Draft Lager', kind: 'added', text: '+ Draft Lager', name: 'Draft Lager', sectionId: 'beer', itemId: '' }],
+            saveOnlyChanges: [],
+            patchMessage: '',
+            truncated: false,
+            mode: 'save-and-send',
+          },
+        }),
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ok: true, ts: 1712705100000, successMessage: 'Saved.' }),
+    };
+  };
+
+  await sandbox.saveMenu();
+
+  assert.equal(blurred, true);
+  assert.deepEqual(requests.slice(0, 2), ['preview_publish', 'publish']);
+});
+
 test('save-only menu edits stay in the draft session until save', async () => {
   const sandbox = loadAppSandbox();
   const persistCalls = [];

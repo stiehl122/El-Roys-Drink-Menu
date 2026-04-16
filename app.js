@@ -2499,6 +2499,7 @@ function getMenuSessionPorts() {
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
         clearCurrentLocalDraft();
+        setServerLiveSnapshot(buildMenuCacheSnapshot());
         updateSaveBtn();
         updateLastUpdatedLabel();
       } else if (result.notificationStatus?.partial || (mode === 'save-and-send' && result.notificationStatus && result.notificationStatus.ok === false)) {
@@ -2507,6 +2508,7 @@ function getMenuSessionPorts() {
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
         clearCurrentLocalDraft();
+        setServerLiveSnapshot(buildMenuCacheSnapshot());
         updateSaveBtn();
         updateLastUpdatedLabel();
       } else if (mode === 'save-and-send' || mode === 'send') {
@@ -2515,6 +2517,7 @@ function getMenuSessionPorts() {
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
         clearCurrentLocalDraft();
+        setServerLiveSnapshot(buildMenuCacheSnapshot());
         updateSaveBtn();
         updateLastUpdatedLabel();
       }
@@ -3087,7 +3090,7 @@ function buildManagerWorkspaceModuleDeps() {
     getCategoryDefs: () => CATEGORY_DEFS,
     getMenuState: () => menuState,
     getDraftChangeCount: () => getDraftChangeCount(),
-    isDirty: () => !!_dirty,
+    isDirty: () => syncLocalDraftDirtyState(),
     hasSharedDraft: () => hasSharedDraftState(),
     countDiffLines: () => countDiffLines(),
     createDraftLedgerService: () => createDraftLedgerService(),
@@ -6730,7 +6733,7 @@ function renderManagerOverviewStats() {
 }
 
 function createDraftLedgerService(deps = {}) {
-  const isDirty = typeof deps.isDirty === 'function' ? deps.isDirty : (() => !!_dirty);
+  const isDirty = typeof deps.isDirty === 'function' ? deps.isDirty : (() => syncLocalDraftDirtyState());
   const getDraftCount = typeof deps.getDraftChangeCount === 'function' ? deps.getDraftChangeCount : (() => getDraftChangeCount());
   const getDiffLineCount = typeof deps.getDiffLinesCount === 'function' ? deps.getDiffLinesCount : (() => countDiffLines());
   const getDiffSections = typeof deps.getDiffSections === 'function' ? deps.getDiffSections : (() => getCachedDiff());
@@ -10563,6 +10566,7 @@ async function persistState(options = {}) {
 }
 
 async function saveMenu() {
+  await flushFocusedManagerEditor();
   const actionState = getMenuActionState();
   if (!actionState.hasLocalDraft) {
     if (actionState.hasPendingServerQueue) {
@@ -11393,6 +11397,7 @@ function renderPreviewModal(preview, options = {}) {
 
 // ─── PREVIEW MODAL ────────────────────────────────────────────────────────────
 async function openPreview() {
+  await flushFocusedManagerEditor();
   const content = document.getElementById('preview-content');
   const saveMenuBtn = document.getElementById('save-menu-btn');
   const saveSendBtn = document.getElementById('save-send-btn');
@@ -11704,7 +11709,19 @@ function setPreviewModalActionState(mode = '') {
   }
 }
 
+async function flushFocusedManagerEditor() {
+  const activeEl = document.activeElement;
+  if (!activeEl || activeEl === document.body || typeof activeEl.blur !== 'function') return false;
+  const tagName = String(activeEl.tagName || '').toUpperCase();
+  const isEditableField = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || !!activeEl.isContentEditable;
+  if (!isEditableField) return false;
+  activeEl.blur();
+  await Promise.resolve();
+  return true;
+}
+
 async function sendUpdate(options = {}) {
+  await flushFocusedManagerEditor();
   let preview = options.preview?.sections ? options.preview : _previewModalState;
   if (!preview) {
     const previewResult = await requestPublishPreviewThroughApi();
