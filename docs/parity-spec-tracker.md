@@ -1,72 +1,165 @@
-# Parity Spec Tracker
+# Menu Save/Send Parity Tracker
 
-This tracker is the canonical `#304` readiness document for the shared backend parity refactor and the future native iOS follow-on in `#305`.
+This tracker is the canonical target-state document for the menu save, queue,
+history, and send workflow shared by the server, web manager, and native iOS
+client.
+
+Scope stays fixed to exactly two restaurants and four menus:
+
+- Leroy's Lounge Drinks
+- Leroy's Lounge Food
+- El Roy's Cantina Drinks
+- El Roy's Cantina Food
 
 ## Update Policy
 
-- Update this tracker whenever a functionality-changing PR affects backend parity, shared contracts, manager/admin behavior, or iOS readiness.
-- Mark each capability as `centralized`, `partial`, or `client-owned`.
-- Keep scope fixed to exactly two restaurants and four menus.
+- Update this tracker whenever a behavior-changing PR affects menu save/send
+  semantics, menu-level status, item tags, history, conflict handling, or iOS
+  parity.
+- Track the intended cutover model, not the legacy shared-draft model.
+- Keep landing-page admin draft/publish behavior out of scope for this tracker.
+
+## Canonical Workflow Model
+
+1. `Drafting` is client-local only. Local drafts are stored per
+   `user + menu + client/device`, autosaved locally, restored on relaunch, and
+   deleted after the current local editor snapshot is successfully saved live.
+2. The server owns the live menu snapshot, the notification baseline, the menu
+   history feed, and the menu-wide queue state.
+3. Menu-level server status is either `Live` or `Live | Unsent`.
+4. Item-level `Unsent` is server-derived from the current live snapshot versus
+   the notification baseline.
+5. Item-level `Draft` is client-local and takes precedence over `Unsent` on the
+   editing client.
+6. `Save Quietly` writes the current editor snapshot to the live menu and keeps
+   the queue available for a later send.
+7. `Save & Send` writes the current editor snapshot to the live menu, sends the
+   checked change groups, and clears the unchecked change groups without
+   notifying.
+8. `Send` is the no-local-save variant of `Save & Send` when the menu is already
+   `Live | Unsent`.
+9. `Discard Draft` is local-only and must never modify the shared server queue
+   or history.
+
+## Queue And Preview Contract
+
+- The queue is a derived net diff, not a stored list of item flags.
+- The server compares the live menu against a reduced notification baseline
+  projection keyed by stable item IDs.
+- The queue must be shared menu-wide across web and iOS.
+- Quiet saves must preserve queued notify-worthy deltas for later send.
+- Add/remove and 86/restore pairs must net out before send when they cancel each
+  other.
+- Rename must render as `Removed old item name` plus `Added new item name`, but
+  remain one inseparable selectable change group.
+- Preview selection operates on grouped change units, not raw rendered lines.
+- Preview must remain section-grouped and must separate:
+  - `Will Send`
+  - `Will Clear Without Sending`
+  - `Will Save Only`
+- Quiet-only changes must be shown in preview even though they are not
+  selectable.
+
+## Notify-Worthy Versus Quiet-Only Changes
+
+Notify-worthy changes:
+
+- item added
+- item removed
+- item 86'd
+- item restored
+- featured/specials membership changed
+- item renamed, rendered as remove plus add for staff-facing notification copy
+
+Quiet-only changes:
+
+- price
+- description
+- recipe text
+- recipe visibility
+- category copy
+- cosmetic reorder
+- category moves, if a move affordance is ever added later
 
 ## Capability Matrix
 
-| Capability | Status | Current Source Of Truth | Notes / Backend Prerequisite |
+| Capability | Intended Owner | Target State | Cutover Notes |
 | --- | --- | --- | --- |
-| Session bootstrap | centralized | `/api/session-bootstrap`, `server/_menu-read.js` | Actor, access, app version, preview-audit metadata already exist. |
-| Workspace reads | centralized | `/api/menu-workspace`, `server/_menu-read.js` | Includes staff permissions, shared draft metadata, revisions, and optional restaurant tools. |
-| Public reads | centralized | `/api/menu-public`, `server/_menu-read.js` | Guest-safe projection exists and now carries server-owned featured groups for route/public rendering. |
-| Shared draft persistence | centralized | `/api/menu-draft`, `server/_menu-draft.js`, `server/_menu-write.js` | Shared drafts now stamp last saver + source with downgrade handling for older schemas. |
-| Live save | centralized | `/api/menu-live`, `server/_menu-live.js` | Revision-aware live persistence exists. |
-| Publish / send transport | centralized | `/api/menu-publish`, `server/_menu-publish.js` | One route now owns preview and publish command actions. |
-| Publish preview / diff | centralized | `/api/menu-publish`, `server/_menu-publish.js` | Canonical diff/sections/patch text are server-generated and selected by `selected_change_ids`. |
-| Menu history reads | centralized | `/api/menu-history`, `server/_menu-history.js` | Menu and restaurant scopes now share one history contract with per-log menu/source metadata. |
-| History writes | centralized | `server/_menu-write.js` | `update_log` writes are already app-owned. |
-| Featured tools writes | centralized | `/api/specials`, `server/_specials-command.js` | Preserve both-menu access rules. |
-| Featured reads | partial | shared routes + client fallback | Workspace/public payloads now provide server-owned featured reads; trim the remaining web fallback helpers after more soak time. |
-| Capability / config readiness | centralized | `/api/session-bootstrap` | Bootstrap now carries config + readiness while preserving compat modes and rewrites. |
-| Audit source stamping | centralized | `server/_menu-write.js`, `server/_menu-history.js` | Draft saves and update-log history now stamp authoritative source metadata with downgrade handling. |
-| Conflict handling | partial | revision guards + reconcile metadata | Stale revision responses now include additive conflict units, server snapshot, and reconcile token while preserving reload semantics. |
+| Workspace read model | server | Returns menu-level publish state, live revision, notification baseline revision, queue metadata, and enough notification projection data for both clients to derive `Unsent` tags and send preview state. | Replace shared-draft metadata in the shared workspace payload. |
+| Local draft storage | client-local | Local drafts autosave per `user + menu + client/device`, survive refresh/relaunch, never sync to the server, and are deleted after successful live save or explicit discard. | Web needs parity with the existing iOS-style device draft behavior. |
+| Live save | server | Live writes happen only at explicit save time, guarded by live revision checks, and update the guest-facing last-updated timestamp immediately. | `Save Quietly` and the save half of `Save & Send` use the same live-save boundary. |
+| Send preview / diff | server with client overlay | The server derives grouped notify-worthy changes from live versus notification baseline, while the client layers current local draft changes into the preview before confirmation. | Replace shared-draft-based preview gating. |
+| Notification baseline / queue | server | The queue is derived from live versus a reduced notification baseline projection, shared across all clients, and only advances on successful send or explicit clear-through-uncheck. | Do not store per-item queue flags as source of truth. |
+| Menu history / recent updates | server | History is menu-wide, typed, grouped by `operation_id`, and shared consistently across web and iOS. | Replace send-only mental model with save, send, clear, and failure event types. |
+| Item tags | mixed | `Unsent` is server-derived and shared; `Draft` is client-local and overrides `Unsent` on the editing client only. | Web already has local badge behavior; both clients must converge on the same contract. |
+| Conflict handling | server plus client recovery | Staleness is checked only at save/send time; non-overlapping local drafts auto-rebase; overlapping changes require review before save. | Replace shared-draft revision semantics with live revision plus notification baseline revision semantics. |
+| Public footer metadata | server | Guest-facing last-updated time reflects the last live save, not the last notification send, and must not leak queue state. | Preserve current footer truthfulness while decoupling send timing. |
+| Migration / cutover | server plus clients | Straight cutover. Existing server-shared drafts are cleared, not migrated, and the legacy shared-draft workflow is removed rather than supported in parallel. | No compatibility layer for shared drafts after cutover. |
 
 ## Surface Notes
 
+### Server
+
+- The server must become authoritative for `Live` versus `Live | Unsent`.
+- The server must own the reduced notification baseline projection and its
+  revision.
+- `Save & Send` must be atomic from the product point of view: the saved live
+  snapshot, queue transition, and history writes must correspond to the same
+  operation.
+- Send failures must leave the checked change groups in the queue for retry.
+- `Save Quietly` must record a first-class history event even when it creates no
+  send work.
+
 ### Web Manager
 
-- Must stop depending on client-authored preview semantics for parity-critical actions.
-- Must treat preview failures as explicit user-visible errors rather than falling back to client-owned publish semantics.
-- Must prefer shared history and featured boundaries over direct table reads where parity matters.
-- Must preserve current draft vs save vs save-and-send behavior while the backend becomes authoritative.
+- Replace shared-draft UI language and status copy with local-draft language.
+- Use server-backed menu status for `Live` and `Live | Unsent`.
+- Keep local `Draft` item tags and layer them on top of shared `Unsent` state.
+- Use dynamic primary action labels:
+  - `Save` for quiet-only local changes with nothing sendable
+  - `Save Quietly` when sendable changes exist but the user wants a quiet save
+  - `Save & Send` when local save plus queue review is required
+  - `Send` when there is no local save but the menu is already `Live | Unsent`
 
-### Public Routes
+### Native iOS
 
-- Keep route-owned design and brand fidelity intact.
-- Keep guest-safe reads separate from staff workspace reads.
-- Do not leak draft or staff-only metadata.
+- Reuse device-local draft storage keyed by `user + menu`.
+- Remove shared-draft assumptions from the app model, send gating, and copy.
+- Drive send availability from server unsent state plus local changes, not only
+  from local diff versus live.
+- Mirror web preview sections, grouped selection behavior, and dynamic action
+  language.
 
-### Admin
+### Public And Guest Surfaces
 
-- Keep admin-only surfaces on the web for this phase.
-- Only change admin flows in `#304` when the backend boundary itself requires it.
+- Public menus should reflect live saves immediately, including quiet saves.
+- Public routes must not expose queue state, draft state, or send/clear history
+  nuance.
 
-### Native iOS Follow-On
+### Admin And Landing Page
 
-- Blocked on `#304`.
-- Should consume shared contracts instead of recreating product semantics locally.
-- Liquid Glass is required on iOS 26+ with deliberate fallbacks on earlier supported iOS versions.
+- The shared `/admin` landing-page subsection draft/publish workflow is out of
+  scope for this parity tracker.
+- Only menu workspaces participate in this cutover.
 
 ## Migration Sequence
 
-1. Inventory and classify what is already centralized vs partial vs client-owned.
-2. Move server-canonical preview/diff generation behind shared backend contracts.
-3. Complete shared history and restaurant-tools read models behind existing routes.
-4. Add draft authorship, source stamping, and richer conflict metadata.
-5. Cut the web runtime onto unified bootstrap/config/profile reads and server-owned restaurant tools payloads.
-6. Trim the remaining featured-read fallback helpers once the new paths have soaked.
-7. Re-verify readiness for `#305`.
+1. Cut the shared workspace read model over from shared-draft metadata to
+   publish-state, notification-baseline, and queue-projection data.
+2. Land the server-side notification baseline projection, grouped diff engine,
+   typed history writes, and stale-save conflict contract.
+3. Cut the web manager onto local-only drafts, server-backed `Unsent`, and the
+   new preview/action semantics.
+4. Cut the iOS client onto the same server contract and remove shared-draft UI
+   and API expectations.
+5. Clear any existing shared drafts at release cutover and remove the legacy
+   shared-draft path instead of running dual semantics.
 
 ## Explicit Non-Goals
 
 - Arbitrary restaurant or menu CRUD.
+- Landing-page admin subsection draft/publish parity.
 - Consumer App Store menu behavior.
 - Native admin-console delivery in the iOS app.
-- Replacing Supabase as the system of record during this phase.
-- Event-sourced draft or publish architecture.
+- Event-sourced queue or draft architecture.
+- Migrating server-shared drafts into client-local drafts.
