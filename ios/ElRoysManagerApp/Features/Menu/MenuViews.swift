@@ -1,5 +1,12 @@
 import SwiftUI
 
+private enum MenuEditorSheet: String, Identifiable {
+  case itemEditor
+  case publishPreview
+
+  var id: String { rawValue }
+}
+
 struct MenuEditorScreen: View {
   @Environment(\.scenePhase) private var scenePhase
   @Bindable var model: AppModel
@@ -7,7 +14,7 @@ struct MenuEditorScreen: View {
   @State private var addCategoryName = ""
   @State private var showingAddCategory = false
   @State private var editingDraft = EditableItemDraft()
-  @State private var showingItemSheet = false
+  @State private var activeSheet: MenuEditorSheet?
   @State private var renameTarget: MenuCategoryPayload?
   @State private var renameText = ""
   @State private var showingDiscardDraftConfirm = false
@@ -46,17 +53,17 @@ struct MenuEditorScreen: View {
             theme: theme,
             menuAccent: menuAccent,
             onAddItem: presentNewItem,
-            onAddCategory: { showingAddCategory = true },
             onSaveQuietly: saveQuietly,
             onSendUpdate: loadSendPreview,
             onDiscardDraft: { showingDiscardDraftConfirm = true }
           )
 
-          if let preview = model.currentEditorPreview {
-            PublishPreviewCard(model: model, preview: preview, theme: theme, menuAccent: menuAccent, onPublish: publishChanges)
-          }
-
           if let document = model.currentEditorDocument {
+            MenuEditorCategoriesHeader(
+              theme: theme,
+              menuAccent: menuAccent,
+              onAddCategory: { showingAddCategory = true }
+            )
             ForEach(Array(document.visibleCategories.enumerated()), id: \.offset) { _, category in
               MenuEditorCategoryCard(
                 menu: menu,
@@ -72,7 +79,14 @@ struct MenuEditorScreen: View {
                 },
                 onSelectItem: { item in
                   editingDraft = EditableItemDraft(item: item, categoryKey: category.key, isFoodMenu: menu.isFoodMenu)
-                  showingItemSheet = true
+                  activeSheet = .itemEditor
+                },
+                onToggleEightySix: { item in
+                  model.setItemEightySixed(
+                    itemID: item.id,
+                    categoryKey: category.key,
+                    isEightySixed: !item.isEightySixed
+                  )
                 },
                 onMoveOffMenu: { item in
                   model.moveItemToOffMenu(itemID: item.id, from: category.key)
@@ -116,11 +130,25 @@ struct MenuEditorScreen: View {
     }
     .navigationTitle(menu.displayTypeLabel)
     .navigationBarTitleDisplayMode(.inline)
+    .toolbar {
+      ToolbarItem(placement: .topBarTrailing) {
+        NavigationLink(value: AppDestination.routePreview(menu)) {
+          Image(systemName: "safari")
+        }
+        .accessibilityLabel("Exact Route Preview")
+      }
+    }
     .task(id: menu.id) {
       await model.loadEditor(menuId: menu.id)
     }
     .task(id: menu.id) {
       await model.monitorEditorRemoteChanges(for: menu.id)
+    }
+    .task(id: model.notice?.id) {
+      guard let notice = model.notice else { return }
+      try? await Task.sleep(for: .seconds(4))
+      guard model.notice?.id == notice.id else { return }
+      model.notice = nil
     }
     .onChange(of: scenePhase) { _, phase in
       guard phase == .active else { return }
@@ -128,15 +156,31 @@ struct MenuEditorScreen: View {
     }
     .onChange(of: model.editorRefreshRequirement != nil) { _, required in
       guard required else { return }
-      showingItemSheet = false
+      activeSheet = nil
       showingAddCategory = false
       renameTarget = nil
     }
-    .sheet(isPresented: Binding(
-      get: { showingItemSheet && model.editorRefreshRequirement == nil },
-      set: { showingItemSheet = $0 }
-    )) {
-      ItemEditorSheet(model: model, menu: menu, draft: $editingDraft)
+    .sheet(item: Binding(
+      get: { model.editorRefreshRequirement == nil ? activeSheet : nil },
+      set: { activeSheet = $0 }
+    )) { sheet in
+      switch sheet {
+      case .itemEditor:
+        ItemEditorSheet(model: model, menu: menu, draft: $editingDraft)
+      case .publishPreview:
+        if let preview = model.currentEditorPreview {
+          PublishPreviewSheet(
+            model: model,
+            preview: preview,
+            theme: theme,
+            menuAccent: menuAccent,
+            onPublish: publishChanges
+          )
+        } else {
+          ProgressView("Loading preview…")
+            .presentationDetents([.medium])
+        }
+      }
     }
     .alert("Add Category", isPresented: $showingAddCategory) {
       TextField("Category name", text: $addCategoryName)
@@ -173,7 +217,7 @@ struct MenuEditorScreen: View {
   private func presentNewItem() {
     if let firstCategoryKey = model.currentEditorDocument?.visibleCategories.first?.key {
       editingDraft = EditableItemDraft(categoryKey: firstCategoryKey, isFoodMenu: menu.isFoodMenu)
-      showingItemSheet = true
+      activeSheet = .itemEditor
     } else {
       model.notice = AppNotice(
         tone: .warning,
@@ -188,11 +232,17 @@ struct MenuEditorScreen: View {
   }
 
   private func loadSendPreview() {
-    Task { await model.loadPublishPreview() }
+    Task {
+      await model.loadPublishPreview()
+      activeSheet = model.currentEditorPreview == nil ? nil : .publishPreview
+    }
   }
 
   private func publishChanges() {
-    Task { await model.publishSelectedChanges() }
+    Task {
+      await model.publishSelectedChanges()
+      activeSheet = nil
+    }
   }
 }
 
@@ -255,96 +305,147 @@ private struct EditorItemRow: View {
   }
 }
 
-private struct PublishPreviewCard: View {
+struct PublishPreviewSummary: Equatable {
+  struct NotificationChange: Identifiable, Equatable {
+    let id: String
+    let sectionLabel: String
+    let text: String
+
+    var displayText: String {
+      "\(sectionLabel): \(text)"
+    }
+  }
+
+  var selectedNotificationChanges: [NotificationChange]
+  var clearedNotificationChanges: [NotificationChange]
+  var saveOnlyChanges: [SaveOnlyChange]
+
+  init(preview: MenuPreviewPayload, selectedChangeIDs: Set<String>) {
+    let notificationChanges = preview.sections
+      .flatMap(\.changes)
+      .map {
+        NotificationChange(
+          id: $0.id,
+          sectionLabel: $0.sectionLabel,
+          text: $0.text
+        )
+      }
+    self.selectedNotificationChanges = notificationChanges.filter { selectedChangeIDs.contains($0.id) }
+    self.clearedNotificationChanges = notificationChanges.filter { !selectedChangeIDs.contains($0.id) }
+    self.saveOnlyChanges = preview.saveOnlyChanges
+  }
+}
+
+private struct PublishPreviewSheet: View {
+  @Environment(\.dismiss) private var dismiss
   @Bindable var model: AppModel
   let preview: MenuPreviewPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
   let onPublish: () -> Void
 
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text(previewTitle)
-        .font(EditorTypography.display(20, weight: .bold))
-        .foregroundStyle(theme.titleText)
-      if !preview.patchMessage.isEmpty {
-        Text(preview.patchMessage)
-          .font(EditorTypography.body(14))
-          .foregroundStyle(theme.subtleText)
-      }
-
-      if preview.hasNotificationChanges {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Will Send")
-            .font(EditorTypography.body(14, weight: .bold))
-            .foregroundStyle(theme.titleText)
-          ForEach(Array(preview.sections.enumerated()), id: \.offset) { _, section in
-            VStack(alignment: .leading, spacing: 6) {
-              Text(section.label)
-                .font(EditorTypography.body(13, weight: .semibold))
-                .foregroundStyle(theme.subtleText)
-              ForEach(Array(section.changes.enumerated()), id: \.offset) { _, change in
-                Toggle(isOn: Binding(
-                  get: { model.selectedPreviewChangeIDs.contains(change.id) },
-                  set: { model.updatePreviewSelection(change.id, selected: $0) }
-                )) {
-                  Text(change.text)
-                    .font(EditorTypography.body(13))
-                    .foregroundStyle(theme.bodyText)
-                }
-                .tint(menuAccent)
-              }
-            }
-          }
-        }
-        .padding(12)
-        .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-        if !uncheckedChanges.isEmpty {
-          VStack(alignment: .leading, spacing: 6) {
-            Text("Will Clear Without Sending")
-              .font(EditorTypography.body(14, weight: .bold))
-              .foregroundStyle(theme.titleText)
-            ForEach(Array(uncheckedChanges.enumerated()), id: \.offset) { _, change in
-              Text("\(change.sectionLabel): \(change.text)")
-                .font(EditorTypography.body(13))
-                .foregroundStyle(theme.bodyText)
-            }
-          }
-          .padding(12)
-          .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-      }
-
-      if !preview.saveOnlyChanges.isEmpty {
-        VStack(alignment: .leading, spacing: 6) {
-          Text("Will Save Only")
-            .font(EditorTypography.body(14, weight: .bold))
-            .foregroundStyle(theme.titleText)
-          ForEach(Array(preview.saveOnlyChanges.enumerated()), id: \.offset) { _, change in
-            Text(change.label.nilIfBlank ?? change.message)
-              .font(EditorTypography.body(13))
-              .foregroundStyle(theme.bodyText)
-          }
-        }
-        .padding(12)
-        .background(theme.itemRowFill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-      }
-
-      Button(actionButtonTitle) {
-        onPublish()
-      }
-      .buttonStyle(PrimaryGlassButtonStyle())
-      .disabled(!model.canPublishRemotely)
-    }
-    .menuEditorSurface(colors: [theme.previewTop, theme.previewBottom], border: theme.previewBorder)
+  private var summary: PublishPreviewSummary {
+    PublishPreviewSummary(
+      preview: preview,
+      selectedChangeIDs: model.selectedPreviewChangeIDs
+    )
   }
 
-  private var previewTitle: String {
-    if !preview.hasNotificationChanges {
-      return "Save Preview"
+  var body: some View {
+    NavigationStack {
+      ScrollView {
+        VStack(alignment: .leading, spacing: 18) {
+          if !preview.patchMessage.isEmpty {
+            Text(preview.patchMessage)
+              .font(EditorTypography.body(14))
+              .foregroundStyle(theme.subtleText)
+              .padding(.horizontal, 2)
+          }
+
+          if preview.hasNotificationChanges {
+            VStack(alignment: .leading, spacing: 10) {
+              Text("Notification Toggles")
+                .font(EditorTypography.body(15, weight: .bold))
+                .foregroundStyle(theme.titleText)
+              ForEach(Array(preview.sections.enumerated()), id: \.offset) { _, section in
+                VStack(alignment: .leading, spacing: 8) {
+                  Text(section.label)
+                    .font(EditorTypography.body(13, weight: .semibold))
+                    .foregroundStyle(theme.subtleText)
+                  ForEach(Array(section.changes.enumerated()), id: \.offset) { _, change in
+                    Toggle(isOn: Binding(
+                      get: { model.selectedPreviewChangeIDs.contains(change.id) },
+                      set: { model.updatePreviewSelection(change.id, selected: $0) }
+                    )) {
+                      Text(change.text)
+                        .font(EditorTypography.body(13))
+                        .foregroundStyle(theme.bodyText)
+                    }
+                    .tint(menuAccent)
+                  }
+                }
+              }
+            }
+            .menuEditorSurface(colors: [theme.previewTop, theme.previewBottom], border: theme.previewBorder)
+          }
+
+          if !summary.selectedNotificationChanges.isEmpty {
+            PublishPreviewSummaryCard(
+              title: "Changes To Send In Notification",
+              items: summary.selectedNotificationChanges.map(\.displayText),
+              theme: theme
+            )
+          }
+
+          if !summary.clearedNotificationChanges.isEmpty {
+            PublishPreviewSummaryCard(
+              title: "Changes To Clear",
+              items: summary.clearedNotificationChanges.map(\.displayText),
+              theme: theme
+            )
+          }
+
+          if !summary.saveOnlyChanges.isEmpty {
+            PublishPreviewSummaryCard(
+              title: "Save Only Changes",
+              items: summary.saveOnlyChanges.map { $0.label.nilIfBlank ?? $0.message },
+              theme: theme
+            )
+          }
+        }
+        .padding(24)
+      }
+      .background {
+        MenuEditorBackground(theme: theme)
+          .ignoresSafeArea()
+      }
+      .safeAreaInset(edge: .bottom) {
+        Button(actionButtonTitle) {
+          onPublish()
+        }
+        .buttonStyle(PrimaryGlassButtonStyle())
+        .disabled(!model.canPublishRemotely)
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+        .background(.ultraThinMaterial)
+      }
+      .navigationTitle(screenTitle)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Close") {
+            dismiss()
+          }
+        }
+      }
     }
-    return model.hasLocalDraftChanges ? "Save & Send Preview" : "Send Preview"
+    .presentationDetents([.large])
+    .presentationDragIndicator(.visible)
+  }
+
+  private var screenTitle: String {
+    preview.hasNotificationChanges ? "Send Notification" : "Save Changes"
   }
 
   private var actionButtonTitle: String {
@@ -353,11 +454,25 @@ private struct PublishPreviewCard: View {
     }
     return model.hasLocalDraftChanges ? "Save & Send" : "Send"
   }
+}
 
-  private var uncheckedChanges: [PreviewChange] {
-    preview.sections
-      .flatMap(\.changes)
-      .filter { !model.selectedPreviewChangeIDs.contains($0.id) }
+private struct PublishPreviewSummaryCard: View {
+  let title: String
+  let items: [String]
+  let theme: MenuEditorTheme
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(title)
+        .font(EditorTypography.body(15, weight: .bold))
+        .foregroundStyle(theme.titleText)
+      ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+        Text(item)
+          .font(EditorTypography.body(13))
+          .foregroundStyle(theme.bodyText)
+      }
+    }
+    .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
   }
 }
 
@@ -383,57 +498,46 @@ private struct MenuEditorHeaderCard: View {
             .font(EditorTypography.display(30, weight: .bold))
             .foregroundStyle(theme.titleText)
           Text(menu.isFoodMenu ? "Kitchen edit deck" : "Bar edit deck")
-            .font(EditorTypography.body(14, weight: .medium))
-            .foregroundStyle(theme.subtleText)
+          .font(EditorTypography.body(14, weight: .medium))
+          .foregroundStyle(theme.subtleText)
         }
         Spacer()
-        Text(menu.displayTypeLabel)
-          .font(EditorTypography.body(12, weight: .bold))
-          .padding(.vertical, 8)
-          .padding(.horizontal, 10)
-          .background(menuAccent.opacity(0.18), in: Capsule())
-          .foregroundStyle(menuAccent)
+        VStack(alignment: .trailing, spacing: 10) {
+          Text(menu.displayTypeLabel)
+            .font(EditorTypography.body(12, weight: .bold))
+            .padding(.vertical, 8)
+            .padding(.horizontal, 10)
+            .background(menuAccent.opacity(0.18), in: Capsule())
+            .foregroundStyle(menuAccent)
+          MenuEditorBadge(
+            label: menuStatusLabel.uppercased(),
+            fill: statusFill,
+            text: statusText
+          )
+        }
       }
-
-      HStack(alignment: .top, spacing: 10) {
-        MenuEditorBadge(
-          label: menuStatusLabel,
-          fill: hasServerUnsentChanges ? menuAccent.opacity(0.16) : theme.successAccent.opacity(0.18),
-          text: hasServerUnsentChanges ? menuAccent : theme.successAccent
-        )
-        MenuEditorBadge(
-          label: hasLocalDraftChanges ? "Drafting locally" : "No local drafts",
-          fill: hasLocalDraftChanges ? theme.warningAccent.opacity(0.18) : theme.neutralAccent.opacity(0.16),
-          text: hasLocalDraftChanges ? theme.warningAccent : theme.neutralAccent
-        )
-        MenuEditorBadge(
-          label: hasLiveMenuChanges ? "Live menu behind working copy" : "Live menu aligned",
-          fill: hasLiveMenuChanges ? menuAccent.opacity(0.16) : theme.successAccent.opacity(0.18),
-          text: hasLiveMenuChanges ? menuAccent : theme.successAccent
-        )
-      }
-
-      Text(workflowSummary)
-        .font(EditorTypography.body(13, weight: .medium))
-        .foregroundStyle(theme.bodyText)
     }
     .menuEditorSurface(colors: [theme.headerTop, theme.headerBottom], border: theme.headerBorder)
   }
 
-  private var workflowSummary: String {
-    if hasLocalDraftChanges && hasServerUnsentChanges {
-      return "This device has unsaved local edits, and the server queue still has unsent menu changes."
-    }
+  private var statusFill: Color {
     if hasLocalDraftChanges {
-      return "Your draft is local to this device until you Save Quietly or Save & Send."
+      return theme.warningAccent.opacity(0.18)
     }
-    if hasServerUnsentChanges {
-      return "The menu is live with unsent queue work. Use Send to notify channels or clear remaining queue groups."
+    if hasServerUnsentChanges || hasLiveMenuChanges {
+      return menuAccent.opacity(0.16)
     }
-    if hasLiveMenuChanges {
-      return "Your working copy differs from live. Save Quietly to stage it live without sending."
+    return theme.successAccent.opacity(0.18)
+  }
+
+  private var statusText: Color {
+    if hasLocalDraftChanges {
+      return theme.warningAccent
     }
-    return "Live state and notification baseline are aligned."
+    if hasServerUnsentChanges || hasLiveMenuChanges {
+      return menuAccent
+    }
+    return theme.successAccent
   }
 }
 
@@ -458,7 +562,6 @@ private struct MenuEditorActionPanel: View {
   let theme: MenuEditorTheme
   let menuAccent: Color
   let onAddItem: () -> Void
-  let onAddCategory: () -> Void
   let onSaveQuietly: () -> Void
   let onSendUpdate: () -> Void
   let onDiscardDraft: () -> Void
@@ -474,14 +577,6 @@ private struct MenuEditorActionPanel: View {
           MenuEditorActionLabel(title: "Add Item", subtitle: "Create a new menu item", icon: "plus.circle.fill", accent: menuAccent)
         }
         .buttonStyle(.plain)
-
-        Button(action: onAddCategory) {
-          MenuEditorActionLabel(title: "Add Category", subtitle: "Create a new section", icon: "square.split.1x2.fill", accent: menuAccent)
-        }
-        .buttonStyle(.plain)
-      }
-
-      HStack(spacing: 12) {
         Button(action: onSaveQuietly) {
           MenuEditorActionLabel(
             title: "Save Quietly",
@@ -492,7 +587,9 @@ private struct MenuEditorActionPanel: View {
         }
         .buttonStyle(.plain)
         .disabled(!model.canSaveQuietlyRemotely)
+      }
 
+      HStack(spacing: 12) {
         Button(action: onSendUpdate) {
           MenuEditorActionLabel(
             title: model.hasLocalDraftChanges ? "Save & Send" : "Send",
@@ -500,7 +597,7 @@ private struct MenuEditorActionPanel: View {
               ? (model.hasLocalDraftChanges
                   ? "Save live, then choose what to send or clear"
                   : "Choose which unsent queue groups to send or clear")
-              : "Preview loaded below",
+              : "Review the current send plan",
             icon: "paperplane.fill",
             accent: menuAccent
           )
@@ -520,14 +617,29 @@ private struct MenuEditorActionPanel: View {
         }
         .buttonStyle(.plain)
         .disabled(!model.canDiscardLocalDraft)
-
-        NavigationLink(value: AppDestination.routePreview(menu)) {
-          MenuEditorActionLabel(title: "Exact Route", subtitle: "See the true public route", icon: "safari.fill", accent: theme.neutralAccent)
-        }
-        .buttonStyle(.plain)
       }
     }
     .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
+  }
+}
+
+private struct MenuEditorCategoriesHeader: View {
+  let theme: MenuEditorTheme
+  let menuAccent: Color
+  let onAddCategory: () -> Void
+
+  var body: some View {
+    HStack(alignment: .center) {
+      Text("Categories")
+        .font(EditorTypography.display(20, weight: .bold))
+        .foregroundStyle(theme.titleText)
+      Spacer()
+      Button(action: onAddCategory) {
+        Label("Add Category", systemImage: "square.split.1x2.fill")
+      }
+      .buttonStyle(SecondaryGlassButtonStyle())
+      .tint(menuAccent)
+    }
   }
 }
 
@@ -568,6 +680,7 @@ private struct MenuEditorCategoryCard: View {
   let onRename: () -> Void
   let onDelete: () -> Void
   let onSelectItem: (MenuItemPayload) -> Void
+  let onToggleEightySix: (MenuItemPayload) -> Void
   let onMoveOffMenu: (MenuItemPayload) -> Void
 
   private var visibleItems: [MenuItemPayload] {
@@ -611,6 +724,14 @@ private struct MenuEditorCategoryCard: View {
           EditorItemRow(item: item, theme: theme)
         }
         .buttonStyle(.plain)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+          Button {
+            onToggleEightySix(item)
+          } label: {
+            Label(item.isEightySixed ? "Restore" : "86", systemImage: item.isEightySixed ? "arrow.uturn.backward.circle.fill" : "nosign.app.fill")
+          }
+          .tint(item.isEightySixed ? theme.successAccent : theme.warningAccent)
+        }
         .swipeActions(edge: .trailing) {
           Button(role: .destructive) {
             onMoveOffMenu(item)

@@ -78,6 +78,40 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
 
+  func testUpsertingExistingItemInSameCategoryPreservesOrderWhenEightySixed() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "item-1", name: "Pilsner"),
+          makeItem(id: "item-2", name: "Amber"),
+          makeItem(id: "item-3", name: "Stout")
+        ]
+      )
+    ])
+
+    var document = EditableMenuDocument(workspace: workspace)
+    guard var amber = document.itemRecord(for: "item-2")?.item else {
+      XCTFail("Expected amber item")
+      return
+    }
+
+    amber.isEightySixed = true
+    document.upsertItem(amber, categoryKey: "beer", originalCategoryKey: "beer")
+
+    XCTAssertEqual(document.category(for: "beer")?.items.map(\.id), ["item-1", "item-2", "item-3"])
+    XCTAssertEqual(document.category(for: "beer")?.items.map(\.displayOrder), [0, 1, 2])
+    XCTAssertTrue(document.itemRecord(for: "item-2")?.item.isEightySixed == true)
+  }
+
   func testEditableDocumentNormalizesDuplicateAndMissingIdentifiers() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -796,6 +830,92 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testSaveQuietlyIgnoresStaleDraftRevisionWhenNoSharedDraftExists() async throws {
+    let sessionStore = TestSessionStore()
+    let workspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(
+        draftSavedTs: 22,
+        draftSavedByUserId: "staff-2",
+        draftSavedByName: "Old Draft",
+        draftSavedSource: "web"
+      ),
+      revisions: WorkspaceRevisions(
+        liveRevision: 10,
+        draftRevision: nil,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      menuStatus: "Live",
+      hasUnsentChanges: false
+    )
+    let liveSaveClient = StubLiveSaveClient(
+      response: PublishResponse(
+        ok: true,
+        action: nil,
+        ts: 44,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 44,
+          draftRevision: nil,
+          lastSentRevision: 10,
+          notificationBaselineRevision: 10
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        liveSaveClient: liveSaveClient
+      ),
+      sessionStore: sessionStore,
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    guard var beer = model.currentEditorDocument?.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded item")
+      return
+    }
+    beer.name = "House Pilsner"
+    model.upsertItem(beer, categoryKey: "beer", originalCategoryKey: "beer")
+
+    XCTAssertTrue(model.canSaveQuietlyRemotely)
+
+    await model.saveLiveMenu()
+
+    XCTAssertEqual(liveSaveClient.saveCallCount, 1)
+    XCTAssertEqual(liveSaveClient.lastExpectedLiveRevision, 10)
+    XCTAssertNil(liveSaveClient.lastExpectedDraftRevision)
+  }
+
+  @MainActor
   func testLoadPublishPreviewUsesDraftAndNotificationRevisionsIndependently() async throws {
     let baseWorkspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -877,6 +997,73 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(publishClient.lastPreviewExpectedDraftRevision, 22)
     XCTAssertEqual(publishClient.lastPreviewExpectedNotificationRevision, 10)
     XCTAssertEqual(model.currentEditorPreview?.selectionDefaults, ["beer::added::ipa"])
+  }
+
+  func testPublishPreviewSummarySeparatesSelectedClearedAndSaveOnlyChanges() throws {
+    let data = Data("""
+    {
+      "mode": "save-and-send",
+      "has_changes": true,
+      "has_local_draft": true,
+      "has_shared_draft": true,
+      "has_notification_changes": true,
+      "has_save_only_changes": true,
+      "diff": [],
+      "sections": [
+        {
+          "id": "beer",
+          "icon": "🍺",
+          "label": "Beer",
+          "changes": [
+            {
+              "id": "beer::added::ipa",
+              "kind": "added",
+              "text": "Added IPA",
+              "name": "IPA",
+              "section_id": "beer",
+              "section_label": "Beer",
+              "icon": "🍺"
+            },
+            {
+              "id": "beer::eightySixed::stout",
+              "kind": "eightySixed",
+              "text": "86'd Stout",
+              "name": "Stout",
+              "section_id": "beer",
+              "section_label": "Beer",
+              "icon": "🍺"
+            }
+          ]
+        }
+      ],
+      "notification_changes": [],
+      "save_only_changes": [
+        {
+          "id": "save-only-1",
+          "label": "Price updated",
+          "message": "Price updated"
+        }
+      ],
+      "patch_message": "Patch text",
+      "truncated": false,
+      "selection_defaults": ["beer::added::ipa"],
+      "metadata": {
+        "server_owned": true,
+        "contract": "menu-publish-preview.v2",
+        "current_featured_ids": []
+      }
+    }
+    """.utf8)
+    let preview = try JSONDecoder.backend.decode(MenuPreviewPayload.self, from: data)
+
+    let summary = PublishPreviewSummary(
+      preview: preview,
+      selectedChangeIDs: ["beer::added::ipa"]
+    )
+
+    XCTAssertEqual(summary.selectedNotificationChanges.map(\.id), ["beer::added::ipa"])
+    XCTAssertEqual(summary.clearedNotificationChanges.map(\.id), ["beer::eightySixed::stout"])
+    XCTAssertEqual(summary.saveOnlyChanges.map(\.id), ["save-only-1"])
   }
 
   @MainActor

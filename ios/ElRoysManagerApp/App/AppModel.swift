@@ -589,6 +589,13 @@ final class AppModel {
     mutateEditorDocument { $0.upsertItem(item, categoryKey: categoryKey, originalCategoryKey: originalCategoryKey) }
   }
 
+  func setItemEightySixed(itemID: String, categoryKey: String, isEightySixed: Bool) {
+    guard var item = currentEditorDocument?.itemRecord(for: itemID)?.item else { return }
+    guard item.isEightySixed != isEightySixed else { return }
+    item.isEightySixed = isEightySixed
+    upsertItem(item, categoryKey: categoryKey, originalCategoryKey: categoryKey)
+  }
+
   func canUseItemName(_ name: String, in categoryKey: String, excluding itemID: String? = nil) -> Bool {
     !(currentEditorDocument?.hasDuplicate(named: name, in: categoryKey, excluding: itemID) ?? false)
   }
@@ -1030,7 +1037,10 @@ final class AppModel {
   }
 
   private func expectedDraftRevision(for workspace: MenuWorkspacePayload) -> Int? {
-    workspace.workspace.revisions.draftRevision
+    let hasSharedDraft = workspace.workspace.hasSharedDraft || workspace.workspace.sharedDraft.exists
+    guard hasSharedDraft else { return nil }
+    return workspace.workspace.revisions.draftRevision
+      ?? workspace.workspace.sharedDraft.savedAt
       ?? workspace.meta.draftSavedTs
   }
 
