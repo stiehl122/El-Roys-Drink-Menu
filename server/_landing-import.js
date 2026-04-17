@@ -26,27 +26,6 @@ function stripHtml(value = '') {
   return normalizeWhitespace(decodeHtmlEntities(String(value || '').replace(/<[^>]+>/g, ' ')));
 }
 
-function readRequestJson(req) {
-  return new Promise((resolve, reject) => {
-    let body = '';
-    req.on('data', chunk => {
-      body += chunk;
-    });
-    req.on('end', () => {
-      if (!body) {
-        resolve({});
-        return;
-      }
-      try {
-        resolve(JSON.parse(body));
-      } catch (_) {
-        reject({ status: 400, message: 'Invalid JSON body' });
-      }
-    });
-    req.on('error', reject);
-  });
-}
-
 function canonicalizeUrl(rawUrl = '') {
   try {
     return new URL(String(rawUrl || '').trim()).toString();
@@ -316,5 +295,3 @@ export async function importReviewFromUrl(rawUrl = '') {
     };
   }
 }
-
-export { readRequestJson };

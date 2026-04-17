@@ -5,9 +5,17 @@
     ? globalScope.__HF_SESSION_MODULES__
     : {};
 
-  function createMenuSessionLifecycleImpl(ports) {
-    const sessionPorts = ports || globalScope.getMenuSessionPorts();
+  function createMenuSessionLifecycleImpl(ports, runtime = {}) {
+    const resolveSessionPorts = typeof runtime.getMenuSessionPorts === 'function'
+      ? runtime.getMenuSessionPorts
+      : (() => globalScope.getMenuSessionPorts?.());
+    const sessionPorts = ports || resolveSessionPorts();
     let request = sessionPorts.buildRequest();
+    const createPublishService = typeof runtime.createPublishService === 'function'
+      ? runtime.createPublishService
+      : (typeof globalScope.createMenuPublishService === 'function'
+          ? globalScope.createMenuPublishService.bind(globalScope)
+          : null);
 
     function syncRequest(overrides = {}) {
       request = { ...request, ...sessionPorts.buildRequest(overrides) };
@@ -18,10 +26,39 @@
       return sessionPorts.buildSnapshot(source, request);
     }
 
-    const publishService = globalScope.createMenuPublishService(sessionPorts, {
-      buildSnapshot,
-      buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
-    });
+    let publishService = null;
+
+    function getPublishService() {
+      if (publishService) return publishService;
+      if (createPublishService) {
+        publishService = createPublishService(sessionPorts, {
+          buildSnapshot,
+          buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
+        });
+        return publishService;
+      }
+      publishService = {
+        async saveDraft(options = {}) {
+          return {
+            ok: false,
+            userHandled: false,
+            userMessage: 'Publish service is unavailable.',
+            preview: options.preview?.sections ? options.preview : sessionPorts.buildPreview(buildSnapshot('preview')),
+            snapshot: buildSnapshot('publish-unavailable'),
+          };
+        },
+        async publishUpdate(options = {}) {
+          return {
+            ok: false,
+            userHandled: false,
+            userMessage: 'Publish service is unavailable.',
+            preview: options.preview?.sections ? options.preview : sessionPorts.buildPreview(buildSnapshot('preview')),
+            snapshot: buildSnapshot('publish-unavailable'),
+          };
+        },
+      };
+      return publishService;
+    }
 
     const session = {
       syncRequest,
@@ -92,11 +129,11 @@
       },
       async saveDraft(options = {}) {
         syncRequest(options);
-        return publishService.saveDraft(options);
+        return getPublishService().saveDraft(options);
       },
       async publishUpdate(options = {}) {
         syncRequest(options);
-        return publishService.publishUpdate(options);
+        return getPublishService().publishUpdate(options);
       },
       async save(options = {}) {
         return session.saveDraft(options);
@@ -117,9 +154,9 @@
 
   modules.createMenuSessionLifecycle = function createMenuSessionLifecycleBoundary(ports, options = {}) {
     if (options && typeof options.impl === 'function') {
-      return options.impl(ports);
+      return options.impl(ports, options);
     }
-    return createMenuSessionLifecycleImpl(ports);
+    return createMenuSessionLifecycleImpl(ports, options);
   };
 
   globalScope.__HF_SESSION_MODULES__ = modules;

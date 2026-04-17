@@ -31,6 +31,24 @@
     return nextUser;
   }
 
+  function getAuthErrorStatus(error) {
+    const status = Number(error?.status || error?.statusCode || 0);
+    return Number.isFinite(status) && status > 0 ? status : 0;
+  }
+
+  function isTerminalAuthSessionError(error) {
+    const status = getAuthErrorStatus(error);
+    return status === 400 || status === 401 || status === 403;
+  }
+
+  function buildSessionProfile(profile = {}) {
+    return {
+      role: profile?.role || 'none',
+      name: profile?.name || '',
+      accessibleMenuIds: Array.isArray(profile?.accessibleMenuIds) ? profile.accessibleMenuIds : [],
+    };
+  }
+
   function scheduleTokenRefreshImpl(expiresAt, deps = {}) {
     const clearExistingTimer = typeof deps.clearExistingTimer === 'function' ? deps.clearExistingTimer : (() => {});
     const setTimer = typeof deps.setTimer === 'function' ? deps.setTimer : (() => null);
@@ -55,8 +73,8 @@
           expiresAt: nextExpiresAt,
         });
         scheduleTokenRefreshImpl(nextExpiresAt, deps);
-      } catch (_) {
-        onRefreshFailure();
+      } catch (error) {
+        onRefreshFailure(error);
       }
     }, msUntilRefresh);
     setTimerRef(timer);
@@ -114,22 +132,30 @@
       return { data, session };
     }
 
+    async function resolveSessionProfile(accessToken) {
+      if (!accessToken) return { ...buildSessionProfile(), profileUnavailable: false };
+      try {
+        return {
+          ...buildSessionProfile(await fetchProfile(accessToken)),
+          profileUnavailable: false,
+        };
+      } catch (error) {
+        if (isTerminalAuthSessionError(error)) throw error;
+        return {
+          ...buildSessionProfile(),
+          profileUnavailable: true,
+        };
+      }
+    }
+
     const service = {
       async applyAuthenticatedSession(data, options = {}) {
         const { closeOverlay = false } = options;
-        let role = 'none';
-        let name = '';
-        let accessibleMenuIds = [];
-        if (data?.access_token) {
-          const profile = await fetchProfile(data.access_token);
-          role = profile.role;
-          name = profile.name;
-          accessibleMenuIds = profile.accessibleMenuIds;
-        }
-        applySession(data, role, name, accessibleMenuIds);
-        applyRole(role);
+        const sessionProfile = await resolveSessionProfile(data?.access_token);
+        applySession(data, sessionProfile.role, sessionProfile.name, sessionProfile.accessibleMenuIds);
+        applyRole(sessionProfile.role);
         if (closeOverlay) closeAuthOverlay();
-        return { role, name, accessibleMenuIds };
+        return sessionProfile;
       },
 
       async handleRecoveryCallback() {
@@ -164,7 +190,7 @@
 
         if (storedAccess && storedExpiresAt > now() + 120_000) {
           try {
-            const profile = await fetchProfile(storedAccess);
+            const profile = await resolveSessionProfile(storedAccess);
             deps.setCurrentUser?.({
               uid: storedUid,
               email: storedEmail,
@@ -186,12 +212,21 @@
         try {
           const refreshed = await restoreWithRefresh();
           return { restored: true, source: 'refresh-token', ...refreshed };
-        } catch (_) {
+        } catch (error) {
+          if (isTerminalAuthSessionError(error)) {
+            clearStorageValue('accessToken');
+            clearStorageValue('refreshToken');
+            clearStorageValue('expiresAt');
+            clearStorageValue('uid');
+            clearStorageValue('email');
+            return { restored: false, reason: 'expired' };
+          }
           scheduleRetry(async () => {
             try {
               await restoreWithRefresh();
               await service.syncRequestedPageMode();
-            } catch (_) {
+            } catch (retryError) {
+              if (!isTerminalAuthSessionError(retryError)) return;
               clearStorageValue('accessToken');
               clearStorageValue('refreshToken');
               clearStorageValue('expiresAt');

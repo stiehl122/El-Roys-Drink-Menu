@@ -32,11 +32,3 @@ export function readAction(req, body = null) {
   const value = fromBody || readQueryValue(req, 'action') || readQueryValue(req, 'mode') || '';
   return String(value || '').trim().toLowerCase();
 }
-
-export function readBoolean(value, fallback = false) {
-  if (typeof value === 'boolean') return value;
-  const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'true') return true;
-  if (normalized === 'false') return false;
-  return fallback;
-}

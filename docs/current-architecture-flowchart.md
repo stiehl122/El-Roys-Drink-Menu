@@ -1,7 +1,7 @@
 # Current Architecture Flow Chart
 
-This map reflects the current tracked repo state on 2026-04-15 at `HEAD`
-`3222b8e` on branch `codex/create-architecture-flow-chart`.
+This map reflects the current tracked repo state on 2026-04-17 at `HEAD`
+`8f757d6`.
 
 ## Boundary Policy
 
@@ -28,12 +28,17 @@ flowchart LR
 
   subgraph Web["Web Client"]
     WebShells["HTML shells and route assets<br/>/<br/>/manager<br/>/admin<br/>/leroyslounge/*<br/>/elroyscantina/*"]
+    WebModules["Classic-script registries and factories<br/>core/auth/*<br/>core/ui/*<br/>core/session/*<br/>core/data/*"]
     RouteCore["Public route adapter layer<br/>routes/shared/public-route-core.js"]
-    WebRuntime["Shared browser runtime<br/>app.js<br/>core/auth/*<br/>core/ui/*"]
+    RouteHandshake["Route registration handshake<br/>registerPublicRouteRenderer<br/>__pendingPublicRouteRenderer"]
+    WebRuntime["Shared browser orchestrator<br/>app.js"]
     Browser --> WebShells
-    WebShells --> RouteCore
+    WebShells --> WebModules
     WebShells --> WebRuntime
-    RouteCore --> WebRuntime
+    WebShells --> RouteCore
+    WebModules -.delegation + injected deps.-> WebRuntime
+    RouteCore -.register or queue renderer.-> RouteHandshake
+    WebRuntime -.adopt pending renderer.-> RouteHandshake
   end
 
   subgraph IOS["iOS Client"]
@@ -117,6 +122,17 @@ The current tracked client boundary is:
   client credentials.
 - Web and iOS still decode and store those compatibility fields to keep session
   bootstrap and restore flows stable.
+- The web runtime is still order-dependent inside the browser even though its
+  network boundary is clean. All HTML shells load `core/*` registries before
+  `app.js`, and that order is enforced by `scripts/check-html-script-order.cjs`.
+- Public routes use a two-step renderer handshake. Route code can queue a
+  pending renderer before `app.js` is ready, and `app.js` later adopts it
+  through `registerPublicRouteRenderer`.
+- The primary session lifecycle path no longer reaches back through an ambient
+  `globalScope.createMenuPublishService` lookup. `app.js` now injects publish
+  creation into `core/session/menu-session.js`, but compatibility fallbacks and
+  other global shims still exist in parts of `core/session/*`, `core/data/*`,
+  and the auth overlay template.
 - Google Fonts is still an external dependency, but the browser does not talk
   to it directly anymore. The server proxy in `server/_font-proxy.js` owns that
   boundary.
