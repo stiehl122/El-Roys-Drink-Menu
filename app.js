@@ -10728,6 +10728,18 @@ function handleManagerItemDrop(event, catId, targetItemId) {
       ...items.filter(item => item.onMenu === false),
     ];
 
+  const category = catId === UNCATEGORIZED_ID
+    ? getUncategorizedCategoryDef()
+    : CATEGORY_DEFS.find(cat => cat.id === catId);
+  const categoryLabel = category?.title || category?.label || 'items';
+  markSaveOnlyDraftChange({
+    key: `item-order:${catId}`,
+    label: `Reordered ${categoryLabel}`,
+    message: `Reordered ${categoryLabel}`,
+    sectionId: catId,
+    itemId: movedItem?.id || '',
+    kind: 'item-order',
+  });
   invalidateDiff();
   renderManagerItems(catId);
   markSectionsStale(_activeManagerSection);
