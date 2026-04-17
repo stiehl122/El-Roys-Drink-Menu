@@ -1448,13 +1448,6 @@ private extension JSONValue {
   }
 }
 
-private extension String {
-  var nilIfBlank: String? {
-    let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? nil : trimmed
-  }
-}
-
 private extension ISO8601DateFormatter {
   static let withFractional: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
