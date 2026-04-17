@@ -508,7 +508,15 @@ final class MenuDocumentTests: XCTestCase {
         "has_shared_draft": true,
         "has_notification_changes": true,
         "has_save_only_changes": false,
-        "diff": [],
+        "diff": [{
+          "id": "beer",
+          "icon": "🍺",
+          "label": "Beer",
+          "added": ["IPA"],
+          "removed": [],
+          "eighty_sixed": [],
+          "restored": []
+        }],
         "sections": [],
         "notification_changes": [],
         "save_only_changes": [],
@@ -533,6 +541,7 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.preview?.metadata.currentFeaturedIds, ["item-1"])
     XCTAssertEqual(payload.preview?.menuStatus, "Live | Unsent")
     XCTAssertEqual(payload.preview?.hasUnsentChanges, true)
+    XCTAssertEqual(payload.preview?.diff.first?.displayOrder, 0)
   }
 
   @MainActor
@@ -689,10 +698,10 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(model.currentEditorDocument?.itemRecord(for: "item-1")?.item.name, "House Pilsner")
     XCTAssertFalse(model.editorDirty)
     XCTAssertTrue(model.editorHasLiveChanges)
-    XCTAssertTrue(model.hasServerUnsentChanges)
+    XCTAssertFalse(model.hasServerUnsentChanges)
     XCTAssertTrue(model.canSaveLiveRemotely)
     XCTAssertTrue(model.canLoadPublishPreview)
-    XCTAssertEqual(model.menuStatusLabel, "Live | Unsent")
+    XCTAssertEqual(model.menuStatusLabel, "Live")
   }
 
   @MainActor
@@ -769,7 +778,7 @@ final class MenuDocumentTests: XCTestCase {
 
     await model.loadEditor(menuId: "menu")
 
-    XCTAssertTrue(model.hasServerUnsentChanges)
+    XCTAssertFalse(model.hasServerUnsentChanges)
     XCTAssertTrue(model.editorHasLiveChanges)
 
     await model.saveLiveMenu()
@@ -779,9 +788,95 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(model.hasServerUnsentChanges)
     XCTAssertFalse(model.canSaveLiveRemotely)
     XCTAssertEqual(liveSaveClient.saveCallCount, 1)
+    XCTAssertEqual(liveSaveClient.lastExpectedLiveRevision, 10)
+    XCTAssertEqual(liveSaveClient.lastExpectedDraftRevision, 22)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
     XCTAssertNil(offlineStore.draft)
     XCTAssertEqual(model.notice?.title, "Saved Quietly")
+  }
+
+  @MainActor
+  func testLoadPublishPreviewUsesDraftAndNotificationRevisionsIndependently() async throws {
+    let baseWorkspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ])
+    var sharedDraftDocument = EditableMenuDocument(workspace: baseWorkspace)
+    guard var sharedBeer = sharedDraftDocument.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded beer item")
+      return
+    }
+    sharedBeer.name = "House Pilsner"
+    sharedDraftDocument.upsertItem(sharedBeer, categoryKey: "beer", originalCategoryKey: "beer")
+
+    let workspace = makeWorkspace(
+      categories: baseWorkspace.cats,
+      meta: MenuMetaPayload(
+        lastSentTs: 10,
+        draftState: makeJSONValue(from: sharedDraftDocument),
+        draftSavedTs: 22
+      ),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 22,
+        savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
+        source: "ios_app"
+      ),
+      revisions: WorkspaceRevisions(liveRevision: 10, draftRevision: 22, lastSentRevision: 10, notificationBaselineRevision: 10)
+    )
+    let publishClient = StubPublishClient(
+      previewResponse: PublishResponse(
+        ok: true,
+        action: "preview",
+        ts: nil,
+        preview: try makePreviewPayload(
+          mode: "save-and-send",
+          selectionDefaults: ["beer::added::ipa"]
+        ),
+        currentRevisions: WorkspaceRevisions(liveRevision: 10, draftRevision: 22, lastSentRevision: 10, notificationBaselineRevision: 10),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publishClient: publishClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.loadPublishPreview()
+
+    XCTAssertEqual(publishClient.previewCallCount, 1)
+    XCTAssertEqual(publishClient.lastPreviewExpectedLiveRevision, 10)
+    XCTAssertEqual(publishClient.lastPreviewExpectedDraftRevision, 22)
+    XCTAssertEqual(publishClient.lastPreviewExpectedNotificationRevision, 10)
+    XCTAssertEqual(model.currentEditorPreview?.selectionDefaults, ["beer::added::ipa"])
   }
 
   @MainActor
@@ -1535,6 +1630,36 @@ final class MenuDocumentTests: XCTestCase {
       showRecipe: false
     )
   }
+
+  private func makePreviewPayload(
+    mode: String,
+    selectionDefaults: [String]
+  ) throws -> MenuPreviewPayload {
+    let selectionJSON = selectionDefaults.map { "\"\($0)\"" }.joined(separator: ", ")
+    let data = Data("""
+    {
+      "mode": "\(mode)",
+      "has_changes": true,
+      "has_local_draft": true,
+      "has_shared_draft": true,
+      "has_notification_changes": true,
+      "has_save_only_changes": false,
+      "diff": [],
+      "sections": [],
+      "notification_changes": [],
+      "save_only_changes": [],
+      "patch_message": "patch text",
+      "truncated": false,
+      "selection_defaults": [\(selectionJSON)],
+      "metadata": {
+        "server_owned": true,
+        "contract": "menu-publish-preview.v2",
+        "current_featured_ids": []
+      }
+    }
+    """.utf8)
+    return try JSONDecoder.backend.decode(MenuPreviewPayload.self, from: data)
+  }
 }
 
 private enum TestError: LocalizedError {
@@ -1704,6 +1829,8 @@ private final class StubDraftClient: DraftClienting {
 private final class StubLiveSaveClient: LiveSaveClienting {
   var response: PublishResponse?
   private(set) var saveCallCount = 0
+  private(set) var lastExpectedLiveRevision: Int?
+  private(set) var lastExpectedDraftRevision: Int?
 
   init(response: PublishResponse? = nil) {
     self.response = response
@@ -1711,6 +1838,8 @@ private final class StubLiveSaveClient: LiveSaveClienting {
 
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String) async throws -> PublishResponse {
     saveCallCount += 1
+    lastExpectedLiveRevision = expectedLiveRevision
+    lastExpectedDraftRevision = expectedDraftRevision
     guard let response else {
       throw TestError.message("Unused in this test")
     }
@@ -1719,12 +1848,42 @@ private final class StubLiveSaveClient: LiveSaveClienting {
 }
 
 private final class StubPublishClient: PublishClienting {
-  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
-    throw TestError.message("Unused in this test")
+  var previewResponse: PublishResponse?
+  var publishResponse: PublishResponse?
+  private(set) var previewCallCount = 0
+  private(set) var publishCallCount = 0
+  private(set) var lastPreviewExpectedLiveRevision: Int?
+  private(set) var lastPreviewExpectedDraftRevision: Int?
+  private(set) var lastPreviewExpectedNotificationRevision: Int?
+  private(set) var lastPublishExpectedLiveRevision: Int?
+  private(set) var lastPublishExpectedDraftRevision: Int?
+  private(set) var lastPublishExpectedNotificationRevision: Int?
+
+  init(previewResponse: PublishResponse? = nil, publishResponse: PublishResponse? = nil) {
+    self.previewResponse = previewResponse
+    self.publishResponse = publishResponse
   }
 
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
-    throw TestError.message("Unused in this test")
+  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+    previewCallCount += 1
+    lastPreviewExpectedLiveRevision = expectedLiveRevision
+    lastPreviewExpectedDraftRevision = expectedDraftRevision
+    lastPreviewExpectedNotificationRevision = expectedNotificationRevision
+    guard let previewResponse else {
+      throw TestError.message("Unused in this test")
+    }
+    return previewResponse
+  }
+
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+    publishCallCount += 1
+    lastPublishExpectedLiveRevision = expectedLiveRevision
+    lastPublishExpectedDraftRevision = expectedDraftRevision
+    lastPublishExpectedNotificationRevision = expectedNotificationRevision
+    guard let publishResponse else {
+      throw TestError.message("Unused in this test")
+    }
+    return publishResponse
   }
 }
 

@@ -44,6 +44,39 @@ test('wave 4 publish command module exports canonical preview and selected-chang
   assert.doesNotMatch(publishModuleSource, /previewDiff/);
 });
 
+test('queue and publish preview boundaries preserve section display order metadata', async () => {
+  const queueModule = await importApiModule('server/_menu-queue.js');
+  const publishModuleSource = read('server/_menu-publish.js');
+
+  const queueState = queueModule.buildCategoryQueueState({
+    snapshot: {
+      cats: [
+        {
+          key: 'wine',
+          label: 'Wine',
+          icon: '🍷',
+          display_order: 2,
+          items: [{ id: 'item-1', name: 'Rose', on_menu: true, visibility: 'public' }],
+        },
+        {
+          key: 'beer',
+          label: 'Beer',
+          icon: '🍺',
+          display_order: 0,
+          items: [{ id: 'item-2', name: 'IPA', on_menu: true, visibility: 'public' }],
+        },
+      ],
+    },
+    lastSentState: {},
+  });
+
+  assert.equal(queueState.diff[0].id, 'beer');
+  assert.equal(queueState.diff[0].displayOrder, 0);
+  assert.equal(queueState.diff[1].id, 'wine');
+  assert.equal(queueState.diff[1].displayOrder, 2);
+  assert.match(publishModuleSource, /displayOrder:\s*Number\.isFinite\(Number\(section\.displayOrder\)\) \? Number\(section\.displayOrder\) : 0/);
+});
+
 test('app runtime requests canonical preview and no longer posts legacy preview payload fields', () => {
   const source = read('app.js');
   const publishApiStart = source.indexOf('async function requestPublishPreviewThroughApi()');

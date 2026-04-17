@@ -106,6 +106,7 @@ function createChangeLine(groupId, section, {
     sectionId: section.id,
     sectionLabel: section.label,
     icon: section.icon,
+    displayOrder: section.displayOrder,
   };
 }
 
@@ -134,6 +135,7 @@ function toSectionsFromGroups(groups = []) {
       id: section.id,
       icon: section.icon,
       label: section.label,
+      displayOrder: section.displayOrder,
       changes: section.changes,
     }));
 }
@@ -143,6 +145,7 @@ function toLegacyDiff(sections = []) {
     id: section.id,
     icon: section.icon,
     label: section.label,
+    displayOrder: Number.isFinite(Number(section.displayOrder)) ? Number(section.displayOrder) : 0,
     added: section.changes.filter(change => change.kind === 'added').map(change => change.name),
     removed: section.changes.filter(change => change.kind === 'removed').map(change => change.name),
     eightySixed: section.changes.filter(change => change.kind === 'eightySixed').map(change => change.name),
