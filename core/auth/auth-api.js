@@ -25,6 +25,14 @@
     return details;
   }
 
+  function buildMalformedAuthApiSuccessError(response, fallbackMessage = 'Authentication failed.') {
+    return {
+      status: 502,
+      message: 'Authentication response was not valid JSON.',
+      fallbackMessage,
+    };
+  }
+
   async function readAuthApiPayload(response, fallbackMessage = 'Authentication failed.') {
     let payload = {};
     const raw = typeof response?.text === 'function'
@@ -34,10 +42,14 @@
       try {
         payload = JSON.parse(raw);
       } catch (_) {
+        if (response?.ok) throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
         payload = { message: raw };
       }
     }
     if (!response.ok) throw buildAuthApiError(response, payload, fallbackMessage);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
+    }
     return payload && typeof payload === 'object' ? payload : {};
   }
 

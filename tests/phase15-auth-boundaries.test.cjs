@@ -51,3 +51,45 @@ test('auth api getProfile preserves non-ok profile errors', async () => {
     }
   );
 });
+
+test('auth api signIn rejects malformed successful responses', async () => {
+  const sandbox = loadSandboxWithScripts(['core/auth/auth-api.js'], {
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => 'not-json',
+    }),
+  });
+
+  await assert.rejects(
+    () => sandbox.__HF_AUTH_API__.signIn({ email: 'manager@example.com', password: 'pass123' }),
+    error => {
+      assert.equal(error.status, 502);
+      assert.equal(error.message, 'Authentication response was not valid JSON.');
+      return true;
+    }
+  );
+});
+
+test('app auth fallback rejects malformed successful sign-in responses', async () => {
+  const sandbox = loadSandboxWithScripts(['app.js'], {
+    fetch: async () => ({
+      ok: true,
+      status: 200,
+      text: async () => 'not-json',
+    }),
+  });
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+  });
+
+  await assert.rejects(
+    () => sandbox.sbSignIn('manager@example.com', 'pass123'),
+    error => {
+      assert.equal(error.status, 502);
+      assert.equal(error.message, 'Authentication response was not valid JSON.');
+      return true;
+    }
+  );
+});
