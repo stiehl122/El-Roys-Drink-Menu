@@ -122,7 +122,13 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
   assert.equal(payload.workspace.publishState.status, 'live');
   assert.equal(payload.workspace.publishState.statusLabel, 'Live');
   assert.equal(payload.workspace.publishState.hasUnsentChanges, false);
+  assert.equal(payload.workspace.publishState.revisions.liveRevision, 1712705100000);
+  assert.equal(payload.workspace.publishState.revisions.notificationRevision, 1712705100000);
   assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
+  assert.equal(payload.workspace.revisions.liveRevision, 1712705100000);
+  assert.equal(payload.workspace.revisions.draftRevision, 1712705200000);
+  assert.equal(payload.workspace.revisions.lastSentRevision, 1712705100000);
+  assert.equal(payload.workspace.revisions.notificationBaselineRevision, 1712705100000);
   assert.equal(payload.workspace.capabilities.includesDraftAuthorship, true);
   assert.equal(payload.workspace.capabilities.includesRestaurantTools, true);
   assert.equal(payload.workspace.capabilities.canSaveQuietly, true);
@@ -159,7 +165,12 @@ test('workspace payload projects server-owned Live | Unsent queue state from sta
   assert.equal(payload.workspace.publishState.status, 'live_unsent');
   assert.equal(payload.workspace.publishState.statusLabel, 'Live | Unsent');
   assert.equal(payload.workspace.publishState.hasUnsentChanges, true);
+  assert.equal(payload.workspace.publishState.revisions.notificationRevision, 1712705100000);
   assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, ['item-1']);
+  assert.equal(payload.workspace.revisions.liveRevision, 1712705300000);
+  assert.equal(payload.workspace.revisions.draftRevision, null);
+  assert.equal(payload.workspace.revisions.lastSentRevision, 1712705100000);
+  assert.equal(payload.workspace.revisions.notificationBaselineRevision, 1712705100000);
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
 });
 

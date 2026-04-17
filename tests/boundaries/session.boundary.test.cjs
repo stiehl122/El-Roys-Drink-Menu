@@ -118,6 +118,7 @@ test('menu state loader boundary reapplies the stored local draft envelope on to
       hydrated = data;
     },
     readStoredLocalDraftEnvelope: () => draftEnvelope,
+    alignLocalDraftEnvelope: envelope => envelope,
     applyLocalDraftEnvelope: envelope => {
       appliedEnvelope = envelope;
       return true;
@@ -169,6 +170,7 @@ test('menu state loader boundary clears no-op stored local drafts instead of ent
       baseSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }] },
       draftSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }] },
     }),
+    alignLocalDraftEnvelope: envelope => envelope,
     applyLocalDraftEnvelope: () => true,
     syncLocalDraftDirtyState: () => false,
     clearCurrentLocalDraft: options => {
@@ -194,4 +196,91 @@ test('menu state loader boundary clears no-op stored local drafts instead of ent
   assert.deepEqual(clearDraftOptions, [undefined]);
   assert.deepEqual(dirtyStates, [false]);
   assert.equal(clearCalls, 1);
+});
+
+test('menu state loader boundary aligns stored drafts after workspace restaurant tools hydrate', async () => {
+  const sandbox = loadAppSandbox();
+  const callOrder = [];
+  const clearDraftOptions = [];
+  const dirtyStates = [];
+  let clearCalls = 0;
+  let refreshCalls = 0;
+  const rawEnvelope = {
+    baseSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }], featured_groups: [] },
+    draftSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }], featured_groups: [] },
+  };
+  const alignedEnvelope = {
+    baseSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }], featured_groups: [{ id: 'group-1' }] },
+    draftSnapshot: { cats: [{ key: 'beer', items: [{ id: 'lager' }] }], featured_groups: [{ id: 'group-1' }] },
+  };
+
+  const service = sandbox.createMenuStateLoaderService({
+    readState: async () => ({
+      cats: [{ key: 'beer', items: [{ id: 'lager' }] }],
+      meta: {},
+      restaurant: { id: 'restaurant-main', name: 'Main Restaurant' },
+      restaurantTools: {
+        featuredGroups: [{ id: 'group-1', name: 'Featured', slots: [] }],
+      },
+      workspace: {
+        actor: { id: 'user-1', role: 'manager' },
+        permissions: { canManage: true },
+      },
+    }),
+    hydrateFromState: () => {
+      callOrder.push('hydrate');
+    },
+    applyWorkspaceRestaurantTools: () => {
+      callOrder.push('tools');
+      return true;
+    },
+    syncServerLiveSnapshot: () => {
+      callOrder.push('snapshot');
+    },
+    readStoredLocalDraftEnvelope: () => rawEnvelope,
+    alignLocalDraftEnvelope: envelope => {
+      callOrder.push('align');
+      assert.equal(envelope, rawEnvelope);
+      return alignedEnvelope;
+    },
+    applyLocalDraftEnvelope: envelope => {
+      callOrder.push('apply');
+      assert.equal(envelope, alignedEnvelope);
+      return true;
+    },
+    syncLocalDraftDirtyState: () => {
+      callOrder.push('dirty');
+      return false;
+    },
+    clearCurrentLocalDraft: options => {
+      clearDraftOptions.push(options);
+    },
+    setDirty: value => {
+      dirtyStates.push(value);
+    },
+    clearDraftChanges: () => {
+      clearCalls += 1;
+    },
+    writeMenuCache: () => {},
+    refreshFeatured: async () => {
+      refreshCalls += 1;
+    },
+    buildSnapshot: source => ({ source }),
+  });
+
+  const snapshot = await service.load({
+    request: { pageMode: 'manager' },
+    source: 'network',
+  });
+
+  assert.equal(snapshot.source, 'network');
+  assert.ok(callOrder.indexOf('tools') !== -1);
+  assert.ok(callOrder.indexOf('snapshot') !== -1);
+  assert.ok(callOrder.indexOf('tools') < callOrder.indexOf('align'));
+  assert.ok(callOrder.indexOf('snapshot') < callOrder.indexOf('align'));
+  assert.ok(callOrder.indexOf('align') < callOrder.indexOf('apply'));
+  assert.deepEqual(clearDraftOptions, [undefined]);
+  assert.deepEqual(dirtyStates, [false]);
+  assert.equal(clearCalls, 1);
+  assert.equal(refreshCalls, 0);
 });

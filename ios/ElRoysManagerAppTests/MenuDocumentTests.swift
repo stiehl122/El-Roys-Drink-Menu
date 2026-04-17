@@ -935,6 +935,195 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testInitialRemoteCheckIgnoresNormalizedQueueBaselineOnlyDifferences() async throws {
+    let meta = MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20)
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: meta,
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let repeatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: meta,
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, repeatedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertNil(model.editorRefreshRequirement)
+  }
+
+  @MainActor
+  func testRemoteQueueOnlyUpdateClassifiesAsQueueState() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 25),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertEqual(model.editorRefreshRequirement?.kind, .queueState)
+  }
+
+  @MainActor
+  func testRemoteLiveOnlyUpdateClassifiesAsLiveMenu() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 40, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 40, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertEqual(model.editorRefreshRequirement?.kind, .liveMenu)
+  }
+
+  @MainActor
+  func testRemoteLiveAndQueueUpdateClassifiesAsLiveAndQueue() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 40, lastSentTs: 25),
+      revisions: WorkspaceRevisions(liveRevision: 40, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertEqual(model.editorRefreshRequirement?.kind, .liveAndQueue)
+  }
+
+  @MainActor
   func testRefreshAndUpdateDraftsDropsOnlyOverlappingChanges() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()

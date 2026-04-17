@@ -304,6 +304,9 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
   ]));
   const hasUnsentChanges = queueState.hasNotificationChanges || unsentFeaturedIds.length > 0;
   const publishStatus = hasUnsentChanges ? 'live_unsent' : 'live';
+  const liveRevision = bundle?.meta?.last_updated_ts || null;
+  const draftRevision = bundle?.meta?.draft_saved_ts || null;
+  const lastSentRevision = bundle?.meta?.last_sent_ts || null;
   const workspaceCapabilities = {
     canSaveDraft: canManage,
     canSaveLiveMenu: canManage,
@@ -335,8 +338,8 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
         statusLabel: hasUnsentChanges ? 'Live | Unsent' : 'Live',
         hasUnsentChanges,
         revisions: {
-          liveRevision: bundle?.meta?.last_updated_ts || null,
-          notificationRevision: bundle?.meta?.last_sent_ts || null,
+          liveRevision,
+          notificationRevision: lastSentRevision,
         },
         queue: {
           contract: 'menu-queue.v1',
@@ -354,8 +357,10 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
       },
       capabilities: workspaceCapabilities,
       revisions: {
-        liveRevision: bundle?.meta?.last_updated_ts || null,
-        draftRevision: bundle?.meta?.draft_saved_ts || null,
+        liveRevision,
+        draftRevision,
+        lastSentRevision,
+        notificationBaselineRevision: lastSentRevision,
       },
     },
     capabilities: workspaceCapabilities,
