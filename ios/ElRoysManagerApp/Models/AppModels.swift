@@ -1159,6 +1159,41 @@ struct PreviewDiffSection: Codable, Equatable, Hashable, Identifiable {
   var eightySixed: [String]
   var restored: [String]
   var displayOrder: Int
+
+  enum CodingKeys: String, CodingKey {
+    case id
+    case icon
+    case label
+    case added
+    case removed
+    case eightySixed
+    case restored
+    case displayOrder
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decodeString(forKey: .id)
+    self.icon = try container.decodeString(forKey: .icon)
+    self.label = try container.decodeString(forKey: .label)
+    self.added = try container.decodeArray([String].self, forKey: .added)
+    self.removed = try container.decodeArray([String].self, forKey: .removed)
+    self.eightySixed = try container.decodeArray([String].self, forKey: .eightySixed)
+    self.restored = try container.decodeArray([String].self, forKey: .restored)
+    self.displayOrder = try container.decodeInt(forKey: .displayOrder, default: 0)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(icon, forKey: .icon)
+    try container.encode(label, forKey: .label)
+    try container.encode(added, forKey: .added)
+    try container.encode(removed, forKey: .removed)
+    try container.encode(eightySixed, forKey: .eightySixed)
+    try container.encode(restored, forKey: .restored)
+    try container.encode(displayOrder, forKey: .displayOrder)
+  }
 }
 
 struct PreviewChange: Codable, Equatable, Hashable, Identifiable {

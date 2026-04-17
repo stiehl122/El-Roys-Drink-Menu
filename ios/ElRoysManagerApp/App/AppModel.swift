@@ -419,12 +419,14 @@ final class AppModel {
 
     let operationLabel = hasLiveMenuChanges ? "Building Save & Send Preview" : "Building Send Preview"
     await run(operationLabel) { model in
-      let expectedBaselineRevision = model.expectedNotificationBaselineRevision(for: workspace)
+      let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
+      let expectedNotificationRevision = model.expectedNotificationBaselineRevision(for: workspace)
       let response = try await model.services.publish.preview(
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: workspace.workspace.revisions.liveRevision,
-        expectedDraftRevision: expectedBaselineRevision,
+        expectedDraftRevision: expectedDraftRevision,
+        expectedNotificationRevision: expectedNotificationRevision,
         accessToken: accessToken,
         source: "ios_app"
       )
@@ -443,7 +445,8 @@ final class AppModel {
 
     let operationLabel = hasLiveMenuChanges ? "Saving And Sending" : "Sending Updates"
     await run(operationLabel) { model in
-      let expectedBaselineRevision = model.expectedNotificationBaselineRevision(for: workspace)
+      let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
+      let expectedNotificationRevision = model.expectedNotificationBaselineRevision(for: workspace)
       let preview: MenuPreviewPayload?
       if let existing = model.currentEditorPreview {
         preview = existing
@@ -452,7 +455,8 @@ final class AppModel {
           menuId: menuId,
           snapshot: snapshot,
           expectedLiveRevision: workspace.workspace.revisions.liveRevision,
-          expectedDraftRevision: expectedBaselineRevision,
+          expectedDraftRevision: expectedDraftRevision,
+          expectedNotificationRevision: expectedNotificationRevision,
           accessToken: accessToken,
           source: "ios_app"
         ).preview
@@ -468,7 +472,8 @@ final class AppModel {
         snapshot: snapshot,
         selectedChangeIds: selection,
         expectedLiveRevision: workspace.workspace.revisions.liveRevision,
-        expectedDraftRevision: expectedBaselineRevision,
+        expectedDraftRevision: expectedDraftRevision,
+        expectedNotificationRevision: expectedNotificationRevision,
         accessToken: accessToken,
         source: "ios_app"
       )
@@ -520,12 +525,12 @@ final class AppModel {
 
     await run("Saving Quietly") { model in
       var currentDocument = try model.requireCurrentEditorDocument()
-      let expectedBaselineRevision = model.expectedNotificationBaselineRevision(for: workspace)
+      let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
       let response = try await model.services.liveSave.save(
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: workspace.workspace.revisions.liveRevision,
-        expectedDraftRevision: expectedBaselineRevision,
+        expectedDraftRevision: expectedDraftRevision,
         accessToken: accessToken
       )
       if let currentRevisions = response.currentRevisions {
@@ -1022,6 +1027,11 @@ final class AppModel {
       ?? workspace.workspace.revisions.lastSentRevision
       ?? workspace.meta.lastSentTs
       ?? workspace.workspace.revisions.draftRevision
+  }
+
+  private func expectedDraftRevision(for workspace: MenuWorkspacePayload) -> Int? {
+    workspace.workspace.revisions.draftRevision
+      ?? workspace.meta.draftSavedTs
   }
 
   private func serverHasUnsentChanges(in workspace: MenuWorkspacePayload?) -> Bool {

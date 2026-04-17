@@ -61,8 +61,8 @@ protocol LiveSaveClienting {
 }
 
 protocol PublishClienting {
-  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
+  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
 }
 
 protocol HistoryClienting {
@@ -163,7 +163,6 @@ private struct LiveSaveRequest: Encodable {
   var snapshot: MenuSnapshotPayload
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
-  var expectedNotificationBaselineRevision: Int?
 }
 
 private struct PublishRequest: Encodable {
@@ -174,7 +173,7 @@ private struct PublishRequest: Encodable {
   var selectedChangeIds: [String]?
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
-  var expectedNotificationBaselineRevision: Int?
+  var expectedNotificationRevision: Int?
 }
 
 private struct SpecialsRequest: Encodable {
@@ -515,8 +514,7 @@ final class LiveSaveClient: LiveSaveClienting {
         menuId: menuId,
         snapshot: snapshot,
         expectedLiveRevision: expectedLiveRevision,
-        expectedDraftRevision: expectedDraftRevision,
-        expectedNotificationBaselineRevision: expectedDraftRevision
+        expectedDraftRevision: expectedDraftRevision
       )
     )
   }
@@ -529,7 +527,7 @@ final class PublishClient: PublishClienting {
     http = HTTPService(environment: environment, session: session)
   }
 
-  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     try await http.request(
       path: "api/manager",
       method: .post,
@@ -542,12 +540,12 @@ final class PublishClient: PublishClienting {
         selectedChangeIds: nil,
         expectedLiveRevision: expectedLiveRevision,
         expectedDraftRevision: expectedDraftRevision,
-        expectedNotificationBaselineRevision: expectedDraftRevision
+        expectedNotificationRevision: expectedNotificationRevision
       )
     )
   }
 
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     try await http.request(
       path: "api/manager",
       method: .post,
@@ -560,7 +558,7 @@ final class PublishClient: PublishClienting {
         selectedChangeIds: selectedChangeIds,
         expectedLiveRevision: expectedLiveRevision,
         expectedDraftRevision: expectedDraftRevision,
-        expectedNotificationBaselineRevision: expectedDraftRevision
+        expectedNotificationRevision: expectedNotificationRevision
       )
     )
   }

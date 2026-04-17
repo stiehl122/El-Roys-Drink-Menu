@@ -119,12 +119,20 @@ function groupNotificationChangesBySection(changes = []) {
         id: sectionId,
         icon: change.icon || '',
         label: change.sectionLabel || sectionId,
+        displayOrder: Number.isFinite(Number(change?.displayOrder))
+          ? Number(change.displayOrder)
+          : Number.MAX_SAFE_INTEGER,
         changes: [],
       });
     }
-    sections.get(sectionId).changes.push(change);
+    const section = sections.get(sectionId);
+    if (Number.isFinite(Number(change?.displayOrder))) {
+      section.displayOrder = Math.min(section.displayOrder, Number(change.displayOrder));
+    }
+    section.changes.push(change);
   });
-  return Array.from(sections.values());
+  return Array.from(sections.values())
+    .sort((a, b) => a.displayOrder - b.displayOrder || String(a.id || '').localeCompare(String(b.id || '')));
 }
 
 function serializeNotificationSectionsForLog(sections = []) {
@@ -132,6 +140,7 @@ function serializeNotificationSectionsForLog(sections = []) {
     id: section.id,
     icon: section.icon,
     label: section.label,
+    displayOrder: Number.isFinite(Number(section.displayOrder)) ? Number(section.displayOrder) : 0,
     added: (section.changes || []).filter(change => change.kind === 'added').map(change => change.name),
     removed: (section.changes || []).filter(change => change.kind === 'removed').map(change => change.name),
     eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
@@ -206,6 +215,9 @@ function createFeaturedChangeLine(groupId, section, kind, itemId, name) {
     sectionId: section.id,
     sectionLabel: section.label,
     icon: section.icon,
+    displayOrder: Number.isFinite(Number(section?.displayOrder))
+      ? Number(section.displayOrder)
+      : Number.MAX_SAFE_INTEGER,
   };
 }
 
@@ -247,6 +259,7 @@ async function buildFeaturedQueueState(knownMenu = null, meta = {}) {
     id: '__featured__',
     icon: '⭐',
     label: String(config?.name || 'Featured'),
+    displayOrder: Number.MAX_SAFE_INTEGER - 500,
   };
   const groups = [];
 
