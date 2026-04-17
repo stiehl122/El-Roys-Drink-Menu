@@ -13,11 +13,11 @@ public restaurant routes.
 - `leroyslounge/index.html`
 - `leroyslounge/style.css`
 - `leroyslounge/app.js`
-- `leroyslounge/DESIGN.md`
+- `docs/design/leroyslounge/DESIGN.md`
 - `elroyscantina/index.html`
 - `elroyscantina/style.css`
 - `elroyscantina/app.js`
-- `elroyscantina/DESIGN.md`
+- `docs/design/elroyscantina/DESIGN.md`
 - `routes/shared/public-route-core.js`
 - route assets used by those pages
 - shared public handoff points in root `app.js` such as `renderPublicView()`
@@ -34,8 +34,8 @@ public restaurant routes.
 
 ## Workflow
 
-1. Read the target route's `index.html`, `style.css`, `app.js`, and
-   `DESIGN.md`.
+1. Read the target route's `index.html`, `style.css`, `app.js`, and route
+   design doc in `docs/design/<route>/DESIGN.md`.
 2. If the issue touches integration, read the related shared public-render code
    in root `app.js`, `routes/shared/public-route-core.js`, and
    `core/ui/public/renderer-default.js`.

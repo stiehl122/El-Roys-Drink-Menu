@@ -48,21 +48,21 @@ If the user does not specify a screen, ask which one before proceeding.
 
 ## Persistent State
 
-All design-loop output for a screen lives in `design-loop/<screen>/`:
+All design-loop output for a screen lives in `docs/design/<screen>/`:
 
-- **`design-loop-issues.md`** — living document of open issues. Written fresh
+- **`docs/design/<screen>/design-loop-issues.md`** — living document of open issues. Written fresh
   after each audit pass. Issues are removed once fixed. Issues are tagged
   `[CRITICAL]` when they break functionality, cause visible regressions, or
   significantly degrade the experience. This file is committed to the repo and
   read at the start of every new session.
-- **`design-loop-log.md`** — append-only full pass report after every pass
+- **`docs/design/<screen>/design-loop-log.md`** — append-only full pass report after every pass
   (audit and code-changing). Gitignored.
-- **Screenshots** — saved to `design-loop/<screen>/` with descriptive names
+- **Screenshots** — saved to `docs/design/<screen>/` with descriptive names
   (e.g. `pass1-audit-desktop-light-top.png`). Gitignored.
 
 At session start:
 
-1. Read `design-loop-issues.md` if it exists.
+1. Read `docs/design/<screen>/design-loop-issues.md` if it exists.
 2. If any `[CRITICAL]` issues are present → skip the audit pass and go
    straight to the first code-changing pass targeting those issues.
 3. If no critical issues (or no issues file) → run a fresh audit pass and
@@ -104,8 +104,8 @@ At session start:
    drawers, hover, focus, active, disabled, loading, empty, and error states.
 6. Apply the Creative Evaluation Lens (see below) in full.
 7. Document every issue found. Tag `[CRITICAL]` where appropriate.
-8. Write `design-loop-issues.md` (merge with any existing issues).
-9. Append the audit report to `design-loop-log.md`.
+8. Write `docs/design/<screen>/design-loop-issues.md` (merge with any existing issues).
+9. Append the audit report to `docs/design/<screen>/design-loop-log.md`.
 10. Propose what the first code-changing pass will tackle.
 11. In pause-after-every-pass mode: ask for approval before proceeding.
     With `--passes N`: proceed automatically.
@@ -126,8 +126,8 @@ At session start:
 6. Reinspect the affected modes and states. Compare before vs after.
 7. Confirm the pass improved the experience and did not introduce regressions.
 8. Run `menu-regression-reviewer` if the pass touched any behavioral code.
-9. Update `design-loop-issues.md`: remove issues that are now fixed.
-10. Append the pass report to `design-loop-log.md`.
+9. Update `docs/design/<screen>/design-loop-issues.md`: remove issues that are now fixed.
+10. Append the pass report to `docs/design/<screen>/design-loop-log.md`.
 11. Plan the next pass based on current state — one pass at a time, never
     plan all passes upfront.
 12. In pause-after-every-pass mode: ask whether to continue.
@@ -188,7 +188,7 @@ detail is off, zoom in on that detail.
 
 ## Output Per Pass
 
-Append to `design-loop-log.md`:
+Append to `docs/design/<screen>/design-loop-log.md`:
 
 - pass number and type (audit or code-changing)
 - target screen and states inspected

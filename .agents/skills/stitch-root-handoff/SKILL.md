@@ -32,7 +32,7 @@ design is approved.
 
 Read this file first:
 
-- `design-loop/root/landing-page-stitch-brief.md`
+- `docs/design/root/landing-page-stitch-brief.md`
 
 Treat that brief as the source of truth for v1 design judgments.
 

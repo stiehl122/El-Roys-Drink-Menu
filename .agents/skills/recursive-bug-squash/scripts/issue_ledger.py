@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Maintain the bug-loop/issues.md ledger."""
+"""Maintain the docs/bug-loop/issues.md ledger."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
-DEFAULT_LEDGER = REPO_ROOT / "bug-loop" / "issues.md"
+DEFAULT_LEDGER = REPO_ROOT / "docs" / "bug-loop" / "issues.md"
 STATUS_ORDER = {
     "open": 0,
     "blocked": 1,
@@ -273,12 +273,12 @@ def command_upsert(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Maintain bug-loop/issues.md")
+    parser = argparse.ArgumentParser(description="Maintain docs/bug-loop/issues.md")
     parser.add_argument(
         "--path",
         type=Path,
         default=DEFAULT_LEDGER,
-        help="Path to the ledger file (default: bug-loop/issues.md)",
+        help="Path to the ledger file (default: docs/bug-loop/issues.md)",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)

@@ -3,7 +3,8 @@ name: stitch
 description: >
   Rebuild a restaurant's public route directly from a Stitch project. Treat the
   imported Stitch screen as design gospel, generate complete route-owned files
-  (`index.html`, `style.css`, route `app.js`, and `DESIGN.md`), download
+  (`index.html`, `style.css`, route `app.js`, and the route design doc in
+  `docs/design/<route>/DESIGN.md`), download
   required assets into stable repo paths, and fully replace deprecated
   Stitch-source artifacts on each run. Expected inputs: restaurant name, Stitch
   project ID, and optional screen ID.
@@ -50,13 +51,13 @@ Route and asset targets:
   - `leroyslounge/index.html`
   - `leroyslounge/style.css`
   - `leroyslounge/app.js`
-  - `leroyslounge/DESIGN.md`
+  - `docs/design/leroyslounge/DESIGN.md`
   - `/assets/leroys-lounge/`
 - El Roy's Cantina
   - `elroyscantina/index.html`
   - `elroyscantina/style.css`
   - `elroyscantina/app.js`
-  - `elroyscantina/DESIGN.md`
+  - `docs/design/elroyscantina/DESIGN.md`
   - `/assets/el-roys-cantina/`
 
 ## Output contract
@@ -66,7 +67,7 @@ the target route:
 - full route `index.html`
 - route-specific `style.css`
 - route-specific `app.js`
-- route-local `DESIGN.md`
+- route design doc in `docs/design/<route>/DESIGN.md`
 
 Every successful `/stitch` run must also:
 - delete the route's deprecated `stitch-source/` folder if it exists
@@ -133,7 +134,8 @@ Before writing new route outputs:
 - treat the new run as a full rebuild, not an incremental patch-up
 
 Do not keep the raw export as a route-local artifact folder. The implementation
-and `DESIGN.md` are the durable record.
+and the route design doc in `docs/design/<route>/DESIGN.md` are the durable
+record.
 
 6. Download and localize required assets.
 
@@ -218,9 +220,10 @@ Responsibilities:
 
 Do not duplicate shared application logic inside the route script.
 
-### `DESIGN.md`
+### Route design doc (`docs/design/<route>/DESIGN.md`)
 
-Create a route-local `DESIGN.md` documenting the import.
+Create the route design doc in `docs/design/<route>/DESIGN.md` documenting the
+import.
 
 It must include:
 - title: `{Restaurant} Menu Design`
@@ -287,7 +290,7 @@ The route files are the product:
 - `index.html`
 - `style.css`
 - `app.js`
-- `DESIGN.md`
+- `docs/design/<route>/DESIGN.md`
 
 10. Final reporting.
 

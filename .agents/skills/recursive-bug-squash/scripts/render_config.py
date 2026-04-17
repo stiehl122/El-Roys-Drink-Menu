@@ -116,7 +116,7 @@ def main() -> int:
     print(f"- `send update`: {'allowed' if args.allow_send else 'blocked by default'}")
     print(f"- `browser mode`: {'headed' if args.headed else 'headless'}")
     print(f"- `DEFCON filter`: {defcon_window(args)}")
-    print("- `carryover`: import newest open bug-squash PR/branch first, then local `bug-loop/issues.md`")
+    print("- `carryover`: import newest open bug-squash PR/branch first, then local `docs/bug-loop/issues.md`")
     print("- `audit stance`: whole-app audit required; low-findings skepticism enabled")
     print("- `full-suite cadence`: once at run start, targeted checks per pass, full suite again at run end")
     print()

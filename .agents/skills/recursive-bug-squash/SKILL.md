@@ -105,7 +105,7 @@ Before the run starts:
    - missing `gh` auth when PR creation is required
    - missing Vercel access when preview verification is required
 4. Create a disposable worktree based on the current committed `HEAD`.
-5. Bootstrap `bug-loop/issues.md` if it does not yet exist:
+5. Bootstrap `docs/bug-loop/issues.md` if it does not yet exist:
 
    ```bash
    python3 .agents/skills/recursive-bug-squash/scripts/issue_ledger.py ensure
@@ -134,20 +134,20 @@ surfaces, authenticated coverage is mandatory, not optional.
 
 ## Persistent State
 
-All recursive bug-squash memory lives under `bug-loop/`:
+All recursive bug-squash memory lives under `docs/bug-loop/`:
 
-- `bug-loop/issues.md`
+- `docs/bug-loop/issues.md`
   Committed. Canonical unresolved/resolved issue ledger.
-- `bug-loop/log.md`
+- `docs/bug-loop/log.md`
   Gitignored. Append-only run log.
-- `bug-loop/artifacts/`
+- `docs/bug-loop/artifacts/`
   Gitignored. Screenshots and other captured evidence.
 
 Before every run:
 
 1. Import carryover from the newest open bug-squash PR or branch first, when
    one exists.
-2. Fall back to the current branch's `bug-loop/issues.md`.
+2. Fall back to the current branch's `docs/bug-loop/issues.md`.
 3. If `DEFCON 1` or `DEFCON 2` carryovers exist, work them first.
 4. Only run a fresh whole-app audit after severe carryovers are fixed,
    reclassified, or quarantined.
@@ -159,7 +159,7 @@ python3 .agents/skills/recursive-bug-squash/scripts/issue_ledger.py list
 python3 .agents/skills/recursive-bug-squash/scripts/issue_ledger.py upsert ...
 ```
 
-`bug-loop/log.md` must exist for every run, even when no bugs are fixed.
+`docs/bug-loop/log.md` must exist for every run, even when no bugs are fixed.
 
 ## DEFCON Scale
 
@@ -206,7 +206,7 @@ The audit phase must:
 
 1. Run the full local suite once at the start of the run.
 2. Turn any failing local test into at least one bug candidate in
-   `bug-loop/issues.md`.
+   `docs/bug-loop/issues.md`.
 3. Build and log an explicit coverage matrix for every in-scope surface.
 4. Use authenticated coverage when `LOOP_*` credentials exist.
 5. Refuse to call the app "clean" until every in-scope surface has either:
@@ -313,8 +313,8 @@ For each pass:
 7. If proof still needs preview/browser inspection, push the branch and inspect
    the relevant preview state.
 8. If the fix is validated:
-   - update `bug-loop/issues.md`
-   - append to `bug-loop/log.md`
+   - update `docs/bug-loop/issues.md`
+   - append to `docs/bug-loop/log.md`
    - commit the pass
 9. If validation is ambiguous:
    - discard the speculative code change
@@ -368,7 +368,7 @@ At the end of the whole run:
 
 ## Logging Requirements
 
-Each run entry in `bug-loop/log.md` must include:
+Each run entry in `docs/bug-loop/log.md` must include:
 
 - effective config and override flags
 - full-suite result at run start
@@ -387,7 +387,7 @@ is credible instead of simply asserting it.
 - never use destructive git commands
 - keep one commit per successful pass
 - ambiguous fix attempts do not stay on the branch
-- include the updated `bug-loop/issues.md` in the branch and PR
+- include the updated `docs/bug-loop/issues.md` in the branch and PR
 
 ## Out Of Bounds
 

@@ -13,11 +13,11 @@ Your ownership is the public-facing restaurant routes and their integration with
 - `leroyslounge/index.html`
 - `leroyslounge/style.css`
 - `leroyslounge/app.js`
-- `leroyslounge/DESIGN.md`
+- `docs/design/leroyslounge/DESIGN.md`
 - `elroyscantina/index.html`
 - `elroyscantina/style.css`
 - `elroyscantina/app.js`
-- `elroyscantina/DESIGN.md`
+- `docs/design/elroyscantina/DESIGN.md`
 - related assets used by those routes
 - shared route handoff points in `app.js` such as `renderPublicView()` and `_renderCustomDesignView()`
 
@@ -44,7 +44,7 @@ That includes:
 
 ## Standard Workflow
 
-1. Read the target route's `index.html`, `style.css`, `app.js`, and `DESIGN.md`.
+1. Read the target route's `index.html`, `style.css`, `app.js`, and route design doc in `docs/design/<route>/DESIGN.md`.
 2. Check the shared public-render entry points in root `app.js` if the change touches integration rather than only route markup/styles.
 3. Identify the live data contract the route expects: menu items, categories, featured groups, timestamps, preview state, footer versioning, and auth/manager entry affordances.
 4. Make the smallest set of route-owned edits that restore the design and the live behavior together.
