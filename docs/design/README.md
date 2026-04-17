@@ -14,7 +14,7 @@ They are the first-stop references for any work that touches:
 1. [Leroy's Lounge vibe](./leroys-lounge-vibe.md)
 2. [El Roy's Cantina vibe](./el-roys-cantina-vibe.md)
 3. [Shared landing-page blend](./shared-landing-page-blend.md)
-4. Any task-specific brief, such as `design-loop/root/landing-page-stitch-brief.md`
+4. Any task-specific brief, such as `docs/design/root/landing-page-stitch-brief.md`
 
 ## Shared Rules
 

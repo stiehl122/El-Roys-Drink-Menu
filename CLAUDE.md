@@ -59,7 +59,7 @@ Each restaurant has two fixed menus, Drinks and Food. Do not generalize this int
   - `docs/design/leroys-lounge-vibe.md`
   - `docs/design/el-roys-cantina-vibe.md`
   - `docs/design/shared-landing-page-blend.md` when the task touches `/` or other shared public design
-- If a task-specific brief exists, such as `design-loop/root/landing-page-stitch-brief.md`, read it after the vibe docs and use both.
+- If a task-specific brief exists, such as `docs/design/root/landing-page-stitch-brief.md`, read it after the vibe docs and use both.
 - Do not invent an umbrella hospitality brand that flattens Leroy's Lounge and El Roy's Cantina into one generic aesthetic.
 
 ## Working Rules
