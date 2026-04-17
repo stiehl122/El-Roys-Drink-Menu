@@ -10,7 +10,47 @@
       accessibleMenuIds: Array.isArray(access?.accessibleMenuIds || payload?.accessibleMenuIds)
         ? (access?.accessibleMenuIds || payload?.accessibleMenuIds)
         : [],
+      };
+  }
+
+  function buildAuthApiError(response, payload, fallbackMessage = 'Authentication failed.') {
+    const details = payload && typeof payload === 'object' ? { ...payload } : {};
+    const status = Number(response?.status || details?.status || 0);
+    if (status > 0) details.status = status;
+    details.message = (
+      typeof payload === 'string' && payload.trim()
+        ? payload.trim()
+        : details.message || details.msg || details.error_description || details.error || fallbackMessage
+    );
+    return details;
+  }
+
+  function buildMalformedAuthApiSuccessError(response, fallbackMessage = 'Authentication failed.') {
+    return {
+      status: 502,
+      message: 'Authentication response was not valid JSON.',
+      fallbackMessage,
     };
+  }
+
+  async function readAuthApiPayload(response, fallbackMessage = 'Authentication failed.') {
+    let payload = {};
+    const raw = typeof response?.text === 'function'
+      ? await response.text().catch(() => '')
+      : '';
+    if (raw) {
+      try {
+        payload = JSON.parse(raw);
+      } catch (_) {
+        if (response?.ok) throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
+        payload = { message: raw };
+      }
+    }
+    if (!response.ok) throw buildAuthApiError(response, payload, fallbackMessage);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
+    }
+    return payload && typeof payload === 'object' ? payload : {};
   }
 
   globalScope.__HF_AUTH_API__ = {
@@ -20,8 +60,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sign_up', email, password, name }),
       });
-      if (!response.ok) throw await response.json();
-      return response.json();
+      return readAuthApiPayload(response, 'Sign-up failed.');
     },
 
     async signIn({ email = '', password = '' } = {}) {
@@ -30,8 +69,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'sign_in', email, password }),
       });
-      if (!response.ok) throw await response.json();
-      return response.json();
+      return readAuthApiPayload(response, 'Authentication failed.');
     },
 
     async refreshToken({ refreshToken = '' } = {}) {
@@ -40,16 +78,14 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'refresh', refresh_token: refreshToken }),
       });
-      if (!response.ok) throw await response.json();
-      return response.json();
+      return readAuthApiPayload(response, 'Session refresh failed.');
     },
 
     async getProfile({ accessToken = '' } = {}) {
       const response = await fetch('/api/auth?mode=profile', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
-      if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
-      const payload = await response.json();
+      const payload = await readAuthApiPayload(response, 'Failed to load profile.');
       return normalizeProfilePayload(payload || {});
     },
 
@@ -59,7 +95,7 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reset_password', email, redirect_to: redirectTo }),
       });
-      if (!response.ok) throw await response.json();
+      await readAuthApiPayload(response, 'Failed to send reset email.');
       return null;
     },
 
@@ -72,8 +108,7 @@
         },
         body: JSON.stringify({ action: 'update_password', new_password: newPassword }),
       });
-      if (!response.ok) throw await response.json();
-      return response.json();
+      return readAuthApiPayload(response, 'Failed to update password.');
     },
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

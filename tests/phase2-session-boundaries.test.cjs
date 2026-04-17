@@ -50,6 +50,52 @@ test('app createMenuSessionLifecycle delegates through session module boundary',
   assert.equal(result.delegated, true);
   assert.equal(result.type, 'lifecycle');
   assert.equal(calls.length, 1);
+  assert.equal(typeof calls[0][1]?.createPublishService, 'function');
+});
+
+test('session lifecycle module uses injected publish creation instead of ambient app globals', async () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/session/publish-service.js',
+    'core/session/menu-session.js',
+  ]);
+  const publishCalls = [];
+
+  sandbox.createMenuPublishService = () => {
+    throw new Error('session lifecycle should not read createMenuPublishService from globalScope when injected');
+  };
+
+  const lifecycle = sandbox.__HF_SESSION_MODULES__.createMenuSessionLifecycle({
+    buildRequest: () => ({ requestedMenuSlug: 'menu-main' }),
+    buildSnapshot: source => ({ source, dirty: true }),
+    buildPreview: snapshot => ({
+      ...snapshot,
+      hasChanges: true,
+      hasLocalDraft: true,
+      hasSharedDraft: false,
+      mode: 'update-only',
+      sections: [],
+      notificationChanges: [],
+      saveOnlyChanges: [],
+    }),
+    resolveMenu: async () => null,
+    canLoadFromNetwork: () => true,
+    restoreFallback: () => ({ source: 'cache', usedFallback: true, snapshot: { source: 'cache' } }),
+    loadState: async ({ source = 'network' }) => ({ source }),
+    pollState: async () => ({ changed: false, designChanged: false, snapshot: { source: 'poll' } }),
+  }, {
+    createPublishService: (...args) => {
+      publishCalls.push(args);
+      return {
+        saveDraft: async () => ({ ok: true, source: 'injected-save' }),
+        publishUpdate: async () => ({ ok: true, source: 'injected-publish' }),
+      };
+    },
+  });
+
+  const result = await lifecycle.saveDraft();
+  assert.equal(result.ok, true);
+  assert.equal(result.source, 'injected-save');
+  assert.equal(publishCalls.length, 1);
 });
 
 test('app createMenuStateLoaderService delegates through session module boundary', () => {

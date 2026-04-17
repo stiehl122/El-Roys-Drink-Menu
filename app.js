@@ -2827,13 +2827,25 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
 }
 
 function createMenuSessionLifecycle(ports) {
+  const sessionPorts = ports || getMenuSessionPorts();
+  const buildPublishService = (nextSessionPorts, runtime = {}) => {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuPublishService === 'function') {
+      return boundary.createMenuPublishService(nextSessionPorts, runtime, {
+        fallback: () => createMenuPublishService(nextSessionPorts, runtime),
+      });
+    }
+    return createMenuPublishService(nextSessionPorts, runtime);
+  };
+
   if (!_sessionModuleDelegationStack.has('createMenuSessionLifecycle')) {
     const boundary = getSessionModuleBoundary();
     if (typeof boundary?.createMenuSessionLifecycle === 'function') {
       _sessionModuleDelegationStack.add('createMenuSessionLifecycle');
       try {
-        return boundary.createMenuSessionLifecycle(ports, {
-          fallback: () => createMenuSessionLifecycle(ports),
+        return boundary.createMenuSessionLifecycle(sessionPorts, {
+          getMenuSessionPorts: () => getMenuSessionPorts(),
+          createPublishService: buildPublishService,
         });
       } finally {
         _sessionModuleDelegationStack.delete('createMenuSessionLifecycle');
@@ -2841,7 +2853,6 @@ function createMenuSessionLifecycle(ports) {
     }
   }
 
-  const sessionPorts = ports || getMenuSessionPorts();
   let request = sessionPorts.buildRequest();
 
   function syncRequest(overrides = {}) {
@@ -2853,7 +2864,7 @@ function createMenuSessionLifecycle(ports) {
     return sessionPorts.buildSnapshot(source, request);
   }
 
-  const publishService = createMenuPublishService(sessionPorts, {
+  const publishService = buildPublishService(sessionPorts, {
     buildSnapshot,
     buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
   });
@@ -3310,19 +3321,11 @@ function createAccessSessionService() {
   return {
     async applyAuthenticatedSession(data, options = {}) {
       const { closeOverlay = false } = options;
-      let role = 'none';
-      let name = '';
-      let accessibleMenuIds = [];
-      if (data?.access_token) {
-        const profile = await sbGetProfile(data.access_token);
-        role = profile.role;
-        name = profile.name;
-        accessibleMenuIds = profile.accessibleMenuIds;
-      }
-      _applySession(data, role, name, accessibleMenuIds);
-      applyRole(role);
+      const sessionProfile = await resolveAuthenticatedSessionProfile(data?.access_token);
+      _applySession(data, sessionProfile.role, sessionProfile.name, sessionProfile.accessibleMenuIds);
+      applyRole(sessionProfile.role);
       if (closeOverlay) closeAuthOverlay();
-      return { role, name, accessibleMenuIds };
+      return sessionProfile;
     },
 
     async handleRecoveryCallback() {
@@ -3355,7 +3358,7 @@ function createAccessSessionService() {
 
       if (storedAccess && storedExpiresAt > Date.now() + 120_000) {
         try {
-          const profile = await sbGetProfile(storedAccess);
+          const profile = await resolveAuthenticatedSessionProfile(storedAccess);
           currentUser = {
             uid: storedUid,
             email: storedEmail,
@@ -3385,17 +3388,18 @@ function createAccessSessionService() {
       try {
         const refreshed = await refreshStoredSession();
         return { restored: true, source: 'refresh-token', ...refreshed };
-      } catch (_) {
+      } catch (error) {
+        if (isTerminalAuthSessionError(error)) {
+          clearStoredAuthSessionKeys();
+          return { restored: false, reason: 'expired' };
+        }
         setTimeout(async () => {
           try {
             await refreshStoredSession();
             await this.syncRequestedPageMode();
-          } catch (_) {
-            localStorage.removeItem(LS_KEYS.accessToken);
-            localStorage.removeItem(LS_KEYS.refreshToken);
-            localStorage.removeItem(LS_KEYS.expiresAt);
-            localStorage.removeItem(LS_KEYS.uid);
-            localStorage.removeItem(LS_KEYS.email);
+          } catch (retryError) {
+            if (!isTerminalAuthSessionError(retryError)) return;
+            clearStoredAuthSessionKeys();
           }
         }, 2000);
         return { restored: false, reason: 'retry-scheduled' };
@@ -3439,7 +3443,8 @@ async function syncRequestedPageModeLegacy() {
 
   if (_appPageMode === 'manager') {
     _setLoadingMessage('Checking manager access…');
-    await refreshCurrentUserProfile();
+    const profile = await refreshCurrentUserProfile();
+    if (profile?.authExpired) return requireAuth();
   }
 
   const routeDecision = resolveRequestedSettingsRoute();
@@ -5162,6 +5167,87 @@ function extractProfileFromBootstrap(payload = {}) {
     name: String(actor?.name || payload?.name || ''),
     accessibleMenuIds: normalizeAccessibleMenuIds(access?.accessibleMenuIds || payload?.accessibleMenuIds || []),
   };
+}
+
+function buildAuthApiError(response, payload, fallbackMessage = 'Authentication failed.') {
+  const details = payload && typeof payload === 'object' ? { ...payload } : {};
+  const status = Number(response?.status || details?.status || 0);
+  if (status > 0) details.status = status;
+  details.message = (
+    typeof payload === 'string' && payload.trim()
+      ? payload.trim()
+      : details.message || details.msg || details.error_description || details.error || fallbackMessage
+  );
+  return details;
+}
+
+function buildMalformedAuthApiSuccessError(response, fallbackMessage = 'Authentication failed.') {
+  return {
+    status: 502,
+    message: 'Authentication response was not valid JSON.',
+    fallbackMessage,
+  };
+}
+
+async function readAuthApiPayload(response, fallbackMessage = 'Authentication failed.') {
+  let payload = {};
+  const raw = typeof response?.text === 'function'
+    ? await response.text().catch(() => '')
+    : '';
+  if (raw) {
+    try {
+      payload = JSON.parse(raw);
+    } catch (_) {
+      if (response?.ok) throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
+      payload = { message: raw };
+    }
+  }
+  if (!response.ok) throw buildAuthApiError(response, payload, fallbackMessage);
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw buildMalformedAuthApiSuccessError(response, fallbackMessage);
+  }
+  return payload && typeof payload === 'object' ? payload : {};
+}
+
+function getAuthErrorStatus(error) {
+  const status = Number(error?.status || error?.statusCode || 0);
+  return Number.isFinite(status) && status > 0 ? status : 0;
+}
+
+function isTerminalAuthSessionError(error) {
+  const status = getAuthErrorStatus(error);
+  return status === 400 || status === 401 || status === 403;
+}
+
+function listStorageKeys(storage = localStorage) {
+  const keys = [];
+  const length = Number(storage?.length || 0);
+  for (let index = 0; index < length; index += 1) {
+    const key = storage.key(index);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
+function clearStoredAuthSessionKeys(storage = localStorage) {
+  [
+    LS_KEYS.accessToken,
+    LS_KEYS.refreshToken,
+    LS_KEYS.expiresAt,
+    LS_KEYS.uid,
+    LS_KEYS.email,
+  ].forEach(key => storage.removeItem(key));
+}
+
+function clearLegacyLocalStorageKeys(storage = localStorage) {
+  ['menuItems', 'menuData', 'bot_id', 'groupme_config', 'lastUpdated'].forEach(key => storage.removeItem(key));
+  listStorageKeys(storage)
+    .filter(key => key.startsWith('firebase:'))
+    .forEach(key => storage.removeItem(key));
+}
+
+function scheduleSessionRefreshRetry(delayMs = 60_000) {
+  _scheduleTokenRefresh(Date.now() + (5 * 60 * 1000) + delayMs);
 }
 
 function canReadRestaurantToolsFromWorkspace(workspace = {}) {
@@ -7361,7 +7447,7 @@ function migrateLocalStorage() {
       tequila: 'Tequila', frozen: 'Frozen', special: 'Special'
     };
     const oldRaw = localStorage.getItem('menuItems') || localStorage.getItem('menuData');
-    const hasFirebaseAuth = Object.keys(localStorage).some(k => k.startsWith('firebase:'));
+    const hasFirebaseAuth = listStorageKeys(localStorage).some(key => key.startsWith('firebase:'));
     const oldBotId = localStorage.getItem('bot_id') || localStorage.getItem('groupme_config');
 
     if (!oldRaw && !hasFirebaseAuth && !oldBotId) {
@@ -7397,13 +7483,12 @@ function migrateLocalStorage() {
       }));
     }
 
-    // Clean up old keys
-    ['menuItems', 'menuData', 'bot_id', 'groupme_config', 'lastUpdated'].forEach(k => localStorage.removeItem(k));
-    Object.keys(localStorage).filter(k => k.startsWith('firebase:')).forEach(k => localStorage.removeItem(k));
+    clearLegacyLocalStorageKeys(localStorage);
     localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
-  } catch (_) {
-    localStorage.clear();
+  } catch (error) {
+    clearLegacyLocalStorageKeys(localStorage);
     localStorage.setItem(LS_KEYS.lsSchemaVersion, '1');
+    console.warn('Failed to migrate legacy local storage.', error);
   }
 }
 
@@ -7480,7 +7565,13 @@ async function _tryHandleRecoveryCallback() {
 }
 
 async function _tryRestoreSession() {
-  return getAccessSessionService().restoreStoredSession();
+  const result = await getAccessSessionService().restoreStoredSession();
+  if (result?.reason === 'expired') {
+    showToast('Your saved session expired. Sign in again.', 'info');
+  } else if (result?.reason === 'retry-scheduled') {
+    showToast('Unable to verify your saved session right now. Retrying...', 'info');
+  }
+  return result;
 }
 
 async function showPublicView() {
@@ -8429,49 +8520,32 @@ function getAuthApiBoundary() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'sign_up', email, password, name }),
-    }).then(async response => {
-      if (!response.ok) throw await response.json();
-      return response.json();
-    }),
+    }).then(response => readAuthApiPayload(response, 'Sign-up failed.')),
     signIn: ({ email = '', password = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'sign_in', email, password }),
-    }).then(async response => {
-      if (!response.ok) throw await response.json();
-      return response.json();
-    }),
+    }).then(response => readAuthApiPayload(response, 'Authentication failed.')),
     refreshToken: ({ refreshToken = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'refresh', refresh_token: refreshToken }),
-    }).then(async response => {
-      if (!response.ok) throw await response.json();
-      return response.json();
-    }),
+    }).then(response => readAuthApiPayload(response, 'Session refresh failed.')),
     getProfile: ({ accessToken = '' } = {}) => fetch('/api/auth?mode=profile', {
       headers: { Authorization: `Bearer ${accessToken}` },
-    }).then(async response => {
-      if (!response.ok) return { role: 'none', name: '', accessibleMenuIds: [] };
-      const payload = await response.json();
-      return extractProfileFromBootstrap(payload || {});
-    }),
+    }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
+      .then(payload => extractProfileFromBootstrap(payload || {})),
     resetPasswordForEmail: ({ email = '', redirectTo = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'reset_password', email, redirect_to: redirectTo }),
-    }).then(async response => {
-      if (!response.ok) throw await response.json();
-      return null;
-    }),
+    }).then(response => readAuthApiPayload(response, 'Failed to send reset email.'))
+      .then(() => null),
     updatePassword: ({ accessToken = '', newPassword = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ action: 'update_password', new_password: newPassword }),
-    }).then(async response => {
-      if (!response.ok) throw await response.json();
-      return response.json();
-    }),
+    }).then(response => readAuthApiPayload(response, 'Failed to update password.')),
   };
 }
 
@@ -8510,6 +8584,30 @@ async function sbGetProfile(accessToken) {
   return { role: role || 'none', name: name || '', accessibleMenuIds: normalizeAccessibleMenuIds(accessibleMenuIds) };
 }
 
+function buildSessionProfile(profile = {}) {
+  return {
+    role: profile?.role || 'none',
+    name: profile?.name || '',
+    accessibleMenuIds: normalizeAccessibleMenuIds(profile?.accessibleMenuIds),
+  };
+}
+
+async function resolveAuthenticatedSessionProfile(accessToken) {
+  if (!accessToken) return { ...buildSessionProfile(), profileUnavailable: false };
+  try {
+    return {
+      ...buildSessionProfile(await sbGetProfile(accessToken)),
+      profileUnavailable: false,
+    };
+  } catch (error) {
+    if (isTerminalAuthSessionError(error)) throw error;
+    return {
+      ...buildSessionProfile(),
+      profileUnavailable: true,
+    };
+  }
+}
+
 function updateCurrentUserProfile(profile = {}) {
   if (!currentUser) return profile;
   currentUser.name = profile.name || '';
@@ -8524,8 +8622,19 @@ async function refreshCurrentUserProfile() {
   try {
     const profile = await sbGetProfile(currentUser.accessToken);
     return updateCurrentUserProfile(profile);
-  } catch (_) {
-    return updateCurrentUserProfile({ role: 'none', name: currentUser?.name || '', accessibleMenuIds: [] });
+  } catch (error) {
+    if (isTerminalAuthSessionError(error)) {
+      showToast('Your session expired. Sign in again.', 'info');
+      clearCurrentSessionState({ syncRequestedPageMode: false, exitViewOnSettings: false });
+      return { role: 'none', name: '', accessibleMenuIds: [], authExpired: true };
+    }
+    showToast('Unable to refresh your access right now. Keeping your current session.', 'error');
+    return {
+      role: currentUser?.role || 'none',
+      name: currentUser?.name || '',
+      accessibleMenuIds: normalizeAccessibleMenuIds(currentUser?.accessibleMenuIds),
+      staleProfile: true,
+    };
   }
 }
 
@@ -8572,7 +8681,15 @@ function _scheduleTokenRefresh(expiresAt) {
             lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
             lsSet(LS_KEYS.expiresAt, String(currentUser.expiresAt));
           },
-          onRefreshFailure: () => signOut(),
+          onRefreshFailure: error => {
+            if (isTerminalAuthSessionError(error)) {
+              showToast('Your session expired. Sign in again.', 'info');
+              signOut();
+              return;
+            }
+            showToast('Unable to refresh your session right now. Retrying soon.', 'error');
+            scheduleSessionRefreshRetry();
+          },
         });
       } finally {
         _authModuleDelegationStack.delete('scheduleTokenRefresh');
@@ -8594,9 +8711,14 @@ function _scheduleTokenRefresh(expiresAt) {
       lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
       lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
       _scheduleTokenRefresh(currentUser.expiresAt);
-    } catch(e) {
-      // Refresh failed — sign out silently
-      signOut();
+    } catch (error) {
+      if (isTerminalAuthSessionError(error)) {
+        showToast('Your session expired. Sign in again.', 'info');
+        signOut();
+        return;
+      }
+      showToast('Unable to refresh your session right now. Retrying soon.', 'error');
+      scheduleSessionRefreshRetry();
     }
   }, msUntilRefresh);
 }
@@ -9496,9 +9618,13 @@ async function handlePreviewAuditSignIn() {
     if (!response.ok || !payload?.session?.access_token) {
       throw new Error(payload?.error || 'Preview audit session failed.');
     }
-    const { role } = await getAccessSessionService().applyAuthenticatedSession(payload.session, { closeOverlay: true });
+    const { role, profileUnavailable } = await getAccessSessionService().applyAuthenticatedSession(payload.session, { closeOverlay: true });
     await _syncRequestedPageMode();
-    if (role === 'none') showToast('Preview audit session opened, but no menu access is configured.', 'info');
+    if (profileUnavailable) {
+      showToast('Preview audit session opened, but access could not be verified yet.', 'info');
+    } else if (role === 'none') {
+      showToast('Preview audit session opened, but no menu access is configured.', 'info');
+    }
   } catch (error) {
     if (errEl) errEl.textContent = error?.message || 'Preview audit session failed.';
   } finally {
@@ -9615,9 +9741,13 @@ async function handleSignIn() {
   errEl.textContent = '';
   try {
     const data = await sbSignIn(email, password);
-    const { role } = await getAccessSessionService().applyAuthenticatedSession(data, { closeOverlay: true });
+    const { role, profileUnavailable } = await getAccessSessionService().applyAuthenticatedSession(data, { closeOverlay: true });
     await _syncRequestedPageMode();
-    if (role === 'none') showToast('Signed in. Contact admin to get manager access.', 'info');
+    if (profileUnavailable) {
+      showToast('Signed in, but your access could not be verified yet.', 'info');
+    } else if (role === 'none') {
+      showToast('Signed in. Contact admin to get manager access.', 'info');
+    }
   } catch(err) {
     const msg = err?.msg || err?.error_description || err?.message || 'Authentication failed.';
     errEl.textContent = msg;
@@ -9700,7 +9830,8 @@ async function handleResetPassword() {
   }
 }
 
-function signOut() {
+function clearCurrentSessionState(options = {}) {
+  const { syncRequestedPageMode = true, exitViewOnSettings = true } = options;
   const boundary = getAuthModuleBoundary();
   if (typeof boundary?.clearStoredSession === 'function') {
     boundary.clearStoredSession({
@@ -9709,27 +9840,21 @@ function signOut() {
       },
       setTimerRef: value => { _tokenRefreshTimer = value; },
       setCurrentUser: value => { currentUser = value; },
-      clearStorage: () => {
-        localStorage.removeItem(LS_KEYS.accessToken);
-        localStorage.removeItem(LS_KEYS.refreshToken);
-        localStorage.removeItem(LS_KEYS.expiresAt);
-        localStorage.removeItem(LS_KEYS.uid);
-        localStorage.removeItem(LS_KEYS.email);
-      },
+      clearStorage: () => clearStoredAuthSessionKeys(),
     });
   } else {
     currentUser = null;
     if (_tokenRefreshTimer) { clearTimeout(_tokenRefreshTimer); _tokenRefreshTimer = null; }
-    localStorage.removeItem(LS_KEYS.accessToken);
-    localStorage.removeItem(LS_KEYS.refreshToken);
-    localStorage.removeItem(LS_KEYS.expiresAt);
-    localStorage.removeItem(LS_KEYS.uid);
-    localStorage.removeItem(LS_KEYS.email);
+    clearStoredAuthSessionKeys();
   }
   _managerMenuPicked = false;
-  if (isManagerMode || isAdminMode) exitView();
+  if (exitViewOnSettings && (isManagerMode || isAdminMode)) exitView();
   renderUserHeader();
-  _syncRequestedPageMode();
+  if (syncRequestedPageMode) _syncRequestedPageMode();
+}
+
+function signOut() {
+  clearCurrentSessionState({ syncRequestedPageMode: true });
 }
 
 // ─── MANAGER MODE ─────────────────────────────────────────────────────────────
@@ -12335,7 +12460,9 @@ async function removeFeaturedSlot(slotId, groupId) {
 async function saveFeaturedSellNote(slotId, note) {
   try {
     await getRestaurantSpecialsService().saveNote({ slotId, note });
-  } catch(e) {}
+  } catch (error) {
+    showToast(error?.message || 'Failed to save note.', 'error');
+  }
 }
 
 async function moveFeaturedSlot(groupId, slotId, direction) {

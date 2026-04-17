@@ -865,6 +865,128 @@ test('access session service restores sessions and resolves settings access', as
   assert.equal(adminDecision.kind, 'admin-denied');
 });
 
+test('access session service restores stored access when profile verification is transiently unavailable', async () => {
+  const sandbox = loadAppSandbox();
+  let refreshCalls = 0;
+
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    _scheduleTokenRefresh: () => {},
+    sbGetProfile: async () => {
+      throw { status: 500, message: 'profile unavailable' };
+    },
+    sbRefreshToken: async () => {
+      refreshCalls += 1;
+      throw { status: 500, message: 'refresh unavailable' };
+    },
+  });
+
+  sandbox.localStorage.setItem('hf_sb_access_token', 'stored-token');
+  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
+  sandbox.localStorage.setItem('hf_sb_expires_at', String(Date.now() + 60 * 60 * 1000));
+  sandbox.localStorage.setItem('hf_sb_uid', 'user-1');
+  sandbox.localStorage.setItem('hf_sb_email', 'taylor@example.com');
+
+  const service = sandbox.getAccessSessionService();
+  const restored = await service.restoreStoredSession();
+
+  assert.equal(restored.restored, true);
+  assert.equal(restored.source, 'stored-access');
+  assert.equal(restored.profile.profileUnavailable, true);
+  assert.equal(restored.profile.role, 'none');
+  assert.equal(refreshCalls, 0);
+  assert.equal(getState(sandbox, 'currentUser.accessToken'), 'stored-token');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'stored-refresh');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'stored-token');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'stored-refresh');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_uid'), 'user-1');
+});
+
+test('access session service applies sessions when profile verification is transiently unavailable', async () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    _scheduleTokenRefresh: () => {},
+    sbGetProfile: async () => {
+      throw { status: 500, message: 'profile unavailable' };
+    },
+  });
+
+  const service = sandbox.getAccessSessionService();
+  const session = await service.applyAuthenticatedSession({
+    access_token: 'token-2',
+    refresh_token: 'refresh-2',
+    expires_in: 3600,
+    user: { id: 'user-2', email: 'jamie@example.com' },
+  });
+
+  assert.equal(session.profileUnavailable, true);
+  assert.equal(getState(sandbox, 'currentUser.accessToken'), 'token-2');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'refresh-2');
+  assert.equal(getState(sandbox, 'currentUser.role'), 'none');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'token-2');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'refresh-2');
+});
+
+test('access session service restores refreshed sessions when profile verification is transiently unavailable', async () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    _scheduleTokenRefresh: () => {},
+    sbGetProfile: async () => {
+      throw { status: 500, message: 'profile unavailable' };
+    },
+    sbRefreshToken: async () => ({
+      access_token: 'fresh-token',
+      refresh_token: 'fresh-refresh',
+      expires_in: 3600,
+      user: { id: 'user-3', email: 'alex@example.com' },
+    }),
+  });
+
+  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
+
+  const service = sandbox.getAccessSessionService();
+  const restored = await service.restoreStoredSession();
+
+  assert.equal(restored.restored, true);
+  assert.equal(restored.source, 'refresh-token');
+  assert.equal(restored.session.profileUnavailable, true);
+  assert.equal(getState(sandbox, 'currentUser.accessToken'), 'fresh-token');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'fresh-refresh');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'fresh-token');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'fresh-refresh');
+});
+
+test('migrateLocalStorage preserves auth session keys when legacy data is malformed', () => {
+  const sandbox = loadAppSandbox();
+  const quietConsole = { ...console, warn() {} };
+  sandbox.console = quietConsole;
+  sandbox.window.console = quietConsole;
+
+  sandbox.localStorage.setItem('hf_sb_access_token', 'stored-token');
+  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
+  sandbox.localStorage.setItem('hf_sb_expires_at', '123456789');
+  sandbox.localStorage.setItem('hf_sb_uid', 'user-1');
+  sandbox.localStorage.setItem('hf_sb_email', 'taylor@example.com');
+  sandbox.localStorage.setItem('menuData', '{not-json');
+  sandbox.localStorage.setItem('lastUpdated', 'yesterday');
+
+  sandbox.migrateLocalStorage();
+
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'stored-token');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'stored-refresh');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_uid'), 'user-1');
+  assert.equal(sandbox.localStorage.getItem('menuData'), null);
+  assert.equal(sandbox.localStorage.getItem('lastUpdated'), null);
+  assert.equal(sandbox.localStorage.getItem('hf_ls_schema_version'), '1');
+});
+
 test('settings auth gate routes unauthenticated users through requestSignIn boundary', async () => {
   const sandbox = loadAppSandbox({
     location: {
@@ -892,6 +1014,46 @@ test('settings auth gate routes unauthenticated users through requestSignIn boun
   assert.equal(result.status, 'auth-required');
   assert.equal(signInRequests.length, 1);
   assert.equal(signInRequests[0].screen, 'signin');
+});
+
+test('settings auth gate keeps expired sessions on the settings shell', async () => {
+  const sandbox = loadAppSandbox({
+    location: {
+      origin: 'https://example.com',
+      protocol: 'https:',
+      hostname: 'example.com',
+      pathname: '/manager',
+      search: '',
+      hash: '',
+      assign() {},
+    },
+  });
+  const signInRequests = [];
+  const navigations = [];
+
+  setState(sandbox, {
+    _appPageMode: 'manager',
+    currentUser: {
+      accessToken: 'expired-token',
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+    requestSignIn: options => { signInRequests.push(options || {}); },
+    navigateToPage: href => { navigations.push(href); },
+    sbGetProfile: async () => {
+      throw { status: 401, message: 'expired' };
+    },
+  });
+
+  const service = sandbox.getAccessSessionService();
+  const result = await service.syncRequestedPageMode();
+
+  assert.equal(result.handled, true);
+  assert.equal(result.status, 'auth-required');
+  assert.equal(signInRequests.length, 1);
+  assert.equal(navigations.length, 0);
+  assert.equal(getState(sandbox, 'currentUser'), null);
 });
 
 test('settings route policy service centralizes manager and admin access decisions', () => {
