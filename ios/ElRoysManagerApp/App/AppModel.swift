@@ -341,7 +341,8 @@ final class AppModel {
     }
 
     do {
-      let workspace = try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let fetchedWorkspace = try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let workspace = normalizedEditorWorkspace(fetchedWorkspace)
       guard let currentWorkspace = currentEditorWorkspace else { return }
       guard workspace.workspace.revisions != currentWorkspace.workspace.revisions else { return }
       let history: HistoryPayload?
@@ -855,12 +856,7 @@ final class AppModel {
     history: HistoryPayload?,
     document: EditableMenuDocument? = nil
   ) throws {
-    var normalizedWorkspace = workspace
-    if normalizedWorkspace.workspace.revisions.notificationBaselineRevision == nil {
-      normalizedWorkspace.workspace.revisions.notificationBaselineRevision = normalizedWorkspace.meta.lastSentTs
-        ?? normalizedWorkspace.workspace.revisions.lastSentRevision
-        ?? normalizedWorkspace.workspace.revisions.draftRevision
-    }
+    let normalizedWorkspace = normalizedEditorWorkspace(workspace)
     let liveDocument = EditableMenuDocument(workspace: normalizedWorkspace)
     let serverDocument = serverWorkspaceDocument(from: normalizedWorkspace, liveDocument: liveDocument)
     currentEditorWorkspace = normalizedWorkspace
@@ -883,7 +879,11 @@ final class AppModel {
     guard let currentEditorDocument else { return }
     try? setEditorBaselines(liveDocument: liveDocument, serverDocument: serverDocument)
     if let revisions {
-      currentEditorWorkspace?.workspace.revisions = revisions
+      if let meta = currentEditorWorkspace?.meta {
+        currentEditorWorkspace?.workspace.revisions = normalizedWorkspaceRevisions(revisions, meta: meta)
+      } else {
+        currentEditorWorkspace?.workspace.revisions = revisions
+      }
     }
     editorHasServerUnsentChanges = serverHasUnsentChanges(in: currentEditorWorkspace)
     editorRefreshRequirement = nil
@@ -996,6 +996,25 @@ final class AppModel {
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
     return try? decoder.decode(EditableMenuDocument.self, from: data)
+  }
+
+  private func normalizedEditorWorkspace(_ workspace: MenuWorkspacePayload) -> MenuWorkspacePayload {
+    var normalizedWorkspace = workspace
+    normalizedWorkspace.workspace.revisions = normalizedWorkspaceRevisions(workspace.workspace.revisions, meta: workspace.meta)
+    return normalizedWorkspace
+  }
+
+  private func normalizedWorkspaceRevisions(_ revisions: WorkspaceRevisions, meta: MenuMetaPayload) -> WorkspaceRevisions {
+    var normalizedRevisions = revisions
+    if normalizedRevisions.lastSentRevision == nil {
+      normalizedRevisions.lastSentRevision = meta.lastSentTs
+    }
+    if normalizedRevisions.notificationBaselineRevision == nil {
+      normalizedRevisions.notificationBaselineRevision = meta.lastSentTs
+        ?? normalizedRevisions.lastSentRevision
+        ?? normalizedRevisions.draftRevision
+    }
+    return normalizedRevisions
   }
 
   private func expectedNotificationBaselineRevision(for workspace: MenuWorkspacePayload) -> Int? {

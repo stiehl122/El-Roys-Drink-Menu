@@ -1163,6 +1163,43 @@ function setServerLiveSnapshot(snapshot = null) {
 function getServerLiveSnapshot() {
   return cloneJsonCompatible(_serverLiveSnapshot, null);
 }
+function syncServerLiveSnapshot() {
+  setServerLiveSnapshot(buildMenuCacheSnapshot());
+}
+function alignDraftDocumentSnapshotWithLiveSnapshot(snapshot = null, liveSnapshot = getServerLiveSnapshot()) {
+  const nextSnapshot = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneJsonCompatible(snapshot, null)
+    : null;
+  if (!nextSnapshot) return null;
+
+  const normalizedLiveSnapshot = normalizeDraftDocumentSnapshot(liveSnapshot);
+  const liveFeaturedGroups = Array.isArray(normalizedLiveSnapshot.featured_groups)
+    ? cloneJsonCompatible(normalizedLiveSnapshot.featured_groups, [])
+    : [];
+  const liveSaveOnlyChanges = Array.isArray(normalizedLiveSnapshot.save_only_changes)
+    ? cloneJsonCompatible(normalizedLiveSnapshot.save_only_changes, [])
+    : [];
+  const hasFeaturedGroups = Array.isArray(nextSnapshot.featured_groups);
+  const hasSaveOnlyChanges = Array.isArray(nextSnapshot.save_only_changes) || Array.isArray(nextSnapshot.saveOnlyChanges);
+
+  if (!hasFeaturedGroups || (!nextSnapshot.featured_groups.length && liveFeaturedGroups.length)) {
+    nextSnapshot.featured_groups = liveFeaturedGroups;
+  }
+  if (!hasSaveOnlyChanges) {
+    nextSnapshot.save_only_changes = liveSaveOnlyChanges;
+  }
+
+  return nextSnapshot;
+}
+function alignLocalDraftEnvelopeWithLiveSnapshot(envelope = null, liveSnapshot = getServerLiveSnapshot()) {
+  const normalizedEnvelope = normalizeLocalDraftEnvelope(envelope);
+  if (!normalizedEnvelope) return null;
+  return {
+    ...normalizedEnvelope,
+    baseSnapshot: alignDraftDocumentSnapshotWithLiveSnapshot(normalizedEnvelope.baseSnapshot, liveSnapshot),
+    draftSnapshot: alignDraftDocumentSnapshotWithLiveSnapshot(normalizedEnvelope.draftSnapshot, liveSnapshot),
+  };
+}
 function setLocalDraftBaseSnapshot(snapshot = null) {
   _localDraftBaseSnapshot = snapshot && typeof snapshot === 'object'
     ? cloneJsonCompatible(snapshot, null)
@@ -5839,6 +5876,9 @@ function withMenuStateLoaderDefaults(deps = {}) {
     readStoredLocalDraftEnvelope: typeof deps.readStoredLocalDraftEnvelope === 'function'
       ? deps.readStoredLocalDraftEnvelope
       : (() => readStoredLocalDraftEnvelope()),
+    alignLocalDraftEnvelope: typeof deps.alignLocalDraftEnvelope === 'function'
+      ? deps.alignLocalDraftEnvelope
+      : ((envelope, liveSnapshot = getServerLiveSnapshot()) => alignLocalDraftEnvelopeWithLiveSnapshot(envelope, liveSnapshot)),
     buildCurrentLocalDraftEnvelope: typeof deps.buildCurrentLocalDraftEnvelope === 'function'
       ? deps.buildCurrentLocalDraftEnvelope
       : (() => buildCurrentLocalDraftEnvelope()),
@@ -5848,6 +5888,12 @@ function withMenuStateLoaderDefaults(deps = {}) {
     clearCurrentLocalDraft: typeof deps.clearCurrentLocalDraft === 'function'
       ? deps.clearCurrentLocalDraft
       : ((options = {}) => clearCurrentLocalDraft(options)),
+    applyWorkspaceRestaurantTools: typeof deps.applyWorkspaceRestaurantTools === 'function'
+      ? deps.applyWorkspaceRestaurantTools
+      : (data => applyWorkspaceRestaurantTools(data)),
+    syncServerLiveSnapshot: typeof deps.syncServerLiveSnapshot === 'function'
+      ? deps.syncServerLiveSnapshot
+      : (() => syncServerLiveSnapshot()),
   };
 }
 
@@ -5882,9 +5928,12 @@ function createMenuStateLoaderService(deps = {}) {
   const getFeaturedSnapshotValue = resolvedDeps.getFeaturedSnapshot;
   const syncDraftDirtyState = resolvedDeps.syncLocalDraftDirtyState;
   const readStoredLocalDraft = resolvedDeps.readStoredLocalDraftEnvelope;
+  const alignLocalDraftEnvelope = resolvedDeps.alignLocalDraftEnvelope;
   const buildCurrentDraftEnvelope = resolvedDeps.buildCurrentLocalDraftEnvelope;
   const applyLocalDraft = resolvedDeps.applyLocalDraftEnvelope;
   const clearCurrentDraft = resolvedDeps.clearCurrentLocalDraft;
+  const applyWorkspaceRestaurantTools = resolvedDeps.applyWorkspaceRestaurantTools;
+  const syncServerLiveSnapshot = resolvedDeps.syncServerLiveSnapshot;
   const isDraftDirty = resolvedDeps.isDirty;
 
   return {
@@ -5901,7 +5950,11 @@ function createMenuStateLoaderService(deps = {}) {
         if (data) {
           hydrateFromState(data);
           const usedWorkspaceRestaurantTools = applyWorkspaceRestaurantTools(data);
-          const localDraftEnvelope = includePersistedDraft ? readStoredLocalDraft() : null;
+          syncServerLiveSnapshot();
+          const localDraftEnvelope = includePersistedDraft
+            ? alignLocalDraftEnvelope(readStoredLocalDraft(), getServerLiveSnapshot())
+            : null;
+          let hasActiveLocalDraft = false;
           const loadedDraft = includePersistedDraft
             ? (localDraftEnvelope
                 ? !!applyLocalDraft(localDraftEnvelope, { markDirty: false })
@@ -5911,24 +5964,34 @@ function createMenuStateLoaderService(deps = {}) {
             setLocalDraftBaseSnapshot(localDraftEnvelope?.baseSnapshot || getServerLiveSnapshot());
             if (syncDraftDirtyState()) {
               setDirty(true);
+              hasActiveLocalDraft = true;
             } else {
               clearCurrentDraft();
               setDirty(false);
               clearDraftChanges();
+              syncServerLiveSnapshot();
             }
           } else {
             clearCurrentDraft(localDraftEnvelope ? {} : { clearStorage: false });
             setDirty(false);
             clearDraftChanges();
+            syncServerLiveSnapshot();
           }
           if (persistCache) writeMenuCache(data);
-          if (includeFeatured && !usedWorkspaceRestaurantTools) await refreshFeatured();
+          if (includeFeatured && !usedWorkspaceRestaurantTools) {
+            await refreshFeatured();
+            if (!hasActiveLocalDraft) syncServerLiveSnapshot();
+          }
         } else if (fallbackToDefault) {
           setDefaultState();
           setDirty(false);
           clearDraftChanges();
           _workspaceRestaurantToolsReadable = false;
-          if (includeFeatured) await refreshFeatured();
+          syncServerLiveSnapshot();
+          if (includeFeatured) {
+            await refreshFeatured();
+            syncServerLiveSnapshot();
+          }
         }
       } catch (error) {
         if (fallbackToDefault) {
@@ -5936,7 +5999,11 @@ function createMenuStateLoaderService(deps = {}) {
           setDirty(false);
           clearDraftChanges();
           _workspaceRestaurantToolsReadable = false;
-          if (includeFeatured) await refreshFeatured();
+          syncServerLiveSnapshot();
+          if (includeFeatured) {
+            await refreshFeatured();
+            syncServerLiveSnapshot();
+          }
         } else {
           throw error;
         }
@@ -5963,23 +6030,34 @@ function createMenuStateLoaderService(deps = {}) {
       const activeDraftEnvelope = isDraftDirty() ? buildCurrentDraftEnvelope() : readStoredLocalDraft();
       hydrateFromState(data);
       const usedWorkspaceRestaurantTools = applyWorkspaceRestaurantTools(data);
-      if (activeDraftEnvelope?.draftSnapshot) {
-        const reappliedDraft = applyLocalDraft(activeDraftEnvelope, { markDirty: false });
+      syncServerLiveSnapshot();
+      let hasActiveLocalDraft = false;
+      const alignedDraftEnvelope = activeDraftEnvelope?.draftSnapshot
+        ? alignLocalDraftEnvelope(activeDraftEnvelope, getServerLiveSnapshot())
+        : activeDraftEnvelope;
+      if (alignedDraftEnvelope?.draftSnapshot) {
+        const reappliedDraft = applyLocalDraft(alignedDraftEnvelope, { markDirty: false });
         if (reappliedDraft && syncDraftDirtyState()) {
           setDirty(true);
+          hasActiveLocalDraft = true;
         } else {
           clearCurrentDraft();
           setDirty(false);
           clearDraftChanges();
+          syncServerLiveSnapshot();
         }
       } else {
         clearCurrentDraft({ clearStorage: false });
         setDirty(false);
         clearDraftChanges();
+        syncServerLiveSnapshot();
       }
       writeMenuCache(data);
       const newTs = getLastUpdatedTs();
-      if (newTs !== oldTs && !usedWorkspaceRestaurantTools) await refreshFeatured();
+      if (newTs !== oldTs && !usedWorkspaceRestaurantTools) {
+        await refreshFeatured();
+        if (!hasActiveLocalDraft) syncServerLiveSnapshot();
+      }
 
       const afterCats = getCategorySnapshot();
       const newDesign = getDesignSnapshotValue();
