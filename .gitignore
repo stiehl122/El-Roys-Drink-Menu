@@ -44,3 +44,4 @@ design-loop/**/*.jpg
 # Bug loop artifacts (issues file is committed)
 bug-loop/log.md
 bug-loop/artifacts/
+*.xcworkspacedata
