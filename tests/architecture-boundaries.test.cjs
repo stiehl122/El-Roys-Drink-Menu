@@ -865,22 +865,19 @@ test('access session service restores sessions and resolves settings access', as
   assert.equal(adminDecision.kind, 'admin-denied');
 });
 
-test('access session service keeps stored auth tokens after transient restore failures', async () => {
-  const sandbox = loadAppSandbox({
-    setTimeout(callback) {
-      Promise.resolve().then(callback);
-      return 1;
-    },
-    clearTimeout() {},
-  });
+test('access session service restores stored access when profile verification is transiently unavailable', async () => {
+  const sandbox = loadAppSandbox();
+  let refreshCalls = 0;
 
   setState(sandbox, {
     SUPABASE_URL: 'https://example.supabase.co',
     SUPABASE_ANON_KEY: 'anon-key',
+    _scheduleTokenRefresh: () => {},
     sbGetProfile: async () => {
       throw { status: 500, message: 'profile unavailable' };
     },
     sbRefreshToken: async () => {
+      refreshCalls += 1;
       throw { status: 500, message: 'refresh unavailable' };
     },
   });
@@ -893,11 +890,14 @@ test('access session service keeps stored auth tokens after transient restore fa
 
   const service = sandbox.getAccessSessionService();
   const restored = await service.restoreStoredSession();
-  await Promise.resolve();
-  await Promise.resolve();
 
-  assert.equal(restored.restored, false);
-  assert.equal(restored.reason, 'retry-scheduled');
+  assert.equal(restored.restored, true);
+  assert.equal(restored.source, 'stored-access');
+  assert.equal(restored.profile.profileUnavailable, true);
+  assert.equal(restored.profile.role, 'none');
+  assert.equal(refreshCalls, 0);
+  assert.equal(getState(sandbox, 'currentUser.accessToken'), 'stored-token');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'stored-refresh');
   assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'stored-token');
   assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'stored-refresh');
   assert.equal(sandbox.localStorage.getItem('hf_sb_uid'), 'user-1');
