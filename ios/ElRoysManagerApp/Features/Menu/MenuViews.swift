@@ -18,6 +18,7 @@ struct MenuEditorScreen: View {
   @State private var renameTarget: MenuCategoryPayload?
   @State private var renameText = ""
   @State private var showingDiscardDraftConfirm = false
+  @State private var reorderingCategoryKey: String?
 
   private var theme: MenuEditorTheme {
     .theme(for: menu)
@@ -84,6 +85,7 @@ struct MenuEditorScreen: View {
                   model.deleteCategory(key: category.key)
                 },
                 onSelectItem: { item in
+                  reorderingCategoryKey = nil
                   editingDraft = EditableItemDraft(item: item, categoryKey: category.key, isFoodMenu: menu.isFoodMenu)
                   activeSheet = .itemEditor
                 },
@@ -94,8 +96,12 @@ struct MenuEditorScreen: View {
                     isEightySixed: !item.isEightySixed
                   )
                 },
-                onMoveOffMenu: { item in
-                  model.moveItemToOffMenu(itemID: item.id, from: category.key)
+                isReordering: reorderingCategoryKey == category.key,
+                onToggleReorder: {
+                  reorderingCategoryKey = reorderingCategoryKey == category.key ? nil : category.key
+                },
+                onMoveVisibleItems: { source, destination in
+                  model.moveVisibleItems(in: category.key, from: source, to: destination)
                 }
               )
             }
@@ -165,6 +171,7 @@ struct MenuEditorScreen: View {
       activeSheet = nil
       showingAddCategory = false
       renameTarget = nil
+      reorderingCategoryKey = nil
     }
     .sheet(item: Binding(
       get: { model.editorRefreshRequirement == nil ? activeSheet : nil },
@@ -780,7 +787,9 @@ private struct MenuEditorCategoryCard: View {
   let onDelete: () -> Void
   let onSelectItem: (MenuItemPayload) -> Void
   let onToggleEightySix: (MenuItemPayload) -> Void
-  let onMoveOffMenu: (MenuItemPayload) -> Void
+  let isReordering: Bool
+  let onToggleReorder: () -> Void
+  let onMoveVisibleItems: (IndexSet, Int) -> Void
 
   private var visibleItems: [MenuItemPayload] {
     category.items.filter(\.onMenu)
@@ -806,10 +815,14 @@ private struct MenuEditorCategoryCard: View {
           .padding(.horizontal, 8)
           .background(menuAccent.opacity(0.15), in: Capsule())
           .foregroundStyle(menuAccent)
-        if canEditCategories {
+        if canEditCategories || visibleItems.count > 1 || isReordering {
           Menu {
-            Button("Rename", action: onRename)
-            Button("Delete Category", role: .destructive, action: onDelete)
+            Button(isReordering ? "Done Reordering" : "Reorder Items", action: onToggleReorder)
+              .disabled(visibleItems.count < 2 && !isReordering)
+            if canEditCategories {
+              Button("Rename", action: onRename)
+              Button("Delete Category", role: .destructive, action: onDelete)
+            }
           } label: {
             Image(systemName: "ellipsis.circle.fill")
               .font(.system(size: 20))
@@ -818,31 +831,125 @@ private struct MenuEditorCategoryCard: View {
         }
       }
 
-      ForEach(Array(visibleItems.enumerated()), id: \.offset) { _, item in
-        Button {
-          onSelectItem(item)
-        } label: {
-          EditorItemRow(item: item, theme: theme)
-        }
-        .buttonStyle(.plain)
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-          Button {
-            onToggleEightySix(item)
-          } label: {
-            Label(item.isEightySixed ? "Restore" : "86", systemImage: item.isEightySixed ? "arrow.uturn.backward.circle.fill" : "nosign.app.fill")
-          }
-          .tint(item.isEightySixed ? theme.successAccent : theme.warningAccent)
-        }
-        .swipeActions(edge: .trailing) {
-          Button(role: .destructive) {
-            onMoveOffMenu(item)
-          } label: {
-            Label("Off Menu", systemImage: "tray.and.arrow.down.fill")
-          }
-        }
+      if visibleItems.isEmpty {
+        Text("No menu items yet.")
+          .font(EditorTypography.body(14, weight: .medium))
+          .foregroundStyle(theme.subtleText)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.vertical, 6)
+      } else {
+        MenuEditorSwipeList(
+          items: visibleItems,
+          theme: theme,
+          isReordering: isReordering,
+          onSelectItem: onSelectItem,
+          onToggleEightySix: onToggleEightySix,
+          onMoveVisibleItems: onMoveVisibleItems
+        )
       }
     }
     .menuEditorSurface(colors: [theme.categoryTop, theme.categoryBottom], border: theme.categoryBorder)
+  }
+}
+
+private struct MenuEditorSwipeList: View {
+  @State private var measuredRowHeights: [String: CGFloat] = [:]
+  let items: [MenuItemPayload]
+  let theme: MenuEditorTheme
+  let isReordering: Bool
+  let onSelectItem: (MenuItemPayload) -> Void
+  let onToggleEightySix: (MenuItemPayload) -> Void
+  let onMoveVisibleItems: (IndexSet, Int) -> Void
+
+  var body: some View {
+    List {
+      ForEach(items, id: \.id) { item in
+        row(for: item)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .background {
+          GeometryReader { proxy in
+            Color.clear
+              .preference(key: MenuEditorRowHeightPreferenceKey.self, value: [item.id: proxy.size.height])
+          }
+        }
+        .moveDisabled(!isReordering || items.count < 2)
+      }
+      .onMove(perform: onMoveVisibleItems)
+    }
+    .environment(\.editMode, .constant(isReordering ? .active : .inactive))
+    .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .scrollDisabled(true)
+    .environment(\.defaultMinListRowHeight, 1)
+    .onPreferenceChange(MenuEditorRowHeightPreferenceKey.self) { measuredRowHeights = $0 }
+    .frame(height: listHeight)
+  }
+
+  @ViewBuilder
+  private func row(for item: MenuItemPayload) -> some View {
+    if isReordering {
+      EditorItemRow(item: item, theme: theme)
+        .contentShape(Rectangle())
+    } else {
+      Button {
+        onSelectItem(item)
+      } label: {
+        EditorItemRow(item: item, theme: theme)
+      }
+      .buttonStyle(.plain)
+      .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+        Button {
+          onToggleEightySix(item)
+        } label: {
+          Label(item.isEightySixed ? "Restore" : "86", systemImage: item.isEightySixed ? "arrow.uturn.backward.circle.fill" : "nosign.app.fill")
+        }
+        .tint(item.isEightySixed ? theme.successAccent : theme.warningAccent)
+      }
+    }
+  }
+
+  private var listHeight: CGFloat {
+    max(estimatedListHeight, measuredListHeight)
+  }
+
+  private var measuredListHeight: CGFloat {
+    let heights = items.compactMap { measuredRowHeights[$0.id] }
+    guard heights.count == items.count else { return 0 }
+    return max(heights.reduce(CGFloat.zero, +), 44)
+  }
+
+  private var estimatedListHeight: CGFloat {
+    max(items.reduce(CGFloat.zero) { partialResult, item in
+      partialResult + estimatedRowHeight(for: item)
+    }, 44)
+  }
+
+  private func estimatedRowHeight(for item: MenuItemPayload) -> CGFloat {
+    var height: CGFloat = 72
+    if item.showDescription, !item.desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      height += estimatedTextHeight(for: item.desc, lineHeight: 17, charactersPerLine: 34)
+    }
+    if item.showRecipe, !item.recipe.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      height += estimatedTextHeight(for: item.recipe.joined(separator: " • "), lineHeight: 15, charactersPerLine: 38)
+    }
+    return height
+  }
+
+  private func estimatedTextHeight(for text: String, lineHeight: CGFloat, charactersPerLine: Int) -> CGFloat {
+    let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalized.isEmpty else { return 0 }
+    let lines = max(1, Int(ceil(Double(normalized.count) / Double(max(charactersPerLine, 1)))))
+    return CGFloat(lines) * lineHeight
+  }
+}
+
+private struct MenuEditorRowHeightPreferenceKey: PreferenceKey {
+  static var defaultValue: [String: CGFloat] = [:]
+
+  static func reduce(value: inout [String: CGFloat], nextValue: () -> [String: CGFloat]) {
+    value.merge(nextValue(), uniquingKeysWith: { _, next in next })
   }
 }
 
@@ -1220,6 +1327,14 @@ private struct ItemEditorSheet: View {
           }
         }
 
+        if draft.itemID != nil, draft.categoryKey != EditableMenuDocument.uncategorizedKey {
+          Section("Menu Placement") {
+            Button("Move To Off Menu", role: .destructive) {
+              moveToOffMenu()
+            }
+          }
+        }
+
         Section("Visibility") {
           Toggle("Show Description", isOn: $draft.showDescription)
           Toggle("86'd", isOn: $draft.isEightySixed)
@@ -1272,23 +1387,51 @@ private struct ItemEditorSheet: View {
   }
 
   private func save() {
+    guard let item = makeItem(categoryKey: draft.categoryKey) else { return }
+    model.upsertItem(item, categoryKey: draft.categoryKey, originalCategoryKey: draft.originalCategoryKey)
+
+    if draft.keepAdding {
+      let preservedCategory = draft.categoryKey
+      let isFood = draft.isFoodMenu
+      draft = EditableItemDraft()
+      draft.categoryKey = preservedCategory
+      draft.isFoodMenu = isFood
+    } else {
+      dismiss()
+    }
+  }
+
+  private func moveToOffMenu() {
+    let sourceCategoryKey = draft.originalCategoryKey ?? draft.categoryKey
+    guard sourceCategoryKey != EditableMenuDocument.uncategorizedKey else {
+      dismiss()
+      return
+    }
+    guard let item = makeItem(categoryKey: sourceCategoryKey, validateDuplicateName: false) else { return }
+    model.moveItemToOffMenu(item, from: sourceCategoryKey)
+    dismiss()
+  }
+
+  private func makeItem(categoryKey: String, validateDuplicateName: Bool = true) -> MenuItemPayload? {
     let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
-    let trimmedCategoryKey = draft.categoryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedCategoryKey = categoryKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedCategoryKey.isEmpty else {
       model.notice = AppNotice(
         tone: .warning,
         title: "Category Required",
         message: "Select a category for this item before saving."
       )
-      return
+      return nil
     }
     guard !trimmedName.isEmpty else {
       model.notice = AppNotice(tone: .warning, title: "Name Required", message: "Every menu item needs a non-empty name.")
-      return
+      return nil
     }
-    guard model.canUseItemName(trimmedName, in: trimmedCategoryKey, excluding: draft.itemID) else {
-      model.notice = AppNotice(tone: .warning, title: "Duplicate Item", message: "That category already has an item with the same name.")
-      return
+    if validateDuplicateName {
+      guard model.canUseItemName(trimmedName, in: trimmedCategoryKey, excluding: draft.itemID) else {
+        model.notice = AppNotice(tone: .warning, title: "Duplicate Item", message: "That category already has an item with the same name.")
+        return nil
+      }
     }
 
     let recipe = draft.isFoodMenu ? [] : draft.recipeText
@@ -1296,7 +1439,7 @@ private struct ItemEditorSheet: View {
       .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
       .filter { !$0.isEmpty }
 
-    let item = MenuItemPayload(
+    return MenuItemPayload(
       id: draft.itemID ?? "local-\(UUID().uuidString.lowercased())",
       name: trimmedName,
       desc: draft.description.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1310,16 +1453,5 @@ private struct ItemEditorSheet: View {
       showDescription: draft.showDescription,
       showRecipe: draft.isFoodMenu ? false : draft.showRecipe
     )
-    model.upsertItem(item, categoryKey: trimmedCategoryKey, originalCategoryKey: draft.originalCategoryKey)
-
-    if draft.keepAdding {
-      let preservedCategory = trimmedCategoryKey
-      let isFood = draft.isFoodMenu
-      draft = EditableItemDraft()
-      draft.categoryKey = preservedCategory
-      draft.isFoodMenu = isFood
-    } else {
-      dismiss()
-    }
   }
 }

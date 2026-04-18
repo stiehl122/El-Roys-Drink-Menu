@@ -1705,6 +1705,22 @@ struct EditableMenuDocument: Codable, Equatable {
     renumberItems(for: Self.uncategorizedKey)
   }
 
+  mutating func moveItemToOffMenu(_ updatedItem: MenuItemPayload, from categoryKey: String) {
+    guard categoryKey != Self.uncategorizedKey else { return }
+    guard let categoryIndex = cats.firstIndex(where: { $0.key == categoryKey }) else { return }
+    guard let itemIndex = cats[categoryIndex].items.firstIndex(where: { $0.id == updatedItem.id }) else { return }
+    ensureUncategorizedCategory()
+    guard let uncategorizedIndex = cats.firstIndex(where: { $0.key == Self.uncategorizedKey }) else { return }
+    var item = updatedItem
+    item.onMenu = false
+    item.visibility = "off_menu"
+    cats[categoryIndex].items.remove(at: itemIndex)
+    cats[uncategorizedIndex].items.removeAll { $0.id == item.id }
+    cats[uncategorizedIndex].items.append(item)
+    renumberItems(for: categoryKey)
+    renumberItems(for: Self.uncategorizedKey)
+  }
+
   mutating func restoreItemFromOffMenu(itemID: String, to categoryKey: String) {
     guard categoryKey != Self.uncategorizedKey else { return }
     guard let sourceIndex = cats.firstIndex(where: { $0.key == Self.uncategorizedKey }) else { return }
@@ -1715,6 +1731,19 @@ struct EditableMenuDocument: Codable, Equatable {
     cats[targetIndex].items.append(item)
     renumberItems(for: categoryKey)
     renumberItems(for: Self.uncategorizedKey)
+  }
+
+  mutating func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int) {
+    guard categoryKey != Self.uncategorizedKey else { return }
+    guard let categoryIndex = cats.firstIndex(where: { $0.key == categoryKey }) else { return }
+
+    var visibleItems = cats[categoryIndex].items.filter(\.onMenu)
+    let hiddenItems = cats[categoryIndex].items.filter { !$0.onMenu }
+    guard visibleItems.count > 1 else { return }
+
+    visibleItems.moveItems(fromOffsets: source, toOffset: destination)
+    cats[categoryIndex].items = visibleItems + hiddenItems
+    renumberItems(for: categoryKey)
   }
 
   mutating func upsertItem(_ item: MenuItemPayload, categoryKey: String, originalCategoryKey: String? = nil) {
