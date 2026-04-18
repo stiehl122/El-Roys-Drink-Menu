@@ -70,7 +70,7 @@ struct MenuEditorScreen: View {
               canEditCategories: canEditCategories,
               onAddCategory: { showingAddCategory = true }
             )
-            ForEach(Array(document.visibleCategories.enumerated()), id: \.offset) { _, category in
+            ForEach(document.visibleCategories) { category in
               MenuEditorCategoryCard(
                 menu: menu,
                 category: category,
@@ -380,12 +380,12 @@ private struct PublishPreviewSheet: View {
               Text("Notification Toggles")
                 .font(EditorTypography.body(15, weight: .bold))
                 .foregroundStyle(theme.titleText)
-              ForEach(Array(preview.sections.enumerated()), id: \.offset) { _, section in
+              ForEach(preview.sections) { section in
                 VStack(alignment: .leading, spacing: 8) {
                   Text(section.label)
                     .font(EditorTypography.body(13, weight: .semibold))
                     .foregroundStyle(theme.subtleText)
-                  ForEach(Array(section.changes.enumerated()), id: \.offset) { _, change in
+                  ForEach(section.changes) { change in
                     Toggle(isOn: Binding(
                       get: { model.selectedPreviewChangeIDs.contains(change.id) },
                       set: { model.updatePreviewSelection(change.id, selected: $0) }
@@ -966,12 +966,12 @@ private struct MenuEditorOffMenuRecoveryCard: View {
         .font(EditorTypography.display(22, weight: .bold))
         .foregroundStyle(theme.titleText)
 
-      ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+      ForEach(items) { item in
         VStack(alignment: .leading, spacing: 10) {
           EditorItemRow(item: item, theme: theme)
           ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-              ForEach(Array(categories.enumerated()), id: \.offset) { _, category in
+              ForEach(categories) { category in
                 Button(category.label) {
                   onRestore(item, category)
                 }
@@ -1318,7 +1318,7 @@ private struct ItemEditorSheet: View {
           TextField("Price", text: $draft.price)
             .keyboardType(.decimalPad)
           Picker("Category", selection: $draft.categoryKey) {
-            ForEach(Array((model.currentEditorDocument?.visibleCategories ?? []).enumerated()), id: \.offset) { _, category in
+            ForEach(model.currentEditorDocument?.visibleCategories ?? []) { category in
               Text(category.label).tag(category.key)
             }
             if !(model.currentEditorDocument?.visibleCategories.contains(where: { $0.key == draft.categoryKey }) ?? true) {
