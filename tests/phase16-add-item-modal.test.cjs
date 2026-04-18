@@ -278,6 +278,217 @@ test('duplicate blocking clears once the manager changes the conflicting draft',
   assert.equal(getState(sandbox, 'menuState.cocktails.items[0].name'), 'modelo especial');
 });
 
+test('untappd import UI is gated by the selected drinks category and hidden on food menus', () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'beer',
+        label: 'Beer',
+        title: 'Beer',
+        icon: '🍺',
+        color: 'rgba(245,210,66,0.22)',
+        sub: 'Drafts and cans',
+        placeholder: 'Add beer…',
+        untappdEnabled: true,
+      },
+      {
+        id: 'cocktails',
+        label: 'Cocktails',
+        title: 'Cocktails',
+        icon: '🍹',
+        color: 'rgba(180,100,220,0.15)',
+        sub: 'Classics and house drinks',
+        placeholder: 'Add cocktail…',
+        untappdEnabled: false,
+      },
+    ],
+  });
+
+  sandbox.openAddItemModal();
+  assert.match(modalHost.innerHTML, /Brewery \+ Beer/);
+  assert.match(modalHost.innerHTML, />Untappd</);
+
+  sandbox.updateAddItemModalField('categoryId', 'cocktails');
+
+  assert.doesNotMatch(modalHost.innerHTML, /Brewery \+ Beer/);
+  assert.doesNotMatch(modalHost.innerHTML, />Untappd</);
+
+  const foodSandbox = loadAppSandbox();
+  const { modalHost: foodModalHost } = setupManagerAddItemDom(foodSandbox);
+  seedManagerMenuState(foodSandbox, {
+    MENU_TYPE: 'food',
+    CATEGORY_DEFS: [
+      {
+        id: 'starters',
+        label: 'Starters',
+        title: 'Starters',
+        icon: '🥗',
+        color: 'rgba(245,210,66,0.22)',
+        sub: '',
+        placeholder: 'Add starter…',
+        untappdEnabled: true,
+      },
+    ],
+    menuState: {
+      starters: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+
+  foodSandbox.openAddItemModal();
+
+  assert.doesNotMatch(foodModalHost.innerHTML, />Untappd</);
+  assert.doesNotMatch(foodModalHost.innerHTML, /Brewery \+ Beer/);
+});
+
+test('blank Untappd searches show inline validation without mutating the draft fields', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'beer',
+        label: 'Beer',
+        title: 'Beer',
+        icon: '🍺',
+        color: 'rgba(245,210,66,0.22)',
+        sub: 'Drafts and cans',
+        placeholder: 'Add beer…',
+        untappdEnabled: true,
+      },
+    ],
+    menuState: {
+      beer: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+
+  sandbox.openAddItemModal();
+  const result = await sandbox.runAddItemUntappdSearch();
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'required');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), '');
+  assert.match(modalHost.innerHTML, /Enter a beer name to search Untappd/i);
+});
+
+test('untappd chooser previews matches and apply only overwrites name and description', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'beer',
+        label: 'Beer',
+        title: 'Beer',
+        icon: '🍺',
+        color: 'rgba(245,210,66,0.22)',
+        sub: 'Drafts and cans',
+        placeholder: 'Add beer…',
+        untappdEnabled: true,
+      },
+    ],
+    menuState: {
+      beer: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+  sandbox.__HF_UI_MODULES__.searchUntappdBeers = async () => ([
+    { bid: 1, name: 'All Day IPA', breweryName: 'Founders', style: 'IPA', abv: 4.7 },
+    { bid: 2, name: 'Two Hearted Ale', breweryName: "Bell's", style: 'IPA', abv: 7 },
+  ]);
+  sandbox.__HF_UI_MODULES__.previewUntappdBeerImport = async bid => ({
+    bid,
+    name: 'Two Hearted Ale',
+    breweryName: "Bell's",
+    description: 'IPA • 7% ABV',
+  });
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('name', 'Two Hearted');
+  sandbox.updateAddItemModalField('price', '$8');
+  sandbox.addAddItemModalRecipeIngredient('Orange');
+  sandbox.addAddItemModalUpcharge('Tallboy', '+$2');
+
+  await sandbox.runAddItemUntappdSearch();
+  assert.match(modalHost.innerHTML, /Choose an Untappd match/i);
+  assert.match(modalHost.innerHTML, /All Day IPA/);
+  assert.match(modalHost.innerHTML, /7% ABV/);
+
+  await sandbox.previewAddItemUntappdSelection(2);
+  assert.match(modalHost.innerHTML, /Imported name/i);
+  assert.match(modalHost.innerHTML, /Two Hearted Ale/);
+
+  sandbox.setAddItemUntappdIncludeBrewery(true);
+  const applyResult = sandbox.applyAddItemUntappdImport();
+
+  assert.equal(applyResult.ok, true);
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), "Bell's Two Hearted Ale");
+  assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), 'IPA • 7% ABV');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.price'), '$8');
+  assert.equal(JSON.stringify(getState(sandbox, '_addItemModalState.fields.recipe')), JSON.stringify(['Orange']));
+  assert.equal(JSON.stringify(getState(sandbox, '_addItemModalState.fields.upcharges')), JSON.stringify([{ label: 'Tallboy', price: '+$2' }]));
+  assert.equal(getState(sandbox, '_addItemModalState.untappd.preview === null'), true);
+});
+
+test('untappd no-match, rerun, and cancel preserve the typed draft', async () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  let searchCount = 0;
+  seedManagerMenuState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'beer',
+        label: 'Beer',
+        title: 'Beer',
+        icon: '🍺',
+        color: 'rgba(245,210,66,0.22)',
+        sub: 'Drafts and cans',
+        placeholder: 'Add beer…',
+        untappdEnabled: true,
+      },
+    ],
+    menuState: {
+      beer: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+  sandbox.__HF_UI_MODULES__.searchUntappdBeers = async query => {
+    searchCount += 1;
+    if (searchCount === 1) return [];
+    return [
+      { bid: 9, name: `${query} Lager`, breweryName: 'Example Brewery', style: 'Lager', abv: 5 },
+      { bid: 10, name: `${query} Pils`, breweryName: 'Example Brewery', style: 'Pilsner', abv: 5.2 },
+    ];
+  };
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('name', 'Missing Beer');
+  sandbox.updateAddItemModalField('desc', 'Keep this description');
+  sandbox.updateAddItemModalField('price', '$7');
+
+  await sandbox.runAddItemUntappdSearch();
+  assert.match(modalHost.innerHTML, /No Untappd matches found/i);
+  assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), 'Keep this description');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.price'), '$7');
+
+  sandbox.updateAddItemModalField('name', 'Fresh Beer');
+  await sandbox.runAddItemUntappdSearch();
+
+  assert.match(modalHost.innerHTML, /Choose an Untappd match/i);
+  assert.match(modalHost.innerHTML, /Fresh Beer Lager/);
+  assert.equal(searchCount, 2);
+
+  sandbox.cancelAddItemUntappdFlow();
+
+  assert.equal(getState(sandbox, '_addItemModalState.fields.name'), 'Fresh Beer');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.desc'), 'Keep this description');
+  assert.equal(getState(sandbox, '_addItemModalState.fields.price'), '$7');
+  assert.doesNotMatch(modalHost.innerHTML, /Choose an Untappd match|No Untappd matches found/i);
+});
+
 test('food menus hide the recipe editor in the add-item modal', () => {
   const sandbox = loadAppSandbox();
   const { modalHost } = setupManagerAddItemDom(sandbox);

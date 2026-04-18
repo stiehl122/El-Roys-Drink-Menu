@@ -670,6 +670,7 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
   var sub: String
   var placeholder: String
   var displayOrder: Int
+  var untappdEnabled: Bool
   var items: [MenuItemPayload]
 
   enum CodingKeys: String, CodingKey {
@@ -682,6 +683,8 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     case sub
     case placeholder
     case displayOrder
+    case untappdEnabled
+    case untappd_enabled
     case items
   }
 
@@ -695,6 +698,7 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     sub: String,
     placeholder: String,
     displayOrder: Int,
+    untappdEnabled: Bool = false,
     items: [MenuItemPayload]
   ) {
     self.id = id
@@ -706,6 +710,7 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     self.sub = sub
     self.placeholder = placeholder
     self.displayOrder = displayOrder
+    self.untappdEnabled = untappdEnabled
     self.items = items
   }
 
@@ -720,7 +725,25 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     self.sub = try container.decodeString(forKey: .sub)
     self.placeholder = try container.decodeString(forKey: .placeholder)
     self.displayOrder = try container.decodeInt(forKey: .displayOrder)
+    self.untappdEnabled = try container.decodeIfPresent(Bool.self, forKey: .untappdEnabled)
+      ?? container.decodeIfPresent(Bool.self, forKey: .untappd_enabled)
+      ?? false
     self.items = (try? container.decode([MenuItemPayload].self, forKey: .items)) ?? []
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encodeIfPresent(menuId, forKey: .menuId)
+    try container.encode(key, forKey: .key)
+    try container.encode(label, forKey: .label)
+    try container.encode(icon, forKey: .icon)
+    try container.encode(color, forKey: .color)
+    try container.encode(sub, forKey: .sub)
+    try container.encode(placeholder, forKey: .placeholder)
+    try container.encode(displayOrder, forKey: .displayOrder)
+    try container.encode(untappdEnabled, forKey: .untappdEnabled)
+    try container.encode(items, forKey: .items)
   }
 }
 

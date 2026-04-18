@@ -129,6 +129,10 @@ Quiet-only changes:
   from local diff versus live.
 - Mirror web preview sections, grouped selection behavior, and dynamic action
   language.
+- Keep category cards and item flows available to all staff, but make category
+  add/rename/delete admin-only and read-only for non-admin workspaces.
+- Decode the shared Untappd category payload flag for parity, but keep Untappd
+  UI out of the iOS v1 editor.
 
 ### Public And Guest Surfaces
 
