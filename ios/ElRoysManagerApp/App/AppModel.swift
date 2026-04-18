@@ -104,6 +104,7 @@ final class AppModel {
   var currentEditorPreview: MenuPreviewPayload?
   var currentToolsMenus: [String: MenuWorkspacePayload] = [:]
   var currentToolsHistories: [String: HistoryPayload] = [:]
+  var homeDataVersion = 0
 
   var currentMenuId: String?
   var selectedPreviewChangeIDs: Set<String> = []
@@ -209,6 +210,7 @@ final class AppModel {
     do {
       let anonymousBootstrap = try await services.bootstrap.fetch(accessToken: nil)
       bootstrap = anonymousBootstrap
+      homeDataVersion += 1
       await restoreSession()
     } catch {
       notice = AppNotice(tone: .danger, title: "Bootstrap Failed", message: error.localizedDescription)
@@ -274,6 +276,7 @@ final class AppModel {
     currentEditorPreview = nil
     currentToolsMenus = [:]
     currentToolsHistories = [:]
+    homeDataVersion += 1
     currentMenuId = nil
     editorRefreshRequirement = nil
     editorHasServerUnsentChanges = false
@@ -410,6 +413,7 @@ final class AppModel {
       }
       model.currentToolsMenus = menus
       model.currentToolsHistories = histories
+      model.homeDataVersion += 1
       model.currentMenuId = menuIds.first
     }
   }
@@ -728,6 +732,7 @@ final class AppModel {
   private func refreshAuthenticatedBootstrap(accessToken: String, adoptedSession: AuthSession) async throws {
     let refreshed = try await services.bootstrap.fetch(accessToken: accessToken)
     bootstrap = refreshed
+    homeDataVersion += 1
     let actor = refreshed.actor
     authSession = AuthSession(
       accessToken: adoptedSession.accessToken,

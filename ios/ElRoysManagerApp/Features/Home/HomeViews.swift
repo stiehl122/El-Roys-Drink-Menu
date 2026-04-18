@@ -7,8 +7,29 @@ struct RestaurantChooserView: View {
   private let initialRestaurantSlug: String?
   @State private var selectedRestaurantSlug: String
   @State private var expandedUpdateID: String?
+  @State private var homeData = HomeDerivedData.empty
   @Namespace private var switcherNamespace
   @Namespace private var bottomNavNamespace
+
+  private struct HomeDerivedData {
+    var updates: [HomeUpdate]
+    var featuredSpecials: [String]
+    var drinksCount: Int?
+    var foodCount: Int?
+    var hasLoadedRestaurantData: Bool
+    var drinksEditorDestination: AppDestination?
+    var foodEditorDestination: AppDestination?
+
+    static let empty = HomeDerivedData(
+      updates: [],
+      featuredSpecials: [],
+      drinksCount: nil,
+      foodCount: nil,
+      hasLoadedRestaurantData: false,
+      drinksEditorDestination: nil,
+      foodEditorDestination: nil
+    )
+  }
 
   init(model: AppModel, initialRestaurantSlug: String? = nil) {
     self.model = model
@@ -19,18 +40,18 @@ struct RestaurantChooserView: View {
   var body: some View {
     let theme = activeTheme
     let restaurant = selectedRestaurant
-    let currentUpdates = restaurant.flatMap(realUpdates(for:)) ?? []
-    let currentFeaturedSpecials = restaurant.flatMap(realFeaturedSpecials(for:)) ?? []
-    let drinksCount = restaurant.flatMap { activeItemCount(for: $0, type: "drinks") }
-    let foodCount = restaurant.flatMap { activeItemCount(for: $0, type: "food") }
-    let hasLoadedRestaurantData = restaurant.map(hasLoadedToolsData(for:)) ?? false
+    let currentHomeData = homeData
 
     ZStack {
       HomeBackground(theme: theme)
 
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 20) {
-          HomeHeader(model: model, theme: theme)
+          HomeHeader(
+            theme: theme,
+            environment: model.environment,
+            onSignOut: { model.signOut() }
+          )
 
           HomeRestaurantSwitcher(
             options: restaurantSwitcherOptions,
@@ -46,25 +67,25 @@ struct RestaurantChooserView: View {
           )
 
           HomeRecentUpdatesCard(
-            updates: currentUpdates,
+            updates: currentHomeData.updates,
             expandedUpdateID: $expandedUpdateID,
-            hasLoadedData: hasLoadedRestaurantData,
+            hasLoadedData: currentHomeData.hasLoadedRestaurantData,
             theme: theme
           )
 
           HomeEditGrid(
-            model: model,
-            restaurant: restaurant,
             theme: theme,
-            drinksCount: drinksCount,
-            foodCount: foodCount
+            drinksCount: currentHomeData.drinksCount,
+            foodCount: currentHomeData.foodCount,
+            drinksDestination: currentHomeData.drinksEditorDestination,
+            foodDestination: currentHomeData.foodEditorDestination
           )
 
           HomeViewRows(restaurant: restaurant, theme: theme)
 
           HomeRestaurantToolsCard(
             restaurant: restaurant,
-            featuredSpecials: currentFeaturedSpecials,
+            featuredSpecials: currentHomeData.featuredSpecials,
             theme: theme
           )
 
@@ -82,15 +103,24 @@ struct RestaurantChooserView: View {
     }
     .onAppear {
       if restaurantSwitcherOptions.contains(where: { $0.slug == selectedRestaurantSlug }) {
+        refreshHomeData()
         return
       }
       if let bootSlug = initialRestaurantSlug,
          restaurantSwitcherOptions.contains(where: { $0.slug == bootSlug })
       {
         selectedRestaurantSlug = bootSlug
+        refreshHomeData()
         return
       }
       selectedRestaurantSlug = restaurantSwitcherOptions.first?.slug ?? "leroys-lounge"
+      refreshHomeData()
+    }
+    .onChange(of: selectedRestaurantSlug) { _, _ in
+      refreshHomeData()
+    }
+    .onChange(of: model.homeDataVersion) { _, _ in
+      refreshHomeData()
     }
     .navigationTitle("Home")
     .navigationBarTitleDisplayMode(.inline)
@@ -224,6 +254,24 @@ struct RestaurantChooserView: View {
     guard date != .distantPast else { return "" }
     return DateFormatter.tickerStamp.string(from: date).uppercased()
   }
+
+  private func refreshHomeData() {
+    guard let restaurant = selectedRestaurant else {
+      homeData = .empty
+      return
+    }
+    let drinksMenu = model.menu(for: restaurant.id, type: "drinks")
+    let foodMenu = model.menu(for: restaurant.id, type: "food")
+    homeData = HomeDerivedData(
+      updates: realUpdates(for: restaurant) ?? [],
+      featuredSpecials: realFeaturedSpecials(for: restaurant) ?? [],
+      drinksCount: activeItemCount(for: restaurant, type: "drinks"),
+      foodCount: activeItemCount(for: restaurant, type: "food"),
+      hasLoadedRestaurantData: hasLoadedToolsData(for: restaurant),
+      drinksEditorDestination: drinksMenu.map(AppDestination.editor),
+      foodEditorDestination: foodMenu.map(AppDestination.editor)
+    )
+  }
 }
 
 struct RestaurantHubView: View {
@@ -239,8 +287,9 @@ struct RestaurantHubView: View {
 // MARK: - Header
 
 private struct HomeHeader: View {
-  @Bindable var model: AppModel
   let theme: HomeTheme
+  let environment: AppEnvironment
+  let onSignOut: () -> Void
 
   var body: some View {
     HStack(alignment: .center, spacing: 14) {
@@ -256,14 +305,14 @@ private struct HomeHeader: View {
 
         HomeLiveStrip(
           theme: theme,
-          environment: model.environment
+          environment: environment
         )
       }
       .frame(maxWidth: .infinity, alignment: .leading)
 
       Menu {
         Button(role: .destructive) {
-          model.signOut()
+          onSignOut()
         } label: {
           Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
         }
@@ -342,23 +391,35 @@ private struct HomeLiveStrip: View {
 }
 
 private struct PulsingDot: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
   let color: Color
 
   var body: some View {
-    TimelineView(.animation) { context in
-      let t = context.date.timeIntervalSinceReferenceDate
-      let phase = (sin(t * 2.6) + 1) / 2
-      ZStack {
-        Circle()
-          .fill(color.opacity(0.25 + 0.35 * phase))
-          .frame(width: 12, height: 12)
-          .blur(radius: 3)
-        Circle()
-          .fill(color)
-          .frame(width: 5.5, height: 5.5)
+    Group {
+      if reduceMotion || scenePhase != .active {
+        dot(phase: 0.5)
+      } else {
+        TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { context in
+          let t = context.date.timeIntervalSinceReferenceDate
+          dot(phase: (sin(t * 2.6) + 1) / 2)
+        }
       }
     }
     .frame(width: 12, height: 12)
+  }
+
+  @ViewBuilder
+  private func dot(phase: Double) -> some View {
+    ZStack {
+      Circle()
+        .fill(color.opacity(0.25 + 0.35 * phase))
+        .frame(width: 12, height: 12)
+        .blur(radius: 3)
+      Circle()
+        .fill(color)
+        .frame(width: 5.5, height: 5.5)
+    }
   }
 }
 
@@ -602,16 +663,16 @@ private struct HomeDiffLine: View {
 // MARK: - Edit tiles
 
 private struct HomeEditGrid: View {
-  @Bindable var model: AppModel
-  let restaurant: RestaurantRecord?
   let theme: HomeTheme
   let drinksCount: Int?
   let foodCount: Int?
+  let drinksDestination: AppDestination?
+  let foodDestination: AppDestination?
 
   var body: some View {
     HStack(spacing: 12) {
       editTile(
-        action: restaurant.flatMap { model.menu(for: $0.id, type: "drinks") }.map(AppDestination.editor),
+        action: drinksDestination,
         tile: HomeEditTile(
           chapter: "VOL. 01",
           kind: theme.motif == .chevron ? "LIQUID" : "BEBIDAS",
@@ -622,7 +683,7 @@ private struct HomeEditGrid: View {
         )
       )
       editTile(
-        action: restaurant.flatMap { model.menu(for: $0.id, type: "food") }.map(AppDestination.editor),
+        action: foodDestination,
         tile: HomeEditTile(
           chapter: "VOL. 02",
           kind: theme.motif == .chevron ? "PLATES" : "COCINA",
@@ -980,30 +1041,43 @@ private struct HomeBottomNav: View {
 
 /// Slowly rotating conic-gradient border — the "door token" medallion.
 private struct HomeMedallionBorder: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.scenePhase) private var scenePhase
   let theme: HomeTheme
 
   var body: some View {
-    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-      let t = context.date.timeIntervalSinceReferenceDate
-      let angle = Angle.degrees(t.truncatingRemainder(dividingBy: 12) / 12 * 360)
-      Circle()
-        .strokeBorder(
-          AngularGradient(
-            gradient: Gradient(colors: [
-              theme.medallionGlowA.opacity(0.9),
-              theme.medallionGlowB.opacity(0.95),
-              theme.medallionGlowA.opacity(0.4),
-              theme.medallionGlowB.opacity(0.85),
-              theme.medallionGlowA.opacity(0.9),
-            ]),
-            center: .center,
-            angle: angle
-          ),
-          lineWidth: 1.4
-        )
-        .blur(radius: 0.2)
+    Group {
+      if reduceMotion || scenePhase != .active {
+        medallion(at: .degrees(0))
+      } else {
+        TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { context in
+          let t = context.date.timeIntervalSinceReferenceDate
+          let angle = Angle.degrees(t.truncatingRemainder(dividingBy: 12) / 12 * 360)
+          medallion(at: angle)
+        }
+      }
     }
     .allowsHitTesting(false)
+  }
+
+  @ViewBuilder
+  private func medallion(at angle: Angle) -> some View {
+    Circle()
+      .strokeBorder(
+        AngularGradient(
+          gradient: Gradient(colors: [
+            theme.medallionGlowA.opacity(0.9),
+            theme.medallionGlowB.opacity(0.95),
+            theme.medallionGlowA.opacity(0.4),
+            theme.medallionGlowB.opacity(0.85),
+            theme.medallionGlowA.opacity(0.9),
+          ]),
+          center: .center,
+          angle: angle
+        ),
+        lineWidth: 1.4
+      )
+      .blur(radius: 0.2)
   }
 }
 
