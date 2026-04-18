@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   requireAuthenticatedUser,
   requireMenuAccess,
@@ -50,6 +52,18 @@ function normalizeRecipe(recipe = []) {
   return [];
 }
 
+function isUuid(value = '') {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+export function normalizePersistentItemId(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return randomUUID();
+  if (!raw.startsWith('local-')) return raw;
+  const localSuffix = raw.slice('local-'.length).trim();
+  return isUuid(localSuffix) ? localSuffix.toLowerCase() : randomUUID();
+}
+
 function normalizeSnapshot(snapshot = {}) {
   const cats = Array.isArray(snapshot?.cats) ? snapshot.cats : [];
   return {
@@ -64,7 +78,7 @@ function normalizeSnapshot(snapshot = {}) {
       untappd_enabled: category?.untappd_enabled === true || category?.untappdEnabled === true,
       display_order: Number.isFinite(Number(category?.display_order)) ? Number(category.display_order) : categoryIndex,
       items: (Array.isArray(category?.items) ? category.items : []).map((item, itemIndex) => ({
-        id: String(item?.id || ''),
+        id: normalizePersistentItemId(item?.id),
         name: String(item?.name || '').trim(),
         desc: String(item?.desc || ''),
         recipe: normalizeRecipe(item?.recipe),

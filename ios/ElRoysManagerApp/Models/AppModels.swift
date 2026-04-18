@@ -647,6 +647,17 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     try container.encode(showDescription, forKey: .showDescription)
     try container.encode(showRecipe, forKey: .showRecipe)
   }
+
+  mutating func normalizePersistentIdentifierForRuntime() {
+    let raw = id.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard raw.hasPrefix("local-") else {
+      id = raw
+      return
+    }
+    let suffix = String(raw.dropFirst("local-".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let uuid = UUID(uuidString: suffix) else { return }
+    id = uuid.uuidString.lowercased()
+  }
 }
 
 struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
@@ -1553,6 +1564,14 @@ struct EditableMenuDocument: Codable, Equatable {
     cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
   }
 
+  mutating func normalizePersistentItemIdentifiersForRuntime() {
+    for categoryIndex in cats.indices {
+      for itemIndex in cats[categoryIndex].items.indices {
+        cats[categoryIndex].items[itemIndex].normalizePersistentIdentifierForRuntime()
+      }
+    }
+  }
+
   var uncategorizedItems: [MenuItemPayload] {
     cats.first(where: { $0.key == Self.uncategorizedKey })?.items ?? []
   }
@@ -1699,20 +1718,26 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   mutating func upsertItem(_ item: MenuItemPayload, categoryKey: String, originalCategoryKey: String? = nil) {
-    if let originalCategoryKey, let sourceIndex = cats.firstIndex(where: { $0.key == originalCategoryKey }) {
-      cats[sourceIndex].items.removeAll { $0.id == item.id }
-      renumberItems(for: originalCategoryKey)
-    }
-
     if !cats.contains(where: { $0.key == categoryKey }) {
       addCategory(label: categoryKey.capitalized)
     }
     guard let targetIndex = cats.firstIndex(where: { $0.key == categoryKey }) else { return }
+    let sourceCategoryKey = originalCategoryKey
+      ?? itemRecord(for: item.id)?.categoryKey
     var next = item
     next.onMenu = categoryKey != Self.uncategorizedKey
-    if let existingIndex = cats[targetIndex].items.firstIndex(where: { $0.id == item.id }) {
+    next.visibility = next.onMenu ? "public" : "off_menu"
+
+    if sourceCategoryKey == categoryKey,
+       let existingIndex = cats[targetIndex].items.firstIndex(where: { $0.id == item.id }) {
+      next.displayOrder = cats[targetIndex].items[existingIndex].displayOrder
       cats[targetIndex].items[existingIndex] = next
     } else {
+      if let sourceCategoryKey,
+         let sourceIndex = cats.firstIndex(where: { $0.key == sourceCategoryKey }) {
+        cats[sourceIndex].items.removeAll { $0.id == item.id }
+        renumberItems(for: sourceCategoryKey)
+      }
       cats[targetIndex].items.append(next)
     }
     renumberItems(for: categoryKey)

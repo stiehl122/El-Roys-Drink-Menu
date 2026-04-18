@@ -1,5 +1,3 @@
-import { randomUUID } from 'node:crypto';
-
 import {
   readProfile,
   requireAuthenticatedUser,
@@ -17,6 +15,7 @@ import {
 } from './_supabase.js';
 import {
   assertExpectedRevision,
+  normalizePersistentItemId,
   readMenuMeta,
   readRevisionState,
 } from './_menu-write.js';
@@ -113,7 +112,7 @@ function normalizeItemRow(item, categoryId, displayOrder, { forceOffMenu = false
   const name = toClientItemName(row);
   if (!name) return null;
   const rawId = asString(row.id);
-  const itemId = rawId && !rawId.startsWith('local-') ? rawId : randomUUID();
+  const itemId = normalizePersistentItemId(rawId);
   const showDescriptionRaw = Object.prototype.hasOwnProperty.call(row, 'showDescription')
     ? row.showDescription
     : row.show_description;
