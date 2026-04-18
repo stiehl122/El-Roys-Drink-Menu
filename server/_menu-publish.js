@@ -10,6 +10,7 @@ import {
   assertExpectedRevision,
   inferAuditSource,
   insertUpdateLog,
+  normalizePersistentItemId,
   patchMenuMetaForMenu,
   patchMenuMetaForMenuWithCompatibility,
   readMenuMeta,
@@ -78,7 +79,7 @@ function snapshotLastSentState(snapshot = {}) {
   return Object.fromEntries(cats.map(category => [
     category.key,
     (Array.isArray(category.items) ? category.items : []).map(item => ({
-      id: item.id,
+      id: normalizePersistentItemId(item?.id),
       name: item.name || '',
       eightySixed: !!item.is_eighty_sixed,
       onMenu: item.on_menu !== false,

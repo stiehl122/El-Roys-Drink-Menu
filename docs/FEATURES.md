@@ -184,3 +184,64 @@ When building a future client:
    workflows.
 4. Treat the `Platform-specific` section as implementation guidance, not as the
    core parity contract.
+
+## Agreed Next Work (Not Yet Shipped)
+
+These notes capture design decisions that are agreed for upcoming work, but are
+not yet reflected in the status tables above.
+
+### Untappd-Assisted Add Item Import
+
+- Scope: web manager only in v1; iOS remains out of scope for the first pass.
+- Availability: drinks menus only, and only for categories explicitly marked as
+  Untappd-enabled.
+- Category control: Untappd-enabled is a saved per-category flag; any drinks
+  category may use it.
+- Permissions: only admins can change a category's Untappd status.
+- Add-item flow:
+  - Untappd lookup appears only in the add-item modal.
+  - The selected category must be Untappd-enabled.
+  - Lookup runs only on explicit button press.
+  - The name-field placeholder becomes `Brewery + Beer` for Untappd-enabled
+    categories.
+  - Search uses the typed name with light server-side normalization for
+    packaging/size hints.
+  - Search returns up to five matches.
+  - One match still goes through a lightweight confirmation step before apply.
+  - Multiple matches open an in-modal chooser, not a route change.
+  - Cancel/no-match preserves the manager's current typed values.
+- Import behavior:
+  - Applying a result overwrites only `Name` and `Description`.
+  - `Price`, category, recipe, upcharges, and other item state stay untouched.
+  - Imported description should be short and primarily generated from style plus
+    ABV.
+  - A per-import `Include brewery in imported name` toggle exists only during
+    the Untappd confirmation/apply flow and defaults to off for each attempt.
+  - Imported fields remain normal editable menu text after apply; items do not
+    stay linked to Untappd afterward.
+- Service model:
+  - All Untappd traffic goes through the app server; no client talks directly to
+    Untappd.
+  - v1 should use live lookups without a server cache.
+  - Untappd attribution should appear anywhere the Untappd lookup UI appears.
+- Failure model: Untappd is assistive only. Lookup failures, empty results, or
+  rate limits never block manual item creation.
+
+### Category Governance Hardening
+
+- Category structure is intended to become admin-only:
+  - add category
+  - rename category
+  - reorder categories
+  - delete category
+  - change Untappd-related category settings
+- Web manager behavior:
+  - admins keep full category editing
+  - managers keep the `Categories` section visible, but read-only
+- iOS behavior:
+  - categories become read-only for everyone
+  - admin category governance remains web-only
+- Server enforcement:
+  - category mutations must be enforced server-side, not only in UI
+  - if a manager submits forbidden category mutations, the whole save/publish
+    request should be rejected with a clear error rather than partially applied

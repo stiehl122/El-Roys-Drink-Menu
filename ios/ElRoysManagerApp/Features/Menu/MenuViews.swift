@@ -420,11 +420,15 @@ private struct PublishPreviewSheet: View {
           .ignoresSafeArea()
       }
       .safeAreaInset(edge: .bottom) {
-        Button(actionButtonTitle) {
-          onPublish()
-        }
-        .buttonStyle(PrimaryGlassButtonStyle())
-        .disabled(!model.canPublishRemotely)
+        PublishPreviewActionButton(
+          title: actionButtonTitle,
+          subtitle: actionButtonSubtitle,
+          icon: actionButtonIcon,
+          accent: menuAccent,
+          theme: theme,
+          enabled: model.canPublishRemotely,
+          action: onPublish
+        )
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 16)
@@ -454,6 +458,20 @@ private struct PublishPreviewSheet: View {
     }
     return model.hasLocalDraftChanges ? "Save & Send" : "Send"
   }
+
+  private var actionButtonSubtitle: String {
+    if !preview.hasNotificationChanges {
+      return "Save live without sending notifications."
+    }
+    if model.hasLocalDraftChanges {
+      return "Checked rows send now, unchecked rows clear quietly."
+    }
+    return "Send checked queue rows now."
+  }
+
+  private var actionButtonIcon: String {
+    preview.hasNotificationChanges ? "paperplane.fill" : "square.and.arrow.down.fill"
+  }
 }
 
 private struct PublishPreviewSummaryCard: View {
@@ -473,6 +491,73 @@ private struct PublishPreviewSummaryCard: View {
       }
     }
     .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
+  }
+}
+
+private struct PublishPreviewActionButton: View {
+  let title: String
+  let subtitle: String
+  let icon: String
+  let accent: Color
+  let theme: MenuEditorTheme
+  let enabled: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 5) {
+          Text(title)
+            .font(EditorTypography.body(16, weight: .bold))
+            .foregroundStyle(theme.titleText)
+          Text(subtitle)
+            .font(EditorTypography.body(12, weight: .medium))
+            .foregroundStyle(theme.subtleText)
+        }
+
+        Spacer()
+
+        Image(systemName: icon)
+          .font(.system(size: 18, weight: .bold))
+          .foregroundStyle(theme.titleText)
+          .frame(width: 46, height: 46)
+          .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+          .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+              .stroke(.white.opacity(0.22), lineWidth: 1)
+          }
+      }
+      .padding(.horizontal, 18)
+      .padding(.vertical, 16)
+      .frame(maxWidth: .infinity)
+      .background {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        shape
+          .fill(.thinMaterial)
+          .overlay {
+            LinearGradient(
+              colors: [
+                accent.opacity(0.42),
+                accent.opacity(0.22),
+                accent.opacity(0.12)
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+            .clipShape(shape)
+          }
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+          .stroke(accent.opacity(0.36), lineWidth: 1)
+      }
+      .shadow(color: accent.opacity(0.2), radius: 18, y: 10)
+    }
+    .buttonStyle(.plain)
+    .disabled(!enabled)
+    .opacity(enabled ? 1 : 0.5)
+    .scaleEffect(enabled ? 1 : 0.98)
+    .animation(.easeOut(duration: 0.16), value: enabled)
   }
 }
 

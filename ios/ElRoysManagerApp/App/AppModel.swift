@@ -432,7 +432,7 @@ final class AppModel {
       )
       let preview = response.preview
       model.currentEditorPreview = preview
-      model.selectedPreviewChangeIDs = Set(preview?.selectionDefaults ?? [])
+      model.selectedPreviewChangeIDs = model.defaultPreviewSelection(for: preview)
     }
   }
 
@@ -462,7 +462,7 @@ final class AppModel {
         ).preview
         model.currentEditorPreview = preview
         if model.selectedPreviewChangeIDs.isEmpty {
-          model.selectedPreviewChangeIDs = Set(preview?.selectionDefaults ?? [])
+          model.selectedPreviewChangeIDs = model.defaultPreviewSelection(for: preview)
         }
       }
 
@@ -492,8 +492,14 @@ final class AppModel {
       if let successMessage = response.successMessage?.nilIfBlank {
         message = successMessage
       }
+      let currentDocument = try model.requireCurrentEditorDocument()
+      model.applyPublishResponseLocally(
+        response,
+        preview: preview,
+        previousWorkspace: workspace,
+        currentDocument: currentDocument
+      )
       model.notice = AppNotice(tone: .success, title: title, message: message)
-      await model.loadEditor(menuId: menuId)
     }
   }
 
@@ -539,7 +545,9 @@ final class AppModel {
       if let ts = response.ts {
         currentDocument.meta.lastUpdatedTs = ts
         model.currentEditorWorkspace?.meta.lastUpdatedTs = ts
-        if model.currentEditorWorkspace?.workspace.revisions.liveRevision == nil {
+        if response.currentRevisions == nil {
+          model.currentEditorWorkspace?.workspace.revisions.liveRevision = ts
+        } else if model.currentEditorWorkspace?.workspace.revisions.liveRevision == nil {
           model.currentEditorWorkspace?.workspace.revisions.liveRevision = ts
         }
       }
@@ -905,6 +913,76 @@ final class AppModel {
     persistOfflineDraftIfNeeded()
   }
 
+  private func applyPublishResponseLocally(
+    _ response: PublishResponse,
+    preview: MenuPreviewPayload?,
+    previousWorkspace: MenuWorkspacePayload,
+    currentDocument: EditableMenuDocument
+  ) {
+    guard var workspace = currentEditorWorkspace else { return }
+
+    let previousNotificationBaseline = expectedNotificationBaselineRevision(for: previousWorkspace)
+    let previousLiveRevision = previousWorkspace.workspace.revisions.liveRevision
+    let publishMode = preview?.mode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+    let didPersistLive = publishMode.isEmpty ? hasLiveMenuChanges : publishMode != "send"
+
+    var nextDocument = currentDocument
+    var nextRevisions = normalizedWorkspaceRevisions(
+      response.currentRevisions ?? workspace.workspace.revisions,
+      meta: workspace.meta
+    )
+
+    if didPersistLive,
+       let liveRevision = nextRevisions.liveRevision ?? response.ts {
+      nextRevisions.liveRevision = liveRevision
+      workspace.meta.lastUpdatedTs = liveRevision
+      nextDocument.meta.lastUpdatedTs = liveRevision
+    }
+
+    if let lastSentRevision = nextRevisions.lastSentRevision {
+      workspace.meta.lastSentTs = lastSentRevision
+      nextDocument.meta.lastSentTs = lastSentRevision
+    }
+
+    workspace.workspace.revisions = nextRevisions
+    workspace.workspace.hasSharedDraft = false
+    workspace.workspace.sharedDraft = SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+    workspace.workspace.revisions.draftRevision = nil
+    workspace.meta.draftState = nil
+    workspace.meta.draftSavedTs = nil
+    workspace.meta.draftSavedByUserId = nil
+    workspace.meta.draftSavedByName = nil
+    workspace.meta.draftSavedSource = nil
+    nextDocument.meta.draftState = nil
+    nextDocument.meta.draftSavedTs = nil
+    nextDocument.meta.draftSavedByUserId = nil
+    nextDocument.meta.draftSavedByName = nil
+    nextDocument.meta.draftSavedSource = nil
+
+    let nextNotificationBaseline = expectedNotificationBaselineRevision(for: workspace)
+    let queueBaselineAdvanced = nextNotificationBaseline != previousNotificationBaseline
+    let nextHasUnsentChanges: Bool
+    if queueBaselineAdvanced {
+      nextHasUnsentChanges = false
+    } else if preview?.hasNotificationChanges == true {
+      nextHasUnsentChanges = true
+    } else if didPersistLive, nextRevisions.liveRevision != previousLiveRevision {
+      nextHasUnsentChanges = false
+    } else {
+      nextHasUnsentChanges = serverHasUnsentChanges(in: previousWorkspace)
+    }
+    workspace.workspace.hasUnsentChanges = nextHasUnsentChanges
+    workspace.workspace.menuStatus = nextHasUnsentChanges ? "Live | Unsent" : "Live"
+
+    currentEditorWorkspace = workspace
+    currentEditorDocument = nextDocument
+    rebaselineCurrentEditorToServer(
+      liveDocument: nextDocument,
+      serverDocument: nextDocument,
+      revisions: nextRevisions
+    )
+  }
+
   private func makeRefreshRequirement(
     currentWorkspace: MenuWorkspacePayload,
     freshWorkspace: MenuWorkspacePayload,
@@ -1042,6 +1120,19 @@ final class AppModel {
     return workspace.workspace.revisions.draftRevision
       ?? workspace.workspace.sharedDraft.savedAt
       ?? workspace.meta.draftSavedTs
+  }
+
+  private func defaultPreviewSelection(for preview: MenuPreviewPayload?) -> Set<String> {
+    guard let preview else { return [] }
+    let notificationChangeIDs = preview.notificationChanges.map(\.id)
+    if !notificationChangeIDs.isEmpty {
+      return Set(notificationChangeIDs)
+    }
+    let sectionChangeIDs = preview.sections.flatMap(\.changes).map(\.id)
+    if !sectionChangeIDs.isEmpty {
+      return Set(sectionChangeIDs)
+    }
+    return Set(preview.selectionDefaults)
   }
 
   private func serverHasUnsentChanges(in workspace: MenuWorkspacePayload?) -> Bool {
