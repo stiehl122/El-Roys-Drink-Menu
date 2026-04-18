@@ -39,6 +39,97 @@ test('consolidated manager and admin routes export request handlers', async () =
   assert.equal(typeof adminSettings.default, 'function');
 });
 
+test('server live-save write path normalizes local item ids before persisting items', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const module = await importApiModule('server/_menu-write.js');
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+
+  global.fetch = async (url, options = {}) => {
+    const href = String(url);
+    fetchCalls.push({ url: href, options });
+
+    if (href.includes('/menu_meta?')) {
+      return {
+        ok: true,
+        async json() {
+          return [{ last_updated_ts: 10 }];
+        },
+      };
+    }
+
+    if (href.includes('/categories?on_conflict=')) {
+      return {
+        ok: true,
+        async json() {
+          return [];
+        },
+      };
+    }
+
+    if (href.includes('/categories?menu_id=')) {
+      return {
+        ok: true,
+        async json() {
+          return [{ id: 'category-uuid-1', key: 'snacks' }];
+        },
+      };
+    }
+
+    if (href.includes('/items?category_id=in.(')) {
+      return {
+        ok: true,
+        async json() {
+          return [];
+        },
+      };
+    }
+
+    if (href.endsWith('/rest/v1/items')) {
+      return {
+        ok: true,
+        async json() {
+          return [];
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    await module.saveLiveMenuForMenu({
+      menuId: '00000000-0000-0000-0000-000000000021',
+      snapshot: {
+        cats: [{
+          id: 'local-category-1',
+          key: 'snacks',
+          label: 'Snacks',
+          items: [{
+            id: 'local-d41a9ab2-3952-4bc2-a278-854f3ca684bf',
+            name: 'Fries',
+            desc: 'Crispy fries',
+          }],
+        }],
+        meta: {},
+      },
+      expectedLiveRevision: 10,
+      actor: { id: 'user-1', name: 'Tester', role: 'manager' },
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  const itemPersistCall = fetchCalls.find(call => call.url.endsWith('/rest/v1/items'));
+  assert.ok(itemPersistCall, 'expected item persistence request');
+  const payload = JSON.parse(itemPersistCall.options.body);
+  assert.equal(payload.length, 1);
+  assert.ok(!payload[0].id.startsWith('local-'));
+  assert.match(payload[0].id, /^[0-9a-f-]{36}$/i);
+});
+
 test('publish service boundary prefers the server-owned publish command when provided', async () => {
   const sandbox = loadAppSandbox();
   let publishCalls = 0;
