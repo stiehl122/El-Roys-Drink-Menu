@@ -1324,6 +1324,120 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testPublishNormalizesLocalItemIDAfterSaveAndSend() async throws {
+    let localItemID = "local-d41a9ab2-3952-4bc2-a278-854f3ca684bf"
+    let persistentItemID = "d41a9ab2-3952-4bc2-a278-854f3ca684bf"
+    let notificationChangeIDs = ["beer::added::fresh-ipa"]
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      revisions: WorkspaceRevisions(
+        liveRevision: 30,
+        draftRevision: nil,
+        lastSentRevision: 30,
+        notificationBaselineRevision: 30
+      ),
+      menuStatus: "Live",
+      hasUnsentChanges: false
+    )
+    let publishClient = StubPublishClient(
+      previewResponse: PublishResponse(
+        ok: true,
+        action: "preview",
+        ts: nil,
+        preview: try makePreviewPayload(
+          mode: "save-and-send",
+          selectionDefaults: [],
+          notificationChangeIDs: notificationChangeIDs
+        ),
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 30,
+          notificationBaselineRevision: 30
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      ),
+      publishResponse: PublishResponse(
+        ok: true,
+        action: "publish",
+        ts: 40,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 40,
+          draftRevision: nil,
+          lastSentRevision: 40,
+          notificationBaselineRevision: 40
+        ),
+        notificationStatus: NotificationStatus(
+          ok: true,
+          skipped: false,
+          partial: false,
+          statusCode: 200,
+          summary: nil,
+          results: nil
+        ),
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: "Sent successfully.",
+        selectedChangeIds: notificationChangeIDs
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, initialWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publishClient: publishClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    model.upsertItem(
+      makeItem(id: localItemID, name: "Fresh IPA"),
+      categoryKey: "beer",
+      originalCategoryKey: nil
+    )
+
+    XCTAssertNotNil(model.currentEditorDocument?.itemRecord(for: localItemID))
+
+    await model.loadPublishPreview()
+    await model.publishSelectedChanges()
+
+    let publishSnapshot = try XCTUnwrap(publishClient.lastPublishSnapshot)
+    let publishedItemIDs = publishSnapshot.cats.flatMap { $0.items.map(\.id) }
+    XCTAssertTrue(publishedItemIDs.contains(localItemID))
+
+    let document = try XCTUnwrap(model.currentEditorDocument)
+    XCTAssertNil(document.itemRecord(for: localItemID))
+    XCTAssertEqual(document.itemRecord(for: persistentItemID)?.item.name, "Fresh IPA")
+  }
+
+  @MainActor
   func testRemoteDraftUpdateRequiresRefreshAndKeepsNonOverlappingLocalDrafts() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
@@ -2270,6 +2384,8 @@ private final class StubPublishClient: PublishClienting {
   var publishResponse: PublishResponse?
   private(set) var previewCallCount = 0
   private(set) var publishCallCount = 0
+  private(set) var lastPreviewSnapshot: MenuSnapshotPayload?
+  private(set) var lastPublishSnapshot: MenuSnapshotPayload?
   private(set) var lastPreviewExpectedLiveRevision: Int?
   private(set) var lastPreviewExpectedDraftRevision: Int?
   private(set) var lastPreviewExpectedNotificationRevision: Int?
@@ -2284,6 +2400,7 @@ private final class StubPublishClient: PublishClienting {
 
   func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     previewCallCount += 1
+    lastPreviewSnapshot = snapshot
     lastPreviewExpectedLiveRevision = expectedLiveRevision
     lastPreviewExpectedDraftRevision = expectedDraftRevision
     lastPreviewExpectedNotificationRevision = expectedNotificationRevision
@@ -2295,6 +2412,7 @@ private final class StubPublishClient: PublishClienting {
 
   func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     publishCallCount += 1
+    lastPublishSnapshot = snapshot
     lastPublishExpectedLiveRevision = expectedLiveRevision
     lastPublishExpectedDraftRevision = expectedDraftRevision
     lastPublishExpectedNotificationRevision = expectedNotificationRevision

@@ -531,6 +531,7 @@ final class AppModel {
 
     await run("Saving Quietly") { model in
       var currentDocument = try model.requireCurrentEditorDocument()
+      currentDocument.normalizePersistentItemIdentifiersForRuntime()
       let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
       let response = try await model.services.liveSave.save(
         menuId: menuId,
@@ -927,6 +928,7 @@ final class AppModel {
     let didPersistLive = publishMode.isEmpty ? hasLiveMenuChanges : publishMode != "send"
 
     var nextDocument = currentDocument
+    nextDocument.normalizePersistentItemIdentifiersForRuntime()
     var nextRevisions = normalizedWorkspaceRevisions(
       response.currentRevisions ?? workspace.workspace.revisions,
       meta: workspace.meta

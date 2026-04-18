@@ -647,6 +647,17 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     try container.encode(showDescription, forKey: .showDescription)
     try container.encode(showRecipe, forKey: .showRecipe)
   }
+
+  mutating func normalizePersistentIdentifierForRuntime() {
+    let raw = id.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard raw.hasPrefix("local-") else {
+      id = raw
+      return
+    }
+    let suffix = String(raw.dropFirst("local-".count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    guard let uuid = UUID(uuidString: suffix) else { return }
+    id = uuid.uuidString.lowercased()
+  }
 }
 
 struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
@@ -1528,6 +1539,14 @@ struct EditableMenuDocument: Codable, Equatable {
 
   mutating func normalizeIdentifiersForRuntime() {
     cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
+  }
+
+  mutating func normalizePersistentItemIdentifiersForRuntime() {
+    for categoryIndex in cats.indices {
+      for itemIndex in cats[categoryIndex].items.indices {
+        cats[categoryIndex].items[itemIndex].normalizePersistentIdentifierForRuntime()
+      }
+    }
   }
 
   var uncategorizedItems: [MenuItemPayload] {
