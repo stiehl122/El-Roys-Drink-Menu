@@ -802,13 +802,45 @@ private struct MenuEditorCategoryCard: View {
         }
       }
 
-      ForEach(Array(visibleItems.enumerated()), id: \.offset) { _, item in
+      if visibleItems.isEmpty {
+        Text("No menu items yet.")
+          .font(EditorTypography.body(14, weight: .medium))
+          .foregroundStyle(theme.subtleText)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.vertical, 6)
+      } else {
+        MenuEditorSwipeList(
+          items: visibleItems,
+          theme: theme,
+          onSelectItem: onSelectItem,
+          onToggleEightySix: onToggleEightySix,
+          onMoveOffMenu: onMoveOffMenu
+        )
+      }
+    }
+    .menuEditorSurface(colors: [theme.categoryTop, theme.categoryBottom], border: theme.categoryBorder)
+  }
+}
+
+private struct MenuEditorSwipeList: View {
+  let items: [MenuItemPayload]
+  let theme: MenuEditorTheme
+  let onSelectItem: (MenuItemPayload) -> Void
+  let onToggleEightySix: (MenuItemPayload) -> Void
+  let onMoveOffMenu: (MenuItemPayload) -> Void
+
+  var body: some View {
+    List {
+      ForEach(items, id: \.id) { item in
         Button {
           onSelectItem(item)
         } label: {
           EditorItemRow(item: item, theme: theme)
         }
         .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
           Button {
             onToggleEightySix(item)
@@ -826,7 +858,35 @@ private struct MenuEditorCategoryCard: View {
         }
       }
     }
-    .menuEditorSurface(colors: [theme.categoryTop, theme.categoryBottom], border: theme.categoryBorder)
+    .listStyle(.plain)
+    .scrollContentBackground(.hidden)
+    .scrollDisabled(true)
+    .environment(\.defaultMinListRowHeight, 1)
+    .frame(height: estimatedListHeight)
+  }
+
+  private var estimatedListHeight: CGFloat {
+    max(items.reduce(CGFloat.zero) { partialResult, item in
+      partialResult + estimatedRowHeight(for: item)
+    }, 44)
+  }
+
+  private func estimatedRowHeight(for item: MenuItemPayload) -> CGFloat {
+    var height: CGFloat = 72
+    if item.showDescription, !item.desc.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      height += estimatedTextHeight(for: item.desc, lineHeight: 17, charactersPerLine: 34)
+    }
+    if item.showRecipe, !item.recipe.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      height += estimatedTextHeight(for: item.recipe.joined(separator: " • "), lineHeight: 15, charactersPerLine: 38)
+    }
+    return height
+  }
+
+  private func estimatedTextHeight(for text: String, lineHeight: CGFloat, charactersPerLine: Int) -> CGFloat {
+    let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalized.isEmpty else { return 0 }
+    let lines = max(1, Int(ceil(Double(normalized.count) / Double(max(charactersPerLine, 1)))))
+    return CGFloat(lines) * lineHeight
   }
 }
 

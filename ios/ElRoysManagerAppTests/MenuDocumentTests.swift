@@ -190,6 +190,16 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(preview.exactRouteURL(for: foodMenu).absoluteString, "https://example.com/leroyslounge")
   }
 
+  func testMenuEditorCategoryCardUsesListForSwipeableRows() throws {
+    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
+    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
+    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
+    let cardSource = String(source[cardRange.lowerBound..<recoveryRange.lowerBound])
+
+    XCTAssertTrue(cardSource.contains("List {"))
+    XCTAssertTrue(cardSource.contains(".swipeActions(edge: .leading, allowsFullSwipe: true)"))
+  }
+
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
     let rootURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -2192,6 +2202,13 @@ final class MenuDocumentTests: XCTestCase {
     """.utf8)
     return try JSONDecoder.backend.decode(MenuPreviewPayload.self, from: data)
   }
+}
+
+private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
 }
 
 private enum TestError: LocalizedError {
