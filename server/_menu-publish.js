@@ -582,6 +582,7 @@ export async function previewMenuUpdateForMenu({
     actor,
     menuId,
     snapshot,
+    requireCategorySnapshot: true,
   });
 
   const meta = await readMenuMeta(menuId);
@@ -632,6 +633,7 @@ export async function publishMenuUpdateForMenu({
     actor,
     menuId,
     snapshot,
+    requireCategorySnapshot: true,
   });
 
   const meta = await readMenuMeta(menuId);

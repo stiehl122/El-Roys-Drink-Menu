@@ -216,6 +216,8 @@ test('draft, live, preview, and publish boundaries enforce shared category gover
   assert.match(draft, /assertCategoryGovernanceAllowed\(/);
   assert.match(live, /from '\.\/_category-governance\.js'/);
   assert.match(live, /assertCategoryGovernanceAllowed\(/);
+  assert.match(live, /requireCategorySnapshot:\s*true/);
   assert.match(publish, /from '\.\/_category-governance\.js'/);
   assert.match(publish, /assertCategoryGovernanceAllowed\(/);
+  assert.match(publish, /requireCategorySnapshot:\s*true/);
 });

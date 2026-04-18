@@ -442,6 +442,7 @@ export async function saveLiveMenuCommand(req) {
     actor,
     menuId,
     snapshot: snapshotPayload,
+    requireCategorySnapshot: true,
   });
 
   const expectedLiveRevision = firstDefined(

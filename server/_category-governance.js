@@ -121,9 +121,16 @@ export async function assertCategoryGovernanceAllowed({
   actor = null,
   menuId = '',
   snapshot = {},
+  requireCategorySnapshot = false,
 } = {}) {
   if (actor?.role === 'admin') return createAllowedResult();
   const nextCategories = asArray(snapshot?.cats);
+  if (requireCategorySnapshot && !Array.isArray(snapshot?.cats)) {
+    throw {
+      status: 400,
+      message: 'Snapshot payload must include cats[]',
+    };
+  }
   if (!menuId || !nextCategories.length) return createAllowedResult();
 
   const liveBundle = await readMenuStateBundle(menuId);

@@ -321,6 +321,36 @@ test('category governance compares managers against shared-draft categories when
   }
 });
 
+test('category governance can require an explicit cats payload before live or publish writes', async () => {
+  const governance = await importApiModule('server/_category-governance.js');
+  let fetchCount = 0;
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    fetchCount += 1;
+    return {
+      ok: true,
+      async json() {
+        return [];
+      },
+    };
+  };
+
+  try {
+    await assert.rejects(
+      () => governance.assertCategoryGovernanceAllowed({
+        actor: { role: 'manager' },
+        menuId: '00000000-0000-0000-0000-000000000020',
+        snapshot: {},
+        requireCategorySnapshot: true,
+      }),
+      error => error?.status === 400 && /cats\[\]/i.test(error?.message || '')
+    );
+    assert.equal(fetchCount, 0);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('manager categories section stays visible but read-only', () => {
   const sandbox = loadAppSandbox();
   const { list, addButton } = setupCategoryManagerDom(sandbox);
