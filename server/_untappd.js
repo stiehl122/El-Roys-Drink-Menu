@@ -19,11 +19,25 @@ function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function normalizeNoiseToken(value = '') {
+  return cleanText(value)
+    .toLowerCase()
+    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '');
+}
+
 function normalizeBid(value) {
   const text = cleanText(value);
   if (!text) return '';
   const numeric = Number(text);
   return Number.isFinite(numeric) ? numeric : text;
+}
+
+function isPackagingCountToken(token = '', index = 0, tokens = []) {
+  const lower = normalizeNoiseToken(token);
+  if (!/^\d+(?:\.\d+)?$/.test(lower)) return false;
+  const previous = normalizeNoiseToken(tokens[index - 1] || '');
+  const next = normalizeNoiseToken(tokens[index + 1] || '');
+  return NOISE_WORDS.has(previous) || NOISE_WORDS.has(next);
 }
 
 function normalizeUntappdQuery(query = '') {
@@ -32,13 +46,14 @@ function normalizeUntappdQuery(query = '') {
     .map(token => token.trim())
     .filter(Boolean);
 
-  const filtered = tokens.filter(token => {
-    const lower = token.toLowerCase();
+  const filtered = tokens.filter((token, index, entries) => {
+    const lower = normalizeNoiseToken(token);
+    if (!lower) return false;
     if (NOISE_WORDS.has(lower)) return false;
-    if (/^\d+$/.test(lower)) return false;
     if (/^\d+(?:\.\d+)?(?:oz|ml)$/.test(lower)) return false;
     if (/^\d+(?:\.\d+)?-?(?:pk|pack)$/.test(lower)) return false;
     if (/^\d+(?:\.\d+)?(?:oz|ml)?-?(?:pk|pack)$/.test(lower)) return false;
+    if (isPackagingCountToken(token, index, entries)) return false;
     return true;
   });
 

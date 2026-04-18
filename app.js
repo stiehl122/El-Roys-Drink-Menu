@@ -7864,9 +7864,22 @@ function toggleAddCategoryForm() {
   const btn  = document.getElementById('show-add-cat-btn');
   if (!form) return;
   const opening = form.style.display === 'none';
-  form.style.display = opening ? '' : 'none';
-  if (btn) btn.textContent = opening ? '− Cancel' : '+ Add Category';
-  if (opening) document.getElementById('new-cat-title')?.focus();
+  if (!opening) {
+    cancelAddCategoryForm();
+    return;
+  }
+  form.style.display = '';
+  if (btn) btn.textContent = '− Cancel';
+  document.getElementById('new-cat-title')?.focus();
+}
+
+function cancelAddCategoryForm() {
+  const form = document.getElementById('catmgr-add-form');
+  const btn  = document.getElementById('show-add-cat-btn');
+  if (form) form.style.display = 'none';
+  if (btn) btn.textContent = '+ Add Category';
+  const untappdEl = document.getElementById('new-cat-untappd-enabled');
+  if (untappdEl) untappdEl.checked = false;
 }
 
 async function confirmAddCategory() {
@@ -7888,11 +7901,7 @@ async function confirmAddCategory() {
   });
   const iconEl = document.getElementById('new-cat-icon');
   if (iconEl) iconEl.value = '🍸';
-  const untappdEl = document.getElementById('new-cat-untappd-enabled');
-  if (untappdEl) untappdEl.checked = false;
-  document.getElementById('catmgr-add-form').style.display = 'none';
-  const btn = document.getElementById('show-add-cat-btn');
-  if (btn) btn.textContent = '+ Add Category';
+  cancelAddCategoryForm();
   markSaveOnlyDraftChange({
     key: `category:${id}:add`,
     label: `Added category ${title}`,

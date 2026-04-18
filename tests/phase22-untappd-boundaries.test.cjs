@@ -99,6 +99,23 @@ test('server untappd gateway normalizes search terms and caps results at five', 
   }
 });
 
+test('server untappd gateway preserves numeric beer names while stripping packaging noise', async () => {
+  const untappd = await importApiModule('server/_untappd.js');
+
+  assert.equal(
+    untappd.normalizeUntappdSearchQuery('805 16 oz 6 pk can'),
+    '805'
+  );
+  assert.equal(
+    untappd.normalizeUntappdSearchQuery('90 Minute IPA bottle'),
+    '90 Minute IPA'
+  );
+  assert.equal(
+    untappd.normalizeUntappdSearchQuery('420 Extra Pale Ale draft'),
+    '420 Extra Pale Ale'
+  );
+});
+
 test('server untappd gateway returns an empty list for no search matches', async () => {
   const untappd = await importApiModule('server/_untappd.js');
   const previousFetch = global.fetch;

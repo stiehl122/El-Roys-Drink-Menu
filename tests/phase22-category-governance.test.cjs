@@ -202,6 +202,125 @@ test('category governance helper flags non-admin category mutations and ignores 
   assert.deepEqual(itemOnly.changed_categories, []);
 });
 
+test('category governance compares managers against shared-draft categories when present', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const governance = await importApiModule('server/_category-governance.js');
+  const originalFetch = global.fetch;
+
+  global.fetch = async url => {
+    const href = String(url);
+
+    if (href.includes('/menus?id=eq.00000000-0000-0000-0000-000000000020')) {
+      return {
+        ok: true,
+        async json() {
+          return [{
+            id: '00000000-0000-0000-0000-000000000020',
+            name: "Leroy's Lounge Drinks",
+            slug: 'leroys-lounge-drinks',
+            type: 'drinks',
+            restaurant_id: '00000000-0000-0000-0000-000000000010',
+          }];
+        },
+      };
+    }
+
+    if (href.includes('/categories?menu_id=eq.00000000-0000-0000-0000-000000000020')) {
+      return {
+        ok: true,
+        async json() {
+          return [{
+            id: 'cat-1',
+            menu_id: '00000000-0000-0000-0000-000000000020',
+            key: 'beer',
+            label: 'Beer',
+            icon: '🍺',
+            color: '',
+            sub: '',
+            placeholder: 'Add beer…',
+            display_order: 0,
+            items: [{ id: 'beer-1', name: 'Pilsner' }],
+          }];
+        },
+      };
+    }
+
+    if (href.includes('/menu_meta?menu_id=eq.00000000-0000-0000-0000-000000000020')) {
+      return {
+        ok: true,
+        async json() {
+          return [{
+            draft_state: {
+              cats: [{
+                id: 'cat-1',
+                key: 'beer',
+                label: 'Draft Beer',
+                icon: '🍺',
+                color: '',
+                sub: '',
+                placeholder: 'Add beer…',
+                display_order: 0,
+                untappd_enabled: false,
+                items: [{ id: 'beer-1', name: 'Pilsner' }],
+              }],
+            },
+          }];
+        },
+      };
+    }
+
+    if (href.includes('/restaurants?id=eq.00000000-0000-0000-0000-000000000010')) {
+      return {
+        ok: true,
+        async json() {
+          return [{
+            id: '00000000-0000-0000-0000-000000000010',
+            name: "Leroy's Lounge",
+            slug: 'leroyslounge',
+            design: {},
+            use_custom_design: true,
+          }];
+        },
+      };
+    }
+
+    if (href.includes('/featured_groups?')) {
+      return {
+        ok: true,
+        async json() {
+          return [];
+        },
+      };
+    }
+
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    await assert.doesNotReject(() => governance.assertCategoryGovernanceAllowed({
+      actor: { role: 'manager' },
+      menuId: '00000000-0000-0000-0000-000000000020',
+      snapshot: {
+        cats: [{
+          key: 'beer',
+          label: 'Draft Beer',
+          icon: '🍺',
+          color: '',
+          sub: '',
+          placeholder: 'Add beer…',
+          display_order: 0,
+          untappd_enabled: false,
+          items: [{ id: 'beer-1', name: 'Fresh Pilsner' }],
+        }],
+      },
+    }));
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('manager categories section stays visible but read-only', () => {
   const sandbox = loadAppSandbox();
   const { list, addButton } = setupCategoryManagerDom(sandbox);
@@ -255,4 +374,26 @@ test('food menus hide Untappd category controls', () => {
 
   assert.doesNotMatch(renderedHtml, /Enable Untappd import for this category/);
   assert.equal(untappdRow.style.display, 'none');
+});
+
+test('canceling the add-category form resets the Untappd toggle to its default state', () => {
+  const sandbox = loadAppSandbox();
+  const { addForm, addButton, untappdCheckbox } = setupCategoryManagerDom(sandbox);
+  seedCategorySandbox(sandbox, {
+    currentUser: {
+      role: 'admin',
+      name: 'Alex',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+  });
+
+  addForm.style.display = '';
+  addButton.textContent = '− Cancel';
+  untappdCheckbox.checked = true;
+
+  sandbox.cancelAddCategoryForm();
+
+  assert.equal(addForm.style.display, 'none');
+  assert.equal(addButton.textContent, '+ Add Category');
+  assert.equal(untappdCheckbox.checked, false);
 });

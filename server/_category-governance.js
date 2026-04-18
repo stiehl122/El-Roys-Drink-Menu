@@ -65,6 +65,12 @@ function createAllowedResult() {
   };
 }
 
+function readGovernanceBaselineCategories(bundle = {}) {
+  const draftCategories = bundle?.meta?.draft_state?.cats;
+  if (Array.isArray(draftCategories)) return draftCategories;
+  return asArray(bundle?.cats);
+}
+
 export function detectForbiddenCategoryMutations({
   actor = null,
   currentCategories = [],
@@ -123,7 +129,7 @@ export async function assertCategoryGovernanceAllowed({
   const liveBundle = await readMenuStateBundle(menuId);
   const result = detectForbiddenCategoryMutations({
     actor,
-    currentCategories: liveBundle?.cats || [],
+    currentCategories: readGovernanceBaselineCategories(liveBundle),
     nextCategories,
   });
   if (!result.allowed) {
