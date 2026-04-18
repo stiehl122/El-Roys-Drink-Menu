@@ -24,6 +24,7 @@ import {
   getKnownMenuById,
   readCurrentFeaturedIdsForRestaurant,
 } from './_menu-read.js';
+import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 import {
   buildCategoryQueueState,
   normalizeName,
@@ -576,6 +577,12 @@ export async function previewMenuUpdateForMenu({
     throw { status: 400, message: 'Unsupported menu_id' };
   }
 
+  await assertCategoryGovernanceAllowed({
+    actor,
+    menuId,
+    snapshot,
+  });
+
   const meta = await readMenuMeta(menuId);
   const currentRevisions = assertPublishRevisions({
     expectedLiveRevision,
@@ -619,6 +626,12 @@ export async function publishMenuUpdateForMenu({
   if (!knownMenu) {
     throw { status: 400, message: 'Unsupported menu_id' };
   }
+
+  await assertCategoryGovernanceAllowed({
+    actor,
+    menuId,
+    snapshot,
+  });
 
   const meta = await readMenuMeta(menuId);
   const currentRevisions = assertPublishRevisions({

@@ -20,6 +20,10 @@ struct MenuEditorScreen: View {
     menu.isFoodMenu ? theme.foodAccent : theme.drinkAccent
   }
 
+  private var canEditCategories: Bool {
+    model.canEditCategories
+  }
+
   var body: some View {
     ZStack {
       MenuEditorBackground(theme: theme)
@@ -45,6 +49,7 @@ struct MenuEditorScreen: View {
             menu: menu,
             theme: theme,
             menuAccent: menuAccent,
+            canEditCategories: canEditCategories,
             onAddItem: presentNewItem,
             onAddCategory: { showingAddCategory = true },
             onSaveQuietly: saveQuietly,
@@ -63,6 +68,7 @@ struct MenuEditorScreen: View {
                 category: category,
                 theme: theme,
                 menuAccent: menuAccent,
+                canEditCategories: canEditCategories,
                 onRename: {
                   renameTarget = category
                   renameText = category.label
@@ -457,6 +463,7 @@ private struct MenuEditorActionPanel: View {
   let menu: MenuRecord
   let theme: MenuEditorTheme
   let menuAccent: Color
+  let canEditCategories: Bool
   let onAddItem: () -> Void
   let onAddCategory: () -> Void
   let onSaveQuietly: () -> Void
@@ -475,10 +482,12 @@ private struct MenuEditorActionPanel: View {
         }
         .buttonStyle(.plain)
 
-        Button(action: onAddCategory) {
-          MenuEditorActionLabel(title: "Add Category", subtitle: "Create a new section", icon: "square.split.1x2.fill", accent: menuAccent)
+        if canEditCategories {
+          Button(action: onAddCategory) {
+            MenuEditorActionLabel(title: "Add Category", subtitle: "Create a new section", icon: "square.split.1x2.fill", accent: menuAccent)
+          }
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
       }
 
       HStack(spacing: 12) {
@@ -565,6 +574,7 @@ private struct MenuEditorCategoryCard: View {
   let category: MenuCategoryPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
+  let canEditCategories: Bool
   let onRename: () -> Void
   let onDelete: () -> Void
   let onSelectItem: (MenuItemPayload) -> Void
@@ -594,13 +604,15 @@ private struct MenuEditorCategoryCard: View {
           .padding(.horizontal, 8)
           .background(menuAccent.opacity(0.15), in: Capsule())
           .foregroundStyle(menuAccent)
-        Menu {
-          Button("Rename", action: onRename)
-          Button("Delete Category", role: .destructive, action: onDelete)
-        } label: {
-          Image(systemName: "ellipsis.circle.fill")
-            .font(.system(size: 20))
-            .foregroundStyle(theme.subtleText)
+        if canEditCategories {
+          Menu {
+            Button("Rename", action: onRename)
+            Button("Delete Category", role: .destructive, action: onDelete)
+          } label: {
+            Image(systemName: "ellipsis.circle.fill")
+              .font(.system(size: 20))
+              .foregroundStyle(theme.subtleText)
+          }
         }
       }
 

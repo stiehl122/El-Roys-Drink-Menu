@@ -20,6 +20,7 @@ import {
   readMenuMeta,
   readRevisionState,
 } from './_menu-write.js';
+import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 
 const UNCATEGORIZED_ID = '__uncategorized__';
 
@@ -161,6 +162,7 @@ function normalizeCategoryRows(menuId, categories = []) {
       color: asString(row.color),
       sub: asString(row.sub),
       placeholder: asString(row.placeholder),
+      untappd_enabled: row?.untappd_enabled === true || row?.untappdEnabled === true,
       rawId: asString(row.id),
       items: asArray(row.items),
     });
@@ -177,6 +179,7 @@ function normalizeCategoryRows(menuId, categories = []) {
     color: category.color,
     sub: category.sub,
     placeholder: category.placeholder,
+    untappd_enabled: category.untappd_enabled === true,
     display_order: index,
     id: category.rawId && !category.rawId.startsWith('local-') ? category.rawId : undefined,
   }));
@@ -190,6 +193,7 @@ function normalizeCategoryRows(menuId, categories = []) {
         color: uncategorized.color,
         sub: uncategorized.sub,
         placeholder: uncategorized.placeholder,
+        untappd_enabled: false,
         display_order: 9999,
         id: uncategorized.rawId && !uncategorized.rawId.startsWith('local-') ? uncategorized.rawId : undefined,
       }
@@ -245,6 +249,7 @@ async function upsertCategories(menuId, normalizedCategories, categoriesByKey) {
     color: '',
     sub: '',
     placeholder: '',
+    untappd_enabled: false,
     display_order: 9999,
   };
   rows.push(uncategorizedSeed);
@@ -427,6 +432,18 @@ export async function saveLiveMenuCommand(req) {
     throw { status: 403, message: 'Forbidden' };
   }
   await requireMenuAccess(uid, role, menuId);
+
+  const actor = {
+    id: uid,
+    name: String(profile?.name || '').trim(),
+    role,
+  };
+  const snapshotPayload = asObject(payload?.snapshot) || payload;
+  await assertCategoryGovernanceAllowed({
+    actor,
+    menuId,
+    snapshot: snapshotPayload,
+  });
 
   const expectedLiveRevision = firstDefined(
     payload?.expected_live_revision,

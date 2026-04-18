@@ -27,6 +27,7 @@ import {
 } from '../server/_specials-command.js';
 import { getSupabaseServerConfig } from '../server/_supabase.js';
 import { lookupProductByBarcode } from '../server/_product-lookup.js';
+import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
 import { parseRequestBody, readAction, readQueryValue } from '../server/_request.js';
 
 const SPECIALS_ACTIONS = new Set(['ensure', 'add', 'remove', 'move', 'note', 'confirm']);
@@ -151,6 +152,19 @@ export default async function handler(req, res) {
         await requireRole(req, 'manager', 'admin');
         const barcode = String(body?.barcode || body?.upc || '').trim();
         return res.json(await lookupProductByBarcode(barcode));
+      }
+      case 'untappd_search': {
+        await requireRole(req, 'manager', 'admin');
+        const query = String(body?.query || body?.q || '').trim();
+        return res.json({ beers: await searchUntappdBeers(query) });
+      }
+      case 'untappd_preview': {
+        await requireRole(req, 'manager', 'admin');
+        const bid = String(body?.bid || body?.beer_id || '').trim();
+        const includeBrewery = Boolean(body?.includeBrewery || body?.include_brewery);
+        return res.json({
+          preview: await previewUntappdBeerImport(bid, { includeBrewery }),
+        });
       }
       default:
         if (SPECIALS_ACTIONS.has(action)) {

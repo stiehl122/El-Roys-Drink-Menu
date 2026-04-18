@@ -61,6 +61,7 @@ function normalizeSnapshot(snapshot = {}) {
       color: String(category?.color || ''),
       sub: String(category?.sub || ''),
       placeholder: String(category?.placeholder || ''),
+      untappd_enabled: category?.untappd_enabled === true || category?.untappdEnabled === true,
       display_order: Number.isFinite(Number(category?.display_order)) ? Number(category.display_order) : categoryIndex,
       items: (Array.isArray(category?.items) ? category.items : []).map((item, itemIndex) => ({
         id: String(item?.id || ''),
@@ -252,6 +253,7 @@ async function upsertCategories(menuId, normalizedSnapshot) {
     color: category.color,
     sub: category.sub,
     placeholder: category.placeholder,
+    untappd_enabled: category.untappd_enabled === true,
     display_order: category.display_order,
   }));
   if (categoryRows.length) {
