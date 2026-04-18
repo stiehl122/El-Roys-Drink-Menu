@@ -78,6 +78,60 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
 
+  func testMoveUpdatedItemToOffMenuAllowsDuplicateHiddenNames() {
+    let hiddenDuplicate = MenuItemPayload(
+      id: "item-hidden",
+      name: "Reserve",
+      desc: "",
+      recipe: [],
+      price: "$16",
+      isEightySixed: false,
+      displayOrder: 0,
+      onMenu: false,
+      visibility: "off_menu",
+      upcharges: [],
+      showDescription: true,
+      showRecipe: false
+    )
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      ),
+      MenuCategoryPayload(
+        id: "uncategorized",
+        menuId: "menu",
+        key: EditableMenuDocument.uncategorizedKey,
+        label: "Uncategorized",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [hiddenDuplicate]
+      )
+    ])
+
+    var document = EditableMenuDocument(workspace: workspace)
+    var editedItem = makeItem(id: "item-1", name: "Reserve", desc: "Moved from taps")
+    editedItem.displayOrder = 0
+    document.moveItemToOffMenu(editedItem, from: "beer")
+
+    XCTAssertTrue(document.category(for: "beer")?.items.isEmpty == true)
+    XCTAssertEqual(document.uncategorizedItems.filter { $0.name == "Reserve" }.count, 2)
+    XCTAssertEqual(document.itemRecord(for: "item-1")?.categoryKey, EditableMenuDocument.uncategorizedKey)
+    XCTAssertEqual(document.itemRecord(for: "item-1")?.item.desc, "Moved from taps")
+    XCTAssertEqual(document.itemRecord(for: "item-1")?.item.onMenu, false)
+  }
+
   func testUpsertingExistingItemInSameCategoryPreservesOrderWhenEightySixed() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -110,6 +164,49 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.category(for: "beer")?.items.map(\.id), ["item-1", "item-2", "item-3"])
     XCTAssertEqual(document.category(for: "beer")?.items.map(\.displayOrder), [0, 1, 2])
     XCTAssertTrue(document.itemRecord(for: "item-2")?.item.isEightySixed == true)
+  }
+
+  func testMoveVisibleItemsReordersWithinCategoryAndKeepsHiddenItemsAtEnd() {
+    let hiddenItem = MenuItemPayload(
+      id: "item-hidden",
+      name: "Cellar Reserve",
+      desc: "",
+      recipe: [],
+      price: "$18",
+      isEightySixed: false,
+      displayOrder: 3,
+      onMenu: false,
+      visibility: "off_menu",
+      upcharges: [],
+      showDescription: true,
+      showRecipe: false
+    )
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "item-1", name: "Pilsner"),
+          makeItem(id: "item-2", name: "Amber"),
+          makeItem(id: "item-3", name: "Stout"),
+          hiddenItem
+        ]
+      )
+    ])
+
+    var document = EditableMenuDocument(workspace: workspace)
+    document.moveVisibleItems(in: "beer", from: IndexSet(integer: 0), to: 3)
+
+    XCTAssertEqual(document.category(for: "beer")?.items.map(\.id), ["item-2", "item-3", "item-1", "item-hidden"])
+    XCTAssertEqual(document.category(for: "beer")?.items.map(\.displayOrder), [0, 1, 2, 3])
+    XCTAssertEqual(document.category(for: "beer")?.items.last?.onMenu, false)
   }
 
   func testEditableDocumentNormalizesDuplicateAndMissingIdentifiers() {
@@ -197,7 +294,42 @@ final class MenuDocumentTests: XCTestCase {
     let cardSource = String(source[cardRange.lowerBound..<recoveryRange.lowerBound])
 
     XCTAssertTrue(cardSource.contains("List {"))
-    XCTAssertTrue(cardSource.contains(".swipeActions(edge: .leading, allowsFullSwipe: true)"))
+    XCTAssertTrue(cardSource.contains("Reorder Items"))
+  }
+
+  func testMenuEditorSwipeListUsesTrailingEightySixActionOnly() throws {
+    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
+    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
+    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
+    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
+
+    XCTAssertTrue(swipeSource.contains(".swipeActions(edge: .trailing, allowsFullSwipe: true)"))
+    XCTAssertFalse(swipeSource.contains(".swipeActions(edge: .leading"))
+    XCTAssertFalse(swipeSource.contains("Label(\"Off Menu\""))
+    XCTAssertTrue(swipeSource.contains(".onMove"))
+  }
+
+  func testMenuEditorSwipeListMeasuresRenderedRowsInsteadOfFixedEstimate() throws {
+    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
+    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
+    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
+    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
+
+    XCTAssertTrue(source.contains("private struct MenuEditorRowHeightPreferenceKey"))
+    XCTAssertFalse(swipeSource.contains(".frame(height: estimatedListHeight)"))
+  }
+
+  func testEditableDocumentDefinesVisibleItemReorderMutation() throws {
+    let source = try String(contentsOf: appModelsSourceURL(), encoding: .utf8)
+    XCTAssertTrue(source.contains("mutating func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int)"))
+  }
+
+  func testItemEditorSheetExposesMoveToOffMenuAction() throws {
+    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
+    let sheetRange = try XCTUnwrap(source.range(of: "private struct ItemEditorSheet"))
+    let sheetSource = String(source[sheetRange.lowerBound...])
+
+    XCTAssertTrue(sheetSource.contains("Move To Off Menu"))
   }
 
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
@@ -2209,6 +2341,13 @@ private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
     .deletingLastPathComponent()
     .deletingLastPathComponent()
     .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
+}
+
+private func appModelsSourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/Models/AppModels.swift")
 }
 
 private enum TestError: LocalizedError {

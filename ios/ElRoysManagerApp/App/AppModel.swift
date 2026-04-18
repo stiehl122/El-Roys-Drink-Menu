@@ -586,8 +586,16 @@ final class AppModel {
     mutateEditorDocument { $0.removeItemToOffMenu(itemID: itemID, from: categoryKey) }
   }
 
+  func moveItemToOffMenu(_ item: MenuItemPayload, from categoryKey: String) {
+    mutateEditorDocument { $0.moveItemToOffMenu(item, from: categoryKey) }
+  }
+
   func restoreItemFromOffMenu(itemID: String, to categoryKey: String) {
     mutateEditorDocument { $0.restoreItemFromOffMenu(itemID: itemID, to: categoryKey) }
+  }
+
+  func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int) {
+    mutateEditorDocument { $0.moveVisibleItems(in: categoryKey, from: source, to: destination) }
   }
 
   func deleteItem(itemID: String, categoryKey: String) {
