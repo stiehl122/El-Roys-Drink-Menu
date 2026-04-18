@@ -4,6 +4,7 @@ import {
   requireMenuAccess,
 } from './_auth.js';
 import { isSupportedMenuId } from './_menu-read.js';
+import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 import {
   inferAuditSource,
   saveDraftStateForMenu,
@@ -92,6 +93,15 @@ export async function saveSharedDraftCommand(req) {
     name: String(profile?.name || '').trim(),
     role,
   }, body?.source || '');
+  await assertCategoryGovernanceAllowed({
+    actor: {
+      id: uid,
+      name: String(profile?.name || '').trim(),
+      role,
+    },
+    menuId,
+    snapshot,
+  });
   const draftExists = hasSharedDraft(snapshot);
 
   let saveResult;

@@ -106,7 +106,8 @@ Use it to answer three questions:
 | Remove items | Full | Full | Staff editor clients | Both can remove items; web additionally has undo-toast affordances. |
 | Reorder items | Full | None | Staff editor clients | Web supports drag/drop reorder; no native iOS item reordering surface today. |
 | Upcharge editing | Full | None | Staff editor clients | Web exposes structured upcharges; iOS currently does not. |
-| Add / rename / delete categories | Full | Full | Staff editor clients | Present in both clients. |
+| Add / rename / delete categories | Full | Partial | Staff editor clients | Web keeps full category governance; iOS keeps category cards and item flows, but add/rename/delete are admin-only and hidden for non-admin staff. |
+| Untappd category import flag | Full | None | Admin clients | Web-only today; iOS decodes the shared payload field for parity but keeps Untappd UI out of v1. |
 | Recover off-menu / uncategorized items | Full | Full | Staff editor clients | Both clients preserve deleted-category items for recovery instead of silently destroying them. |
 | Reorder categories | Full | None | Staff editor clients | Web supports category reordering; iOS currently does not. |
 | Database / all-items view | Full | None | Staff editor clients | Web manager has a broader database surface; iOS does not. |

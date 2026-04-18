@@ -213,22 +213,22 @@ function colorAt(palette, index) {
 
 function buildDefaultCategoryDefs(palette) {
   return [
-    { id: 'beer', icon: '🍺', color: colorAt(palette, 0), title: 'Beers on Tap', sub: 'Current draft offerings', placeholder: 'e.g. Modelo Especial...' },
-    { id: 'canned', icon: '🍻', color: colorAt(palette, 4), title: 'Canned & Bottled', sub: 'Canned & bottled offerings', placeholder: 'e.g. Modelo Especial (can), Topo Chico...' },
-    { id: 'cocktails', icon: '🍹', color: colorAt(palette, 5), title: 'Cocktails', sub: 'Craft cocktail offerings', placeholder: 'e.g. Paloma, Spicy Margarita...' },
-    { id: 'tequila', icon: '🌶️', color: colorAt(palette, 1), title: 'Infused Tequila', sub: 'Rotating infused marg tequila', placeholder: 'e.g. Jalapeño-Pineapple Blanco...' },
-    { id: 'frozen', icon: '🧊', color: colorAt(palette, 2), title: 'Frozen Marg', sub: 'Current frozen margarita flavor', placeholder: 'e.g. Strawberry Basil...' },
-    { id: 'special', icon: '⭐', color: colorAt(palette, 3), title: 'Monthly Specials', sub: 'Featured cocktails & promos', placeholder: 'e.g. The Valentina — raspberry, grapefruit...' },
+    { id: 'beer', icon: '🍺', color: colorAt(palette, 0), title: 'Beers on Tap', sub: 'Current draft offerings', placeholder: 'e.g. Modelo Especial...', untappdEnabled: false },
+    { id: 'canned', icon: '🍻', color: colorAt(palette, 4), title: 'Canned & Bottled', sub: 'Canned & bottled offerings', placeholder: 'e.g. Modelo Especial (can), Topo Chico...', untappdEnabled: false },
+    { id: 'cocktails', icon: '🍹', color: colorAt(palette, 5), title: 'Cocktails', sub: 'Craft cocktail offerings', placeholder: 'e.g. Paloma, Spicy Margarita...', untappdEnabled: false },
+    { id: 'tequila', icon: '🌶️', color: colorAt(palette, 1), title: 'Infused Tequila', sub: 'Rotating infused marg tequila', placeholder: 'e.g. Jalapeño-Pineapple Blanco...', untappdEnabled: false },
+    { id: 'frozen', icon: '🧊', color: colorAt(palette, 2), title: 'Frozen Marg', sub: 'Current frozen margarita flavor', placeholder: 'e.g. Strawberry Basil...', untappdEnabled: false },
+    { id: 'special', icon: '⭐', color: colorAt(palette, 3), title: 'Monthly Specials', sub: 'Featured cocktails & promos', placeholder: 'e.g. The Valentina — raspberry, grapefruit...', untappdEnabled: false },
   ];
 }
 
 function buildDefaultFoodCategoryDefs(palette) {
   return [
-    { key: 'starters', label: '🥗 Starters', icon: '🥗', color: colorAt(palette, 4), sub: '', placeholder: 'e.g. Chips & Salsa...' },
-    { key: 'tacos', label: '🌮 Tacos', icon: '🌮', color: colorAt(palette, 0), sub: '', placeholder: 'e.g. Al Pastor...' },
-    { key: 'entrees', label: '🍽 Entrees', icon: '🍽', color: colorAt(palette, 1), sub: '', placeholder: 'e.g. Enchiladas...' },
-    { key: 'sides', label: '🫘 Sides', icon: '🫘', color: colorAt(palette, 2), sub: '', placeholder: 'e.g. Mexican Rice...' },
-    { key: 'desserts', label: '🍮 Desserts', icon: '🍮', color: colorAt(palette, 3), sub: '', placeholder: 'e.g. Flan...' },
+    { key: 'starters', label: '🥗 Starters', icon: '🥗', color: colorAt(palette, 4), sub: '', placeholder: 'e.g. Chips & Salsa...', untappdEnabled: false },
+    { key: 'tacos', label: '🌮 Tacos', icon: '🌮', color: colorAt(palette, 0), sub: '', placeholder: 'e.g. Al Pastor...', untappdEnabled: false },
+    { key: 'entrees', label: '🍽 Entrees', icon: '🍽', color: colorAt(palette, 1), sub: '', placeholder: 'e.g. Enchiladas...', untappdEnabled: false },
+    { key: 'sides', label: '🫘 Sides', icon: '🫘', color: colorAt(palette, 2), sub: '', placeholder: 'e.g. Mexican Rice...', untappdEnabled: false },
+    { key: 'desserts', label: '🍮 Desserts', icon: '🍮', color: colorAt(palette, 3), sub: '', placeholder: 'e.g. Flan...', untappdEnabled: false },
   ];
 }
 
@@ -984,6 +984,20 @@ let _previewSelectionState = {};
 let _lastAddItemCategoryId = '';
 const ADD_ITEM_MODAL_MANUAL_MODE = 'manual';
 const ADD_ITEM_MODAL_SCAN_MODE = 'scan';
+function createAddItemModalUntappdState(overrides = {}) {
+  return {
+    pending: false,
+    query: '',
+    results: [],
+    selectedBid: '',
+    preview: null,
+    includeBrewery: false,
+    error: '',
+    requestId: 0,
+    ...overrides,
+  };
+}
+
 function createAddItemModalState(overrides = {}) {
   return {
     isOpen: false,
@@ -997,6 +1011,7 @@ function createAddItemModalState(overrides = {}) {
     manualBarcode: '',
     scanState: 'idle',
     scannerService: null,
+    untappd: createAddItemModalUntappdState(),
     ...overrides,
   };
 }
@@ -1452,6 +1467,29 @@ function getManagedCategoryDefs() {
   ));
 }
 
+function normalizeCategoryUntappdEnabled(category = null) {
+  if (!category || typeof category !== 'object') return false;
+  return category.untappdEnabled === true || category.untappd_enabled === true;
+}
+
+function shouldShowCategoryUntappdControl(category = null) {
+  const categoryId = typeof category === 'string' ? category : category?.id;
+  return currentUserCanEditCategories() &&
+    MENU_TYPE !== 'food' &&
+    categoryId !== UNCATEGORIZED_ID &&
+    !isLegacySpecialCategory(categoryId);
+}
+
+function categorySupportsUntappdImport(category = null) {
+  const categoryId = typeof category === 'string' ? category : category?.id;
+  if (!categoryId || categoryId === UNCATEGORIZED_ID || MENU_TYPE === 'food') return false;
+  const categoryDef = typeof category === 'string'
+    ? CATEGORY_DEFS.find(candidate => candidate.id === category)
+    : category;
+  if (!categoryDef || isLegacySpecialCategory(categoryDef)) return false;
+  return normalizeCategoryUntappdEnabled(categoryDef);
+}
+
 function getUncategorizedCategoryDef() {
   return {
     id: UNCATEGORIZED_ID,
@@ -1461,6 +1499,7 @@ function getUncategorizedCategoryDef() {
     color: 'rgba(120,120,120,0.12)',
     sub: 'Items for specials & autocomplete — not shown on public menu',
     placeholder: 'Add to pool…',
+    untappdEnabled: false,
   };
 }
 
@@ -1494,6 +1533,41 @@ function createAddItemModalFields(overrides = {}) {
   };
 }
 
+function getSelectedAddItemModalCategoryDef(categoryId = _addItemModalState.fields?.categoryId) {
+  return getAddItemModalCategoryDefs().find(cat => cat.id === categoryId) || getUncategorizedCategoryDef();
+}
+
+function getAddItemModalNamePlaceholder(categoryId = _addItemModalState.fields?.categoryId) {
+  return categorySupportsUntappdImport(categoryId) ? 'Brewery + Beer' : 'Item name…';
+}
+
+function getAddItemModalUntappdAttribution() {
+  return 'Data provided by Untappd';
+}
+
+function formatUntappdResultMeta(entry = {}) {
+  const parts = [];
+  if (entry?.breweryName) parts.push(String(entry.breweryName));
+  if (entry?.style) parts.push(String(entry.style));
+  const abv = Number(entry?.abv);
+  if (Number.isFinite(abv)) parts.push(`${abv}% ABV`);
+  return parts.join(' • ');
+}
+
+function getSelectedAddItemUntappdResult() {
+  const bid = String(_addItemModalState?.untappd?.selectedBid || '').trim();
+  if (!bid) return null;
+  return (_addItemModalState?.untappd?.results || []).find(result => String(result?.bid || '').trim() === bid) || null;
+}
+
+function buildAddItemUntappdImportedName(preview = null, selectedResult = null, includeBrewery = false) {
+  const previewName = String(preview?.name || '').trim();
+  if (!previewName) return '';
+  if (!includeBrewery) return previewName;
+  const breweryName = String(selectedResult?.breweryName || preview?.breweryName || '').trim();
+  return breweryName ? `${breweryName} ${previewName}` : previewName;
+}
+
 function getAddItemCategoryLabel(catId) {
   return getAddItemModalCategoryDefs().find(cat => cat.id === catId)?.title || 'this category';
 }
@@ -1520,6 +1594,7 @@ function syncAddItemModalWarnings() {
 
 function getAddItemModalViewState() {
   const fields = _addItemModalState.fields || createAddItemModalFields();
+  const untappd = _addItemModalState.untappd || createAddItemModalUntappdState();
   return {
     isOpen: !!_addItemModalState.isOpen,
     mode: _addItemModalState.mode || ADD_ITEM_MODAL_MANUAL_MODE,
@@ -1530,6 +1605,15 @@ function getAddItemModalViewState() {
     manualBarcode: _addItemModalState.manualBarcode || '',
     scanState: _addItemModalState.scanState || 'idle',
     scanUnsupported: _addItemModalState.scanState === 'unsupported',
+    untappd: {
+      pending: !!untappd.pending,
+      query: untappd.query || '',
+      results: Array.isArray(untappd.results) ? untappd.results.map(result => ({ ...result })) : [],
+      selectedBid: untappd.selectedBid || '',
+      preview: untappd.preview ? { ...untappd.preview } : null,
+      includeBrewery: !!untappd.includeBrewery,
+      error: untappd.error || '',
+    },
     fields: {
       name: fields.name || '',
       categoryId: fields.categoryId || '',
@@ -1727,6 +1811,7 @@ async function beginAddItemBarcodeLookup(rawBarcode) {
   _addItemModalState.mode = ADD_ITEM_MODAL_MANUAL_MODE;
   _addItemModalState.entryMode = ADD_ITEM_MODAL_SCAN_MODE;
   _addItemModalState.scanState = 'idle';
+  _addItemModalState.untappd = createAddItemModalUntappdState();
   const categoryId = String(_addItemModalState.fields?.categoryId || getAddItemModalDefaultCategoryId());
   _addItemModalState.fields = createAddItemModalFields({ categoryId });
   syncAddItemModalWarnings();
@@ -1768,6 +1853,156 @@ function submitAddItemModalBarcodeLookup() {
   return beginAddItemBarcodeLookup(barcode);
 }
 
+async function runAddItemUntappdSearch(rawQuery = '') {
+  if (!_addItemModalState.isOpen || _addItemModalState.mode !== ADD_ITEM_MODAL_MANUAL_MODE) {
+    return { ok: false, reason: 'inactive' };
+  }
+  const categoryId = String(_addItemModalState.fields?.categoryId || '');
+  if (!categorySupportsUntappdImport(categoryId)) {
+    return { ok: false, reason: 'unsupported' };
+  }
+
+  const query = String(rawQuery || _addItemModalState.fields?.name || '').trim();
+  if (!query) {
+    _addItemModalState.untappd = createAddItemModalUntappdState({
+      error: 'Enter a beer name to search Untappd.',
+    });
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+    return { ok: false, reason: 'required' };
+  }
+
+  const requestId = Number(_addItemModalState.untappd?.requestId || 0) + 1;
+  _addItemModalState.untappd = createAddItemModalUntappdState({
+    pending: true,
+    query,
+    requestId,
+  });
+  renderAddItemModal();
+
+  const results = await searchUntappdBeers(query, {
+    headers: getAuthorizedApiHeaders(),
+  });
+  if (!_addItemModalState.isOpen || Number(_addItemModalState.untappd?.requestId || 0) !== requestId) {
+    return { ok: false, reason: 'stale' };
+  }
+
+  if (!Array.isArray(results)) {
+    _addItemModalState.untappd = createAddItemModalUntappdState({
+      query,
+      error: 'Untappd is unavailable right now.',
+      requestId,
+    });
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+    return { ok: false, reason: 'unavailable' };
+  }
+
+  if (!results.length) {
+    _addItemModalState.untappd = createAddItemModalUntappdState({
+      query,
+      error: 'No Untappd matches found.',
+      requestId,
+    });
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+    return { ok: false, reason: 'not-found' };
+  }
+
+  _addItemModalState.untappd = createAddItemModalUntappdState({
+    query,
+    results,
+    requestId,
+  });
+
+  if (results.length === 1) {
+    return previewAddItemUntappdSelection(results[0].bid);
+  }
+
+  renderAddItemModal();
+  return { ok: true, results };
+}
+
+async function previewAddItemUntappdSelection(bid) {
+  if (!_addItemModalState.isOpen) return { ok: false, reason: 'closed' };
+  const query = String(_addItemModalState.untappd?.query || '').trim();
+  const results = Array.isArray(_addItemModalState.untappd?.results) ? _addItemModalState.untappd.results.slice() : [];
+  const requestId = Number(_addItemModalState.untappd?.requestId || 0) + 1;
+  _addItemModalState.untappd = createAddItemModalUntappdState({
+    pending: true,
+    query,
+    results,
+    selectedBid: String(bid || ''),
+    includeBrewery: !!_addItemModalState.untappd?.includeBrewery,
+    requestId,
+  });
+  renderAddItemModal();
+
+  const preview = await previewUntappdBeerImport(bid, {
+    includeBrewery: true,
+    headers: getAuthorizedApiHeaders(),
+  });
+  if (!_addItemModalState.isOpen || Number(_addItemModalState.untappd?.requestId || 0) !== requestId) {
+    return { ok: false, reason: 'stale' };
+  }
+
+  if (!preview) {
+    _addItemModalState.untappd = createAddItemModalUntappdState({
+      query,
+      results,
+      selectedBid: String(bid || ''),
+      error: 'Untappd preview is unavailable right now.',
+      requestId,
+    });
+    renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+    return { ok: false, reason: 'preview-unavailable' };
+  }
+
+  _addItemModalState.untappd = createAddItemModalUntappdState({
+    query,
+    results,
+    selectedBid: String(bid || ''),
+    preview,
+    includeBrewery: !!_addItemModalState.untappd?.includeBrewery,
+    requestId,
+  });
+  renderAddItemModal();
+  return { ok: true, preview };
+}
+
+function setAddItemUntappdIncludeBrewery(enabled) {
+  if (!_addItemModalState.isOpen) return;
+  if (!_addItemModalState.untappd) _addItemModalState.untappd = createAddItemModalUntappdState();
+  _addItemModalState.untappd.includeBrewery = !!enabled;
+  renderAddItemModal();
+}
+
+function cancelAddItemUntappdFlow() {
+  if (!_addItemModalState.isOpen) return;
+  _addItemModalState.untappd = createAddItemModalUntappdState();
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+}
+
+function applyAddItemUntappdImport() {
+  if (!_addItemModalState.isOpen || !_addItemModalState.fields) return { ok: false, reason: 'closed' };
+  const preview = _addItemModalState.untappd?.preview;
+  if (!preview) return { ok: false, reason: 'missing-preview' };
+  const selectedResult = getSelectedAddItemUntappdResult();
+  _addItemModalState.fields.name = buildAddItemUntappdImportedName(
+    preview,
+    selectedResult,
+    !!_addItemModalState.untappd?.includeBrewery
+  );
+  _addItemModalState.fields.desc = String(preview.description || '').trim();
+  _addItemModalState.untappd = createAddItemModalUntappdState();
+  syncAddItemModalWarnings();
+  renderAddItemModal({ focusFieldId: 'add-item-name-input' });
+  return {
+    ok: true,
+    imported: {
+      name: _addItemModalState.fields.name,
+      desc: _addItemModalState.fields.desc,
+    },
+  };
+}
+
 function syncAddItemModalUiState() {
   const body = document.body;
   if (!body?.classList || typeof body.classList.toggle !== 'function') return;
@@ -1786,6 +2021,14 @@ function renderAddItemModal(options = {}) {
   const view = getAddItemModalViewState();
   const { fields } = view;
   const isScanMode = view.mode === ADD_ITEM_MODAL_SCAN_MODE;
+  const untappd = view.untappd || createAddItemModalUntappdState();
+  const untappdEnabled = categorySupportsUntappdImport(fields.categoryId);
+  const selectedUntappdResult = untappd.results.find(result => String(result?.bid || '') === String(untappd.selectedBid || '')) || null;
+  const importedUntappdName = buildAddItemUntappdImportedName(
+    untappd.preview,
+    selectedUntappdResult,
+    untappd.includeBrewery
+  );
   const canConfirm = !!fields.name.trim() && !!fields.categoryId && !view.duplicateWarning;
   const modalSubtitle = isScanMode
     ? 'Scan a barcode to prefill item details, or use manual UPC lookup when camera scanning is unavailable.'
@@ -1851,17 +2094,94 @@ function renderAddItemModal(options = {}) {
           <button type="button" class="btn-small" onclick="addAddItemModalRecipeIngredient()">Add Ingredient</button>
         </div>
       </div>`;
+  const untappdPanelHtml = !untappdEnabled
+    ? ''
+    : (() => {
+        const attributionHtml = `<p class="add-item-inline-note add-item-untappd-attribution">${escHtml(getAddItemModalUntappdAttribution())}</p>`;
+        if (untappd.pending) {
+          return `<div class="add-item-modal-note" role="status">Searching Untappd…</div>`;
+        }
+        if (untappd.preview) {
+          return `
+            <div class="add-item-untappd-panel add-item-untappd-panel--preview">
+              <div class="add-item-untappd-header">
+                <strong>Untappd preview</strong>
+                <button type="button" class="btn-small" onclick="runAddItemUntappdSearch()">Rerun</button>
+              </div>
+              <div class="add-item-untappd-preview">
+                <div class="add-item-untappd-preview-label">Imported name</div>
+                <div class="add-item-untappd-preview-value">${escHtml(importedUntappdName || untappd.preview.name || '')}</div>
+                <div class="add-item-untappd-preview-label">Imported description</div>
+                <div class="add-item-untappd-preview-value">${escHtml(untappd.preview.description || '') || '<span class="add-item-inline-note">No description available.</span>'}</div>
+              </div>
+              <label class="catmgr-checkbox-row" for="add-item-untappd-brewery-toggle">
+                <input id="add-item-untappd-brewery-toggle" type="checkbox"${untappd.includeBrewery ? ' checked' : ''} onchange="setAddItemUntappdIncludeBrewery(this.checked)"/>
+                <span>Include brewery in name</span>
+              </label>
+              <div class="add-item-untappd-actions">
+                <button type="button" class="btn-small" onclick="cancelAddItemUntappdFlow()">Cancel</button>
+                <button type="button" class="btn-small" onclick="applyAddItemUntappdImport()">Apply</button>
+              </div>
+              ${attributionHtml}
+            </div>`;
+        }
+        if (untappd.results.length > 1) {
+          return `
+            <div class="add-item-untappd-panel add-item-untappd-panel--results">
+              <div class="add-item-untappd-header">
+                <strong>Choose an Untappd match</strong>
+                <button type="button" class="btn-small" onclick="runAddItemUntappdSearch()">Rerun</button>
+              </div>
+              <div class="add-item-untappd-result-list">
+                ${untappd.results.map(result => `
+                  <button type="button" class="add-item-untappd-result" onclick="previewAddItemUntappdSelection('${escHtml(result.bid)}')">
+                    <span class="add-item-untappd-result-name">${escHtml(result.name || '')}</span>
+                    <span class="add-item-untappd-result-meta">${escHtml(formatUntappdResultMeta(result) || result.breweryName || '')}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <div class="add-item-untappd-actions">
+                <button type="button" class="btn-small" onclick="cancelAddItemUntappdFlow()">Cancel</button>
+              </div>
+              ${attributionHtml}
+            </div>`;
+        }
+        if (untappd.error) {
+          return `
+            <div class="add-item-untappd-panel add-item-untappd-panel--status">
+              <p class="add-item-modal-warning">${escHtml(untappd.error)}</p>
+              <div class="add-item-untappd-actions">
+                <button type="button" class="btn-small" onclick="cancelAddItemUntappdFlow()">Cancel</button>
+                <button type="button" class="btn-small" onclick="runAddItemUntappdSearch()">Rerun</button>
+              </div>
+              ${attributionHtml}
+            </div>`;
+        }
+        return '';
+      })();
+  const nameFieldHtml = untappdEnabled
+    ? `
+      <div class="add-item-field-block">
+        <span class="add-item-field-label">Name</span>
+        <div class="add-item-inline-row add-item-inline-row--untappd">
+          <input id="add-item-name-input" class="catmgr-input" type="text" value="${escHtml(fields.name)}" placeholder="${escHtml(getAddItemModalNamePlaceholder(fields.categoryId))}" oninput="updateAddItemModalField('name', this.value)"/>
+          <button type="button" class="btn-small" ${untappd.pending ? 'disabled' : ''} onclick="runAddItemUntappdSearch()">${untappd.pending ? 'Searching…' : 'Untappd'}</button>
+        </div>
+      </div>`
+    : `
+      <label class="add-item-field-block">
+        <span class="add-item-field-label">Name</span>
+        <input id="add-item-name-input" class="catmgr-input" type="text" value="${escHtml(fields.name)}" placeholder="${escHtml(getAddItemModalNamePlaceholder(fields.categoryId))}" oninput="updateAddItemModalField('name', this.value)"/>
+      </label>`;
   const manualBodyHtml = `
     ${lookupStatusHtml}
     <div class="add-item-modal-grid">
-      <label class="add-item-field-block">
-        <span class="add-item-field-label">Name</span>
-        <input id="add-item-name-input" class="catmgr-input" type="text" value="${escHtml(fields.name)}" placeholder="Item name…" oninput="updateAddItemModalField('name', this.value)"/>
-      </label>
+      ${nameFieldHtml}
       <label class="add-item-field-block">
         <span class="add-item-field-label">Category</span>
         <select id="add-item-category-input" class="catmgr-input" onchange="updateAddItemModalField('categoryId', this.value)">${categoryOptions}</select>
       </label>
+      ${untappdEnabled && untappdPanelHtml ? `<div class="add-item-field-block add-item-field-block--full">${untappdPanelHtml}</div>` : ''}
       <label class="add-item-field-block add-item-field-block--full">
         <span class="add-item-field-label">Description</span>
         <textarea id="add-item-desc-input" class="desc-input" rows="3" placeholder="Describe this item…" oninput="updateAddItemModalField('desc', this.value)">${escHtml(fields.desc)}</textarea>
@@ -1947,6 +2267,9 @@ function updateAddItemModalField(field, value) {
   if (!Object.prototype.hasOwnProperty.call(_addItemModalState.fields, field)) return;
   const focusState = captureAddItemModalFocusState();
   _addItemModalState.fields[field] = field === 'categoryId' ? String(value || '') : String(value || '');
+  if (field === 'categoryId' && !categorySupportsUntappdImport(_addItemModalState.fields.categoryId)) {
+    _addItemModalState.untappd = createAddItemModalUntappdState();
+  }
   syncAddItemModalWarnings();
   renderAddItemModal({ focusState });
 }
@@ -2088,6 +2411,10 @@ function currentUserCanManageMenu(menuId = MENU_ID, user = currentUser) {
   if (user.role === 'admin') return true;
   if (user.role !== 'manager') return false;
   return normalizeAccessibleMenuIds(user.accessibleMenuIds).includes(menuId);
+}
+
+function currentUserCanEditCategories(user = currentUser) {
+  return !!user && user.role === 'admin';
 }
 
 function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user = currentUser) {
@@ -2306,6 +2633,7 @@ function getDefaultCategoryDefsForMenuType(menuType = 'drinks') {
       title: cat.label || '',
       sub: cat.sub || '',
       placeholder: cat.placeholder || '',
+      untappdEnabled: cat.untappdEnabled === true || cat.untappd_enabled === true,
     }));
   }
   return DEFAULT_CATEGORY_DEFS.map(cat => ({ ...cat }));
@@ -3123,6 +3451,18 @@ function lookupOpenFoodFactsProduct(barcode, deps = {}) {
   const boundary = getUiModuleBoundary();
   if (typeof boundary?.lookupOpenFoodFactsProduct !== 'function') return Promise.resolve(null);
   return boundary.lookupOpenFoodFactsProduct(barcode, deps);
+}
+
+function searchUntappdBeers(query, deps = {}) {
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.searchUntappdBeers !== 'function') return Promise.resolve(null);
+  return boundary.searchUntappdBeers(query, deps);
+}
+
+function previewUntappdBeerImport(bid, deps = {}) {
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.previewUntappdBeerImport !== 'function') return Promise.resolve(null);
+  return boundary.previewUntappdBeerImport(bid, deps);
 }
 
 function createBarcodeScannerService(deps = {}) {
@@ -5589,6 +5929,7 @@ function hydrateState({ cats, meta, restaurant }) {
       title:       c.label,
       sub:         c.sub         || '',
       placeholder: c.placeholder || '',
+      untappdEnabled: normalizeCategoryUntappdEnabled(c),
     }));
   }
 
@@ -5662,6 +6003,7 @@ function applyPersistedDraftState(draftState = {}) {
     title: cat.label,
     sub: cat.sub || '',
     placeholder: cat.placeholder || '',
+    untappdEnabled: normalizeCategoryUntappdEnabled(cat),
   }));
 
   menuState = {};
@@ -6198,6 +6540,7 @@ function buildMenuCacheSnapshot() {
     color: cat.color || '',
     sub: cat.sub || '',
     placeholder: cat.placeholder || '',
+    untappd_enabled: normalizeCategoryUntappdEnabled(cat),
     display_order: index,
     items: (menuState[cat.id]?.items || []).map((item, itemIndex) => ({
       id: item.id,
@@ -6224,6 +6567,7 @@ function buildMenuCacheSnapshot() {
       color: '',
       sub: '',
       placeholder: '',
+      untappd_enabled: false,
       display_order: 9999,
       items: uncategorizedItems.map((item, itemIndex) => ({
         id: item.id,
@@ -6332,6 +6676,8 @@ function buildSnapshotCategoryStateMap(snapshot = {}) {
     if (!key || key === UNCATEGORIZED_ID) return;
     const nextCategory = cloneJsonCompatible(category, {});
     nextCategory.items = [];
+    nextCategory.untappd_enabled = normalizeCategoryUntappdEnabled(nextCategory);
+    delete nextCategory.untappdEnabled;
     map.set(key, nextCategory);
   });
   return map;
@@ -6848,7 +7194,11 @@ async function renderPublicViews() {
 
 function updateManagerToolsContext() {
   const ctx = document.getElementById('categories-menu-context');
-  if (ctx) ctx.textContent = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+  if (!ctx) return;
+  const baseLabel = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+  ctx.textContent = currentUserCanEditCategories()
+    ? baseLabel
+    : [baseLabel, 'Categories are admin-managed.'].filter(Boolean).join(' • ');
 }
 
 function renderManagerOverviewStats() {
@@ -7325,15 +7675,48 @@ function getNextCategoryColor() {
 
 function renderCategoriesTab() {
   const container = document.getElementById('catmgr-list');
+  const context = document.getElementById('categories-menu-context');
+  const addForm = document.getElementById('catmgr-add-form');
+  const addButton = document.getElementById('show-add-cat-btn');
+  const addUntappdRow = document.getElementById('new-cat-untappd-row');
   if (!container) return;
+  const canEdit = currentUserCanEditCategories();
   container.innerHTML = '';
+  if (context) {
+    const baseLabel = _activeMenuName ? `Editing: ${_activeMenuName}` : '';
+    context.textContent = canEdit
+      ? baseLabel
+      : [baseLabel, 'Categories are admin-managed.'].filter(Boolean).join(' • ');
+  }
+  if (addButton) {
+    addButton.style.display = canEdit ? '' : 'none';
+    addButton.hidden = !canEdit;
+    addButton.textContent = '+ Add Category';
+  }
+  if (addForm && !canEdit) addForm.style.display = 'none';
+  if (addUntappdRow) addUntappdRow.style.display = canEdit && MENU_TYPE !== 'food' ? '' : 'none';
   const managedCategories = getManagedCategoryDefs();
+  if (!canEdit) {
+    const note = document.createElement('div');
+    note.className = 'catmgr-readonly-note';
+    note.innerHTML = `
+      <strong>Admin-managed.</strong>
+      Managers can add and edit items here, but category changes are handled by admins.`;
+    container.appendChild(note);
+  }
   managedCategories.forEach((cat, idx) => {
     const card = document.createElement('div');
     card.className = 'catmgr-card';
     card.id = 'catmgr-' + cat.id;
     const isFirst = idx === 0;
     const isLast  = idx === managedCategories.length - 1;
+    const untappdRowHtml = shouldShowCategoryUntappdControl(cat)
+      ? `
+        <label class="catmgr-checkbox-row" for="ce-untappd-${escHtml(cat.id)}">
+          <input type="checkbox" id="ce-untappd-${escHtml(cat.id)}" name="category-untappd-${escHtml(cat.id)}"${normalizeCategoryUntappdEnabled(cat) ? ' checked' : ''}/>
+          <span>Enable Untappd import for this category</span>
+        </label>`
+      : '';
     card.innerHTML = `
       <div class="catmgr-row">
         <div class="catmgr-icon" style="background:${escHtml(cat.color)}">${escHtml(cat.icon)}</div>
@@ -7341,48 +7724,53 @@ function renderCategoriesTab() {
           <div class="catmgr-title">${escHtml(cat.title)}</div>
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
-        <div class="catmgr-actions">
-          <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
-          <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
-          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
-          <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
-        </div>
+        ${canEdit
+          ? `<div class="catmgr-actions">
+              <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
+              <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
+              <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
+              <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
+            </div>`
+          : '<div class="catmgr-readonly-pill">Admin-managed</div>'}
       </div>
-      <div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
-        <div class="catmgr-field-row">
-          <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
-          <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" name="category-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji…" autocomplete="off" spellcheck="false"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label for="ce-title-${escHtml(cat.id)}">Title</label>
-          <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" name="category-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title…" autocomplete="off"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label for="ce-sub-${escHtml(cat.id)}">Subtitle</label>
-          <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" name="category-subtitle-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description…" autocomplete="off"/>
-        </div>
-        <div class="catmgr-field-row">
-          <label for="ce-ph-${escHtml(cat.id)}">Hint text</label>
-          <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" name="category-hint-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint…" autocomplete="off"/>
-        </div>
-        <div class="catmgr-save-row">
-          <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
-          <button class="btn-small" onclick="saveCategoryEdit('${escHtml(cat.id)}')">Save</button>
-        </div>
-      </div>`;
+      ${canEdit
+        ? `<div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
+            <div class="catmgr-field-row">
+              <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
+              <input type="text" class="catmgr-input catmgr-icon-input" id="ce-icon-${escHtml(cat.id)}" name="category-icon-${escHtml(cat.id)}" value="${escHtml(cat.icon)}" maxlength="4" placeholder="Emoji…" autocomplete="off" spellcheck="false"/>
+            </div>
+            <div class="catmgr-field-row">
+              <label for="ce-title-${escHtml(cat.id)}">Title</label>
+              <input type="text" class="catmgr-input" id="ce-title-${escHtml(cat.id)}" name="category-title-${escHtml(cat.id)}" value="${escHtml(cat.title)}" placeholder="Category title…" autocomplete="off"/>
+            </div>
+            <div class="catmgr-field-row">
+              <label for="ce-sub-${escHtml(cat.id)}">Subtitle</label>
+              <input type="text" class="catmgr-input" id="ce-sub-${escHtml(cat.id)}" name="category-subtitle-${escHtml(cat.id)}" value="${escHtml(cat.sub || '')}" placeholder="Short description…" autocomplete="off"/>
+            </div>
+            <div class="catmgr-field-row">
+              <label for="ce-ph-${escHtml(cat.id)}">Hint text</label>
+              <input type="text" class="catmgr-input" id="ce-ph-${escHtml(cat.id)}" name="category-hint-${escHtml(cat.id)}" value="${escHtml(cat.placeholder || '')}" placeholder="Add item input hint…" autocomplete="off"/>
+            </div>
+            ${untappdRowHtml}
+            <div class="catmgr-save-row">
+              <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')">Cancel</button>
+              <button class="btn-small" onclick="saveCategoryEdit('${escHtml(cat.id)}')">Save</button>
+            </div>
+          </div>`
+        : ''}`;
     container.appendChild(card);
   });
 }
 
 function toggleCategoryEdit(catId) {
-  if (isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
   const el = document.getElementById('catmgr-edit-' + catId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 async function saveCategoryEdit(catId) {
-  if (isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const icon  = document.getElementById('ce-icon-'  + catId)?.value.trim() || cat.icon;
@@ -7390,7 +7778,14 @@ async function saveCategoryEdit(catId) {
   if (!title) { showToast('Title is required.', 'error'); return; }
   const sub   = document.getElementById('ce-sub-'   + catId)?.value.trim() || '';
   const ph    = document.getElementById('ce-ph-'    + catId)?.value.trim() || '';
-  cat.icon = icon; cat.title = title; cat.sub = sub; cat.placeholder = ph;
+  const untappdEnabled = shouldShowCategoryUntappdControl(cat)
+    ? document.getElementById('ce-untappd-' + catId)?.checked === true
+    : false;
+  cat.icon = icon;
+  cat.title = title;
+  cat.sub = sub;
+  cat.placeholder = ph;
+  cat.untappdEnabled = untappdEnabled;
   toggleCategoryEdit(catId);
   markSaveOnlyDraftChange({
     key: `category:${catId}:copy`,
@@ -7406,7 +7801,7 @@ async function saveCategoryEdit(catId) {
 }
 
 async function moveCategoryUp(catId) {
-  if (isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
@@ -7423,7 +7818,7 @@ async function moveCategoryUp(catId) {
 }
 
 async function moveCategoryDown(catId) {
-  if (isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
@@ -7440,7 +7835,7 @@ async function moveCategoryDown(catId) {
 }
 
 async function deleteCategory(catId) {
-  if (isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const items = menuState[catId]?.items || [];
@@ -7464,25 +7859,41 @@ async function deleteCategory(catId) {
 }
 
 function toggleAddCategoryForm() {
+  if (!currentUserCanEditCategories()) return;
   const form = document.getElementById('catmgr-add-form');
   const btn  = document.getElementById('show-add-cat-btn');
   if (!form) return;
   const opening = form.style.display === 'none';
-  form.style.display = opening ? '' : 'none';
-  if (btn) btn.textContent = opening ? '− Cancel' : '+ Add Category';
-  if (opening) document.getElementById('new-cat-title')?.focus();
+  if (!opening) {
+    cancelAddCategoryForm();
+    return;
+  }
+  form.style.display = '';
+  if (btn) btn.textContent = '− Cancel';
+  document.getElementById('new-cat-title')?.focus();
+}
+
+function cancelAddCategoryForm() {
+  const form = document.getElementById('catmgr-add-form');
+  const btn  = document.getElementById('show-add-cat-btn');
+  if (form) form.style.display = 'none';
+  if (btn) btn.textContent = '+ Add Category';
+  const untappdEl = document.getElementById('new-cat-untappd-enabled');
+  if (untappdEl) untappdEl.checked = false;
 }
 
 async function confirmAddCategory() {
+  if (!currentUserCanEditCategories()) return;
   const icon  = document.getElementById('new-cat-icon')?.value.trim() || '🍸';
   const title = document.getElementById('new-cat-title')?.value.trim();
   if (!title) { showToast('Category title is required.', 'error'); return; }
   const sub = document.getElementById('new-cat-sub')?.value.trim() || '';
   const ph  = document.getElementById('new-cat-placeholder')?.value.trim() || `e.g. Add ${title} item…`;
+  const untappdEnabled = MENU_TYPE !== 'food' && document.getElementById('new-cat-untappd-enabled')?.checked === true;
   const id  = 'cat_' + Date.now().toString(36);
   const color = getNextCategoryColor();
   // _uuid is left undefined; persistState() will INSERT and capture the generated UUID
-  CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph });
+  CATEGORY_DEFS.push({ id, icon, color, title, sub, placeholder: ph, untappdEnabled });
   menuState[id] = { items: [], lastSent: [] };
   // Reset form
   ['new-cat-icon','new-cat-title','new-cat-sub','new-cat-placeholder'].forEach(fid => {
@@ -7490,9 +7901,7 @@ async function confirmAddCategory() {
   });
   const iconEl = document.getElementById('new-cat-icon');
   if (iconEl) iconEl.value = '🍸';
-  document.getElementById('catmgr-add-form').style.display = 'none';
-  const btn = document.getElementById('show-add-cat-btn');
-  if (btn) btn.textContent = '+ Add Category';
+  cancelAddCategoryForm();
   markSaveOnlyDraftChange({
     key: `category:${id}:add`,
     label: `Added category ${title}`,

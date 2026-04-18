@@ -301,9 +301,13 @@
                 <label for="new-cat-placeholder">Placeholder</label>
                 <input type="text" id="new-cat-placeholder" name="new-category-hint" class="catmgr-input" placeholder="Shown when adding items, e.g. &quot;Margarita…&quot;" autocomplete="off"/>
               </div>
+              <label class="catmgr-checkbox-row" id="new-cat-untappd-row" for="new-cat-untappd-enabled" style="display:none">
+                <input type="checkbox" id="new-cat-untappd-enabled" name="new-category-untappd-enabled"/>
+                <span>Enable Untappd import for this category</span>
+              </label>
               <div class="catmgr-add-btn-row">
                 <button class="btn-small" onclick="confirmAddCategory()">Add Category</button>
-                <button class="btn-small" onclick="document.getElementById('catmgr-add-form').style.display='none'">Cancel</button>
+                <button class="btn-small" onclick="cancelAddCategoryForm()">Cancel</button>
               </div>
             </div>
             <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()">+ Add Category</button>
@@ -436,6 +440,7 @@
 <script src="/core/ui/manager/sections.js"></script>
 <script src="/core/ui/manager/editors.js"></script>
 <script src="/core/ui/manager/open-food-facts.js"></script>
+<script src="/core/ui/manager/untappd.js"></script>
 <script src="/core/ui/manager/barcode-scanner.js"></script>
 <script src="/core/ui/admin/workspace.js"></script>
 <script src="/core/ui/admin/switcher.js"></script>

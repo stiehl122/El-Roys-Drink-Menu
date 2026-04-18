@@ -226,6 +226,13 @@ function sanitizePublicCategory(category = {}) {
   };
 }
 
+function normalizeWorkspaceCategory(category = {}) {
+  return {
+    ...category,
+    untappd_enabled: category?.untappd_enabled === true || category?.untappdEnabled === true,
+  };
+}
+
 function sanitizePublicRestaurant(restaurant = null) {
   if (!restaurant || typeof restaurant !== 'object') return null;
   const design = restaurant.design && typeof restaurant.design === 'object' ? restaurant.design : {};
@@ -252,6 +259,9 @@ function sanitizePublicMeta(meta = {}) {
 }
 
 export function createMenuWorkspacePayload(bundle, { actor = null, restaurantTools = null } = {}) {
+  const normalizedCats = Array.isArray(bundle?.cats)
+    ? bundle.cats.map(normalizeWorkspaceCategory)
+    : [];
   const accessibleMenuIds = getActorAccessibleMenuIds(actor);
   const menuId = bundle?.menu?.id || '';
   const restaurantId = bundle?.menu?.restaurantId || '';
@@ -283,7 +293,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
     ? draftMeta.last_sent_state
     : {};
   const queueState = buildCategoryQueueState({
-    snapshot: { cats: bundle?.cats || [] },
+    snapshot: { cats: normalizedCats },
     lastSentState,
   });
   const currentFeaturedIds = Array.isArray(bundle?.featuredCurrentIds)
@@ -320,7 +330,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
   };
 
   return {
-    cats: bundle?.cats || [],
+    cats: normalizedCats,
     meta: bundle?.meta || {},
     restaurant: bundle?.restaurant || null,
     restaurantTools: restaurantTools || null,

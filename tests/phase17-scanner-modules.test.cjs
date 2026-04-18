@@ -43,6 +43,54 @@ test('open food facts lookup returns null for unknown products and network failu
   assert.equal(await failedSandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct('0000'), null);
 });
 
+test('untappd lookup boundary only talks to the manager API and returns shaped results', async () => {
+  let request = null;
+  const sandbox = loadSandboxWithScripts(['core/ui/manager/untappd.js'], {
+    fetch: async (url, options) => {
+      request = { url, options };
+      return createFetchResponse(200, {
+        beers: [
+          { bid: 101, beer_name: 'West Coast IPA', brewery_name: 'Example Brewery' },
+        ],
+      });
+    },
+  });
+
+  const result = await sandbox.__HF_UI_MODULES__.searchUntappdBeers('  West Coast IPA draft 16 oz can  ');
+
+  assert.equal(request.url, '/api/manager');
+  assert.equal(request.options.method, 'POST');
+  assert.equal(request.options.headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    action: 'untappd_search',
+    query: 'West Coast IPA draft 16 oz can',
+  });
+  assert.equal(result.length, 1);
+  assert.equal(JSON.stringify(result), JSON.stringify([
+    { bid: 101, name: 'West Coast IPA', breweryName: 'Example Brewery', style: '', abv: null },
+  ]));
+});
+
+test('untappd preview boundary falls back to null on bad transport responses', async () => {
+  let request = null;
+  const sandbox = loadSandboxWithScripts(['core/ui/manager/untappd.js'], {
+    fetch: async (url, options) => {
+      request = { url, options };
+      return createFetchResponse(500, { error: 'nope' });
+    },
+  });
+
+  const result = await sandbox.__HF_UI_MODULES__.previewUntappdBeerImport(42, { includeBrewery: true });
+
+  assert.equal(request.url, '/api/manager');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    action: 'untappd_preview',
+    bid: 42,
+    includeBrewery: true,
+  });
+  assert.equal(result, null);
+});
+
 test('barcode scanner prefers the native BarcodeDetector path and releases the stream after detection', async () => {
   let trackStopCount = 0;
   const stream = {

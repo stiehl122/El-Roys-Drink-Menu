@@ -28,6 +28,10 @@ struct MenuEditorScreen: View {
     menu.isFoodMenu ? theme.foodAccent : theme.drinkAccent
   }
 
+  private var canEditCategories: Bool {
+    model.canEditCategories
+  }
+
   var body: some View {
     ZStack {
       MenuEditorBackground(theme: theme)
@@ -63,6 +67,7 @@ struct MenuEditorScreen: View {
             MenuEditorCategoriesHeader(
               theme: theme,
               menuAccent: menuAccent,
+              canEditCategories: canEditCategories,
               onAddCategory: { showingAddCategory = true }
             )
             ForEach(Array(document.visibleCategories.enumerated()), id: \.offset) { _, category in
@@ -71,6 +76,7 @@ struct MenuEditorScreen: View {
                 category: category,
                 theme: theme,
                 menuAccent: menuAccent,
+                canEditCategories: canEditCategories,
                 onRename: {
                   renameTarget = category
                   renameText = category.label
@@ -718,6 +724,7 @@ private struct MenuEditorActionPanel: View {
 private struct MenuEditorCategoriesHeader: View {
   let theme: MenuEditorTheme
   let menuAccent: Color
+  let canEditCategories: Bool
   let onAddCategory: () -> Void
 
   var body: some View {
@@ -726,11 +733,17 @@ private struct MenuEditorCategoriesHeader: View {
         .font(EditorTypography.display(20, weight: .bold))
         .foregroundStyle(theme.titleText)
       Spacer()
-      Button(action: onAddCategory) {
-        Label("Add Category", systemImage: "square.split.1x2.fill")
+      if canEditCategories {
+        Button(action: onAddCategory) {
+          Label("Add Category", systemImage: "square.split.1x2.fill")
+        }
+        .buttonStyle(SecondaryGlassButtonStyle())
+        .tint(menuAccent)
+      } else {
+        Text("Admin managed")
+          .font(EditorTypography.body(12, weight: .semibold))
+          .foregroundStyle(theme.subtleText)
       }
-      .buttonStyle(SecondaryGlassButtonStyle())
-      .tint(menuAccent)
     }
   }
 }
@@ -769,6 +782,7 @@ private struct MenuEditorCategoryCard: View {
   let category: MenuCategoryPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
+  let canEditCategories: Bool
   let onRename: () -> Void
   let onDelete: () -> Void
   let onSelectItem: (MenuItemPayload) -> Void
@@ -801,15 +815,19 @@ private struct MenuEditorCategoryCard: View {
           .padding(.horizontal, 8)
           .background(menuAccent.opacity(0.15), in: Capsule())
           .foregroundStyle(menuAccent)
-        Menu {
-          Button(isReordering ? "Done Reordering" : "Reorder Items", action: onToggleReorder)
-            .disabled(visibleItems.count < 2 && !isReordering)
-          Button("Rename", action: onRename)
-          Button("Delete Category", role: .destructive, action: onDelete)
-        } label: {
-          Image(systemName: "ellipsis.circle.fill")
-            .font(.system(size: 20))
-            .foregroundStyle(theme.subtleText)
+        if canEditCategories || visibleItems.count > 1 || isReordering {
+          Menu {
+            Button(isReordering ? "Done Reordering" : "Reorder Items", action: onToggleReorder)
+              .disabled(visibleItems.count < 2 && !isReordering)
+            if canEditCategories {
+              Button("Rename", action: onRename)
+              Button("Delete Category", role: .destructive, action: onDelete)
+            }
+          } label: {
+            Image(systemName: "ellipsis.circle.fill")
+              .font(.system(size: 20))
+              .foregroundStyle(theme.subtleText)
+          }
         }
       }
 

@@ -152,6 +152,10 @@ final class AppModel {
     return bootstrap?.restaurants.first(where: { $0.id == restaurantId })
   }
 
+  var canEditCategories: Bool {
+    currentEditorWorkspace?.workspace.permissions.canAdmin ?? false
+  }
+
   private var editorCapabilities: WorkspaceCapabilities? {
     currentEditorWorkspace?.workspace.capabilities
   }
@@ -571,14 +575,17 @@ final class AppModel {
   }
 
   func addCategory(label: String) {
+    guard canEditCategories else { return }
     mutateEditorDocument { $0.addCategory(label: label) }
   }
 
   func renameCategory(key: String, label: String) {
+    guard canEditCategories else { return }
     mutateEditorDocument { $0.renameCategory(key: key, label: label) }
   }
 
   func deleteCategory(key: String) {
+    guard canEditCategories else { return }
     mutateEditorDocument { $0.deleteCategory(key: key) }
   }
 

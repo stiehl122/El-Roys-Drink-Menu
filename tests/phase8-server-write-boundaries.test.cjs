@@ -206,3 +206,18 @@ test('category deletion no longer performs direct Supabase writes before the ser
   assert.match(deleteCategorySource, /invalidateDiff\(\)/);
   assert.match(deleteCategorySource, /updateDraftIndicator\(\)/);
 });
+
+test('draft, live, preview, and publish boundaries enforce shared category governance before saving', () => {
+  const draft = read('server/_menu-draft.js');
+  const live = read('server/_menu-live.js');
+  const publish = read('server/_menu-publish.js');
+
+  assert.match(draft, /from '\.\/_category-governance\.js'/);
+  assert.match(draft, /assertCategoryGovernanceAllowed\(/);
+  assert.match(live, /from '\.\/_category-governance\.js'/);
+  assert.match(live, /assertCategoryGovernanceAllowed\(/);
+  assert.match(live, /requireCategorySnapshot:\s*true/);
+  assert.match(publish, /from '\.\/_category-governance\.js'/);
+  assert.match(publish, /assertCategoryGovernanceAllowed\(/);
+  assert.match(publish, /requireCategorySnapshot:\s*true/);
+});

@@ -513,6 +513,37 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.visibility, "off_menu")
   }
 
+  func testCategoryPayloadDefaultsUntappdEnabledToFalse() throws {
+    let data = Data("""
+    {
+      "id": "cat-1",
+      "key": "beer",
+      "label": "Beer",
+      "items": []
+    }
+    """.utf8)
+
+    let category = try JSONDecoder.backend.decode(MenuCategoryPayload.self, from: data)
+
+    XCTAssertFalse(category.untappdEnabled)
+  }
+
+  func testCategoryPayloadDecodesUntappdEnabledFromSnakeCase() throws {
+    let data = Data("""
+    {
+      "id": "cat-1",
+      "key": "beer",
+      "label": "Beer",
+      "untappd_enabled": true,
+      "items": []
+    }
+    """.utf8)
+
+    let category = try JSONDecoder.backend.decode(MenuCategoryPayload.self, from: data)
+
+    XCTAssertTrue(category.untappdEnabled)
+  }
+
   func testWorkspacePayloadDecodesQueueStatusFields() throws {
     let data = Data("""
     {
@@ -556,6 +587,87 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.workspace.hasUnsentChanges, true)
     XCTAssertEqual(payload.workspace.revisions.liveRevision, 200)
     XCTAssertEqual(payload.workspace.revisions.notificationBaselineRevision, 150)
+  }
+
+  @MainActor
+  func testCanEditCategoriesTracksAdminPermission() {
+    let adminWorkspace = makeWorkspace(
+      permissions: WorkspacePermissions(
+        canManage: true,
+        canAdmin: true,
+        canEditRestaurantSpecials: false,
+        canReadRestaurantTools: false
+      )
+    )
+    let managerWorkspace = makeWorkspace(
+      permissions: WorkspacePermissions(
+        canManage: true,
+        canAdmin: false,
+        canEditRestaurantSpecials: false,
+        canReadRestaurantTools: false
+      )
+    )
+
+    let adminModel = AppModel(
+      environment: AppEnvironment(name: .preview, baseURL: exampleURL, publicOrigin: exampleURL, displayName: "Preview"),
+      services: makeServices(workspaceClient: StubWorkspaceClient(payloads: []), historyClient: StubHistoryClient(payload: makeHistoryPayload())),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    let managerModel = AppModel(
+      environment: AppEnvironment(name: .preview, baseURL: exampleURL, publicOrigin: exampleURL, displayName: "Preview"),
+      services: makeServices(workspaceClient: StubWorkspaceClient(payloads: []), historyClient: StubHistoryClient(payload: makeHistoryPayload())),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+
+    adminModel.currentEditorWorkspace = adminWorkspace
+    managerModel.currentEditorWorkspace = managerWorkspace
+
+    XCTAssertTrue(adminModel.canEditCategories)
+    XCTAssertFalse(managerModel.canEditCategories)
+  }
+
+  @MainActor
+  func testCategoryMutationsAreIgnoredForNonAdmins() {
+    let workspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      permissions: WorkspacePermissions(
+        canManage: true,
+        canAdmin: false,
+        canEditRestaurantSpecials: false,
+        canReadRestaurantTools: false
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(name: .preview, baseURL: exampleURL, publicOrigin: exampleURL, displayName: "Preview"),
+      services: makeServices(workspaceClient: StubWorkspaceClient(payloads: []), historyClient: StubHistoryClient(payload: makeHistoryPayload())),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.currentEditorWorkspace = workspace
+    model.currentEditorDocument = EditableMenuDocument(workspace: workspace)
+
+    model.addCategory(label: "Wine")
+    model.renameCategory(key: "beer", label: "Draft Beer")
+    model.deleteCategory(key: "beer")
+
+    XCTAssertFalse(model.canEditCategories)
+    XCTAssertEqual(model.currentEditorDocument?.visibleCategories.count, 1)
+    XCTAssertEqual(model.currentEditorDocument?.category(for: "beer")?.label, "Beer")
   }
 
   func testHistoryPayloadDecodesWhenSourceFieldsAreMissing() throws {
@@ -2159,7 +2271,8 @@ final class MenuDocumentTests: XCTestCase {
     sharedDraft: SharedDraftInfo? = nil,
     revisions: WorkspaceRevisions = WorkspaceRevisions(liveRevision: 10, draftRevision: nil, lastSentRevision: 10, notificationBaselineRevision: 10),
     menuStatus: String = "",
-    hasUnsentChanges: Bool? = nil
+    hasUnsentChanges: Bool? = nil,
+    permissions: WorkspacePermissions = WorkspacePermissions(canManage: true, canAdmin: true, canEditRestaurantSpecials: false, canReadRestaurantTools: false)
   ) -> MenuWorkspacePayload {
     let resolvedSharedDraft = sharedDraft ?? SharedDraftInfo(
       exists: hasSharedDraft,
@@ -2180,7 +2293,7 @@ final class MenuDocumentTests: XCTestCase {
         sharedDraft: resolvedSharedDraft,
         menuStatus: menuStatus,
         hasUnsentChanges: hasUnsentChanges,
-        permissions: WorkspacePermissions(canManage: true, canAdmin: false, canEditRestaurantSpecials: false, canReadRestaurantTools: false),
+        permissions: permissions,
         capabilities: WorkspaceCapabilities(
           canSaveDraft: true,
           canSaveLiveMenu: true,
