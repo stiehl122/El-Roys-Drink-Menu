@@ -6783,13 +6783,9 @@ body.manager-dossier-shell .manager-shell-actionbar {
 body.manager-dossier-shell .manager-shell-actionbar-groups,
 body.manager-dossier-shell .manager-shell-actionbar-primary,
 body.manager-dossier-shell .manager-shell-actionbar-featured {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-}
-
-body.manager-dossier-shell .manager-shell-actionbar-primary,
-body.manager-dossier-shell .manager-shell-actionbar-featured {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 body.manager-dossier-shell .manager-shell-actionbar-primary .save-btn,
@@ -7212,10 +7208,10 @@ body.manager-dossier-shell #manager-items-section .item-actions-compact {
 
 body.manager-dossier-shell .eighty-six-btn,
 body.manager-dossier-shell .del-item,
-body.manager-dossier-shell .db-filter-btn,
-body.manager-dossier-shell .btn-small,
-body.manager-dossier-shell .collapse-all-btn,
-body.manager-dossier-shell .public-switch-btn {
+body.manager-dossier-shell #manager-main-content .db-filter-btn,
+body.manager-dossier-shell #manager-main-content .btn-small,
+body.manager-dossier-shell #manager-action-bar .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small {
   border-radius: 0;
 }
 
@@ -7611,10 +7607,6 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  body.manager-dossier-shell .manager-shell-actionbar-primary {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
 }
 
 @media (min-width: 780px) {
@@ -7737,7 +7729,6 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 
   body.manager-dossier-shell .manager-shell-actionbar-primary,
   body.manager-dossier-shell .manager-shell-actionbar-featured {
-    display: flex;
     align-items: center;
     gap: 8px;
   }
@@ -7777,7 +7768,7 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 
   body.manager-dossier-shell .manager-shell-actionbar-primary,
   body.manager-dossier-shell .manager-shell-actionbar-featured {
-    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   body.manager-dossier-shell .settings-section,
