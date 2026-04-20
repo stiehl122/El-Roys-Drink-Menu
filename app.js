@@ -2427,6 +2427,39 @@ function currentUserCanEditRestaurantSpecials(restaurantId = RESTAURANT_ID, user
   return requiredMenuIds.every(menuId => accessibleMenuIds.has(menuId));
 }
 
+function formatNaturalLabelList(labels = []) {
+  const cleaned = (Array.isArray(labels) ? labels : []).filter(Boolean);
+  if (!cleaned.length) return '';
+  if (cleaned.length === 1) return cleaned[0];
+  if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}`;
+  return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}`;
+}
+
+function getRestaurantSpecialAccessNote(restaurantId = RESTAURANT_ID, user = currentUser) {
+  const restaurantName = getRestaurantById(restaurantId)?.name || 'this restaurant';
+  const requiredMenuIds = getRestaurantSpecialConfig(restaurantId)?.menuIds || getRestaurantMenuIds(restaurantId);
+  const accessibleMenuIds = new Set(normalizeAccessibleMenuIds(user?.accessibleMenuIds));
+  const requiredLabels = requiredMenuIds
+    .map(menuId => getMenuById(menuId))
+    .filter(Boolean)
+    .map(menu => formatMenuDisplayName(menu.name, menu.type, menu.restaurantId));
+  const missingLabels = requiredMenuIds
+    .filter(menuId => !accessibleMenuIds.has(menuId))
+    .map(menuId => getMenuById(menuId))
+    .filter(Boolean)
+    .map(menu => formatMenuDisplayName(menu.name, menu.type, menu.restaurantId));
+  const requiredLabelText = formatNaturalLabelList(requiredLabels) || `both ${restaurantName} menus`;
+  const missingLabelText = formatNaturalLabelList(missingLabels);
+  const detail = missingLabelText
+    ? `This account is missing ${missingLabelText}. Ask an admin to grant both menus for ${restaurantName}.`
+    : `Ask an admin to grant access to both menus for ${restaurantName}.`;
+  return {
+    title: 'Featured specials need both menus.',
+    summary: `This panel stays read-only until the same account can manage ${requiredLabelText}.`,
+    detail,
+  };
+}
+
 function getMenuTypeLabel(menuType) {
   return (menuType || '').toLowerCase() === 'food' ? 'Food' : 'Drinks';
 }
@@ -12800,10 +12833,29 @@ function getActiveRestaurantSpecialGroup() {
 
 function renderFeaturedTab() {
   const wrap = document.getElementById('featured-mgr-wrap');
+  const action = document.getElementById('manager-featured-action');
   if (!wrap) return;
   if (!currentUserCanEditRestaurantSpecials()) {
-    wrap.innerHTML = '';
+    const accessNote = getRestaurantSpecialAccessNote();
+    wrap.innerHTML = `<div class="featured-specials-access-note" role="note" aria-live="polite">
+      <p class="featured-specials-access-kicker">Limited access</p>
+      <h4>${escHtml(accessNote.title)}</h4>
+      <p class="featured-specials-access-copy">${escHtml(accessNote.summary)}</p>
+      <p class="featured-specials-access-detail">${escHtml(accessNote.detail)}</p>
+    </div>`;
+    if (action) {
+      action.textContent = 'Needs both menus';
+      action.disabled = true;
+      action.setAttribute('aria-disabled', 'true');
+      action.title = accessNote.detail;
+    }
     return;
+  }
+  if (action) {
+    action.textContent = 'Edit Featured';
+    action.disabled = false;
+    action.removeAttribute('aria-disabled');
+    action.removeAttribute('title');
   }
   const group = getActiveRestaurantSpecialGroup();
   const groupId = group?.id || '';

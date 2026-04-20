@@ -4618,6 +4618,46 @@ body.manager-stitch-shell .featured-specials-editor {
   gap: 16px;
 }
 
+body.manager-stitch-shell .featured-specials-access-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(248, 243, 233, 0.98), rgba(239, 228, 211, 0.92));
+}
+
+body.manager-stitch-shell .featured-specials-access-kicker {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 11px;
+  font-family: var(--manager-shell-mono, 'IBM Plex Mono', monospace);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .featured-specials-access-note h4 {
+  margin: 0;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: clamp(1.4rem, 2.1vw, 1.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+body.manager-stitch-shell .featured-specials-access-copy,
+body.manager-stitch-shell .featured-specials-access-detail {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.manager-stitch-shell .featured-specials-access-detail {
+  color: var(--manager-shell-primary);
+}
+
 body.manager-stitch-shell .featured-specials-head {
   display: flex;
   align-items: flex-start;
