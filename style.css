@@ -6788,6 +6788,11 @@ body.manager-dossier-shell .manager-shell-actionbar-featured {
   gap: 8px;
 }
 
+body.manager-dossier-shell .manager-shell-actionbar .btn-row,
+body.manager-dossier-shell #manager-primary-action-group {
+  margin-top: 0;
+}
+
 body.manager-dossier-shell .manager-shell-actionbar-primary .save-btn,
 body.manager-dossier-shell .manager-shell-actionbar-primary .send-btn,
 body.manager-dossier-shell .manager-shell-actionbar-primary .btn-small,
