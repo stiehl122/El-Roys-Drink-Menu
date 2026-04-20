@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/core/auth/auth-overlay-unified.css">
 </head>
-<body class="settings-shell-pending manager-stitch-shell">
+<body class="settings-shell-pending manager-dossier-shell">
 <a class="manager-shell-skip-link" href="#manager-main-content">Skip to Content</a>
 <main id="site-picker-view" class="site-picker-view" hidden>
   <div class="site-picker-card">
@@ -23,25 +23,61 @@
 </main>
 
 <div class="wrapper manager-shell-wrapper" id="app-shell">
-  <header class="manager-shell-topbar">
-    <div class="manager-shell-topbar-inner">
-      <div class="manager-shell-topbar-primary">
-        <button
-          class="manager-shell-menu-toggle"
-          id="settings-drawer-toggle"
-          type="button"
-          aria-label="Open section navigation"
-          aria-controls="manager-settings-rail"
-          aria-expanded="false"
-          onclick="toggleSettingsDrawer()"
-        >☰</button>
-        <h1 class="manager-shell-topbar-title">Manager Workspace</h1>
+  <header class="manager-shell-topbar manager-dossier-header">
+    <div class="manager-shell-topbar-inner manager-dossier-header-inner">
+      <div class="manager-dossier-brand">
+        <div class="manager-dossier-brand-row">
+          <button
+            class="manager-shell-menu-toggle"
+            id="settings-drawer-toggle"
+            type="button"
+            aria-label="Open section navigation"
+            aria-controls="manager-settings-rail"
+            aria-expanded="false"
+            onclick="toggleSettingsDrawer()"
+          >≡</button>
+          <div class="manager-dossier-title-block">
+            <p class="manager-dossier-kicker">Manager dossier / service revision</p>
+            <h1 class="manager-shell-topbar-title">Manager Workspace</h1>
+          </div>
+        </div>
+
+        <div class="manager-dossier-meta-strip" aria-hidden="true">
+          <span class="manager-dossier-meta-tag">Archival shell</span>
+          <span class="manager-dossier-meta-tag">Mobile ready</span>
+          <span class="manager-dossier-meta-tag">Live runtime</span>
+        </div>
+
+        <div class="manager-dossier-header-grid">
+          <div class="manager-dossier-header-panel">
+            <p class="manager-dossier-panel-label">Active dossier</p>
+            <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
+          </div>
+          <div class="manager-dossier-header-panel">
+            <p class="manager-dossier-panel-label">Revision stamp</p>
+            <div class="header-sub" id="last-updated-label">Last Updated: —</div>
+          </div>
+          <div class="manager-dossier-header-panel">
+            <p class="manager-dossier-panel-label">Routing</p>
+            <div id="active-menu-bar" class="manager-shell-menu-bar">
+              <span class="active-menu-label">Menu</span>
+              <span id="active-menu-name" class="active-menu-name-text"></span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="manager-shell-topbar-actions">
-        <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Menu Switcher</button>
-        <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
-        <div class="manager-shell-user-tools">
+      <div class="manager-shell-topbar-actions manager-dossier-header-actions">
+        <div class="manager-dossier-action-cluster">
+          <p class="manager-dossier-panel-label">Controls</p>
+          <div class="manager-dossier-action-row">
+            <button class="manager-btn manager-dossier-action-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Open Manager</button>
+            <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+            <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
+          </div>
+        </div>
+        <div class="manager-shell-user-tools manager-dossier-user-tools">
+          <p class="manager-dossier-panel-label">Staff</p>
           <div class="user-chip" id="user-chip" style="display:none"
                onclick="toggleUserDropdown()"
                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
@@ -59,19 +95,6 @@
               <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
             </div>
           </div>
-        </div>
-      </div>
-
-      <div class="manager-shell-legacy-hooks" aria-hidden="true" hidden>
-        <button class="manager-btn" id="action-btn" tabindex="-1">Open Manager</button>
-        <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
-        <div class="manager-shell-meta-card">
-          <span class="manager-shell-meta-label">Last sync</span>
-          <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-        </div>
-        <div id="active-menu-bar" class="manager-shell-menu-bar">
-          <span class="active-menu-label">Menu</span>
-          <span id="active-menu-name" class="active-menu-name-text"></span>
         </div>
       </div>
     </div>
@@ -135,11 +158,11 @@
 
     <div class="settings-workspace manager-shell-layout">
       <aside class="settings-rail manager-shell-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
-        <div class="manager-shell-rail-head">
-          <div class="manager-shell-rail-head-row">
-            <div>
-              <p class="settings-rail-kicker">Manager</p>
-              <p class="manager-shell-rail-note">Sections</p>
+        <div class="manager-shell-rail-head manager-dossier-rail-head">
+          <div class="manager-shell-rail-head-row manager-dossier-rail-head-row">
+            <div class="manager-dossier-rail-title-block">
+              <p class="settings-rail-kicker">Section Index</p>
+              <p class="manager-shell-rail-note">Manager dossier</p>
             </div>
             <button
               class="manager-shell-rail-close"
@@ -148,11 +171,11 @@
               onclick="closeSettingsDrawer()"
             >×</button>
           </div>
-          <div class="manager-shell-drawer-meta">
-            <p class="manager-shell-drawer-kicker">Quick Actions</p>
+          <div class="manager-shell-drawer-meta manager-dossier-drawer-meta">
+            <p class="manager-shell-drawer-kicker">Current record</p>
             <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
-            <p class="manager-shell-drawer-copy">Use the rail for long-form edits, then publish from the dock when service is ready.</p>
-            <div class="manager-shell-drawer-actions">
+            <p class="manager-shell-drawer-copy">Move through sections like a service packet, then publish from the dock once the room is ready.</p>
+            <div class="manager-shell-drawer-actions manager-dossier-drawer-actions">
               <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
               <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
               <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
@@ -160,25 +183,28 @@
             <button class="btn-small manager-shell-drawer-return" id="drawer-return-btn" type="button" onclick="exitView()">Return to menu</button>
           </div>
         </div>
-        <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>
-        <button type="button" class="settings-rail-btn" data-target="manager-items-section" onclick="focusSettingsSection('manager-items-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9634;</span>Edit Items</button>
-        <button type="button" class="settings-rail-btn" data-target="manager-pricing-section" onclick="focusSettingsSection('manager-pricing-section', this)"><span class="rail-btn-icon" aria-hidden="true">$</span>Edit Pricing</button>
-        <button type="button" class="settings-rail-btn" data-target="manager-description-section" onclick="focusSettingsSection('manager-description-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9998;</span>Edit Description</button>
-        <button type="button" class="settings-rail-btn" data-target="manager-categories-section" onclick="focusSettingsSection('manager-categories-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9776;</span>Categories</button>
-        <button type="button" class="settings-rail-btn" data-target="manager-database-section" onclick="focusSettingsSection('manager-database-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#8942;</span>Database</button>
+        <nav class="manager-dossier-rail-nav" aria-label="Manager dossier navigation">
+          <button type="button" class="settings-rail-btn active" data-target="manager-overview-section" onclick="focusSettingsSection('manager-overview-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9670;</span>Overview</button>
+          <button type="button" class="settings-rail-btn" data-target="manager-items-section" onclick="focusSettingsSection('manager-items-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9634;</span>Edit Items</button>
+          <button type="button" class="settings-rail-btn" data-target="manager-pricing-section" onclick="focusSettingsSection('manager-pricing-section', this)"><span class="rail-btn-icon" aria-hidden="true">$</span>Edit Pricing</button>
+          <button type="button" class="settings-rail-btn" data-target="manager-description-section" onclick="focusSettingsSection('manager-description-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9998;</span>Edit Description</button>
+          <button type="button" class="settings-rail-btn" data-target="manager-categories-section" onclick="focusSettingsSection('manager-categories-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#9776;</span>Categories</button>
+          <button type="button" class="settings-rail-btn" data-target="manager-database-section" onclick="focusSettingsSection('manager-database-section', this)"><span class="rail-btn-icon" aria-hidden="true">&#8942;</span>Database</button>
+        </nav>
       </aside>
 
       <main class="settings-stage manager-shell-stage" id="manager-main-content">
         <div id="manager-panel" class="settings-panel manager-shell-panel" style="display:none">
-          <section class="settings-section manager-shell-overview" id="manager-overview-section">
-            <div class="manager-shell-section-header">
+          <section class="settings-section manager-shell-overview manager-dossier-panel" id="manager-overview-section">
+            <div class="manager-shell-section-header manager-dossier-panel-head">
               <div>
                 <p class="settings-section-kicker">Service Overview</p>
                 <h2>At a glance</h2>
               </div>
+              <p class="manager-dossier-panel-note">Balanced density for service-time editing across desktop and mobile.</p>
             </div>
 
-            <div class="manager-shell-overview-hero">
+            <div class="manager-shell-overview-hero manager-dossier-hero">
               <div class="manager-shell-overview-hero-copy">
                 <p class="manager-shell-overview-hero-kicker">Start Here</p>
                 <h3>Move from draft to service without losing your place.</h3>
@@ -192,7 +218,7 @@
               </div>
             </div>
 
-            <div class="manager-shell-stats-grid">
+            <div class="manager-shell-stats-grid manager-dossier-stats">
               <article class="manager-shell-stat-card">
                 <p class="manager-shell-stat-label">Menu Status</p>
                 <strong class="manager-shell-stat-value" id="manager-overview-status-value">Live</strong>
@@ -210,8 +236,8 @@
               </article>
             </div>
 
-            <div class="manager-shell-overview-grid">
-              <section class="manager-shell-overview-card manager-shell-overview-card--featured" id="manager-featured-overview-card">
+            <div class="manager-shell-overview-grid manager-dossier-record-grid">
+              <section class="manager-shell-overview-card manager-shell-overview-card--featured manager-dossier-record-card" id="manager-featured-overview-card">
                 <div class="manager-shell-card-head">
                   <div>
                     <p class="settings-section-kicker">Featured</p>
@@ -223,7 +249,7 @@
                 <button class="btn-small manager-shell-overview-link" onclick="focusFeaturedManagerCard()" style="margin-top:14px">Edit Featured</button>
               </section>
 
-              <section class="manager-shell-overview-card manager-shell-overview-card--recent" id="manager-recent-section">
+              <section class="manager-shell-overview-card manager-shell-overview-card--recent manager-dossier-record-card" id="manager-recent-section">
                 <div class="manager-shell-card-head">
                   <div>
                     <p class="settings-section-kicker">Recent Changes</p>
@@ -236,7 +262,7 @@
             </div>
           </section>
 
-          <section class="settings-section manager-shell-items" id="manager-items-section">
+          <section class="settings-section manager-shell-items manager-dossier-panel" id="manager-items-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Items</p>
@@ -251,7 +277,7 @@
             <div id="manager-add-item-modal-host"></div>
           </section>
 
-          <section class="settings-section manager-shell-pricing" id="manager-pricing-section">
+          <section class="settings-section manager-shell-pricing manager-dossier-panel" id="manager-pricing-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Pricing</p>
@@ -262,7 +288,7 @@
             <div id="manager-pricing-categories"></div>
           </section>
 
-          <section class="settings-section manager-shell-descriptions" id="manager-description-section">
+          <section class="settings-section manager-shell-descriptions manager-dossier-panel" id="manager-description-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Edit Description</p>
@@ -273,7 +299,7 @@
             <div id="manager-description-categories"></div>
           </section>
 
-          <section class="settings-section manager-shell-categories" id="manager-categories-section">
+          <section class="settings-section manager-shell-categories manager-dossier-panel" id="manager-categories-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Categories</p>
@@ -313,7 +339,7 @@
             <button class="btn-small" id="show-add-cat-btn" onclick="toggleAddCategoryForm()">+ Add Category</button>
           </section>
 
-          <section class="settings-section manager-shell-database" id="manager-database-section">
+          <section class="settings-section manager-shell-database manager-dossier-panel" id="manager-database-section">
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Database</p>
@@ -367,14 +393,14 @@
           </section>
         </div>
 
-        <footer class="manager-shell-footer">
-          <div class="manager-shell-footer-copy">
+        <footer class="manager-shell-footer manager-dossier-footer">
+          <div class="manager-shell-footer-copy manager-dossier-footer-panel">
             <p class="manager-shell-footer-kicker">Current Menu</p>
             <h3>Manager Workspace</h3>
             <p class="manager-shell-footer-note">Keep drafts private and publish updates when service is ready.</p>
           </div>
-          <div class="manager-shell-footer-meta">
-            <div class="manager-shell-footer-pills">
+          <div class="manager-shell-footer-meta manager-dossier-footer-panel">
+            <div class="manager-shell-footer-pills manager-dossier-footer-pills">
               <span class="manager-shell-footer-pill" id="manager-footer-menu-name">No menu selected</span>
               <span class="manager-shell-footer-pill" id="manager-footer-last-updated">Updated —</span>
               <span class="manager-shell-footer-pill" id="manager-footer-version">Version —</span>
@@ -391,8 +417,8 @@
       </div>
       <div class="manager-shell-actionbar-groups">
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group">
-          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Send</button>
+          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Quietly</button>
+          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Save &amp; Send</button>
           <button class="btn-small" id="discard-draft-btn" onclick="discardLocalDraft()" hidden>Discard Draft</button>
         </div>
       </div>
