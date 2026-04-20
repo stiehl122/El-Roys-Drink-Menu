@@ -1,0 +1,76 @@
+<h2>How should the Basement Marquee layout open?</h2>
+<p class="subtitle">Both stay dark, weighted, and analog. This choice is mostly about hierarchy in the first screen.</p>
+
+<div class="cards">
+  <div class="card" data-choice="marquee-stack" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Marquee Stack</div>
+        <div class="mockup-body" style="background:#1f1714; color:#f1e2ce; min-height:300px; padding:0;">
+          <div style="padding:18px 20px; background:linear-gradient(180deg,#882518,#5c150f); border-bottom:1px solid rgba(255,255,255,.08);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+              <div style="font-size:26px; font-weight:800; letter-spacing:-.03em;">Leroy's Lounge</div>
+              <div style="font-size:11px; letter-spacing:.18em; text-transform:uppercase;">Food / Drinks</div>
+            </div>
+          </div>
+          <div style="padding:22px 20px 12px; display:grid; gap:14px;">
+            <div style="display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:end;">
+              <div>
+                <div style="font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#e2a564;">Late Night Menu</div>
+                <div style="font-size:34px; line-height:.95; font-weight:800; margin-top:10px;">A sign-led opening, then the board takes over.</div>
+              </div>
+              <div style="border:1px solid rgba(241,226,206,.12); padding:14px; background:rgba(255,255,255,.04);">
+                <div style="font-size:10px; text-transform:uppercase; letter-spacing:.2em; color:#cda277;">Updated</div>
+                <div style="margin-top:8px; font-size:16px;">11:42 PM</div>
+              </div>
+            </div>
+            <div style="display:grid; gap:8px; padding-top:10px; border-top:1px solid rgba(241,226,206,.12);">
+              <div style="display:flex; justify-content:space-between;"><span>Specials</span><span>3 items</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Burgers</span><span>5 items</span></div>
+              <div style="display:flex; justify-content:space-between;"><span>Whiskey</span><span>8 pours</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Marquee Stack</h3>
+      <p>The sign and controls get a stronger opening moment, then the menu sections follow below like a physical board.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="split-board" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. Split Board</div>
+        <div class="mockup-body" style="background:#1f1714; color:#f1e2ce; min-height:300px; padding:18px 20px; display:grid; gap:14px;">
+          <div style="display:grid; grid-template-columns:.8fr 1.2fr; gap:16px; align-items:stretch;">
+            <div style="background:linear-gradient(180deg,#7f2318,#4f130f); padding:16px; border:1px solid rgba(255,255,255,.08); display:grid; gap:12px;">
+              <div style="font-size:24px; line-height:.96; font-weight:800;">Leroy's Lounge</div>
+              <div style="font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#f0b16f;">Basement Marquee</div>
+              <div style="font-size:13px; line-height:1.45; color:#efd7bf;">The menu is already on stage in the first frame, not waiting below the fold.</div>
+            </div>
+            <div style="display:grid; gap:8px;">
+              <div style="display:flex; justify-content:space-between; border:1px solid rgba(241,226,206,.12); padding:12px 14px; background:rgba(255,255,255,.03);">
+                <span>Friday Fish Fry</span><span>$18</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border:1px solid rgba(241,226,206,.12); padding:12px 14px; background:rgba(255,255,255,.03);">
+                <span>Old Fashioned</span><span>$13</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; border:1px solid rgba(241,226,206,.12); padding:12px 14px; background:rgba(255,255,255,.03);">
+                <span>Draft Lager</span><span>$6</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; padding-top:10px; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:#cda277;">
+                <span>Swap Menu</span><span>Last Updated 11:42 PM</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Split Board</h3>
+      <p>The opening frame immediately shows food and drink entries, making the route feel more editorial and more useful at first glance.</p>
+    </div>
+  </div>
+</div>
