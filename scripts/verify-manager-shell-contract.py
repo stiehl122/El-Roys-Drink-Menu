@@ -45,6 +45,9 @@ def normalized_text(parts) -> str:
 def main() -> int:
     html_path = Path(__file__).resolve().parent.parent / "manager" / "index.html"
     html = html_path.read_text(encoding="utf-8")
+    toast_css = (Path(__file__).resolve().parent.parent / "styles" / "components" / "toast.css").read_text(encoding="utf-8")
+    auth_css = (Path(__file__).resolve().parent.parent / "core" / "auth" / "auth-overlay-unified.css").read_text(encoding="utf-8")
+    picker_css = (Path(__file__).resolve().parent.parent / "styles" / "components" / "menu-picker.css").read_text(encoding="utf-8")
     parser = ManagerShellParser()
     parser.feed(html)
 
@@ -109,6 +112,22 @@ def main() -> int:
     if missing_strings:
         print("Missing required manager shell strings:")
         for item in missing_strings:
+            print(f" - {item}")
+        return 1
+
+    shared_css_expectations = [
+        ("toast dossier hook", "body.manager-dossier-shell .toast", toast_css),
+        ("auth overlay dossier hook", "body.manager-dossier-shell #auth-overlay", auth_css),
+        ("auth box dossier hook", "body.manager-dossier-shell .auth-box", auth_css),
+        ("menu picker dossier hook", "body.manager-dossier-shell .picker-box", picker_css),
+    ]
+
+    missing_shared_css = [
+        label for label, needle, haystack in shared_css_expectations if needle not in haystack
+    ]
+    if missing_shared_css:
+        print("Missing required manager dossier shared CSS hooks:")
+        for item in missing_shared_css:
             print(f" - {item}")
         return 1
 

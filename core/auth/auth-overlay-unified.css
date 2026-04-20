@@ -14,6 +14,7 @@
 }
 
 body.manager-stitch-shell #auth-overlay,
+body.manager-dossier-shell #auth-overlay,
 body.admin-console-page #auth-overlay {
   align-items: center;
   justify-content: center;
@@ -38,6 +39,7 @@ body.admin-console-page #auth-overlay {
 }
 
 body.manager-stitch-shell .auth-box,
+body.manager-dossier-shell .auth-box,
 body.admin-console-page .auth-box {
   width: min(100%, 340px);
   max-width: 340px;
@@ -50,28 +52,31 @@ body.admin-console-page .auth-box {
 
 .auth-box::before,
 body.manager-stitch-shell .auth-box::before,
+body.manager-dossier-shell .auth-box::before,
 body.admin-console-page .auth-box::before {
   content: none;
   display: none;
 }
 
-body.manager-stitch-shell #auth-overlay {
+body.manager-stitch-shell #auth-overlay,
+body.manager-dossier-shell #auth-overlay {
   padding: 24px;
-  background: color-mix(in srgb, var(--manager-shell-overlay) 90%, transparent);
+  background: color-mix(in srgb, var(--manager-shell-overlay, var(--manager-dossier-overlay, rgba(0, 0, 0, 0.6))) 90%, transparent);
   backdrop-filter: blur(16px);
 }
 
-body.manager-stitch-shell .auth-box {
+body.manager-stitch-shell .auth-box,
+body.manager-dossier-shell .auth-box {
   width: min(100%, 420px);
   max-width: 420px;
   padding: 42px 34px 30px;
-  border: 1px solid var(--manager-shell-border-strong);
+  border: 1px solid var(--manager-shell-border-strong, var(--manager-dossier-border-strong, rgba(45, 55, 72, 0.18)));
   border-radius: 24px;
   background:
-    radial-gradient(circle at top right, var(--manager-shell-accent-soft), transparent 32%),
-    linear-gradient(180deg, var(--manager-shell-surface), var(--manager-shell-surface-muted));
-  color: var(--manager-shell-text);
-  box-shadow: 0 30px 60px var(--manager-shell-shadow-strong);
+    radial-gradient(circle at top right, var(--manager-shell-accent-soft, var(--manager-dossier-olive, rgba(0, 0, 0, 0.08))), transparent 32%),
+    linear-gradient(180deg, var(--manager-shell-surface, var(--manager-dossier-panel, #f7fafc)), var(--manager-shell-surface-muted, var(--manager-dossier-panel-strong, #f7fafc)));
+  color: var(--manager-shell-text, var(--manager-dossier-ink, #1a202c));
+  box-shadow: 0 30px 60px var(--manager-shell-shadow-strong, var(--manager-dossier-shadow, rgba(0, 0, 0, 0.18)));
 }
 
 .auth-box h2 {
@@ -84,6 +89,7 @@ body.manager-stitch-shell .auth-box {
 }
 
 body.manager-stitch-shell .auth-box h2,
+body.manager-dossier-shell .auth-box h2,
 body.admin-console-page .auth-box h2 {
   font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
   font-size: 22px;
@@ -92,13 +98,14 @@ body.admin-console-page .auth-box h2 {
   color: #1a202c;
 }
 
-body.manager-stitch-shell .auth-box h2 {
+body.manager-stitch-shell .auth-box h2,
+body.manager-dossier-shell .auth-box h2 {
   font-family: 'Noto Serif', serif;
   font-size: clamp(2rem, 3.2vw, 2.55rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1;
-  color: var(--manager-shell-primary);
+  color: var(--manager-shell-primary, var(--manager-dossier-ink, #1a202c));
 }
 
 .auth-box p,
@@ -115,6 +122,11 @@ body.manager-stitch-shell .auth-toggle,
 body.manager-stitch-shell .auth-approval-notice,
 body.manager-stitch-shell .auth-back-btn,
 body.manager-stitch-shell .pin-cancel,
+body.manager-dossier-shell .auth-box p,
+body.manager-dossier-shell .auth-toggle,
+body.manager-dossier-shell .auth-approval-notice,
+body.manager-dossier-shell .auth-back-btn,
+body.manager-dossier-shell .pin-cancel,
 body.admin-console-page .auth-box p,
 body.admin-console-page .auth-toggle,
 body.admin-console-page .auth-approval-notice,
@@ -128,8 +140,13 @@ body.manager-stitch-shell .auth-box p,
 body.manager-stitch-shell .auth-toggle,
 body.manager-stitch-shell .auth-approval-notice,
 body.manager-stitch-shell .auth-back-btn,
-body.manager-stitch-shell .pin-cancel {
-  color: var(--manager-shell-muted);
+body.manager-stitch-shell .pin-cancel,
+body.manager-dossier-shell .auth-box p,
+body.manager-dossier-shell .auth-toggle,
+body.manager-dossier-shell .auth-approval-notice,
+body.manager-dossier-shell .auth-back-btn,
+body.manager-dossier-shell .pin-cancel {
+  color: var(--manager-shell-muted, var(--manager-dossier-muted, #718096));
   font-size: 12px;
 }
 
@@ -147,6 +164,7 @@ body.admin-console-page .auth-box p {
 }
 
 body.manager-stitch-shell .auth-screen,
+body.manager-dossier-shell .auth-screen,
 body.admin-console-page .auth-screen {
   display: block;
 }
@@ -166,16 +184,18 @@ body.admin-console-page .auth-screen {
 }
 
 body.manager-stitch-shell .auth-hint-msg,
+body.manager-dossier-shell .auth-hint-msg,
 body.admin-console-page .auth-hint-msg {
   color: #718096;
   background: rgba(0, 0, 0, 0.05);
   border-radius: 8px;
 }
 
-body.manager-stitch-shell .auth-hint-msg {
-  color: var(--manager-shell-muted);
-  background: var(--manager-shell-primary-faint);
-  border: 1px solid var(--manager-shell-border);
+body.manager-stitch-shell .auth-hint-msg,
+body.manager-dossier-shell .auth-hint-msg {
+  color: var(--manager-shell-muted, var(--manager-dossier-muted, #718096));
+  background: var(--manager-shell-primary-faint, color-mix(in srgb, var(--manager-dossier-olive, #4f5a3c) 14%, transparent));
+  border: 1px solid var(--manager-shell-border, var(--manager-dossier-border, rgba(45, 55, 72, 0.18)));
   border-radius: 16px;
   padding: 12px 14px;
 }
@@ -205,6 +225,7 @@ body.manager-stitch-shell .auth-hint-msg {
 }
 
 body.manager-stitch-shell .auth-field input,
+body.manager-dossier-shell .auth-field input,
 body.admin-console-page .auth-field input {
   min-height: 44px;
   border: 1px solid rgba(45, 55, 72, 0.2);
@@ -214,7 +235,8 @@ body.admin-console-page .auth-field input {
   box-shadow: none;
 }
 
-body.manager-stitch-shell .auth-field {
+body.manager-stitch-shell .auth-field,
+body.manager-dossier-shell .auth-field {
   margin-bottom: 12px;
 }
 
