@@ -9302,6 +9302,58 @@ function _setDisplayBySelectorFiltered(selector, display, predicate) {
   });
 }
 
+function getUserChipRoots() {
+  const dataContractRoots = Array.from(document.querySelectorAll('[data-user-chip]'));
+  if (dataContractRoots.length) return dataContractRoots;
+  return Array.from(document.querySelectorAll('.user-chip, [data-route-user-chip]'));
+}
+
+function getUserChipRoot(targetOrId = null) {
+  let resolvedTarget = targetOrId;
+  if (!resolvedTarget) {
+    resolvedTarget = window.event?.currentTarget || window.event?.target || null;
+  }
+  if (!resolvedTarget) return null;
+  if (typeof resolvedTarget === 'string') {
+    return document.getElementById(resolvedTarget) ||
+      document.querySelector(`[data-user-chip-id="${resolvedTarget}"]`);
+  }
+  return resolvedTarget.closest?.('[data-user-chip], .user-chip, [data-route-user-chip]') || null;
+}
+
+function getUserChipParts(root) {
+  if (!root) return null;
+  return {
+    root,
+    trigger: root.querySelector('[data-user-chip-trigger]') || root,
+    panel: root.querySelector('[data-user-chip-panel]') ||
+      root.querySelector('.user-dropdown, .ll-site-userdropdown, .erc-userdropdown'),
+    initials: root.querySelector('[data-user-chip-initials]') ||
+      root.querySelector('[id$="user-initials"]'),
+    name: root.querySelector('[data-user-chip-name]') ||
+      root.querySelector('[id$="user-dropdown-name"]'),
+    role: root.querySelector('[data-user-chip-role]') ||
+      root.querySelector('[id$="user-dropdown-role"]'),
+  };
+}
+
+function setUserChipVisibility(isSignedIn) {
+  getUserChipRoots().forEach(root => {
+    root.style.display = isSignedIn ? '' : 'none';
+  });
+}
+
+function hydrateUserChip(root, { initials, fullName, roleLabel }) {
+  const parts = getUserChipParts(root);
+  if (!parts) return;
+  if (parts.initials) parts.initials.textContent = initials;
+  if (parts.name) parts.name.textContent = fullName;
+  if (parts.role) parts.role.textContent = roleLabel;
+  if (parts.trigger) {
+    parts.trigger.setAttribute('aria-expanded', root.classList.contains('open') ? 'true' : 'false');
+  }
+}
+
 function renderUserHeader(options = {}) {
   const signedIn  = !!currentUser;
   const role      = currentUser?.role || 'none';
@@ -9317,10 +9369,9 @@ function renderUserHeader(options = {}) {
   const canManageCurrentMenu = currentUserCanManageMenu();
 
   _setDisplayById('signin-btn', signedIn ? 'none' : '');
-  _setDisplayById('user-chip', signedIn ? '' : 'none');
   _setDisplayBySelectorFiltered('[data-route-signin]', signedIn ? 'none' : '', el => !el.hasAttribute('data-route-signin-persistent'));
   _setDisplayBySelector('[data-route-signin-persistent]', '');
-  _setDisplayBySelector('[data-route-user-chip]', signedIn ? '' : 'none');
+  setUserChipVisibility(signedIn);
 
   const actionBtn = document.getElementById('action-btn');
   const adminBtn  = document.getElementById('admin-btn');
@@ -9365,22 +9416,9 @@ function renderUserHeader(options = {}) {
 
   if (signedIn) {
     const fullName = name || currentUser?.email || '';
-    const standardInitials = document.getElementById('user-initials');
-    const standardName = document.getElementById('user-dropdown-name');
-    const standardRole = document.getElementById('user-dropdown-role');
-    const routeInitials = document.getElementById('ll-user-initials');
-    const routeName = document.getElementById('ll-user-dropdown-name');
-    const routeRole = document.getElementById('ll-user-dropdown-role');
-    const cantinaName = document.getElementById('erc-user-dropdown-name');
-    const cantinaRole = document.getElementById('erc-user-dropdown-role');
-    if (standardInitials) standardInitials.textContent = initials;
-    if (standardName) standardName.textContent = fullName;
-    if (standardRole) standardRole.textContent = roleLabel;
-    if (routeInitials) routeInitials.textContent = initials;
-    if (routeName) routeName.textContent = fullName;
-    if (routeRole) routeRole.textContent = roleLabel;
-    if (cantinaName) cantinaName.textContent = fullName;
-    if (cantinaRole) cantinaRole.textContent = roleLabel;
+    getUserChipRoots().forEach(root => {
+      hydrateUserChip(root, { initials, fullName, roleLabel });
+    });
   }
 
   const publicView = document.getElementById('public-view');
@@ -9585,25 +9623,26 @@ function exitView() {
   else if (isAdminMode) exitAdmin();
 }
 
-function toggleUserDropdown(chipId = 'user-chip') {
-  const chip = document.getElementById(chipId);
+function toggleUserDropdown(targetOrId = null) {
+  const chip = getUserChipRoot(targetOrId);
   if (!chip) return;
   closeRouteDropdowns();
-  closeUserChips(chipId);
+  closeUserChips(chip);
   const isOpen = chip.classList.toggle('open');
-  chip.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-  if (isOpen) {
-    const firstFocusable = chip.querySelector('button, a');
-    if (firstFocusable) firstFocusable.focus();
+  const parts = getUserChipParts(chip);
+  if (parts?.trigger) parts.trigger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  if (isOpen) chip.querySelector('[data-user-chip-panel] button, [data-user-chip-panel] a')?.focus();
+  if (isOpen && parts?.panel) {
+    parts.panel.querySelector('button, a')?.focus();
   }
 }
 
-function closeUserChips(exceptChipId = '', target = null) {
-  document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
-    if (exceptChipId && chip.id === exceptChipId) return;
+function closeUserChips(exceptChip = null, target = null) {
+  getUserChipRoots().forEach(chip => {
+    if (exceptChip && chip === exceptChip) return;
     if (target && chip.contains(target)) return;
     chip.classList.remove('open');
-    chip.setAttribute('aria-expanded', 'false');
+    getUserChipParts(chip)?.trigger?.setAttribute('aria-expanded', 'false');
   });
 }
 
@@ -9639,7 +9678,7 @@ function toggleRouteDropdown(triggerId, dropdownId) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function(e) {
-  closeUserChips('', e.target);
+  closeUserChips(null, e.target);
   document.querySelectorAll('[data-route-dropdown]').forEach(wrapper => {
     if (!wrapper.contains(e.target)) {
       wrapper.classList.remove('open');
@@ -9662,11 +9701,16 @@ document.addEventListener('keydown', function(e) {
   ) {
     closeSettingsDrawer();
   }
-  document.querySelectorAll('.user-chip, .ll-site-userchip, .erc-userchip, [data-route-user-chip]').forEach(chip => {
+  getUserChipRoots().forEach(chip => {
     if (chip.classList.contains('open')) {
       chip.classList.remove('open');
-      chip.setAttribute('aria-expanded', 'false');
-      chip.focus();
+      const parts = getUserChipParts(chip);
+      if (parts?.trigger) {
+        parts.trigger.setAttribute('aria-expanded', 'false');
+        parts.trigger.focus();
+      } else {
+        chip.focus();
+      }
     }
   });
   document.querySelectorAll('[data-route-dropdown].open').forEach(wrapper => {
