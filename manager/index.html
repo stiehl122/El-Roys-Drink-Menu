@@ -41,59 +41,10 @@
             <h1 class="manager-shell-topbar-title">Manager Workspace</h1>
           </div>
         </div>
-
-        <div class="manager-dossier-meta-strip" aria-hidden="true">
-          <span class="manager-dossier-meta-tag">Archival shell</span>
-          <span class="manager-dossier-meta-tag">Mobile ready</span>
-          <span class="manager-dossier-meta-tag">Live runtime</span>
-        </div>
-
         <div class="manager-dossier-header-grid">
-          <div class="manager-dossier-header-panel">
-            <p class="manager-dossier-panel-label">Active dossier</p>
-            <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-header-menu-badge">No menu selected</span>
-          </div>
           <div class="manager-dossier-header-panel">
             <p class="manager-dossier-panel-label">Revision stamp</p>
             <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-          </div>
-          <div class="manager-dossier-header-panel">
-            <p class="manager-dossier-panel-label">Routing</p>
-            <div id="active-menu-bar" class="manager-shell-menu-bar">
-              <span class="active-menu-label">Menu</span>
-              <span id="active-menu-name" class="active-menu-name-text"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="manager-shell-topbar-actions manager-dossier-header-actions">
-        <div class="manager-dossier-action-cluster">
-          <p class="manager-dossier-panel-label">Controls</p>
-          <div class="manager-dossier-action-row">
-            <button class="manager-btn manager-dossier-action-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Open Manager</button>
-            <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
-            <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
-          </div>
-        </div>
-        <div class="manager-shell-user-tools manager-dossier-user-tools">
-          <p class="manager-dossier-panel-label">Staff</p>
-          <div class="user-chip" id="user-chip" style="display:none"
-               onclick="toggleUserDropdown()"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-               tabindex="0"
-               role="button"
-               aria-haspopup="true"
-               aria-expanded="false"
-               aria-label="User menu">
-            <span id="user-initials">?</span>
-            <span>▾</span>
-            <div class="user-dropdown" id="user-dropdown" onclick="event.stopPropagation()">
-              <div class="user-dropdown-name" id="user-dropdown-name"></div>
-              <div class="user-dropdown-role" id="user-dropdown-role"></div>
-              <div class="user-dropdown-divider"></div>
-              <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
-            </div>
           </div>
         </div>
       </div>
@@ -173,13 +124,39 @@
           </div>
           <div class="manager-shell-drawer-meta manager-dossier-drawer-meta">
             <p class="manager-shell-drawer-kicker">Current record</p>
-            <span class="manager-shell-header-badge manager-shell-header-badge--muted" id="manager-drawer-menu-badge">No menu selected</span>
+            <div id="active-menu-bar" class="manager-shell-menu-bar">
+              <span class="active-menu-label">Menu</span>
+              <span id="active-menu-name" class="active-menu-name-text"></span>
+            </div>
             <p class="manager-shell-drawer-copy">Move through sections like a service packet, then publish from the dock once the room is ready.</p>
             <div class="manager-shell-drawer-actions manager-dossier-drawer-actions">
               <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
               <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
               <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
             </div>
+            <div class="manager-shell-user-tools manager-dossier-user-tools">
+              <p class="manager-dossier-panel-label">Staff</p>
+              <div class="user-chip" id="user-chip" style="display:none"
+                   onclick="toggleUserDropdown()"
+                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
+                   tabindex="0"
+                   role="button"
+                   aria-haspopup="true"
+                   aria-expanded="false"
+                   aria-label="User menu">
+                <span id="user-initials">?</span>
+                <span>▾</span>
+                <div class="user-dropdown" id="user-dropdown" onclick="event.stopPropagation()">
+                  <div class="user-dropdown-name" id="user-dropdown-name"></div>
+                  <div class="user-dropdown-role" id="user-dropdown-role"></div>
+                  <div class="user-dropdown-divider"></div>
+                  <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
+                </div>
+              </div>
+            </div>
+            <button class="manager-btn manager-dossier-action-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none" hidden aria-hidden="true" tabindex="-1">Open Manager</button>
+            <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none" hidden aria-hidden="true" tabindex="-1">Admin Console</button>
+            <button class="btn-small manager-shell-switch-btn" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" hidden aria-hidden="true" tabindex="-1">Switch Menu</button>
             <button class="btn-small manager-shell-drawer-return" id="drawer-return-btn" type="button" onclick="exitView()">Return to menu</button>
           </div>
         </div>
