@@ -6583,7 +6583,7 @@ body.manager-dossier-shell .manager-shell-panel {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
 }
 
 body.manager-dossier-shell .manager-shell-backdrop {
@@ -6725,7 +6725,7 @@ body.manager-dossier-shell .rail-btn-icon {
 
 body.manager-dossier-shell .settings-section,
 body.manager-dossier-shell .manager-shell-overview-card {
-  padding: 18px 16px;
+  padding: 26px 22px;
 }
 
 body.manager-dossier-shell #manager-overview-section,
@@ -6743,7 +6743,8 @@ body.manager-dossier-shell .manager-shell-footer {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 12px;
+  gap: 14px;
+  margin-bottom: 6px;
 }
 
 body.manager-dossier-shell .manager-shell-section-header h2,
@@ -6792,8 +6793,8 @@ body.manager-dossier-shell .manager-shell-actionbar-copy {
 }
 
 body.manager-dossier-shell .manager-shell-footer {
-  margin-top: 12px;
-  padding: 18px 16px;
+  margin-top: 18px;
+  padding: 26px 22px;
   background: var(--manager-dossier-panel);
 }
 
@@ -6877,8 +6878,8 @@ body.manager-dossier-shell .manager-category-note {
 body.manager-dossier-shell .manager-shell-overview-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
-  gap: 16px;
-  padding: 16px;
+  gap: 24px;
+  padding: 24px;
   border: 1px solid var(--manager-dossier-border-strong);
   background: var(--manager-dossier-panel-strong);
 }
@@ -6886,7 +6887,7 @@ body.manager-dossier-shell .manager-shell-overview-hero {
 body.manager-dossier-shell .manager-shell-overview-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 14px;
 }
 
 body.manager-dossier-shell .manager-shell-overview-hero-kicker {
@@ -6928,12 +6929,12 @@ body.manager-dossier-shell .manager-shell-stats-grid {
 }
 
 body.manager-dossier-shell .manager-shell-stat-card {
-  min-height: 112px;
+  min-height: 128px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 10px;
+  padding: 20px 22px;
   border: 0;
   background: var(--manager-dossier-panel);
   box-shadow: none;
@@ -6956,7 +6957,7 @@ body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-va
 }
 
 body.manager-dossier-shell .manager-shell-overview-grid {
-  gap: 14px;
+  gap: 20px;
 }
 
 body.manager-dossier-shell .manager-dossier-record-card {
@@ -6968,11 +6969,11 @@ body.manager-dossier-shell #featured-mgr-wrap,
 body.manager-dossier-shell #recent-changes-wrap {
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 20px 22px;
 }
 
 body.manager-dossier-shell .manager-shell-overview-link {
-  margin: 0 16px 16px !important;
+  margin: 0 22px 22px !important;
   align-self: flex-start;
 }
 
@@ -7698,8 +7699,8 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-layout {
     width: min(1480px, calc(100% - 40px));
     grid-template-columns: 280px minmax(0, 1fr);
-    gap: 22px;
-    padding-top: 18px;
+    gap: 28px;
+    padding-top: 24px;
   }
 
   body.manager-dossier-shell .manager-shell-rail {
@@ -7813,7 +7814,7 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .settings-section,
   body.manager-dossier-shell .manager-shell-overview-card,
   body.manager-dossier-shell .manager-shell-footer {
-    padding: 16px 14px;
+    padding: 22px 18px;
   }
 
   body.manager-dossier-shell .manager-shell-overview-hero-actions {

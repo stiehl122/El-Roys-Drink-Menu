@@ -49,9 +49,9 @@
     <div class="spinner"></div>
     <p>Loading manager workspace…</p>
     <section class="manager-shell-locked-card" id="manager-locked-card" hidden aria-labelledby="manager-locked-title">
-      <p class="manager-shell-locked-kicker">Manager Access</p>
-      <h2 id="manager-locked-title">Open the workspace</h2>
-      <p class="manager-shell-locked-copy">Sign in to edit menu drafts, review recent changes, and publish updates to the live board.</p>
+      <p class="manager-shell-locked-kicker">Behind the Pass</p>
+      <h2 id="manager-locked-title">Sign in to work the board.</h2>
+      <p class="manager-shell-locked-copy">Draft changes, pull recent sends, and push the board live when service is ready.</p>
       <div class="manager-shell-locked-actions">
         <button
           class="btn-small manager-shell-locked-primary"
@@ -153,17 +153,16 @@
           <section class="settings-section manager-shell-overview manager-dossier-panel" id="manager-overview-section">
             <div class="manager-shell-section-header manager-dossier-panel-head">
               <div>
-                <p class="settings-section-kicker">Dossier Overview</p>
-                <h2>Operational record</h2>
+                <p class="settings-section-kicker">Tonight's Board</p>
+                <h2>The pass, before service.</h2>
               </div>
-              <p class="manager-dossier-panel-note">Archival density tuned for service-time edits across desktop and mobile.</p>
             </div>
 
             <div class="manager-shell-overview-hero manager-dossier-hero">
               <div class="manager-shell-overview-hero-copy">
-                <p class="manager-shell-overview-hero-kicker">Primary Route</p>
-                <h3>Work the draft, then clear it for service.</h3>
-                <p class="manager-shell-overview-hero-text">Jump into item, pricing, description, or category records, then return here before you publish from the dock.</p>
+                <p class="manager-shell-overview-hero-kicker">Where to start</p>
+                <h3>Draft it. Polish it. Send it live.</h3>
+                <p class="manager-shell-overview-hero-text">Every edit sits as a draft until you hit the dock. Jump into a record, make your passes, come back here to publish.</p>
               </div>
               <div class="manager-shell-overview-hero-actions" role="group" aria-label="Quick manager actions">
                 <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-items-section')">Edit Items</button>
@@ -196,9 +195,9 @@
                 <div class="manager-shell-card-head">
                   <div>
                     <p class="settings-section-kicker">Featured</p>
-                    <h3>Featured Items</h3>
+                    <h3>On the marquee.</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Current featured lineup across this restaurant's menus.</p>
+                  <p class="manager-shell-card-copy">What's front-of-house right now.</p>
                 </div>
                 <div id="featured-mgr-wrap"></div>
                 <button class="btn-small manager-shell-overview-link" onclick="focusFeaturedManagerCard()" style="margin-top:14px">Edit Featured</button>
@@ -207,10 +206,10 @@
               <section class="manager-shell-overview-card manager-shell-overview-card--recent manager-dossier-record-card" id="manager-recent-section">
                 <div class="manager-shell-card-head">
                   <div>
-                    <p class="settings-section-kicker">Recent Changes</p>
-                    <h3>Last 7 days</h3>
+                    <p class="settings-section-kicker">Recent Sends</p>
+                    <h3>Last seven nights.</h3>
                   </div>
-                  <p class="manager-shell-card-copy">Sent updates from the last 7 days.</p>
+                  <p class="manager-shell-card-copy">Everything pushed live in the past week.</p>
                 </div>
                 <div id="recent-changes-wrap"></div>
               </section>
@@ -220,11 +219,11 @@
           <section class="settings-section manager-shell-items manager-dossier-panel" id="manager-items-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Edit Items</p>
-                <h2>Add, remove, and 86 items.</h2>
+                <p class="settings-section-kicker">Items</p>
+                <h2>Shape tonight's lineup.</h2>
               </div>
               <div class="manager-shell-section-actions">
-                <p class="manager-shell-section-copy">Swipe left to 86. Swipe right to restore. Changes stay on this device until you save them live or send the queue.</p>
+                <p class="manager-shell-section-copy">Swipe left to 86, right to bring it back. Nothing hits the floor until you send from the dock.</p>
                 <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal({ mode: 'manual' })" style="display:none">Add Item(s)</button>
               </div>
             </div>
@@ -235,10 +234,10 @@
           <section class="settings-section manager-shell-pricing manager-dossier-panel" id="manager-pricing-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Edit Pricing</p>
-                <h2>Prices and upcharges.</h2>
+                <p class="settings-section-kicker">Pricing</p>
+                <h2>Set the numbers.</h2>
               </div>
-              <p class="manager-shell-section-copy">Set base prices and add upcharge modifiers (e.g. "Add bacon +$2").</p>
+              <p class="manager-shell-section-copy">Base prices and modifiers—"Add bacon +$2," "Sub gluten-free +$1"—stack here.</p>
             </div>
             <div id="manager-pricing-categories"></div>
           </section>
@@ -246,10 +245,10 @@
           <section class="settings-section manager-shell-descriptions manager-dossier-panel" id="manager-description-section">
             <div class="manager-shell-section-header">
               <div>
-                <p class="settings-section-kicker">Edit Description</p>
-                <h2>Descriptions and recipes.</h2>
+                <p class="settings-section-kicker">Copy &amp; Recipes</p>
+                <h2>The story behind each pour.</h2>
               </div>
-              <p class="manager-shell-section-copy">Expand an item to edit guest-facing copy, manage recipe details, and decide what appears on the live menu.</p>
+              <p class="manager-shell-section-copy">Open a row to rewrite what the guest reads, stash the build behind the bar, and flip visibility.</p>
             </div>
             <div id="manager-description-categories"></div>
           </section>
@@ -258,7 +257,7 @@
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Categories</p>
-                <h2>Add, rename, or reorder categories.</h2>
+                <h2>Section the menu.</h2>
               </div>
             </div>
 
@@ -298,7 +297,7 @@
             <div class="manager-shell-section-header">
               <div>
                 <p class="settings-section-kicker">Database</p>
-                <h2>All items across this menu.</h2>
+                <h2>Everything on record.</h2>
               </div>
             </div>
 
@@ -350,9 +349,9 @@
 
         <footer class="manager-shell-footer manager-dossier-footer">
           <div class="manager-shell-footer-copy manager-dossier-footer-panel">
-            <p class="manager-shell-footer-kicker">Current Menu</p>
-            <h3>Manager Workspace</h3>
-            <p class="manager-shell-footer-note">Keep drafts private and publish updates when service is ready.</p>
+            <p class="manager-shell-footer-kicker">Behind the Pass</p>
+            <h3>Drafts stay here. Service sees the send.</h3>
+            <p class="manager-shell-footer-note">Publish from the dock whenever the line is ready.</p>
           </div>
           <div class="manager-shell-footer-meta manager-dossier-footer-panel">
             <div class="manager-shell-footer-pills manager-dossier-footer-pills">
