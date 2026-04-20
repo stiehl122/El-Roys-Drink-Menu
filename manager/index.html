@@ -23,34 +23,6 @@
 </section>
 
 <div class="wrapper manager-shell-wrapper" id="app-shell">
-  <header class="manager-shell-topbar manager-dossier-header">
-    <div class="manager-shell-topbar-inner manager-dossier-header-inner">
-      <div class="manager-dossier-brand">
-        <div class="manager-dossier-brand-row">
-          <button
-            class="manager-shell-menu-toggle"
-            id="settings-drawer-toggle"
-            type="button"
-            aria-label="Open section navigation"
-            aria-controls="manager-settings-rail"
-            aria-expanded="false"
-            onclick="toggleSettingsDrawer()"
-          >≡</button>
-          <div class="manager-dossier-title-block">
-            <p class="manager-dossier-kicker">Manager dossier / service revision</p>
-            <h1 class="manager-shell-topbar-title">Manager Workspace</h1>
-          </div>
-        </div>
-        <div class="manager-dossier-header-grid">
-          <div class="manager-dossier-header-panel">
-            <p class="manager-dossier-panel-label">Revision stamp</p>
-            <div class="header-sub" id="last-updated-label">Last Updated: —</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
-
   <button
     class="manager-shell-mobile-drawer-trigger"
     id="manager-mobile-drawer-trigger"
@@ -61,6 +33,17 @@
     onclick="toggleSettingsDrawer()"
     hidden
   >☰</button>
+
+  <button
+    class="manager-shell-menu-toggle"
+    id="settings-drawer-toggle"
+    type="button"
+    aria-label="Open section navigation"
+    aria-controls="manager-settings-rail"
+    aria-expanded="false"
+    onclick="toggleSettingsDrawer()"
+    hidden
+  >≡</button>
 
   <div id="loading-view">
     <div class="spinner"></div>
@@ -111,10 +94,7 @@
       <aside class="settings-rail manager-shell-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
         <div class="manager-shell-rail-head manager-dossier-rail-head">
           <div class="manager-shell-rail-head-row manager-dossier-rail-head-row">
-            <div class="manager-dossier-rail-title-block">
-              <p class="settings-rail-kicker">Section Index</p>
-              <p class="manager-shell-rail-note">Manager dossier</p>
-            </div>
+            <p class="settings-rail-kicker">Index</p>
             <button
               class="manager-shell-rail-close"
               type="button"
@@ -123,19 +103,17 @@
             >×</button>
           </div>
           <div class="manager-shell-drawer-meta manager-dossier-drawer-meta">
-            <p class="manager-shell-drawer-kicker">Current record</p>
             <div id="active-menu-bar" class="manager-shell-menu-bar">
               <span class="active-menu-label">Menu</span>
               <span id="active-menu-name" class="active-menu-name-text"></span>
             </div>
-            <p class="manager-shell-drawer-copy">Move through sections like a service packet, then publish from the dock once the room is ready.</p>
+            <div class="header-sub manager-shell-rail-updated" id="last-updated-label">Last Updated: —</div>
             <div class="manager-shell-drawer-actions manager-dossier-drawer-actions">
               <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
               <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
               <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
             </div>
             <div class="manager-shell-user-tools manager-dossier-user-tools">
-              <p class="manager-dossier-panel-label">Staff</p>
               <div class="user-chip" id="user-chip" style="display:none"
                    onclick="toggleUserDropdown()"
                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
