@@ -6860,8 +6860,7 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 }
 
 @media (min-width: 780px) {
-  body.manager-dossier-shell .manager-shell-overview-grid,
-  body.manager-dossier-shell .manager-shell-footer {
+  body.manager-dossier-shell .manager-shell-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
   }
