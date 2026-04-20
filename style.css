@@ -6538,8 +6538,10 @@ body.manager-dossier-shell .manager-shell-actionbar .manager-btn {
   min-height: 42px;
   padding: 0 12px;
   border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
   background: var(--manager-dossier-panel);
   color: var(--manager-dossier-ink);
+  max-width: none;
 }
 
 body.manager-dossier-shell .user-dropdown {
