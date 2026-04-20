@@ -6721,7 +6721,8 @@ body.manager-dossier-shell .manager-dossier-drawer-meta .user-chip {
 
 body.manager-dossier-shell .manager-dossier-drawer-meta .user-chip {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
+  gap: 8px;
   padding: 0 14px;
 }
 
@@ -6783,6 +6784,15 @@ body.manager-dossier-shell .rail-btn-icon {
 body.manager-dossier-shell .settings-section,
 body.manager-dossier-shell .manager-shell-overview-card {
   padding: 26px 22px;
+}
+
+body.manager-dossier-shell #manager-overview-section {
+  display: grid;
+  gap: 18px;
+}
+
+body.manager-dossier-shell #manager-overview-section .manager-shell-section-header {
+  margin-bottom: 0;
 }
 
 body.manager-dossier-shell #manager-overview-section,
@@ -6937,9 +6947,9 @@ body.manager-dossier-shell .manager-category-note {
 
 body.manager-dossier-shell .manager-shell-overview-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
-  gap: 24px;
-  padding: 24px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.95fr);
+  gap: 28px;
+  padding: 28px;
   border: 1px solid var(--manager-dossier-border-strong);
   background: var(--manager-dossier-panel-strong);
 }
@@ -6947,7 +6957,7 @@ body.manager-dossier-shell .manager-shell-overview-hero {
 body.manager-dossier-shell .manager-shell-overview-hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
 body.manager-dossier-shell .manager-shell-overview-hero-kicker {
@@ -6965,7 +6975,7 @@ body.manager-dossier-shell .manager-shell-overview-hero h3 {
 
 body.manager-dossier-shell .manager-shell-overview-hero-text {
   margin: 0;
-  max-width: 34rem;
+  max-width: 40rem;
   color: var(--manager-dossier-muted);
   font-size: 14px;
   line-height: 1.65;
@@ -6975,7 +6985,7 @@ body.manager-dossier-shell .manager-shell-overview-hero-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: 8px;
+  gap: 10px;
 }
 
 body.manager-dossier-shell .manager-shell-overview-chip {
@@ -6989,12 +6999,12 @@ body.manager-dossier-shell .manager-shell-stats-grid {
 }
 
 body.manager-dossier-shell .manager-shell-stat-card {
-  min-height: 128px;
+  min-height: 142px;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 10px;
-  padding: 20px 22px;
+  padding: 24px 24px 22px;
   border: 0;
   background: var(--manager-dossier-panel);
   box-shadow: none;
@@ -7017,7 +7027,7 @@ body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-va
 }
 
 body.manager-dossier-shell .manager-shell-overview-grid {
-  gap: 20px;
+  gap: 24px;
 }
 
 body.manager-dossier-shell .manager-dossier-record-card {
@@ -7028,13 +7038,70 @@ body.manager-dossier-shell .manager-dossier-record-card {
 body.manager-dossier-shell #featured-mgr-wrap,
 body.manager-dossier-shell #recent-changes-wrap {
   display: grid;
-  gap: 12px;
-  padding: 20px 22px;
+  gap: 14px;
+  padding: 24px;
 }
 
 body.manager-dossier-shell .manager-shell-overview-link {
-  margin: 0 22px 22px !important;
+  margin: 0 24px 24px !important;
   align-self: flex-start;
+}
+
+body.manager-dossier-shell .item-swipeable {
+  position: relative;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .swipe-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+body.manager-dossier-shell .swipe-action--86 {
+  right: 0;
+  background: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .swipe-action--restore {
+  left: 0;
+  background: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .swipe-action-label {
+  color: var(--manager-dossier-panel);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: scale(0.92);
+  transition: transform 0.12s ease;
+}
+
+body.manager-dossier-shell .item-swipeable.swiping .swipe-action {
+  opacity: 1;
+}
+
+body.manager-dossier-shell .item-swipeable.swipe-triggered .swipe-action-label {
+  transform: scale(1.08);
+}
+
+body.manager-dossier-shell .item-swipeable .items-row {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+}
+
+body.manager-dossier-shell .item-swipeable .items-row.swipe-animating {
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 body.manager-dossier-shell .featured-specials-editor {
@@ -7717,7 +7784,7 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 
 @media (min-width: 780px) {
   body.manager-dossier-shell .manager-shell-overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
     align-items: start;
   }
 }
@@ -7725,6 +7792,8 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 @media (max-width: 860px) {
   body.manager-dossier-shell .manager-shell-overview-hero {
     grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 22px;
   }
 
   body.manager-dossier-shell .manager-shell-overview-hero-actions {
@@ -7878,6 +7947,10 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-overview-card,
   body.manager-dossier-shell .manager-shell-footer {
     padding: 22px 18px;
+  }
+
+  body.manager-dossier-shell #manager-overview-section {
+    gap: 14px;
   }
 
   body.manager-dossier-shell .manager-shell-overview-hero-actions {
