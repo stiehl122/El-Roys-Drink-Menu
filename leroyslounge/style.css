@@ -35,6 +35,31 @@ body.route-restaurant.route-restaurant--leroy {
   color-scheme: dark;
 }
 
+#restaurant-site-wrapper .ll-board-page {
+  --ll-board-surface: rgb(24 18 15 / 1);
+  --ll-board-surface-soft: rgb(41 30 25 / 0.94);
+  --ll-board-bg: rgb(33 25 22 / 0.94);
+  --ll-board-panel: rgb(53 39 31 / 0.92);
+  --ll-board-panel-strong: rgb(95 30 21 / 0.95);
+  --ll-board-panel-edge: rgb(239 225 203 / 0.12);
+  --ll-board-line: rgb(239 225 203 / 0.11);
+  --ll-board-rule: rgb(239 225 203 / 0.11);
+  --ll-board-rule-strong: rgb(239 225 203 / 0.18);
+  --ll-board-ink: rgb(239 225 203 / 1);
+  --ll-board-ink-muted: rgb(223 205 180 / 0.82);
+  --ll-board-ink-soft: rgb(223 205 180 / 0.82);
+  --ll-board-description: rgb(211 188 158 / 0.88);
+  --ll-board-accent: rgb(190 143 78 / 1);
+  --ll-board-accent-soft: rgb(190 143 78 / 0.22);
+  --ll-board-oxblood: rgb(133 38 29 / 1);
+  --ll-board-oxblood-deep: rgb(76 26 23 / 1);
+  --ll-board-shadow: 0 24px 60px rgb(0 0 0 / 0.34);
+  --ll-board-shadow-soft: 0 14px 34px rgb(0 0 0 / 0.22);
+  --ll-board-text-shadow: 0 1px 0 rgb(0 0 0 / 0.38);
+  color: var(--ll-board-ink);
+  color-scheme: dark;
+}
+
 #restaurant-site-wrapper .ll-marquee-page {
   min-height: 100vh;
   min-height: 100dvh;
