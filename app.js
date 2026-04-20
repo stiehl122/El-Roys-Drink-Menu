@@ -12857,9 +12857,7 @@ function renderFeaturedTab() {
   wrap.innerHTML = `<div class="featured-specials-editor">
     <div class="featured-specials-head">
       <div>
-        <p class="settings-section-kicker">Shared across both menus</p>
         <h4>${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</h4>
-        <p class="featured-specials-copy">Build a clean featured lineup for ${escHtml(restaurantName)} and keep the order guests should see first.</p>
       </div>
       <span class="featured-count">${slotCount} / 5 live</span>
     </div>

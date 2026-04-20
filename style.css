@@ -6676,6 +6676,19 @@ body.manager-dossier-shell .manager-shell-rail-updated {
 body.manager-dossier-shell .manager-dossier-drawer-meta .manager-shell-menu-bar,
 body.manager-dossier-shell .manager-dossier-drawer-meta .user-chip {
   align-self: stretch;
+  width: 100%;
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta .user-chip {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta .user-chip > span:first-child {
+  font-family: var(--font-accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 body.manager-dossier-shell .manager-shell-drawer-actions,
