@@ -1,0 +1,500 @@
+<style>
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .card,
+  .mockup {
+    border-radius: 0;
+  }
+
+  .card {
+    border: 1px solid #111;
+    overflow: hidden;
+    background: #f4f4f0;
+  }
+
+  .card-body {
+    padding: 14px 16px 18px;
+  }
+
+  .mockup {
+    min-height: 430px;
+    overflow: hidden;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .dossier {
+    --paper: #f4f4f0;
+    --ink: #070707;
+    --alert: #e61919;
+    --utility: #6c7165;
+    display: grid;
+    grid-template-columns: 118px minmax(0, 1fr);
+    min-height: 430px;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Arial Narrow", "Helvetica Neue", sans-serif;
+  }
+
+  .dossier.slate {
+    --utility: #65707a;
+  }
+
+  .dossier.steel {
+    --utility: #6d7270;
+  }
+
+  .rail,
+  .stage,
+  .stats,
+  .panels {
+    display: grid;
+    gap: 1px;
+    background: var(--ink);
+  }
+
+  .rail {
+    align-content: start;
+  }
+
+  .rail div,
+  .topbar,
+  .hero,
+  .dock,
+  .stat,
+  .panel {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  .rail div {
+    padding: 11px 12px;
+    min-height: 40px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+    padding: 15px 16px;
+    border-bottom: 1px solid var(--ink);
+  }
+
+  .title {
+    margin: 0;
+    font-size: 38px;
+    font-weight: 900;
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+  }
+
+  .kicker,
+  .micro,
+  .pill {
+    font-size: 9px;
+    letter-spacing: 0.17em;
+    text-transform: uppercase;
+  }
+
+  .kicker,
+  .micro {
+    color: var(--utility);
+  }
+
+  .actions,
+  .dock-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    padding: 7px 9px;
+    border: 1px solid var(--ink);
+    color: var(--utility);
+  }
+
+  .pill.alert {
+    color: var(--alert);
+    border-color: var(--alert);
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.25fr 0.75fr;
+    min-height: 128px;
+  }
+
+  .hero-copy,
+  .hero-side {
+    padding: 15px 16px;
+  }
+
+  .hero-copy {
+    position: relative;
+    background:
+      linear-gradient(90deg, transparent 0 84%, color-mix(in srgb, var(--utility) 18%, transparent) 84% 100%),
+      var(--paper);
+  }
+
+  .hero-copy p {
+    margin: 8px 0 0;
+    font-size: 21px;
+    line-height: 0.98;
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+    font-weight: 900;
+  }
+
+  .hero-side {
+    border-left: 1px solid var(--ink);
+    display: grid;
+    align-content: space-between;
+  }
+
+  .barcode {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 2px;
+    justify-content: start;
+  }
+
+  .barcode span {
+    width: 3px;
+    height: 18px;
+    background: var(--utility);
+  }
+
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .stat {
+    padding: 12px 14px;
+    min-height: 74px;
+  }
+
+  .stat strong {
+    display: block;
+    margin-top: 8px;
+    font-size: 28px;
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+  }
+
+  .panels {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .panel {
+    min-height: 132px;
+    padding: 14px;
+  }
+
+  .panel h4 {
+    margin: 0 0 10px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--utility);
+  }
+
+  .tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .tag {
+    padding: 5px 7px;
+    border: 1px solid var(--utility);
+    color: var(--utility);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .tag.alert {
+    border-color: var(--alert);
+    color: var(--alert);
+  }
+
+  .lines {
+    display: grid;
+    gap: 7px;
+  }
+
+  .lines span {
+    display: block;
+    height: 10px;
+    background: color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  .dock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    border-top: 2px solid var(--ink);
+  }
+
+  .dock-copy {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--utility);
+  }
+
+  .button {
+    padding: 10px 14px;
+    border: 1px solid var(--ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .button.primary {
+    background: var(--alert);
+    color: var(--paper);
+    border-color: var(--alert);
+  }
+
+  .lane-note {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64645d;
+  }
+
+  @media (max-width: 1100px) {
+    .cards {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<h2>dossier palette study</h2>
+<p class="subtitle">Same archival dossier direction, but with different muted utility tones for states like draft, queued, and review metadata. Red still stays reserved for true alerts and send actions.</p>
+
+<div class="cards">
+  <div class="card" data-choice="olive" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="dossier olive">
+        <div class="rail">
+          <div>overview</div>
+          <div>edit items</div>
+          <div>pricing</div>
+          <div>descriptions</div>
+          <div>categories</div>
+          <div>database</div>
+        </div>
+        <div class="stage">
+          <div class="topbar">
+            <div>
+              <div class="kicker">manager / plate dossier / utility tone olive</div>
+              <h3 class="title">olive utility</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">draft</div>
+              <div class="pill">queued</div>
+              <div class="pill alert">send live</div>
+            </div>
+          </div>
+          <div class="hero">
+            <div class="hero-copy">
+              <div class="kicker">overview / balanced density</div>
+              <p>Feels slightly military-archival without going full terminal.</p>
+            </div>
+            <div class="hero-side">
+              <div class="barcode"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="micro">record / 11A</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="kicker">status</div><strong>live</strong></div>
+            <div class="stat"><div class="kicker">active</div><strong>128</strong></div>
+            <div class="stat"><div class="kicker">86 watch</div><strong>07</strong></div>
+          </div>
+          <div class="panels">
+            <div class="panel">
+              <h4>item tags</h4>
+              <div class="tags">
+                <div class="tag">draft</div>
+                <div class="tag">review</div>
+                <div class="tag alert">86'd</div>
+              </div>
+              <div class="lines"><span></span><span></span><span style="width:72%"></span></div>
+            </div>
+            <div class="panel">
+              <h4>recent activity</h4>
+              <div class="lines"><span></span><span></span><span style="width:81%"></span><span style="width:65%"></span></div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">olive makes the system feel analog, dusty, and operational</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Olive Utility</h3>
+      <p class="lane-note">Best if you want the dossier look to feel physical, archival, and a touch military.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="slate" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="dossier slate">
+        <div class="rail">
+          <div>overview</div>
+          <div>edit items</div>
+          <div>pricing</div>
+          <div>descriptions</div>
+          <div>categories</div>
+          <div>database</div>
+        </div>
+        <div class="stage">
+          <div class="topbar">
+            <div>
+              <div class="kicker">manager / plate dossier / utility tone slate</div>
+              <h3 class="title">slate utility</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">draft</div>
+              <div class="pill">queued</div>
+              <div class="pill alert">send live</div>
+            </div>
+          </div>
+          <div class="hero">
+            <div class="hero-copy">
+              <div class="kicker">overview / balanced density</div>
+              <p>Feels more technical and neutral, with less warmth than olive.</p>
+            </div>
+            <div class="hero-side">
+              <div class="barcode"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="micro">record / 11A</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="kicker">status</div><strong>live</strong></div>
+            <div class="stat"><div class="kicker">active</div><strong>128</strong></div>
+            <div class="stat"><div class="kicker">86 watch</div><strong>07</strong></div>
+          </div>
+          <div class="panels">
+            <div class="panel">
+              <h4>item tags</h4>
+              <div class="tags">
+                <div class="tag">draft</div>
+                <div class="tag">review</div>
+                <div class="tag alert">86'd</div>
+              </div>
+              <div class="lines"><span></span><span></span><span style="width:72%"></span></div>
+            </div>
+            <div class="panel">
+              <h4>recent activity</h4>
+              <div class="lines"><span></span><span></span><span style="width:81%"></span><span style="width:65%"></span></div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">slate makes the system feel cleaner, sharper, and more technical</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Slate Utility</h3>
+      <p class="lane-note">Best if you want the dossier system to stay neutral and crisp without extra warmth.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="steel" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="dossier steel">
+        <div class="rail">
+          <div>overview</div>
+          <div>edit items</div>
+          <div>pricing</div>
+          <div>descriptions</div>
+          <div>categories</div>
+          <div>database</div>
+        </div>
+        <div class="stage">
+          <div class="topbar">
+            <div>
+              <div class="kicker">manager / plate dossier / utility tone steel</div>
+              <h3 class="title">steel utility</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">draft</div>
+              <div class="pill">queued</div>
+              <div class="pill alert">send live</div>
+            </div>
+          </div>
+          <div class="hero">
+            <div class="hero-copy">
+              <div class="kicker">overview / balanced density</div>
+              <p>Feels most industrial and fabricated, like stamped metal paperwork.</p>
+            </div>
+            <div class="hero-side">
+              <div class="barcode"><span></span><span></span><span></span><span></span><span></span></div>
+              <div class="micro">record / 11A</div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><div class="kicker">status</div><strong>live</strong></div>
+            <div class="stat"><div class="kicker">active</div><strong>128</strong></div>
+            <div class="stat"><div class="kicker">86 watch</div><strong>07</strong></div>
+          </div>
+          <div class="panels">
+            <div class="panel">
+              <h4>item tags</h4>
+              <div class="tags">
+                <div class="tag">draft</div>
+                <div class="tag">review</div>
+                <div class="tag alert">86'd</div>
+              </div>
+              <div class="lines"><span></span><span></span><span style="width:72%"></span></div>
+            </div>
+            <div class="panel">
+              <h4>recent activity</h4>
+              <div class="lines"><span></span><span></span><span style="width:81%"></span><span style="width:65%"></span></div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">steel feels industrial first, archival second</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Steel Utility</h3>
+      <p class="lane-note">Best if you want the interface to lean more mechanical and fabricated than editorial.</p>
+    </div>
+  </div>
+</div>
