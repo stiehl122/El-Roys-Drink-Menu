@@ -5,13 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Leroy's Lounge &amp; El Roy's Cantina | Menus</title>
 <link rel="icon" type="image/png" href="HFLOGO.png">
-    <link href="/api/public?action=font_css&amp;set=root" rel="stylesheet">
+<link href="/api/public?action=font_css&amp;set=root" rel="stylesheet">
+<link href="/api/public?action=font_css&amp;font=Outfit" rel="stylesheet">
 <link rel="stylesheet" href="/styles/root-landing.css">
 <link rel="stylesheet" href="/core/auth/auth-overlay-unified.css">
 </head>
 <body class="root-landing-page">
 
 <section id="site-picker-view" class="landing-root" hidden>
+  <nav class="landing-topbar" aria-label="Primary">
+    <div class="landing-topbar-inner">
+      <a class="landing-topbar-brand" href="#hero" aria-label="Back to top">
+        <span class="landing-topbar-brand-mark">L/E</span>
+        <span class="landing-topbar-brand-copy">
+          <strong>Tonight's Choice</strong>
+          <span>Two rooms. One fast decision.</span>
+        </span>
+      </a>
+      <div class="landing-topbar-links">
+        <a href="#hours">Hours</a>
+        <a href="#comparison">Compare</a>
+        <a href="#events">Events</a>
+        <a href="#news">News</a>
+        <a href="#reviews">Reviews</a>
+      </div>
+      <div class="landing-topbar-actions">
+        <a class="landing-topbar-action landing-topbar-action--leroys" href="/leroyslounge">Leroy's Food</a>
+        <a class="landing-topbar-action landing-topbar-action--elroys" href="/elroyscantina">El Roy's Food</a>
+      </div>
+    </div>
+  </nav>
+
   <nav class="landing-dot-nav" aria-label="Page sections">
     <button type="button" class="is-active" data-landing-dot="hero" aria-label="Hero"></button>
     <button type="button" data-landing-dot="hours" aria-label="Hours"></button>
@@ -22,43 +46,65 @@
   </nav>
 
   <main id="landing-root-shell" class="landing-root-shell" hidden>
-    <section id="hero" class="landing-hero">
-      <article class="landing-hero-card landing-hero-card--leroys">
-        <div class="landing-hero-card-inner">
-          <p class="landing-hero-kicker">Leroy's Lounge</p>
-          <img class="landing-hero-sign" src="/assets/leroys-sign.png" alt="Leroy's Lounge sign">
-          <h1 class="landing-hero-title landing-hero-title--leroys">Leroy's Lounge</h1>
-          <p class="landing-hero-copy">Basement-bar warmth, American bites, and the kind of late-night room that rewards a wrong turn.</p>
-          <div id="landing-hero-status-leroys" class="landing-status-pill is-closed">Loading hours...</div>
-          <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge">See Leroy's Food</a>
+    <section id="hero" class="landing-hero landing-chapter">
+      <div class="landing-hero-backdrop" aria-hidden="true">
+        <div class="landing-orb landing-orb--leroys"></div>
+        <div class="landing-orb landing-orb--elroys"></div>
+      </div>
+      <div class="landing-shell-inner landing-hero-shell">
+        <div class="landing-hero-intro landing-reveal" data-landing-word-reveal>
+          <p class="landing-eyebrow">Where should I go tonight?</p>
+          <h1 class="landing-hero-heading">
+            Pick the room that fits tonight, then go straight to food.
+          </h1>
+          <p class="landing-hero-deck">
+            Leroy's stays low, warm, and analog. El Roy's hits brighter, louder, and glossier.
+            Both are visible now so the choice stays immediate.
+          </p>
         </div>
-      </article>
+        <div class="landing-hero-choices">
+          <article class="landing-hero-card landing-hero-card--leroys landing-reveal" data-scroll-media>
+            <div class="landing-hero-card-image">
+              <img class="landing-hero-sign" src="/assets/leroys-sign.png" alt="Leroy's Lounge sign">
+            </div>
+            <div class="landing-hero-card-inner">
+              <p class="landing-hero-kicker">Leroy's Lounge</p>
+              <h2 class="landing-hero-title landing-hero-title--leroys">Basement glow and American bites.</h2>
+              <p class="landing-hero-copy">The heavier room. Dark wood, late fries, beer-sign warmth, and the kind of night that gets better after the first round.</p>
+              <div id="landing-hero-status-leroys" class="landing-status-pill is-closed">Loading hours...</div>
+              <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge">Go To Leroy's Food</a>
+            </div>
+          </article>
 
-      <article class="landing-hero-card landing-hero-card--elroys">
-        <div class="landing-hero-card-inner">
-          <p class="landing-hero-kicker">El Roy's Cantina</p>
-          <img class="landing-hero-sign" src="/assets/elroys-sign.png" alt="El Roy's Cantina sign">
-          <h1 class="landing-hero-title landing-hero-title--elroys">El Roy's Cantina</h1>
-          <p class="landing-hero-copy">Border-glam color, Tex-Mex heat, and a louder kind of night out when the room needs more shine.</p>
-          <div id="landing-hero-status-elroys" class="landing-status-pill is-closed">Loading hours...</div>
-          <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina">See El Roy's Food</a>
+          <article class="landing-hero-card landing-hero-card--elroys landing-reveal" data-scroll-media>
+            <div class="landing-hero-card-image">
+              <img class="landing-hero-sign" src="/assets/elroys-sign.png" alt="El Roy's Cantina sign">
+            </div>
+            <div class="landing-hero-card-inner">
+              <p class="landing-hero-kicker">El Roy's Cantina</p>
+              <h2 class="landing-hero-title landing-hero-title--elroys">Lacquer heat and Tex-Mex energy.</h2>
+              <p class="landing-hero-copy">The brighter room. Chrome, color, queso, and the louder kind of night out when the table needs more voltage.</p>
+              <div id="landing-hero-status-elroys" class="landing-status-pill is-closed">Loading hours...</div>
+              <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina">Go To El Roy's Food</a>
+            </div>
+          </article>
         </div>
-      </article>
+      </div>
     </section>
 
-    <section id="hours" class="landing-shell-section landing-shell-section--warm landing-reveal">
+    <section id="hours" class="landing-shell-section landing-shell-section--warm landing-chapter landing-reveal">
       <div class="landing-shell-inner">
-        <div class="landing-section-head">
-          <h2>Hours</h2>
-          <div class="landing-section-rule"></div>
+        <div class="landing-section-head landing-section-head--stack">
+          <p class="landing-eyebrow">Hours</p>
+          <h2 class="landing-section-title">Operational clarity without killing the mood.</h2>
+          <p class="landing-section-copy">The live line stays up in the hero. This chapter turns the rest of the week into something you can scan in a breath.</p>
         </div>
-        <p class="landing-section-copy">Live status comes first up top. Full recurring hours live here when you want the rest of the week at a glance.</p>
 
         <div class="landing-hours-grid">
-          <article class="landing-hours-card landing-hours-card--leroys">
-            <div>
+          <article class="landing-hours-card landing-hours-card--leroys" data-scroll-media>
+            <div class="landing-hours-card-head">
               <p class="landing-section-kicker">Leroy's Lounge</p>
-              <h3 class="landing-hero-title landing-hero-title--leroys" style="font-size:2.6rem">This Week</h3>
+              <h3>This Week</h3>
             </div>
             <div id="landing-hours-today-leroys" class="landing-hours-today landing-hours-today--leroys">
               <span>Today</span>
@@ -67,10 +113,10 @@
             <dl id="landing-hours-list-leroys" class="landing-hours-table"></dl>
           </article>
 
-          <article class="landing-hours-card landing-hours-card--elroys">
-            <div>
+          <article class="landing-hours-card landing-hours-card--elroys" data-scroll-media>
+            <div class="landing-hours-card-head">
               <p class="landing-section-kicker">El Roy's Cantina</p>
-              <h3 class="landing-hero-title landing-hero-title--elroys" style="font-size:2.6rem">This Week</h3>
+              <h3>This Week</h3>
             </div>
             <div id="landing-hours-today-elroys" class="landing-hours-today landing-hours-today--elroys">
               <span>Today</span>
@@ -78,80 +124,142 @@
             </div>
             <dl id="landing-hours-list-elroys" class="landing-hours-table"></dl>
           </article>
+
+          <article class="landing-detail-card landing-detail-card--wide">
+            <p class="landing-card-kicker">Fast read</p>
+            <h3>Two atmospheres, one clean decision.</h3>
+            <p>Keep the shared frame neutral and let each restaurant do its own work. Leroy's leans amber and worn-in. El Roy's leans cream, chrome, and gloss.</p>
+          </article>
+
+          <article class="landing-detail-card">
+            <p class="landing-card-kicker">Leroy's</p>
+            <h3>American bites first.</h3>
+            <p>Burgers, fries, bar snacks, and the grounded room when the night wants more weight.</p>
+          </article>
+
+          <article class="landing-detail-card">
+            <p class="landing-card-kicker">El Roy's</p>
+            <h3>Tex-Mex first.</h3>
+            <p>Tacos, queso, agave culture, and the brighter table when the night wants more shine.</p>
+          </article>
         </div>
       </div>
     </section>
 
-    <section id="comparison" class="landing-shell-section landing-shell-section--panel landing-reveal">
+    <section id="comparison" class="landing-shell-section landing-shell-section--panel landing-chapter landing-reveal">
       <div class="landing-shell-inner">
-        <div class="landing-section-head">
-          <h2>Choose Your Night</h2>
-          <div class="landing-section-rule"></div>
+        <div class="landing-section-head landing-section-head--stack">
+          <p class="landing-eyebrow">Compare The Night</p>
+          <h2 class="landing-section-title">Same building. Different energy curves.</h2>
         </div>
 
         <div class="landing-comparison-grid">
-          <article class="landing-comparison-card landing-comparison-card--leroys">
-            <p class="landing-card-kicker">The Lounge</p>
-            <h3 style="color:var(--landing-leroys)">American Bites</h3>
-            <p>Burgers, fries, and late-night plates with real heft. Leroy's leans warm, grounded, and analog in the best possible way.</p>
+          <article class="landing-comparison-card landing-comparison-card--leroys is-active" tabindex="0">
+            <p class="landing-card-kicker">Leroy's Lounge</p>
+            <h3>American bites with basement-bar gravity.</h3>
+            <p>The heavier option. Warm wood, lived-in surfaces, and the familiar late-night room when you want to settle in instead of show up polished.</p>
           </article>
 
-          <article class="landing-comparison-card landing-comparison-card--elroys">
-            <p class="landing-card-kicker">The Cantina</p>
-            <h3 style="color:var(--landing-elroys)">Tex-Mex</h3>
-            <p>Tacos, queso, and margarita energy first. El Roy's brings the brighter, glossier room when the night needs more voltage.</p>
+          <article class="landing-comparison-card landing-comparison-card--elroys" tabindex="0">
+            <p class="landing-card-kicker">El Roy's Cantina</p>
+            <h3>Tex-Mex with more color, chrome, and social heat.</h3>
+            <p>The brighter option. Gloss, contrast, and a sharper table presence when the plan needs more movement and more shine.</p>
+          </article>
+
+          <article class="landing-marquee" aria-label="Shared atmosphere details">
+            <div class="landing-marquee-track">
+              <span>Leroy's Lounge</span>
+              <span>American bites</span>
+              <span>El Roy's Cantina</span>
+              <span>Tex-Mex energy</span>
+              <span>Late-night choice</span>
+              <span>Leroy's Lounge</span>
+              <span>American bites</span>
+              <span>El Roy's Cantina</span>
+              <span>Tex-Mex energy</span>
+              <span>Late-night choice</span>
+            </div>
           </article>
         </div>
       </div>
     </section>
 
-    <section id="events" class="landing-shell-section landing-reveal">
+    <section id="events" class="landing-shell-section landing-shell-section--story landing-chapter landing-reveal">
       <div class="landing-shell-inner">
-        <div class="landing-section-head">
-          <h2>Events</h2>
-          <div class="landing-section-rule"></div>
+        <div class="landing-story-layout">
+          <div class="landing-story-rail">
+            <p class="landing-eyebrow">Events</p>
+            <h2 class="landing-section-title">Programming should feel curated, not marketplace loud.</h2>
+            <p class="landing-section-copy">This side stays pinned while the cards stack through the right column, so the page reads like a living venue calendar instead of a feed dump.</p>
+          </div>
+          <div class="landing-story-stack">
+            <div id="landing-events-list" class="landing-story-grid landing-story-list"></div>
+            <article id="landing-events-empty" class="landing-empty-card landing-empty-card--story">
+              <p class="landing-empty-kicker">Nothing booked yet</p>
+              <h3>Nothing scheduled right now.</h3>
+              <p>The page stays calm when the calendar is clear instead of manufacturing urgency.</p>
+            </article>
+          </div>
         </div>
-        <div id="landing-events-list" class="landing-story-grid landing-story-list"></div>
-        <article id="landing-events-empty" class="landing-empty-card">
-          <p class="landing-empty-kicker">Nothing booked yet</p>
-          <h3>Nothing scheduled right now.</h3>
-          <p>The shell is live and ready for upcoming nights, but the public page stays calm instead of faking urgency when nothing is on deck.</p>
-        </article>
       </div>
     </section>
 
-    <section id="news" class="landing-shell-section landing-shell-section--warm landing-reveal">
+    <section id="news" class="landing-shell-section landing-shell-section--warm landing-shell-section--story landing-chapter landing-reveal">
       <div class="landing-shell-inner">
-        <div class="landing-section-head">
-          <h2>News</h2>
-          <div class="landing-section-rule"></div>
+        <div class="landing-story-layout">
+          <div class="landing-story-rail">
+            <p class="landing-eyebrow">News</p>
+            <h2 class="landing-section-title">The outside world comes in as signal, not noise.</h2>
+            <p class="landing-section-copy">Imported coverage stays editorial and external. Image-led when it can be, text-forward when it has to be.</p>
+          </div>
+          <div class="landing-story-stack">
+            <div id="landing-news-list" class="landing-review-grid landing-review-list"></div>
+            <article id="landing-news-empty" class="landing-empty-card landing-empty-card--story">
+              <p class="landing-empty-kicker">Imported stories</p>
+              <h3>Fresh coverage lands here.</h3>
+              <p>When the teams publish news, it drops into the page without interrupting the decision-first rhythm above.</p>
+            </article>
+          </div>
         </div>
-        <div id="landing-news-list" class="landing-review-grid landing-review-list"></div>
-        <article id="landing-news-empty" class="landing-empty-card">
-          <p class="landing-empty-kicker">Imported stories</p>
-          <h3>Fresh coverage lands here.</h3>
-          <p>When the teams publish news, it will appear as a clean editorial layer without getting in the way of the decision-first flow above.</p>
-        </article>
       </div>
     </section>
 
-    <section id="reviews" class="landing-shell-section landing-reveal">
+    <section id="reviews" class="landing-shell-section landing-shell-section--story landing-chapter landing-reveal">
       <div class="landing-shell-inner">
-        <div class="landing-section-head">
-          <h2>Reviews</h2>
-          <div class="landing-section-rule"></div>
+        <div class="landing-story-layout">
+          <div class="landing-story-rail">
+            <p class="landing-eyebrow">Reviews</p>
+            <h2 class="landing-section-title">Proof lands better when both rooms stay equally legible.</h2>
+            <p class="landing-section-copy">The review pairings move as one unit so neither restaurant turns into the default winner by layout alone.</p>
+          </div>
+          <div class="landing-story-stack">
+            <div id="landing-reviews-list" class="landing-review-carousel"></div>
+            <div id="landing-reviews-controls" class="landing-review-controls" hidden>
+              <button id="landing-reviews-prev" class="landing-review-nav" type="button" aria-label="Previous reviews">←</button>
+              <div id="landing-reviews-dots" class="landing-review-dots" aria-label="Review pairs"></div>
+              <button id="landing-reviews-next" class="landing-review-nav" type="button" aria-label="Next reviews">→</button>
+            </div>
+            <article id="landing-reviews-empty" class="landing-empty-card landing-empty-card--story">
+              <p class="landing-empty-kicker">Paired proof</p>
+              <h3>Balanced social proof comes later.</h3>
+              <p>The slot stays reserved until both sides have enough real review inventory to feel fair.</p>
+            </article>
+          </div>
         </div>
-        <div id="landing-reviews-list" class="landing-review-carousel"></div>
-        <div id="landing-reviews-controls" class="landing-review-controls" hidden>
-          <button id="landing-reviews-prev" class="landing-review-nav" type="button" aria-label="Previous reviews">←</button>
-          <div id="landing-reviews-dots" class="landing-review-dots" aria-label="Review pairs"></div>
-          <button id="landing-reviews-next" class="landing-review-nav" type="button" aria-label="Next reviews">→</button>
+      </div>
+    </section>
+
+    <section class="landing-action landing-chapter landing-reveal">
+      <div class="landing-shell-inner">
+        <div class="landing-action-panel">
+          <p class="landing-eyebrow">Make The Call</p>
+          <h2 class="landing-action-title">Go warm and grounded, or go brighter and louder.</h2>
+          <p class="landing-action-copy">The homepage should end the hesitation, not prolong it. Pick the room and land directly on the food menu.</p>
+          <div class="landing-action-links">
+            <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge">Open Leroy's Food</a>
+            <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina">Open El Roy's Food</a>
+          </div>
         </div>
-        <article id="landing-reviews-empty" class="landing-empty-card">
-          <p class="landing-empty-kicker">Paired proof</p>
-          <h3>Balanced social proof comes later.</h3>
-          <p>The public shell keeps this slot reserved for paired Leroy's and El Roy's reviews once both sides have enough usable live inventory.</p>
-        </article>
       </div>
     </section>
 
@@ -185,8 +293,28 @@
 
 <script>
   (function initRootLandingChrome() {
-    const shellSections = Array.from(document.querySelectorAll('main [id]'));
+    const shellSections = Array.from(document.querySelectorAll('main > section[id]'));
     const dots = Array.from(document.querySelectorAll('[data-landing-dot]'));
+    const revealTargets = Array.from(document.querySelectorAll('.landing-reveal'));
+    const mediaTargets = Array.from(document.querySelectorAll('[data-scroll-media]'));
+    const wordRevealTargets = Array.from(document.querySelectorAll('[data-landing-word-reveal]'));
+
+    wordRevealTargets.forEach(container => {
+      const paragraph = container.querySelector('.landing-hero-deck');
+      if (!paragraph || paragraph.dataset.wordsReady === 'true') return;
+      const words = paragraph.textContent.trim().split(/\s+/).filter(Boolean);
+      paragraph.innerHTML = words.map(word => `<span class="landing-word">${word}</span>`).join(' ');
+      paragraph.dataset.wordsReady = 'true';
+    });
+
+    const updateMediaTargets = () => {
+      mediaTargets.forEach(target => {
+        const rect = target.getBoundingClientRect();
+        const progress = 1 - Math.min(Math.max((rect.top + rect.height * 0.2) / (window.innerHeight * 1.2), 0), 1);
+        target.style.setProperty('--landing-media-progress', progress.toFixed(3));
+      });
+    };
+
     if (!shellSections.length || !dots.length || !('IntersectionObserver' in window)) {
       dots.forEach(dot => {
         dot.addEventListener('click', () => {
@@ -194,6 +322,7 @@
           if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });
       });
+      updateMediaTargets();
       return;
     }
 
@@ -203,9 +332,7 @@
       });
     }, { threshold: 0.16 });
 
-    document.querySelectorAll('.landing-reveal').forEach(section => {
-      revealObserver.observe(section);
-    });
+    revealTargets.forEach(section => revealObserver.observe(section));
 
     const sectionObserver = new IntersectionObserver(entries => {
       entries.forEach(entry => {
@@ -226,6 +353,19 @@
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
+
+    const wordObserver = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+      });
+    }, { threshold: 0.35 });
+
+    wordRevealTargets.forEach(target => wordObserver.observe(target));
+
+    updateMediaTargets();
+    window.addEventListener('scroll', updateMediaTargets, { passive: true });
+    window.addEventListener('resize', updateMediaTargets);
   })();
 </script>
 
