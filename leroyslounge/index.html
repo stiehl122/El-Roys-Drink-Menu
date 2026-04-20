@@ -94,6 +94,24 @@
                     aria-label="Exit admin view">
               Exit
             </button>
+            <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
+                 onclick="toggleUserDropdown('ll-user-chip')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
+                 tabindex="0"
+                 role="button"
+                 aria-haspopup="true"
+                 aria-expanded="false"
+                 id="ll-user-chip"
+                 aria-label="User menu">
+              <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
+              <span class="material-symbols-outlined ll-board-usercaret" aria-hidden="true">keyboard_arrow_down</span>
+              <div class="ll-board-userdropdown ll-site-userdropdown" id="ll-user-dropdown">
+                <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
+                <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
+                <div class="user-dropdown-divider"></div>
+                <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -101,24 +119,6 @@
           <div class="ll-rail-meta-card">
             <p class="ll-rail-label">Live Board</p>
             <p class="ll-rail-timestamp" id="ll-route-status-timestamp">Loading live menu…</p>
-          </div>
-          <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
-               onclick="toggleUserDropdown('ll-user-chip')"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
-               tabindex="0"
-               role="button"
-               aria-haspopup="true"
-               aria-expanded="false"
-               id="ll-user-chip"
-               aria-label="User menu">
-            <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
-            <span class="material-symbols-outlined ll-board-usercaret" aria-hidden="true">keyboard_arrow_down</span>
-            <div class="ll-board-userdropdown ll-site-userdropdown" id="ll-user-dropdown">
-              <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
-              <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
-              <div class="user-dropdown-divider"></div>
-              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
-            </div>
           </div>
           <span id="ll-user-initials" hidden>?</span>
         </div>

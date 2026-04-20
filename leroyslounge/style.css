@@ -103,6 +103,7 @@ body.route-restaurant.route-restaurant--leroy {
   grid-template-columns: minmax(18rem, 25rem) minmax(0, 1fr);
   gap: 1.25rem;
   width: min(84rem, calc(100% - 2rem));
+  box-sizing: border-box;
   margin: 0 auto;
   padding: calc(1.2rem + var(--ll-safe-top)) calc(1rem + var(--ll-safe-right)) 2.5rem calc(1rem + var(--ll-safe-left));
   flex: 1 0 auto;
@@ -252,6 +253,7 @@ body.route-restaurant.route-restaurant--leroy {
 #restaurant-site-wrapper .ll-board-action-cluster {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.55rem;
   margin-top: 0.55rem;
 }
@@ -339,14 +341,16 @@ body.route-restaurant.route-restaurant--leroy {
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.3rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid rgb(239 225 203 / 0.12);
-  border-radius: 1rem;
-  background: rgb(21 16 15 / 0.24);
+  justify-content: center;
+  gap: 0.12rem;
+  min-height: 2.4rem;
+  padding: 0 0.58rem 0 0.52rem;
+  border: 1px solid rgb(239 225 203 / 0.15);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.04);
   color: var(--ll-board-ink);
   cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
 }
 
 #restaurant-site-wrapper .ll-board-userchip.ll-site-userchip:hover .ll-board-usericon,
@@ -354,14 +358,23 @@ body.route-restaurant.route-restaurant--leroy {
   transform: scale(1.04);
 }
 
+#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip:hover,
+#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip:focus-visible,
+#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip[aria-expanded='true'] {
+  border-color: rgb(202 153 86 / 0.44);
+  background: rgb(202 153 86 / 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+
 #restaurant-site-wrapper .ll-board-usericon {
-  font-size: 1.7rem;
+  font-size: 1.35rem;
   line-height: 1;
   transition: transform 0.18s ease;
 }
 
 #restaurant-site-wrapper .ll-board-usercaret {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   line-height: 1;
 }
 
@@ -801,16 +814,23 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-marquee-shell {
     grid-template-columns: 1fr;
     gap: 0.85rem;
-    width: calc(100% - 0.75rem);
+    width: 100%;
     padding: calc(0.75rem + var(--ll-safe-top)) calc(0.375rem + var(--ll-safe-right)) 1.5rem calc(0.375rem + var(--ll-safe-left));
   }
 
   #restaurant-site-wrapper .ll-marquee-rail {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'logo actions'
+      'toggle toggle';
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-auto-rows: min-content;
     align-items: center;
+    align-content: start;
     gap: 0.55rem 0.7rem;
     padding: 0.65rem 0.8rem;
+    height: 8.25rem;
+    overflow: clip;
   }
 
   #restaurant-site-wrapper .ll-marquee-rail,
@@ -819,8 +839,10 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-marquee-sign {
-    grid-column: 1;
-    grid-row: 1;
+    grid-area: logo;
+    align-self: center;
+    justify-self: start;
+    min-height: 0;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -845,6 +867,7 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-rail-block {
+    min-height: 0;
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -852,14 +875,15 @@ body.route-restaurant.route-restaurant--leroy {
     box-shadow: none;
   }
 
-  #restaurant-site-wrapper .ll-rail-block:first-of-type {
-    grid-column: 1 / -1 !important;
-    grid-row: 2 !important;
+  #restaurant-site-wrapper .ll-marquee-rail > .ll-rail-block:nth-child(2) {
+    grid-area: toggle !important;
+    width: 100%;
   }
 
-  #restaurant-site-wrapper .ll-rail-block:last-of-type {
-    grid-column: 3 !important;
-    grid-row: 1 !important;
+  #restaurant-site-wrapper .ll-marquee-rail > .ll-rail-block:nth-child(3) {
+    grid-area: actions !important;
+    align-self: center;
+    justify-self: end;
   }
 
   #restaurant-site-wrapper .ll-rail-label {
@@ -869,6 +893,8 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-board-action-cluster {
     margin-top: 0;
     justify-content: flex-end;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
   }
 
   #restaurant-site-wrapper .ll-menu-toggle {
@@ -878,16 +904,33 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-menu-toggle-btn,
   #restaurant-site-wrapper .ll-board-jump-link,
   #restaurant-site-wrapper .ll-board-settings-trigger,
-  #restaurant-site-wrapper .ll-board-swap-trigger {
+  #restaurant-site-wrapper .ll-board-swap-trigger,
+  #restaurant-site-wrapper .ll-board-userchip.ll-site-userchip {
     min-height: 2.15rem;
     padding: 0 0.78rem;
     font-size: 0.64rem;
     letter-spacing: 0.12em;
   }
 
+  #restaurant-site-wrapper .ll-board-userchip.ll-site-userchip {
+    padding: 0 0.48rem 0 0.42rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-usericon {
+    font-size: 1.15rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-usercaret {
+    font-size: 0.82rem;
+  }
+
   #restaurant-site-wrapper .ll-board-footer {
     padding-left: calc(0.75rem + var(--ll-safe-left));
     padding-right: calc(0.75rem + var(--ll-safe-right));
+  }
+
+  #restaurant-site-wrapper .ll-board-main {
+    margin-top: -15rem;
   }
 }
 
@@ -901,7 +944,7 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-marquee-rail {
     gap: 0.6rem;
     padding-top: 0.55rem;
-    padding-bottom: 0.6rem;
+    padding-bottom: 0.55rem;
   }
 
   #restaurant-site-wrapper .ll-board-logo {
@@ -912,11 +955,15 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-board-action-cluster {
     width: 100%;
     gap: 0.4rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   #restaurant-site-wrapper .ll-menu-toggle {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #restaurant-site-wrapper .ll-board-action-cluster {
+    justify-content: flex-end;
   }
 
   #restaurant-site-wrapper .ll-board-row {
@@ -937,10 +984,23 @@ body.route-restaurant.route-restaurant--leroy {
   #restaurant-site-wrapper .ll-menu-toggle-btn,
   #restaurant-site-wrapper .ll-board-jump-link,
   #restaurant-site-wrapper .ll-board-settings-trigger,
-  #restaurant-site-wrapper .ll-board-swap-trigger {
+  #restaurant-site-wrapper .ll-board-swap-trigger,
+  #restaurant-site-wrapper .ll-board-userchip.ll-site-userchip {
     min-height: 1.9rem;
     padding: 0 0.68rem;
     font-size: 0.6rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-userchip.ll-site-userchip {
+    padding: 0 0.38rem 0 0.34rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-usericon {
+    font-size: 1.02rem;
+  }
+
+  #restaurant-site-wrapper .ll-board-usercaret {
+    font-size: 0.76rem;
   }
 
   #restaurant-site-wrapper .ll-board-footer-actions {
