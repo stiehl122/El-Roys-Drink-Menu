@@ -319,6 +319,75 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertFalse(swipeSource.contains(".frame(height: estimatedListHeight)"))
   }
 
+  func testEditableDocumentMovesVisibleCategoriesAndKeepsRecoveryBucketLast() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      ),
+      MenuCategoryPayload(
+        id: "wine",
+        menuId: "menu",
+        key: "wine",
+        label: "Wine",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [makeItem(id: "item-2", name: "Orange Wine")]
+      ),
+      MenuCategoryPayload(
+        id: "uncategorized",
+        menuId: "menu",
+        key: EditableMenuDocument.uncategorizedKey,
+        label: "Uncategorized",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 2,
+        items: []
+      )
+    ])
+
+    var document = EditableMenuDocument(workspace: workspace)
+    document.moveVisibleCategories(from: IndexSet(integer: 0), to: 2)
+
+    XCTAssertEqual(document.visibleCategories.map(\.key), ["wine", "beer"])
+    XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1])
+    XCTAssertEqual(document.cats.last?.key, EditableMenuDocument.uncategorizedKey)
+  }
+
+  func testRestaurantToolsProvidesCategoryManagementEntryPoint() throws {
+    let toolsSource = try String(contentsOf: restaurantToolsSourceURL(), encoding: .utf8)
+    let appSource = try String(contentsOf: appEntrySourceURL(), encoding: .utf8)
+
+    XCTAssertTrue(toolsSource.contains("Manage Categories"))
+    XCTAssertTrue(appSource.contains("case categoryTools(MenuRecord)"))
+    XCTAssertTrue(appSource.contains("RestaurantCategoryManagementScreen"))
+  }
+
+  func testMenuEditorCategoryCardUsesVisibleReorderButtonInsteadOfOverflowMenu() throws {
+    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
+    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
+    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
+    let cardSource = String(source[cardRange.lowerBound..<swipeRange.lowerBound])
+
+    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
+    XCTAssertTrue(cardSource.contains("Done Reordering"))
+    XCTAssertFalse(cardSource.contains("Menu {"))
+    XCTAssertFalse(cardSource.contains("ellipsis.circle.fill"))
+  }
+
   func testEditableDocumentDefinesVisibleItemReorderMutation() throws {
     let source = try String(contentsOf: appModelsSourceURL(), encoding: .utf8)
     XCTAssertTrue(source.contains("mutating func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int)"))
@@ -2454,6 +2523,20 @@ private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
     .deletingLastPathComponent()
     .deletingLastPathComponent()
     .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
+}
+
+private func restaurantToolsSourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift")
+}
+
+private func appEntrySourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/App/ElRoysManagerApp.swift")
 }
 
 private func appModelsSourceURL(filePath: StaticString = #filePath) -> URL {
