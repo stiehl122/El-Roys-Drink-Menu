@@ -94,9 +94,14 @@
   function buildMenuSwitchPlaceholder() {
     return `
       <section class="ll-slat-section ll-route-switch-section" aria-hidden="true">
-        <div class="ll-slat-section-head">
-          <h2 class="ll-slat-section-title">Loading menu</h2>
+        <div class="ll-route-boot-rows ll-route-switch-rows">
+          <span class="ll-route-boot-line ll-route-boot-line--wide"></span>
+          <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
+          <span class="ll-route-boot-line ll-route-boot-line--narrow"></span>
+          <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
         </div>
+      </section>
+      <section class="ll-slat-section ll-route-switch-section" aria-hidden="true">
         <div class="ll-route-boot-rows ll-route-switch-rows">
           <span class="ll-route-boot-line ll-route-boot-line--wide"></span>
           <span class="ll-route-boot-line ll-route-boot-line--mid"></span>
@@ -104,33 +109,6 @@
         </div>
       </section>
     `;
-  }
-
-  function renderSwapDropdown({ contract, sharedState, menus, switchRouteMenu, esc: escRoute }) {
-    const dropdown = document.getElementById('ll-route-swap-dropdown');
-    const trigger = document.getElementById('ll-route-swap-trigger');
-    if (!dropdown || !trigger) return;
-
-    trigger.style.display = menus.length > 1 ? '' : 'none';
-    dropdown.innerHTML = menus.map(menu => {
-      const isActive = menu.id === sharedState.menuId;
-      return `
-        <button class="ll-board-route-option${isActive ? ' is-active' : ''}" type="button" data-route-menu-option="${escRoute(menu.id)}">
-          <span class="ll-board-route-option-label">${escRoute((contract.helpers.getMenuTypeLabel?.(menu.type) || menu.type || '').toUpperCase())}</span>
-          <span class="material-symbols-outlined ll-board-route-option-icon" aria-hidden="true">${menu.type === 'food' ? 'restaurant_menu' : 'sports_bar'}</span>
-        </button>
-      `;
-    }).join('');
-
-    dropdown.querySelectorAll('[data-route-menu-option]').forEach(button => {
-      button.onclick = async () => {
-        const menuId = button.getAttribute('data-route-menu-option') || '';
-        const menu = menus.find(entry => entry.id === menuId);
-        if (!menu) return;
-        contract.actions.closeDropdowns?.();
-        await switchRouteMenu(contract, menu);
-      };
-    });
   }
 
   const routeBoundary = (window.__HF_ROUTE_MODULES__ && typeof window.__HF_ROUTE_MODULES__ === 'object')
@@ -165,6 +143,5 @@
     buildMenuSwitchPlaceholder,
     buildFeaturedHtml,
     buildCategoryHtml,
-    renderSwapDropdown,
   });
 })();

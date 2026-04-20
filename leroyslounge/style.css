@@ -446,48 +446,17 @@ body.route-restaurant.route-restaurant--leroy {
   align-content: start;
   gap: 1rem;
   min-width: 0;
+  padding-top: 0;
 }
 
 #restaurant-site-wrapper #ll-route-main {
   scroll-margin-top: calc(6rem + var(--ll-safe-top));
 }
 
-#restaurant-site-wrapper .ll-board-stage-head {
-  display: grid;
-  gap: 0.65rem;
-  padding: 1.2rem 1.3rem;
-  border: 1px solid var(--ll-board-panel-edge);
-  border-radius: 1.6rem;
-  background:
-    linear-gradient(180deg, rgb(41 30 25 / 0.94), rgb(28 21 19 / 0.98));
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.04),
-    var(--ll-board-shadow);
-}
-
-#restaurant-site-wrapper .ll-board-stage-title {
-  margin: 0.35rem 0 0;
-  max-width: 13ch;
-  color: var(--ll-board-ink);
-  font-family: 'Epilogue', sans-serif;
-  font-size: clamp(2.2rem, 5vw, 4.25rem);
-  font-weight: 800;
-  letter-spacing: -0.05em;
-  line-height: 0.92;
-  text-wrap: balance;
-}
-
-#restaurant-site-wrapper .ll-board-stage-copy {
-  margin: 0;
-  max-width: 48ch;
-  color: var(--ll-board-ink-soft);
-  font-size: 0.98rem;
-  line-height: 1.55;
-}
-
 #restaurant-site-wrapper #ll-route-sections {
   display: grid;
   gap: 1rem;
+  grid-template-columns: 1fr;
 }
 
 #restaurant-site-wrapper .ll-slat-section {
@@ -740,7 +709,7 @@ body.route-restaurant.route-restaurant--leroy {
 }
 
 #restaurant-site-wrapper .ll-route-switch-section {
-  min-height: 10rem;
+  min-height: 12rem;
 }
 
 #restaurant-site-wrapper .ll-route-switch-rows,
@@ -828,13 +797,6 @@ body.route-restaurant.route-restaurant--leroy {
   }
 }
 
-@media (min-width: 1100px) {
-  #restaurant-site-wrapper #ll-route-sections {
-    grid-template-columns: minmax(0, 1.08fr) minmax(18rem, 0.92fr);
-    align-items: start;
-  }
-}
-
 @media (max-width: 860px) {
   #restaurant-site-wrapper .ll-marquee-shell {
     grid-template-columns: 1fr;
@@ -844,13 +806,8 @@ body.route-restaurant.route-restaurant--leroy {
   }
 
   #restaurant-site-wrapper .ll-marquee-rail,
-  #restaurant-site-wrapper .ll-board-stage-head,
   #restaurant-site-wrapper .ll-slat-section {
     border-radius: 1.2rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-stage-title {
-    max-width: 11ch;
   }
 
   #restaurant-site-wrapper .ll-board-footer {
@@ -861,7 +818,6 @@ body.route-restaurant.route-restaurant--leroy {
 
 @media (max-width: 640px) {
   #restaurant-site-wrapper .ll-marquee-rail,
-  #restaurant-site-wrapper .ll-board-stage-head,
   #restaurant-site-wrapper .ll-slat-section {
     padding-left: 0.95rem;
     padding-right: 0.95rem;
@@ -879,10 +835,6 @@ body.route-restaurant.route-restaurant--leroy {
     max-width: 44%;
     flex-wrap: wrap;
     justify-content: flex-end;
-  }
-
-  #restaurant-site-wrapper .ll-board-stage-copy {
-    font-size: 0.92rem;
   }
 
   #restaurant-site-wrapper .ll-board-item-name.menu-item-name,
