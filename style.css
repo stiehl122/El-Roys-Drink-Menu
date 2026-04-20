@@ -6098,7 +6098,10 @@ body.manager-mode.manager-dossier-shell {
   --manager-dossier-ink: #1c1914;
   --manager-dossier-muted: #5d5548;
   --manager-dossier-olive: #4f5a3c;
+  --manager-dossier-olive-soft: rgba(79, 90, 60, 0.12);
   --manager-dossier-accent: #3b3124;
+  --manager-dossier-red: #9f3125;
+  --manager-dossier-red-soft: rgba(159, 49, 37, 0.12);
   --manager-dossier-border: rgba(34, 27, 18, 0.18);
   --manager-dossier-border-strong: rgba(34, 27, 18, 0.34);
   --manager-dossier-rule: rgba(34, 27, 18, 0.1);
@@ -6114,6 +6117,8 @@ body.manager-mode.manager-dossier-shell {
   --ember: var(--manager-dossier-olive);
   --gold: var(--manager-dossier-olive);
   --prune-divider: var(--manager-dossier-border);
+  --danger-bg: var(--manager-dossier-red-soft);
+  --danger-border: rgba(159, 49, 37, 0.34);
   background: var(--manager-dossier-canvas);
   color: var(--manager-dossier-ink);
   font-family: var(--font-body);
@@ -6241,7 +6246,7 @@ body.manager-dossier-shell .featured-special-order,
 body.manager-dossier-shell .pricing-inline-label,
 body.manager-dossier-shell .manager-shell-disclosure summary span:first-child {
   margin: 0;
-  color: var(--manager-dossier-muted);
+  color: var(--manager-dossier-olive);
   font-family: var(--font-accent);
   font-size: 10px;
   font-weight: 600;
@@ -6812,6 +6817,759 @@ body.manager-dossier-shell #sync-status {
   color: inherit;
 }
 
+body.manager-dossier-shell .manager-dossier-panel-head,
+body.manager-dossier-shell .manager-shell-card-head {
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell .manager-dossier-panel-note,
+body.manager-dossier-shell .manager-shell-stat-meta,
+body.manager-dossier-shell .manager-shell-card-copy,
+body.manager-dossier-shell .workspace-actions-sub,
+body.manager-dossier-shell .manager-shell-footer-note,
+body.manager-dossier-shell .manager-category-note {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-kicker {
+  margin: 0;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero h3 {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 3.2vw, 2.3rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-text {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--manager-dossier-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-chip {
+  min-height: 44px;
+}
+
+body.manager-dossier-shell .manager-shell-stats-grid {
+  gap: 1px;
+  padding: 1px;
+  background: var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell .manager-shell-stat-card {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-shell-stat-value {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.85rem, 4vw, 2.5rem);
+  line-height: 0.9;
+}
+
+body.manager-dossier-shell .manager-shell-stat-card--warn {
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .manager-shell-overview-grid {
+  gap: 14px;
+}
+
+body.manager-dossier-shell .manager-dossier-record-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell #featured-mgr-wrap,
+body.manager-dossier-shell #recent-changes-wrap {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-link {
+  margin: 0 16px 16px !important;
+  align-self: flex-start;
+}
+
+body.manager-dossier-shell .featured-specials-editor {
+  gap: 12px;
+}
+
+body.manager-dossier-shell .featured-specials-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+body.manager-dossier-shell .featured-specials-head h4 {
+  margin: 4px 0 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  line-height: 1;
+}
+
+body.manager-dossier-shell .featured-specials-copy {
+  margin: 8px 0 0;
+  color: var(--manager-dossier-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+body.manager-dossier-shell .featured-count,
+body.manager-dossier-shell .featured-special-tag,
+body.manager-dossier-shell .featured-special-upcharge,
+body.manager-dossier-shell .upcharge-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .featured-special-tag--danger {
+  color: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell .featured-special-upcharge strong,
+body.manager-dossier-shell .upcharge-chip strong {
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell .featured-specials-composer,
+body.manager-dossier-shell .featured-special-row,
+body.manager-dossier-shell .history-entry,
+body.manager-dossier-shell .history-archive {
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .history-entry,
+body.manager-dossier-shell .history-archive {
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .history-header,
+body.manager-dossier-shell .history-archive-summary {
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .history-header:hover,
+body.manager-dossier-shell .history-archive-summary:hover {
+  background: var(--manager-dossier-olive-soft);
+}
+
+body.manager-dossier-shell .history-detail,
+body.manager-dossier-shell .history-archive-body {
+  padding: 0 14px 14px;
+  background: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .history-archive-body {
+  display: grid;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .cat-card {
+  margin-bottom: 12px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .cat-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .current-section {
+  padding: 14px 16px 16px;
+}
+
+body.manager-dossier-shell .current-label {
+  margin-bottom: 10px;
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #manager-items-section .current-items,
+body.manager-dossier-shell #manager-pricing-section .current-items,
+body.manager-dossier-shell #manager-description-section .current-items {
+  gap: 10px;
+}
+
+body.manager-dossier-shell .item-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+body.manager-dossier-shell .item-state-badge--active,
+body.manager-dossier-shell .item-state-badge--new,
+body.manager-dossier-shell .item-state-badge--draft,
+body.manager-dossier-shell .item-state-badge--unsent {
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .item-state-badge--off {
+  background: transparent;
+  color: var(--manager-dossier-muted);
+  border-style: dashed;
+}
+
+body.manager-dossier-shell .item-state-badge--86 {
+  background: var(--manager-dossier-red-soft);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row,
+body.manager-dossier-shell #manager-pricing-section .pricing-row,
+body.manager-dossier-shell #manager-description-section .description-editor-card {
+  position: relative;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell #manager-items-section .items-row::before,
+body.manager-dossier-shell #manager-pricing-section .pricing-row::before,
+body.manager-dossier-shell #manager-description-section .description-editor-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-eighty-sixed,
+body.manager-dossier-shell #manager-pricing-section .pricing-row.is-eighty-sixed,
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-eighty-sixed,
+body.manager-dossier-shell .manager-shell-disclosure--danger {
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-eighty-sixed::before,
+body.manager-dossier-shell #manager-pricing-section .pricing-row.is-eighty-sixed::before,
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-eighty-sixed::before {
+  background: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-off-menu {
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-off-menu::before {
+  background: var(--manager-dossier-accent);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+}
+
+body.manager-dossier-shell #manager-items-section .item-row-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+}
+
+body.manager-dossier-shell #manager-items-section .item-drag-handle {
+  width: 48px;
+  min-height: 58px;
+  border: 0;
+  border-right: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  color: var(--manager-dossier-muted);
+}
+
+body.manager-dossier-shell #manager-items-section .item-name {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+body.manager-dossier-shell #manager-items-section .item-name input {
+  min-height: 58px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--manager-dossier-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+body.manager-dossier-shell #manager-items-section .item-name input:focus,
+body.manager-dossier-shell #manager-pricing-section .price-input:focus,
+body.manager-dossier-shell #manager-pricing-section .upcharge-label-input:focus,
+body.manager-dossier-shell #manager-pricing-section .upcharge-price-input:focus,
+body.manager-dossier-shell #manager-description-section .desc-input:focus,
+body.manager-dossier-shell #manager-description-section .add-ingredient-input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-items-section .item-actions-compact {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0;
+  margin-left: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .eighty-six-btn,
+body.manager-dossier-shell .del-item,
+body.manager-dossier-shell .db-filter-btn,
+body.manager-dossier-shell .btn-small,
+body.manager-dossier-shell .collapse-all-btn,
+body.manager-dossier-shell .public-switch-btn {
+  border-radius: 0;
+}
+
+body.manager-dossier-shell .eighty-six-btn,
+body.manager-dossier-shell .del-item {
+  min-width: 50px;
+  min-height: 58px;
+  border: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+  background: transparent;
+  color: var(--manager-dossier-muted);
+  opacity: 1;
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .eighty-six-btn:hover {
+  background: var(--manager-dossier-red-soft);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .eighty-six-btn.restore {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .eighty-six-btn.restore:hover {
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .del-item:hover {
+  background: var(--manager-dossier-red-soft);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-main {
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-meta {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-controls {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0;
+  align-items: stretch;
+  border-left: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-inline-field {
+  min-width: 116px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell #manager-pricing-section .price-input,
+body.manager-dossier-shell #manager-pricing-section .upcharge-label-input,
+body.manager-dossier-shell #manager-pricing-section .upcharge-price-input,
+body.manager-dossier-shell #manager-description-section .add-ingredient-input,
+body.manager-dossier-shell #manager-description-section .desc-input,
+body.manager-dossier-shell .featured-sell-note-input {
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell #manager-pricing-section .price-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn,
+body.manager-dossier-shell #manager-description-section .desc-visibility-toggle,
+body.manager-dossier-shell #manager-description-section .add-ingredient-btn,
+body.manager-dossier-shell .recipe-field-block .add-ingredient-btn {
+  min-height: 40px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn[aria-expanded="true"],
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn:hover,
+body.manager-dossier-shell #manager-description-section .add-ingredient-btn:hover,
+body.manager-dossier-shell .recipe-field-block .add-ingredient-btn:hover {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-count {
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-summary,
+body.manager-dossier-shell #manager-pricing-section .upcharges-panel {
+  margin-top: 0;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-top: 0;
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-summary {
+  padding: 12px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-panel {
+  padding: 12px 16px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-row,
+body.manager-dossier-shell #manager-pricing-section .upcharge-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open {
+  border-color: var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 14px 16px 14px 22px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  text-align: left;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open .desc-row-header {
+  border-bottom-color: var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-title .item-name-static,
+body.manager-dossier-shell #manager-pricing-section .pricing-row-title .item-name-static,
+body.manager-dossier-shell .featured-special-name .item-name-static {
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  line-height: 1;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-meta {
+  color: var(--manager-dossier-olive);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-status-indicators {
+  gap: 6px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator {
+  padding: 6px 8px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  color: var(--manager-dossier-muted);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator.has-content {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator.is-hidden {
+  background: transparent;
+  border-style: dashed;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-chevron {
+  color: var(--manager-dossier-olive);
+  font-size: 22px;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open .desc-chevron {
+  transform: rotate(90deg);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-edit-body {
+  padding: 16px 16px 16px 22px;
+  border: 0;
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-field-block,
+body.manager-dossier-shell #manager-description-section .recipe-field-block {
+  margin-bottom: 0;
+  padding: 14px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-field-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-visibility-toggle input {
+  accent-color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-input {
+  min-height: 120px;
+  padding: 12px 14px;
+}
+
+body.manager-dossier-shell #manager-description-section .recipe-field-block .recipe-ingredient-list {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+body.manager-dossier-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .ingredient-row {
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  border: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .del-ingredient:hover {
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .field-saved {
+  border-color: var(--manager-dossier-olive) !important;
+  box-shadow: inset 0 0 0 1px var(--manager-dossier-olive-soft);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-copy,
+body.manager-dossier-shell .manager-shell-actionbar-status,
+body.manager-dossier-shell .manager-shell-footer-pill,
+body.manager-dossier-shell .manager-shell-header-badge--muted {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-copy .workspace-actions-title,
+body.manager-dossier-shell .manager-shell-actionbar-copy .workspace-actions-sub {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar .save-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar .save-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn:hover {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn,
+body.manager-dossier-shell .btn-danger,
+body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+  background: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn:hover,
+body.manager-dossier-shell .btn-danger:hover {
+  background: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--manager-dossier-olive);
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #sync-status:empty {
+  display: none;
+}
+
+body.manager-dossier-shell #sync-status.sync-error {
+  background: var(--manager-dossier-red-soft);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #sync-status.sync-poll-error {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+  opacity: 1;
+}
+
 body.manager-dossier-shell.add-item-modal-open {
   overflow: hidden;
 }
@@ -6863,6 +7621,20 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+  }
+}
+
+@media (max-width: 860px) {
+  body.manager-dossier-shell .manager-shell-overview-hero {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell .manager-shell-overview-hero-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-edit-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -7012,6 +7784,55 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-overview-card,
   body.manager-dossier-shell .manager-shell-footer {
     padding: 16px 14px;
+  }
+
+  body.manager-dossier-shell .manager-shell-overview-hero-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-items-section .items-row,
+  body.manager-dossier-shell #manager-pricing-section .pricing-row {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-items-section .item-row-main {
+    grid-template-columns: 44px auto minmax(0, 1fr);
+  }
+
+  body.manager-dossier-shell #manager-items-section .item-actions-compact,
+  body.manager-dossier-shell #manager-pricing-section .pricing-row-controls {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+    border-left: 0;
+    border-top: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell .eighty-six-btn,
+  body.manager-dossier-shell .del-item {
+    min-width: 100%;
+    min-height: 46px;
+    border-left: 0;
+    border-top: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell #manager-pricing-section .pricing-inline-field {
+    border-right: 0;
+    border-bottom: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell #manager-pricing-section .upcharge-row,
+  body.manager-dossier-shell #manager-pricing-section .upcharge-add-row,
+  body.manager-dossier-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-row-header {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-status-indicators {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
