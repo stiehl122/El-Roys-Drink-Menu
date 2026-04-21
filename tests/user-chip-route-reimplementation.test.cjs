@@ -184,6 +184,7 @@ test("el roy's cantina route owns both the route chip and the fallback chip", ()
   const css = read('elroyscantina/style.css');
 
   assert.match(html, /data-user-chip-scope="route"/);
+  assert.match(html, /data-route-user-chip/);
   assert.match(html, /data-user-chip-scope="fallback"/);
   assert.doesNotMatch(html, /id="erc-user-dropdown-name"/);
   assert.doesNotMatch(html, /id="user-dropdown-name"/);
