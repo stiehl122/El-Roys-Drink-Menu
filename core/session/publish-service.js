@@ -6,11 +6,16 @@
     : {};
 
   function createMenuPublishServiceImpl(sessionPorts, runtime = {}, options = {}) {
+    const moduleCreatePublishFacade = typeof modules.createMenuPublishFacade === 'function'
+      ? modules.createMenuPublishFacade
+      : null;
     const createPublishFacade = typeof runtime.createPublishFacade === 'function'
       ? runtime.createPublishFacade
-      : (typeof globalScope.createMenuPublishFacade === 'function'
-          ? globalScope.createMenuPublishFacade.bind(globalScope)
-          : null);
+      : (moduleCreatePublishFacade
+          ? moduleCreatePublishFacade
+          : (typeof globalScope.createMenuPublishFacade === 'function'
+              ? globalScope.createMenuPublishFacade.bind(globalScope)
+              : null));
     const facade = typeof createPublishFacade === 'function'
       ? createPublishFacade(sessionPorts, runtime)
       : null;
@@ -24,51 +29,57 @@
       return fallbackService;
     }
 
+    function getUnavailableResult(message) {
+      return {
+        ok: false,
+        userHandled: false,
+        userMessage: message,
+      };
+    }
+
+    async function prepare(opts = {}) {
+      if (facade && typeof facade.prepare === 'function') {
+        return facade.prepare(opts);
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.prepare === 'function') {
+        return fallback.prepare(opts);
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
+    async function saveDraft(opts = {}) {
+      if (facade && typeof facade.commit === 'function') {
+        return facade.commit({ ...opts, intent: 'save' });
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.saveDraft === 'function') {
+        return fallback.saveDraft(opts);
+      }
+      if (fallback && typeof fallback.publishUpdate === 'function') {
+        return fallback.publishUpdate({ ...opts, intent: 'save' });
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
+    async function publishUpdate(opts = {}) {
+      if (facade && typeof facade.commit === 'function') {
+        return facade.commit(opts);
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.publishUpdate === 'function') {
+        return fallback.publishUpdate(opts);
+      }
+      if (fallback && typeof fallback.saveDraft === 'function' && opts.intent === 'save') {
+        return fallback.saveDraft(opts);
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
     return {
-      async saveDraft(opts = {}) {
-        if (facade && typeof facade.commit === 'function') {
-          return facade.commit({ ...opts, intent: 'save' });
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.saveDraft === 'function') {
-          return fallback.saveDraft(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
-
-      async publishUpdate(opts = {}) {
-        if (facade && typeof facade.commit === 'function') {
-          return facade.commit(opts);
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.publishUpdate === 'function') {
-          return fallback.publishUpdate(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
-
-      async prepare(opts = {}) {
-        if (facade && typeof facade.prepare === 'function') {
-          return facade.prepare(opts);
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.prepare === 'function') {
-          return fallback.prepare(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
+      prepare,
+      saveDraft,
+      publishUpdate,
     };
   }
 
