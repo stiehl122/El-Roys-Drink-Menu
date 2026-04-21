@@ -178,3 +178,16 @@ test("leroy's lounge route owns both the board chip and the fallback chip", () =
   assert.match(css, /\.ll-board-userchip-trigger/);
   assert.match(css, /\.ll-board-userdropdown\.ll-site-userdropdown/);
 });
+
+test("el roy's cantina route owns both the route chip and the fallback chip", () => {
+  const html = read('elroyscantina/index.html');
+  const css = read('elroyscantina/style.css');
+
+  assert.match(html, /data-user-chip-scope="route"/);
+  assert.match(html, /data-user-chip-scope="fallback"/);
+  assert.doesNotMatch(html, /id="erc-user-dropdown-name"/);
+  assert.doesNotMatch(html, /id="user-dropdown-name"/);
+
+  assert.match(css, /\.erc-userchip-trigger/);
+  assert.match(css, /\.erc-userdropdown/);
+});

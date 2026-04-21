@@ -90,43 +90,17 @@
                 Exit
               </button>
 
-              <div
-                class="erc-userchip"
-                data-route-user-chip
-                style="display: none"
-                onclick="toggleUserDropdown('erc-user-chip')"
-                onkeydown="
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    toggleUserDropdown('erc-user-chip');
-                  }
-                "
-                tabindex="0"
-                role="button"
-                aria-haspopup="true"
-                aria-expanded="false"
-                id="erc-user-chip"
-                aria-label="User menu"
-              >
-                <span
-                  class="material-symbols-outlined erc-icon"
-                  aria-hidden="true"
-                  >account_circle</span
-                >
-                <div class="erc-userdropdown" id="erc-user-dropdown">
-                  <div
-                    class="user-dropdown-name"
-                    id="erc-user-dropdown-name"
-                  ></div>
-                  <div
-                    class="user-dropdown-role"
-                    id="erc-user-dropdown-role"
-                  ></div>
+              <div class="erc-userchip" data-user-chip data-user-chip-scope="route" data-user-chip-variant="topbar" data-user-chip-theme="cantina" style="display:none">
+                <button class="erc-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+                  <span class="material-symbols-outlined erc-icon" aria-hidden="true">account_circle</span>
+                </button>
+                <div class="erc-userdropdown" data-user-chip-panel onclick="event.stopPropagation()">
+                  <div class="user-dropdown-name" data-user-chip-name></div>
+                  <div class="user-dropdown-role" data-user-chip-role></div>
                   <div class="user-dropdown-divider"></div>
-                  <button class="user-dropdown-signout" onclick="signOut()">
-                    Sign Out
-                  </button>
+                  <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
                 </div>
+                <span data-user-chip-initials hidden>?</span>
               </div>
 
               <div
@@ -254,32 +228,16 @@
         >
           Sign In
         </button>
-        <div
-          class="user-chip"
-          id="user-chip"
-          style="display: none"
-          onclick="toggleUserDropdown()"
-          onkeydown="
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault();
-              toggleUserDropdown();
-            }
-          "
-          tabindex="0"
-          role="button"
-          aria-haspopup="true"
-          aria-expanded="false"
-          aria-label="User menu"
-        >
-          <span id="user-initials">?</span>
-          <span>▾</span>
-          <div class="user-dropdown" id="user-dropdown">
-            <div class="user-dropdown-name" id="user-dropdown-name"></div>
-            <div class="user-dropdown-role" id="user-dropdown-role"></div>
+        <div class="public-fallback-userchip user-chip" data-user-chip data-user-chip-scope="fallback" data-user-chip-variant="fallback" data-user-chip-theme="fallback" style="display:none">
+          <button class="public-fallback-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+            <span data-user-chip-initials>?</span>
+            <span aria-hidden="true">▾</span>
+          </button>
+          <div class="user-dropdown public-fallback-userchip-panel" data-user-chip-panel onclick="event.stopPropagation()">
+            <div class="user-dropdown-name" data-user-chip-name></div>
+            <div class="user-dropdown-role" data-user-chip-role></div>
             <div class="user-dropdown-divider"></div>
-            <button class="user-dropdown-signout" onclick="signOut()">
-              Sign Out
-            </button>
+            <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
           </div>
         </div>
       </header>

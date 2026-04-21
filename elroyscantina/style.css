@@ -246,6 +246,18 @@ body.route-restaurant.route-restaurant--elroy {
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
+  color: var(--erc-muted);
+}
+
+#restaurant-site-wrapper .erc-userchip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
   border-radius: 999px;
   color: var(--erc-muted);
   cursor: pointer;
@@ -254,8 +266,9 @@ body.route-restaurant.route-restaurant--elroy {
   -webkit-tap-highlight-color: rgb(139 75 0 / 0.08);
 }
 
-#restaurant-site-wrapper .erc-userchip:hover,
-#restaurant-site-wrapper .erc-userchip:focus-visible {
+#restaurant-site-wrapper .erc-userchip-trigger:hover,
+#restaurant-site-wrapper .erc-userchip-trigger:focus-visible,
+#restaurant-site-wrapper .erc-userchip.open .erc-userchip-trigger {
   background: var(--erc-surface-low);
   color: var(--erc-primary);
   outline: none;
