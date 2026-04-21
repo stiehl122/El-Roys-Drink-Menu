@@ -130,3 +130,17 @@ test('user chip runtime supports mixed rollout roots, hydration, open/close, and
   getState(sandbox, 'toggleUserDropdown()');
   assert.equal(legacyChip.root.classList.contains('open'), false);
 });
+
+test('manager route owns a rail user chip inside the drawer action stack', () => {
+  const html = read('manager/index.html');
+  const css = read('style.css');
+
+  assert.match(html, /class="manager-userchip manager-dossier-userchip"/);
+  assert.match(html, /data-user-chip-variant="rail"/);
+  assert.match(html, /data-user-chip-trigger/);
+  assert.match(html, /data-user-chip-panel/);
+  assert.doesNotMatch(html, /id="user-chip"/);
+
+  assert.match(css, /body\.manager-dossier-shell \.manager-userchip/);
+  assert.match(css, /body\.manager-stitch-shell \.manager-userchip/);
+});

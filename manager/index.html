@@ -112,21 +112,14 @@
               <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="drawer-switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
               <button class="manager-btn admin-btn manager-shell-drawer-admin" id="admin-btn-drawer" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
               <button class="btn-small manager-shell-drawer-add-item" id="drawer-add-item-btn" type="button" onclick="onDrawerAddItemClick()" style="display:none" aria-label="Scan or add an item">Scan / Add Item</button>
-            </div>
-            <div class="manager-shell-user-tools manager-dossier-user-tools">
-              <div class="user-chip" id="user-chip" style="display:none"
-                   onclick="toggleUserDropdown()"
-                   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-                   tabindex="0"
-                   role="button"
-                   aria-haspopup="true"
-                   aria-expanded="false"
-                   aria-label="User menu">
-                <span id="user-initials">?</span>
-                <span>▾</span>
-                <div class="user-dropdown" id="user-dropdown" onclick="event.stopPropagation()">
-                  <div class="user-dropdown-name" id="user-dropdown-name"></div>
-                  <div class="user-dropdown-role" id="user-dropdown-role"></div>
+              <div class="manager-userchip manager-dossier-userchip" data-user-chip data-user-chip-variant="rail" data-user-chip-theme="manager" style="display:none">
+                <button class="manager-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+                  <span data-user-chip-initials>?</span>
+                  <span aria-hidden="true">▾</span>
+                </button>
+                <div class="user-dropdown manager-userchip-panel" data-user-chip-panel onclick="event.stopPropagation()">
+                  <div class="user-dropdown-name" data-user-chip-name></div>
+                  <div class="user-dropdown-role" data-user-chip-role></div>
                   <div class="user-dropdown-divider"></div>
                   <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
                 </div>
