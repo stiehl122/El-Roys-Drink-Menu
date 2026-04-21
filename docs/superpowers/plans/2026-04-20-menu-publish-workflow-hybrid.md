@@ -25,7 +25,7 @@
 | `tests/boundaries/publish.boundary.test.cjs` | Updated facade/session tests to assert `prepare()` / `commit()` behavior instead of shallow `publishMenuUpdate` delegation. |
 | `tests/phase19-menu-preview-boundaries.test.cjs` | Updated server boundary tests to assert the workflow-backed preview/commit contract. |
 | `tests/helpers/runtime.cjs` | Loads the new `core/session/menu-publish-facade.js` and `core/session/menu-publish-workflow.js` scripts into the sandbox. |
-| `docs/current-architecture-flowchart.md` | Update the publish flow description so the new deep module and facade are documented. |
+| `docs/architecture/current-flowchart.md` | Update the publish flow description so the new deep module and facade are documented. |
 
 ---
 
@@ -1053,7 +1053,7 @@ git commit -m "refactor: route app publish flow through facade prepare and commi
 ### Task 6: Update architecture docs for the new publish path
 
 **Files:**
-- Modify: `docs/current-architecture-flowchart.md`
+- Modify: `docs/architecture/current-flowchart.md`
 
 - [ ] **Step 1: Update the publish-flow section**
 
@@ -1078,7 +1078,7 @@ Manager/Admin publish behavior now runs through two explicit layers:
 - [ ] **Step 2: Commit the doc update**
 
 ```bash
-git add docs/current-architecture-flowchart.md
+git add docs/architecture/current-flowchart.md
 git commit -m "docs: describe hybrid menu publish workflow architecture"
 ```
 

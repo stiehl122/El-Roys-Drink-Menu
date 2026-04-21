@@ -147,8 +147,8 @@ Vercel is required for full functionality. Static-only hosting will not support 
 
 ## Architecture Guardrails
 
-- Ownership map and module labels: [`docs/architecture-ownership-map.md`](docs/architecture-ownership-map.md)
-- Migration plan: [`docs/architecture-file-map-migration-plan.md`](docs/architecture-file-map-migration-plan.md)
+- Ownership map and module labels: [`docs/architecture/ownership-map.md`](docs/architecture/ownership-map.md)
+- Migration plan: [`docs/architecture/file-map-migration-plan.md`](docs/architecture/file-map-migration-plan.md)
 - HTML script-load order check:
 
 ```bash

@@ -2,72 +2,107 @@
 
 ## Mission
 
-Maintain a zero-dependency web app for exactly two restaurants:
+Maintain a zero-dependency, Vercel-backed app for exactly two restaurants:
 
 - Leroy's Lounge
 - El Roy's Cantina
 
-Each restaurant has two fixed menus, Drinks and Food. Do not generalize this into arbitrary restaurant/menu CRUD unless the task explicitly asks for it.
+Each restaurant has exactly two fixed menus, Drinks and Food. Do not
+generalize the product into arbitrary restaurant/menu CRUD unless a task
+explicitly asks for it.
 
-## Architecture Snapshot
+This file should guide agent behavior. It is not meant to be a full codebase
+map.
 
-- `/` is a site picker only.
-- `/leroyslounge` and `/elroyscantina` are route-owned public pages. Each route ships its own `index.html`, `style.css`, and `app.js`, alongside the shared runtime in `/app.js`.
-- Shared route wiring lives in `routes/shared/public-route-core.js`; route `app.js` files are adapters into that contract.
-- `/manager` and `/admin` are separate HTML shells that load the shared runtime from `/app.js` and shared styles from `/style.css`.
-- `app.js` is the shared runtime for menu resolution, Supabase reads/writes, auth/session restore, manager/admin flows, notifications, featured groups, route navigation, and fallback public rendering.
-- `style.css` is a shared compatibility entrypoint that layers `styles/*` for shared manager/admin/public fallback behavior. Restaurant folders layer their own styles on top.
-- Shared auth modules live in `core/auth/*`; all five entry shells load the shared auth template/controller/session scripts.
-- Shared auth overlay visuals live in `core/auth/auth-overlay-unified.css`; do not duplicate auth overlay styles in entry shells.
-- Shared domain constants/defaults live in `core/domain/*` and are consumed by `app.js` and `api/_auth.js`.
-- `vercel.json` rewrites clean routes to those HTML entrypoints.
-- `/api/*.js` provides serverless config, role lookup, user management, and notification delivery. Vercel is required for full functionality.
-- Supabase is the source of truth for menus, categories, items, featured state, history, notification config, and auth-backed access.
+## Product Shape
 
-## Canonical Model
+- `/` is the shared landing page and restaurant chooser, not a parent-company
+  brand site.
+- `/leroyslounge` and `/elroyscantina` are route-owned public pages.
+- `/manager` is the staff editing workspace.
+- `/admin` is the admin console, including landing-page management.
+- The repo also contains an iOS client. Web remains the primary surface here,
+  but shared server contracts and product capabilities should not drift
+  silently from iOS expectations.
 
-- Source of truth for restaurant/menu constants: `core/domain/constants.js` (`RESTAURANTS`, `MENUS`, aliases).
-- Supported menus only: Leroy's Lounge Drinks, Leroy's Lounge Food, El Roy's Cantina Drinks, El Roy's Cantina Food.
-- Legacy `?menu=el-roys` must still normalize to El Roy's Cantina Drinks.
-- Category defaults live in `DEFAULT_CATEGORY_DEFS` and `DEFAULT_FOOD_CATEGORY_DEFS`.
-- Deleted categories move items into `__uncategorized__`, which stays hidden from the public UI.
+## Read First
 
-## High-Risk Behaviors
+- For design-facing work, read `docs/design/` first.
+- For architecture, ownership, or boundary questions, read `docs/architecture/`
+  first.
+- For cross-client capability or parity questions, read `docs/FEATURES.md`.
 
-- `Save` persists quietly. `Send Update` persists, sends notifications, and updates the public timestamp/history.
-- Draft indicators reflect unsent changes since the last send.
+Then inspect the smallest relevant code area:
+
+- public route folders
+- `core/`
+- `api/`
+- `server/`
+- `ios/`
+- `tests/`
+
+## Non-Negotiable Behaviors
+
+- `Save` persists quietly.
+- `Send Update` persists, sends notifications, and updates the public
+  timestamp/history.
+- Landing-page draft save stays separate from publishing selected landing
+  sections live.
+- Draft indicators reflect unsent changes since the last send/publish.
 - 86'd items stay visible publicly with strike-through or badge treatment.
 - Food menus hide recipe controls and use food defaults.
-- Recovery session data stays in memory only through `_recoverySessionData`, never localStorage.
-- Public footer shows `APP_VERSION` and last-updated time. Preview deployments show a `PREVIEW` badge.
-- Public routes should boot route-first and avoid flashing the shared loading shell.
-- If a dedicated public route is unavailable or disabled, shared fallback rendering must still work.
-- Public route sign-in entry should remain in footer staff actions; do not reintroduce top-of-page login buttons.
-
-## Edit Boundaries
-
-- Public route design/content: `leroyslounge/*`, `elroyscantina/*`, plus shared hooks in `app.js` when needed.
-- Manager/admin UX: `manager/index.html`, `admin/index.html`, `style.css`, `app.js`, and `core/ui/{manager,admin}/*`.
-- Auth/access control: `core/auth/*` + `app.js` delegation wrappers, plus `api/_auth.js`, `api/role.js`, `api/users.js`.
-- Persistence/menu resolution/notifications: `sbResolveMenu()`, `loadActiveMenuState()`, `persistState()`, `sendUpdate()`, and related API routes.
-- Schema/data history: `supabase/migrations/*` only when the task is explicitly about schema or seed data.
-
-## Design References
-
-- For any design-facing work, read these docs first:
-  - `docs/design/README.md`
-  - `docs/design/leroys-lounge-vibe.md`
-  - `docs/design/el-roys-cantina-vibe.md`
-  - `docs/design/shared-landing-page-blend.md` when the task touches `/` or other shared public design
-- If a task-specific brief exists, such as `docs/design/root/landing-page-stitch-brief.md`, read it after the vibe docs and use both.
-- Do not invent an umbrella hospitality brand that flattens Leroy's Lounge and El Roy's Cantina into one generic aesthetic.
+- Managers have per-menu access; admins have global access.
+- Recovery session data stays in memory only, never localStorage.
+- Legacy `?menu=el-roys` still normalizes to El Roy's Cantina Drinks.
+- Deleted categories move items into `__uncategorized__`, which stays hidden
+  from the public UI.
+- Public footer shows `APP_VERSION` and last-updated time; preview deployments
+  show a `PREVIEW` badge.
+- Public routes should boot route-first and avoid flashing the shared loading
+  shell.
+- If a dedicated public route is unavailable or disabled, shared fallback
+  rendering must still work.
+- Public route sign-in entry should remain in footer staff actions; do not
+  reintroduce top-of-page login buttons.
 
 ## Working Rules
 
 - No dependencies, no bundler, no build step.
-- Preserve Supabase auth, live polling, database-backed menu state, and per-menu access control.
-- Use CSS custom properties for new colors in `styles/tokens.css` (or shared layered CSS); avoid hardcoded hex values in shared layers.
-- Keep auth overlay markup and base styling centralized (`core/auth/auth-overlay-template.js` + `core/auth/auth-overlay-unified.css`).
-- Keep accessibility intact: dialog behavior, keyboard flows, ARIA states, and live regions.
-- Prefer concise docs over drift-prone line maps or copied constants.
-- For Stitch-related public page work, treat the route files as the design destination. Do not reintroduce a separate generated-design artifact flow.
+- Keep the app working as plain HTML, CSS, and JavaScript.
+- Preserve Supabase auth, live polling, database-backed menu state, and
+  per-menu access control.
+- Keep auth overlay markup and styling centralized in the shared auth layer.
+- Keep accessibility intact: dialog behavior, keyboard flows, ARIA states, and
+  live regions.
+- Prefer updating the module or folder that already owns a behavior instead of
+  expanding unrelated files.
+- Use `supabase/migrations/` for schema changes; do not rely on ad hoc
+  dashboard edits.
+- If a change materially affects shared web/iOS capability parity, update
+  `docs/FEATURES.md` in the same change.
+
+## Design Rules
+
+- Do not flatten Leroy's Lounge and El Roy's Cantina into one generic
+  hospitality brand.
+- Shared landing-page work should blend both identities without inventing a
+  third umbrella brand.
+- Route-owned public pages should lean hard into their assigned restaurant's
+  vibe.
+- For Stitch-related public-page work, treat the repo files as the design
+  destination.
+
+## Verification
+
+- Run the smallest relevant tests in `tests/` for the area you changed,
+  especially boundary tests around auth, routing, publish flows, landing-page
+  state, or ownership seams.
+- Run `node --check app.js` when editing shared runtime behavior.
+- Run `node scripts/check-html-script-order.cjs` when touching entry shells or
+  shared auth loading.
+- Verify the user-facing behavior that matters for the change, not just syntax.
+- For route work, confirm route-first boot and footer staff actions still hold.
+- For save/send work, confirm quiet save and notify/publish flows still behave
+  differently.
+- For landing-page work, confirm draft save and selective live publish remain
+  separate behaviors.
