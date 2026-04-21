@@ -318,16 +318,19 @@ final class RouteStateStubAuthClient: AuthClienting {
 
 final class RouteStateStubWorkspaceClient: WorkspaceClienting {
   private let payloads: [MenuWorkspacePayload]
-  private var fetchCount = 0
 
   init(payloads: [MenuWorkspacePayload]) {
     self.payloads = payloads
   }
 
   func fetch(menuId: String, accessToken: String) async throws -> MenuWorkspacePayload {
-    let index = min(fetchCount, max(payloads.count - 1, 0))
-    fetchCount += 1
-    return payloads[index]
+    if let payload = payloads.first(where: { $0.context.menu?.id == menuId }) {
+      return payload
+    }
+    if let payload = payloads.first {
+      return payload
+    }
+    throw RouteStateTestError.message("Missing workspace payload for \(menuId)")
   }
 }
 

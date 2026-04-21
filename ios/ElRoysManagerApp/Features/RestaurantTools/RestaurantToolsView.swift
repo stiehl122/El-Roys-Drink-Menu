@@ -103,6 +103,16 @@ struct RestaurantToolsScreen: View {
         .appPillChrome(accent: accent)
       }
 
+      NavigationLink(value: AppDestination.restaurantInventory(session.restaurant)) {
+        AppIslandButtonLabel(
+          title: "Inventory And Prune",
+          subtitle: "Review on-menu, off-menu, and 86'd items across both menus from one tools surface.",
+          systemImage: "archivebox.fill"
+        )
+      }
+      .buttonStyle(.plain)
+      .appPillChrome(accent: accent)
+
       Button {
         showingCatalog = true
       } label: {
@@ -238,6 +248,90 @@ struct RestaurantToolsScreen: View {
 
   private var currentHistory: HistoryPayload? {
     session.history(for: selectedType)
+  }
+}
+
+struct RestaurantInventoryScreen: View {
+  @Bindable var session: RestaurantToolsSession
+  @State private var filter = "all"
+
+  var body: some View {
+    List {
+      ForEach(filteredRows) { row in
+        VStack(alignment: .leading, spacing: 6) {
+          HStack(spacing: 8) {
+            Text(row.name)
+              .font(AppTypography.body(16, weight: .bold))
+              .foregroundStyle(AppPalette.ink)
+            if row.isEightySixed {
+              Text("86'D")
+                .font(AppTypography.micro(9, weight: .bold))
+                .tracking(1.4)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(AppPalette.danger.opacity(0.10), in: Capsule(style: .continuous))
+                .foregroundStyle(AppPalette.danger)
+            }
+          }
+
+          Text("\(row.menuType.capitalized) • \(row.categoryLabel) • \(row.price.isEmpty ? "—" : row.price)")
+            .font(AppTypography.body(12, weight: .medium))
+            .foregroundStyle(AppPalette.espresso.opacity(0.72))
+
+          Text(row.onMenu ? "On menu" : "Off menu")
+            .font(AppTypography.micro(9, weight: .bold))
+            .tracking(1.4)
+            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .background((row.onMenu ? AppPalette.jade : AppPalette.brass).opacity(0.10), in: Capsule(style: .continuous))
+            .foregroundStyle(row.onMenu ? AppPalette.jade : AppPalette.brass)
+        }
+        .padding(.vertical, 6)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+          if !row.onMenu {
+            Button("Prune", role: .destructive) {
+              session.prune(itemID: row.id, fromMenuID: row.menuID, categoryKey: row.categoryKey)
+            }
+          }
+        }
+      }
+    }
+    .navigationTitle("\(session.restaurant.name) Inventory")
+    .navigationBarTitleDisplayMode(.inline)
+    .task(id: session.restaurant.id) {
+      await session.load()
+    }
+    .safeAreaInset(edge: .top) {
+      AppSegmentedControl(
+        options: ["all", "off-menu", "86d"],
+        selection: $filter,
+        accent: AppPalette.cobalt,
+        title: { option in
+          switch option {
+          case "off-menu":
+            return "Off Menu"
+          case "86d":
+            return "86'd"
+          default:
+            return "All"
+          }
+        }
+      )
+      .padding(.horizontal, 16)
+      .padding(.vertical, 10)
+      .background(.ultraThinMaterial)
+    }
+  }
+
+  private var filteredRows: [RestaurantInventoryRow] {
+    switch filter {
+    case "off-menu":
+      return session.inventoryRows.filter { !$0.onMenu || $0.menuVisibility == "off_menu" }
+    case "86d":
+      return session.inventoryRows.filter(\.isEightySixed)
+    default:
+      return session.inventoryRows
+    }
   }
 }
 

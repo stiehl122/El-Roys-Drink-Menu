@@ -134,3 +134,150 @@ final class UpchargeEditorTests: XCTestCase {
     XCTAssertEqual(draft.upcharges[0].price, "+$1")
   }
 }
+
+@MainActor
+final class RestaurantToolsInventoryTests: XCTestCase {
+  func testInventoryListsOnMenuAndOffMenuItemsAcrossBothMenus() async throws {
+    let drinksWorkspace = routeStateMakeWorkspace(
+      menuId: "menu-drinks",
+      type: "drinks",
+      categories: [
+        routeStateMakeCategory(
+          id: "cat-drinks",
+          menuId: "menu-drinks",
+          key: "beer",
+          label: "Beer",
+          items: [routeStateMakeItem(id: "item-drink-1", name: "Pilsner")]
+        )
+      ],
+      permissions: WorkspacePermissions(
+        canManage: true,
+        canAdmin: true,
+        canEditRestaurantSpecials: true,
+        canReadRestaurantTools: true
+      ),
+      capabilities: WorkspaceCapabilities(
+        canSaveDraft: true,
+        canSaveLiveMenu: true,
+        canPublishUpdates: true,
+        canManageRestaurantSpecials: true,
+        canReadRestaurantTools: true,
+        canManageAdminSettings: false,
+        includesDraftAuthorship: true,
+        includesRestaurantTools: true
+      )
+    )
+    let foodWorkspace = routeStateMakeWorkspace(
+      menuId: "menu-food",
+      type: "food",
+      categories: [
+        routeStateMakeCategory(
+          id: "cat-off-menu",
+          menuId: "menu-food",
+          key: EditableMenuDocument.uncategorizedKey,
+          label: "Off Menu",
+          items: [
+            routeStateMakeItem(
+              id: "item-food-1",
+              name: "Secret Taco",
+              onMenu: false,
+              visibility: "off_menu"
+            )
+          ]
+        )
+      ],
+      permissions: WorkspacePermissions(
+        canManage: true,
+        canAdmin: true,
+        canEditRestaurantSpecials: true,
+        canReadRestaurantTools: true
+      ),
+      capabilities: WorkspaceCapabilities(
+        canSaveDraft: true,
+        canSaveLiveMenu: true,
+        canPublishUpdates: true,
+        canManageRestaurantSpecials: true,
+        canReadRestaurantTools: true,
+        canManageAdminSettings: false,
+        includesDraftAuthorship: true,
+        includesRestaurantTools: true
+      )
+    )
+    let services = routeStateMakeServices(
+      workspaceClient: RouteStateStubWorkspaceClient(payloads: [drinksWorkspace, foodWorkspace]),
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+    )
+    let appModel = AppModel(
+      services: services,
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+    appModel.authSession = routeStateMakeAuthSession()
+    appModel.bootstrap = try await services.bootstrap.fetch(accessToken: nil)
+
+    let restaurant = routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+    let session = appModel.restaurantToolsSession(for: restaurant)
+
+    await session.load()
+    let inventory = session.inventoryRows
+
+    XCTAssertFalse(inventory.isEmpty)
+    XCTAssertTrue(inventory.contains(where: { $0.menuType == "drinks" }))
+    XCTAssertTrue(inventory.contains(where: { !$0.onMenu || $0.menuVisibility == "off_menu" }))
+  }
+
+  func testPruneOffMenuItemDeletesItFromInventoryRows() async throws {
+    let offMenuCategory = routeStateMakeCategory(
+      id: "cat-off-menu",
+      menuId: "menu-food",
+      key: EditableMenuDocument.uncategorizedKey,
+      label: "Off Menu",
+      items: [
+        routeStateMakeItem(
+          id: "item-food-1",
+          name: "Secret Taco",
+          onMenu: false,
+          visibility: "off_menu"
+        )
+      ]
+    )
+    let services = routeStateMakeServices(
+      workspaceClient: RouteStateStubWorkspaceClient(
+        payloads: [
+          routeStateMakeWorkspace(
+            menuId: "menu-drinks",
+            type: "drinks",
+            categories: [routeStateMakeCategory(id: "cat-drinks", menuId: "menu-drinks", key: "beer", label: "Beer", items: [])]
+          ),
+          routeStateMakeWorkspace(
+            menuId: "menu-food",
+            type: "food",
+            categories: [offMenuCategory]
+          )
+        ]
+      ),
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+    )
+    let appModel = AppModel(
+      services: services,
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+    appModel.authSession = routeStateMakeAuthSession()
+    appModel.bootstrap = try await services.bootstrap.fetch(accessToken: nil)
+
+    let restaurant = routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+    let session = appModel.restaurantToolsSession(for: restaurant)
+
+    await session.load()
+    let offMenuItem = try XCTUnwrap(session.inventoryRows.first(where: { !$0.onMenu }))
+
+    session.prune(
+      itemID: offMenuItem.id,
+      fromMenuID: offMenuItem.menuID,
+      categoryKey: offMenuItem.categoryKey
+    )
+
+    XCTAssertFalse(session.inventoryRows.contains(where: { $0.id == offMenuItem.id }))
+  }
+}

@@ -6,6 +6,7 @@ enum AppDestination: Hashable {
   case editor(MenuRecord)
   case restaurantTools(RestaurantRecord)
   case categoryTools(MenuRecord)
+  case restaurantInventory(RestaurantRecord)
   case routePreview(MenuRecord)
 }
 
@@ -46,6 +47,8 @@ private struct RootView: View {
                 RestaurantToolsRoute(model: model, restaurant: restaurant)
               case .categoryTools(let menu):
                 CategoryToolsRoute(model: model, menu: menu)
+              case .restaurantInventory(let restaurant):
+                RestaurantInventoryRoute(model: model, restaurant: restaurant)
               case .routePreview(let menu):
                 RoutePreviewScreen(menu: menu, url: model.exactRoutePreviewURL(for: menu))
               }
@@ -102,6 +105,15 @@ private struct CategoryToolsRoute: View {
 
   var body: some View {
     RestaurantCategoryManagementScreen(session: model.editorSession(for: menu))
+  }
+}
+
+private struct RestaurantInventoryRoute: View {
+  @Bindable var model: AppModel
+  let restaurant: RestaurantRecord
+
+  var body: some View {
+    RestaurantInventoryScreen(session: model.restaurantToolsSession(for: restaurant))
   }
 }
 
