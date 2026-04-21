@@ -9,13 +9,12 @@
     const moduleCreatePublishFacade = typeof modules.createMenuPublishFacade === 'function'
       ? modules.createMenuPublishFacade
       : null;
+    const globalCreatePublishFacade = typeof globalScope.createMenuPublishFacade === 'function'
+      ? globalScope.createMenuPublishFacade.bind(globalScope)
+      : null;
     const createPublishFacade = typeof runtime.createPublishFacade === 'function'
       ? runtime.createPublishFacade
-      : (moduleCreatePublishFacade
-          ? moduleCreatePublishFacade
-          : (typeof globalScope.createMenuPublishFacade === 'function'
-              ? globalScope.createMenuPublishFacade.bind(globalScope)
-              : null));
+      : (globalCreatePublishFacade || moduleCreatePublishFacade);
     const facade = typeof createPublishFacade === 'function'
       ? createPublishFacade(sessionPorts, runtime)
       : null;
@@ -56,9 +55,6 @@
       if (fallback && typeof fallback.saveDraft === 'function') {
         return fallback.saveDraft(opts);
       }
-      if (fallback && typeof fallback.publishUpdate === 'function') {
-        return fallback.publishUpdate({ ...opts, intent: 'save' });
-      }
       return getUnavailableResult('Publish service is unavailable.');
     }
 
@@ -69,9 +65,6 @@
       const fallback = getFallbackService();
       if (fallback && typeof fallback.publishUpdate === 'function') {
         return fallback.publishUpdate(opts);
-      }
-      if (fallback && typeof fallback.saveDraft === 'function' && opts.intent === 'save') {
-        return fallback.saveDraft(opts);
       }
       return getUnavailableResult('Publish service is unavailable.');
     }

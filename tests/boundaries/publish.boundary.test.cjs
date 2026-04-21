@@ -255,3 +255,80 @@ test('menu session lifecycle prepares and commits through shared session modules
   assert.equal(previewCalls.length, 1);
   assert.equal(commitCalls.length, 2);
 });
+
+test('menu publish service honors an explicit global facade override for direct consumers', async () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/session/menu-publish-facade.js',
+    'core/session/publish-service.js',
+  ]);
+  const calls = [];
+
+  sandbox.createMenuPublishFacade = (sessionPorts, runtime = {}) => ({
+    async prepare(options = {}) {
+      calls.push({ type: 'prepare', sessionPorts: !!sessionPorts, runtime: !!runtime, options });
+      return { ok: true, source: 'global-override' };
+    },
+    async commit(options = {}) {
+      calls.push({ type: 'commit', sessionPorts: !!sessionPorts, runtime: !!runtime, options });
+      return { ok: true, source: 'global-override', options };
+    },
+  });
+
+  const service = sandbox.__HF_SESSION_MODULES__.createMenuPublishService(createMenuSessionPorts(), {});
+  const preview = await service.prepare({ expectedLiveRevision: 10 });
+  const save = await service.saveDraft({ pathname: '/manager' });
+
+  assert.equal(preview.source, 'global-override');
+  assert.equal(save.source, 'global-override');
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].type, 'prepare');
+  assert.equal(calls[1].type, 'commit');
+  assert.equal(calls[1].options.intent, 'save');
+});
+
+test('menu publish service keeps fallback methods explicit for quiet-save and publish paths', async () => {
+  const sandbox = loadSandboxWithScripts(['core/session/publish-service.js']);
+  const quietSaveCalls = [];
+  const publishCalls = [];
+
+  const saveOnlyService = sandbox.__HF_SESSION_MODULES__.createMenuPublishService(
+    createMenuSessionPorts(),
+    {},
+    {
+      fallback: () => ({
+        async saveDraft(options = {}) {
+          quietSaveCalls.push(options);
+          return { ok: true, path: 'save-only' };
+        },
+      }),
+    },
+  );
+
+  const saveResult = await saveOnlyService.saveDraft({ pathname: '/manager' });
+  const publishUnavailable = await saveOnlyService.publishUpdate({ pathname: '/manager' });
+
+  assert.equal(saveResult.path, 'save-only');
+  assert.equal(quietSaveCalls.length, 1);
+  assert.equal(publishUnavailable.ok, false);
+
+  const publishOnlyService = sandbox.__HF_SESSION_MODULES__.createMenuPublishService(
+    createMenuSessionPorts(),
+    {},
+    {
+      fallback: () => ({
+        async publishUpdate(options = {}) {
+          publishCalls.push(options);
+          return { ok: true, path: 'publish-only' };
+        },
+      }),
+    },
+  );
+
+  const publishResult = await publishOnlyService.publishUpdate({ selectedChangeIds: ['beer::added::lager'] });
+  const saveUnavailable = await publishOnlyService.saveDraft({});
+
+  assert.equal(publishResult.path, 'publish-only');
+  assert.equal(publishCalls.length, 1);
+  assert.deepEqual(toPlainValue(publishCalls[0]), { selectedChangeIds: ['beer::added::lager'] });
+  assert.equal(saveUnavailable.ok, false);
+});
