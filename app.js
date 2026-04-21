@@ -3989,9 +3989,7 @@ async function upsertLandingPageRecordThroughApi(payload = {}, action = 'save_la
 }
 
 function formatLandingTimestampLabel(value) {
-  const ts = Number(value || 0);
-  if (!ts) return 'Not yet';
-  return formatUpdatedAt(ts);
+  return LANDING_MODEL.formatLandingTimestampLabel(value);
 }
 
 function getLandingSectionStatus(sectionId, record = _landingPageState) {
