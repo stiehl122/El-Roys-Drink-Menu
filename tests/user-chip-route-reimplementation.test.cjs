@@ -131,6 +131,37 @@ test('user chip runtime supports mixed rollout roots, hydration, open/close, and
   assert.equal(legacyChip.root.classList.contains('open'), false);
 });
 
+test('user chip visibility scopes route and fallback roots for dedicated route mode', () => {
+  const document = createDocument();
+  const routeChip = createUserChipFixture({ id: 'route-chip', includeDataContract: true });
+  const fallbackChip = createUserChipFixture({ id: 'fallback-chip', includeDataContract: true });
+
+  routeChip.root.setAttribute('data-user-chip-scope', 'route');
+  fallbackChip.root.setAttribute('data-user-chip-scope', 'fallback');
+
+  document._registerElement('route-chip', routeChip.root);
+  document._registerElement('fallback-chip', fallbackChip.root);
+  document._registerSelector(USER_CHIP_ROOT_SELECTOR, [routeChip.root, fallbackChip.root]);
+  document._registerSelector('[data-route-dropdown]', []);
+
+  const sandbox = loadSandboxWithScripts(['app.js'], { document });
+
+  getState(sandbox, '_siteRestaurant = { id: "00000000-0000-0000-0000-000000000010" }');
+  getState(sandbox, 'document.body.classList.add("restaurant-public-site")');
+  getState(sandbox, 'setUserChipVisibility(true)');
+  assert.equal(routeChip.root.style.display, '');
+  assert.equal(fallbackChip.root.style.display, 'none');
+
+  getState(sandbox, 'document.body.classList.remove("restaurant-public-site")');
+  getState(sandbox, 'setUserChipVisibility(true)');
+  assert.equal(routeChip.root.style.display, 'none');
+  assert.equal(fallbackChip.root.style.display, '');
+
+  getState(sandbox, 'setUserChipVisibility(false)');
+  assert.equal(routeChip.root.style.display, 'none');
+  assert.equal(fallbackChip.root.style.display, 'none');
+});
+
 test('manager route owns a rail user chip inside the drawer action stack', () => {
   const html = read('manager/index.html');
   const css = read('style.css');
@@ -169,6 +200,7 @@ test("leroy's lounge route owns both the board chip and the fallback chip", () =
   const css = read('leroyslounge/style.css');
 
   assert.match(html, /data-user-chip-scope="route"/);
+  assert.match(html, /data-route-user-chip/);
   assert.match(html, /data-user-chip-scope="fallback"/);
   assert.match(html, /class="public-fallback-userchip user-chip"/);
   assert.match(html, /class="user-dropdown public-fallback-userchip-panel"/);

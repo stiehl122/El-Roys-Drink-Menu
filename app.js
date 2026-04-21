@@ -9354,8 +9354,12 @@ function getUserChipParts(root) {
 }
 
 function setUserChipVisibility(isSignedIn) {
+  const isDedicatedRouteModeActive = isDedicatedRestaurantPage() && document.body.classList.contains('restaurant-public-site');
   getUserChipRoots().forEach(root => {
-    root.style.display = isSignedIn ? '' : 'none';
+    const scope = root.getAttribute('data-user-chip-scope');
+    const scopedHidden = (scope === 'route' && !isDedicatedRouteModeActive) ||
+      (scope === 'fallback' && isDedicatedRouteModeActive);
+    root.style.display = (isSignedIn && !scopedHidden) ? '' : 'none';
   });
 }
 
