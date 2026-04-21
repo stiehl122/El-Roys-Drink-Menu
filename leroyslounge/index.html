@@ -102,25 +102,19 @@
             Exit
           </button>
         </div>
-        <div class="ll-board-userchip ll-site-userchip" data-route-user-chip style="display:none"
-             onclick="toggleUserDropdown('ll-user-chip')"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown('ll-user-chip')}"
-             tabindex="0"
-             role="button"
-             aria-haspopup="true"
-             aria-expanded="false"
-             id="ll-user-chip"
-             aria-label="User menu">
-          <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
-          <span class="material-symbols-outlined ll-board-usercaret" aria-hidden="true">keyboard_arrow_down</span>
-          <div class="ll-board-userdropdown ll-site-userdropdown" id="ll-user-dropdown">
-            <div class="user-dropdown-name" id="ll-user-dropdown-name"></div>
-            <div class="user-dropdown-role" id="ll-user-dropdown-role"></div>
+        <div class="ll-board-userchip ll-site-userchip" data-user-chip data-user-chip-scope="route" data-user-chip-variant="board" data-user-chip-theme="leroys" style="display:none">
+          <button class="ll-board-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+            <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
+            <span class="material-symbols-outlined ll-board-usercaret" aria-hidden="true">keyboard_arrow_down</span>
+          </button>
+          <div class="ll-board-userdropdown ll-site-userdropdown" data-user-chip-panel onclick="event.stopPropagation()">
+            <div class="user-dropdown-name" data-user-chip-name></div>
+            <div class="user-dropdown-role" data-user-chip-role></div>
             <div class="user-dropdown-divider"></div>
-            <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+            <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
           </div>
+          <span data-user-chip-initials hidden>?</span>
         </div>
-        <span id="ll-user-initials" hidden>?</span>
       </div>
     </header>
 
@@ -161,21 +155,16 @@
       <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">⚙ Admin</button>
     </div>
     <button class="header-signin-btn" id="signin-btn" data-auth-trigger="signin" data-auth-origin="route-header">Sign In</button>
-    <div class="user-chip" id="user-chip" style="display:none"
-         onclick="toggleUserDropdown()"
-         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-         tabindex="0"
-         role="button"
-         aria-haspopup="true"
-         aria-expanded="false"
-         aria-label="User menu">
-      <span id="user-initials">?</span>
-      <span>▾</span>
-      <div class="user-dropdown" id="user-dropdown">
-        <div class="user-dropdown-name" id="user-dropdown-name"></div>
-        <div class="user-dropdown-role" id="user-dropdown-role"></div>
+    <div class="public-fallback-userchip" data-user-chip data-user-chip-scope="fallback" data-user-chip-variant="fallback" data-user-chip-theme="fallback" style="display:none">
+      <button class="public-fallback-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+        <span data-user-chip-initials>?</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      <div class="user-dropdown public-fallback-userchip-panel" data-user-chip-panel onclick="event.stopPropagation()">
+        <div class="user-dropdown-name" data-user-chip-name></div>
+        <div class="user-dropdown-role" data-user-chip-role></div>
         <div class="user-dropdown-divider"></div>
-        <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+        <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
       </div>
     </div>
   </header>

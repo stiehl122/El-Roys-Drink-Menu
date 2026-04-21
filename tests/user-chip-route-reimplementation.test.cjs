@@ -163,3 +163,16 @@ test('admin route owns a topbar user chip with the shared data contract', () => 
   assert.match(css, /\.admin-console-topbar \.admin-userchip/);
   assert.match(css, /\.admin-console-topbar \.admin-userchip-trigger/);
 });
+
+test("leroy's lounge route owns both the board chip and the fallback chip", () => {
+  const html = read('leroyslounge/index.html');
+  const css = read('leroyslounge/style.css');
+
+  assert.match(html, /data-user-chip-scope="route"/);
+  assert.match(html, /data-user-chip-scope="fallback"/);
+  assert.doesNotMatch(html, /id="ll-user-dropdown-name"/);
+  assert.doesNotMatch(html, /id="user-dropdown-name"/);
+
+  assert.match(css, /\.ll-board-userchip-trigger/);
+  assert.match(css, /\.ll-board-userdropdown\.ll-site-userdropdown/);
+});

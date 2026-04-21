@@ -349,12 +349,22 @@ body.route-restaurant.route-restaurant--leroy {
   text-shadow: 0 0 8px rgb(252 211 77 / 0.5);
 }
 
-#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip {
+#restaurant-site-wrapper .ll-board-userchip {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.125rem;
   color: rgb(255 255 255 / 1);
+}
+
+#restaurant-site-wrapper .ll-board-userchip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
@@ -372,8 +382,8 @@ body.route-restaurant.route-restaurant--leroy {
   transition: transform 0.15s ease;
 }
 
-#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip:hover .ll-board-usericon,
-#restaurant-site-wrapper .ll-board-userchip.ll-site-userchip:focus-visible .ll-board-usericon {
+#restaurant-site-wrapper .ll-board-userchip-trigger:hover .ll-board-usericon,
+#restaurant-site-wrapper .ll-board-userchip-trigger:focus-visible .ll-board-usericon {
   transform: scale(1.06);
 }
 
