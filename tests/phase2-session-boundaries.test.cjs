@@ -33,6 +33,7 @@ test('app createMenuPublishService delegates through session module boundary', (
   assert.equal(result.delegated, true);
   assert.equal(result.type, 'publish');
   assert.equal(calls.length, 1);
+  assert.equal(typeof calls[0][2]?.fallback, 'function');
 });
 
 test('app createMenuSessionLifecycle delegates through session module boundary', () => {
@@ -51,51 +52,42 @@ test('app createMenuSessionLifecycle delegates through session module boundary',
   assert.equal(result.type, 'lifecycle');
   assert.equal(calls.length, 1);
   assert.equal(typeof calls[0][1]?.createPublishService, 'function');
+  assert.equal('createPublishFacade' in (calls[0][1] || {}), false);
 });
 
-test('session lifecycle module uses injected publish creation instead of ambient app globals', async () => {
-  const sandbox = loadSandboxWithScripts([
-    'core/session/publish-service.js',
-    'core/session/menu-session.js',
-  ]);
-  const publishCalls = [];
-
-  sandbox.createMenuPublishService = () => {
-    throw new Error('session lifecycle should not read createMenuPublishService from globalScope when injected');
-  };
-
-  const lifecycle = sandbox.__HF_SESSION_MODULES__.createMenuSessionLifecycle({
-    buildRequest: () => ({ requestedMenuSlug: 'menu-main' }),
-    buildSnapshot: source => ({ source, dirty: true }),
-    buildPreview: snapshot => ({
-      ...snapshot,
-      hasChanges: true,
-      hasLocalDraft: true,
-      hasSharedDraft: false,
-      mode: 'update-only',
-      sections: [],
-      notificationChanges: [],
-      saveOnlyChanges: [],
-    }),
-    resolveMenu: async () => null,
-    canLoadFromNetwork: () => true,
-    restoreFallback: () => ({ source: 'cache', usedFallback: true, snapshot: { source: 'cache' } }),
-    loadState: async ({ source = 'network' }) => ({ source }),
-    pollState: async () => ({ changed: false, designChanged: false, snapshot: { source: 'poll' } }),
-  }, {
-    createPublishService: (...args) => {
-      publishCalls.push(args);
-      return {
-        saveDraft: async () => ({ ok: true, source: 'injected-save' }),
-        publishUpdate: async () => ({ ok: true, source: 'injected-publish' }),
-      };
+test('app createMenuSessionLifecycle delegates publish creation through shared session modules', () => {
+  const createPublishServiceCalls = [];
+  const sandbox = loadSandboxWithScripts(['app.js'], {
+    __HF_SESSION_MODULES__: {
+      createMenuSessionLifecycle: (ports, runtime = {}) => {
+        return runtime.createPublishService(ports, {});
+      },
+      createMenuPublishService: (...args) => {
+        createPublishServiceCalls.push(args);
+        return {
+        delegated: true,
+        prepare: async () => ({ ok: true }),
+        publishUpdate: async () => ({ ok: true }),
+        saveDraft: async () => ({ ok: true }),
+        };
+      },
     },
   });
 
-  const result = await lifecycle.saveDraft();
-  assert.equal(result.ok, true);
-  assert.equal(result.source, 'injected-save');
-  assert.equal(publishCalls.length, 1);
+  const lifecycle = sandbox.createMenuSessionLifecycle({
+    buildRequest: () => ({ requestedMenuSlug: 'menu-main' }),
+    buildSnapshot: source => ({ source }),
+    buildPreview: snapshot => ({ ...snapshot, hasChanges: true, sections: [], notificationChanges: [] }),
+    resolveMenu: async () => null,
+    canLoadFromNetwork: () => true,
+    restoreFallback: () => ({ source: 'cache', usedFallback: true, snapshot: { source: 'cache' } }),
+    loadState: async () => ({ source: 'network' }),
+    pollState: async () => ({ changed: false, designChanged: false, snapshot: { source: 'poll' } }),
+  });
+
+  assert.equal(lifecycle.delegated, true);
+  assert.equal(createPublishServiceCalls.length, 1);
+  assert.equal(typeof createPublishServiceCalls[0][2]?.fallback, 'function');
 });
 
 test('app createMenuStateLoaderService delegates through session module boundary', () => {

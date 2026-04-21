@@ -88,13 +88,9 @@ test('wave 5 no longer calls the legacy live-save fallback from the authoritativ
 
 test('wave 5 publish session boundary prefers the server-owned publish command before local side effects', () => {
   const source = read('core/session/publish-service.js');
-  const guardIndex = source.indexOf("if (typeof sessionPorts.publishMenuUpdate === 'function')");
-  const fallbackPublishIndex = source.indexOf('return fallbackService.publishUpdate(options);');
-
-  assert.notEqual(guardIndex, -1);
-  assert.notEqual(fallbackPublishIndex, -1);
-  assert.match(source, /return sessionPorts\.publishMenuUpdate\(options\);/);
-  assert.ok(guardIndex < fallbackPublishIndex);
+  assert.match(source, /globalCreatePublishFacade \|\| moduleCreatePublishFacade/);
+  assert.doesNotMatch(source, /fallback\.publishUpdate\(\{ \.\.\.opts, intent: 'save' \}\)/);
+  assert.doesNotMatch(source, /opts\.intent === 'save'/);
   assert.doesNotMatch(source, /persistState\(/);
   assert.doesNotMatch(source, /dispatchNotification\(/);
   assert.doesNotMatch(source, /patchMenuMeta/);

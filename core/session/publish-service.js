@@ -6,15 +6,25 @@
     : {};
 
   function createMenuPublishServiceImpl(sessionPorts, runtime = {}, options = {}) {
+    const moduleCreatePublishFacade = typeof modules.createMenuPublishFacade === 'function'
+      ? modules.createMenuPublishFacade
+      : null;
+    const globalCreatePublishFacade = typeof globalScope.createMenuPublishFacade === 'function'
+      ? globalScope.createMenuPublishFacade.bind(globalScope)
+      : null;
     const createPublishFacade = typeof runtime.createPublishFacade === 'function'
       ? runtime.createPublishFacade
-      : (typeof globalScope.createMenuPublishFacade === 'function'
-          ? globalScope.createMenuPublishFacade.bind(globalScope)
-          : null);
+      : (globalCreatePublishFacade || moduleCreatePublishFacade);
     const facade = typeof createPublishFacade === 'function'
       ? createPublishFacade(sessionPorts, runtime)
       : null;
     let fallbackService = null;
+    const buildSnapshot = typeof runtime.buildSnapshot === 'function'
+      ? runtime.buildSnapshot
+      : (() => ({ source: 'unknown' }));
+    const buildPreview = typeof runtime.buildPreview === 'function'
+      ? runtime.buildPreview
+      : (() => sessionPorts.buildPreview?.(buildSnapshot('preview')));
 
     function getFallbackService() {
       if (fallbackService !== null) return fallbackService;
@@ -24,51 +34,80 @@
       return fallbackService;
     }
 
+    function getUnavailableResult(message) {
+      return {
+        ok: false,
+        userHandled: false,
+        userMessage: message,
+      };
+    }
+
+    function buildSaveDraftNoop(preview, source = 'draft-noop') {
+      return {
+        ok: false,
+        noop: true,
+        preview,
+        snapshot: buildSnapshot(source),
+      };
+    }
+
+    async function prepare(opts = {}) {
+      if (facade && typeof facade.prepare === 'function') {
+        return facade.prepare(opts);
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.prepare === 'function') {
+        return fallback.prepare(opts);
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
+    async function saveDraft(opts = {}) {
+      if (typeof sessionPorts.publishMenuUpdate === 'function') {
+        const snapshot = buildSnapshot('draft');
+        const preview = opts.preview?.sections ? opts.preview : buildPreview();
+        const hasLocalDraft = !!snapshot.dirty || !!preview?.hasLocalDraft;
+        const hasChanges = !!preview?.hasChanges;
+
+        if (!hasLocalDraft || !hasChanges) {
+          return buildSaveDraftNoop(preview);
+        }
+
+        return sessionPorts.publishMenuUpdate({
+          ...opts,
+          preview,
+          mode: 'save',
+          notify: false,
+        });
+      }
+      if (facade && typeof facade.commit === 'function') {
+        return facade.commit({ ...opts, intent: 'save' });
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.saveDraft === 'function') {
+        return fallback.saveDraft(opts);
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
+    async function publishUpdate(opts = {}) {
+      if (typeof sessionPorts.publishMenuUpdate === 'function') {
+        return sessionPorts.publishMenuUpdate(opts);
+      }
+      if (facade && typeof facade.commit === 'function') {
+        return facade.commit(opts);
+      }
+      const fallback = getFallbackService();
+      if (fallback && typeof fallback.publishUpdate === 'function') {
+        return fallback.publishUpdate(opts);
+      }
+      return getUnavailableResult('Publish service is unavailable.');
+    }
+
     return {
-      async saveDraft(opts = {}) {
-        if (facade && typeof facade.commit === 'function') {
-          return facade.commit({ ...opts, intent: 'save' });
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.saveDraft === 'function') {
-          return fallback.saveDraft(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
-
-      async publishUpdate(opts = {}) {
-        if (facade && typeof facade.commit === 'function') {
-          return facade.commit(opts);
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.publishUpdate === 'function') {
-          return fallback.publishUpdate(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
-
-      async prepare(opts = {}) {
-        if (facade && typeof facade.prepare === 'function') {
-          return facade.prepare(opts);
-        }
-        const fallback = getFallbackService();
-        if (fallback && typeof fallback.prepare === 'function') {
-          return fallback.prepare(opts);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Publish service is unavailable.',
-        };
-      },
+      prepare,
+      saveDraft,
+      publishUpdate,
     };
   }
 

@@ -11,16 +11,16 @@
       : (() => globalScope.getMenuSessionPorts?.());
     const sessionPorts = ports || resolveSessionPorts();
     let request = sessionPorts.buildRequest();
-    const createPublishFacade = typeof runtime.createPublishFacade === 'function'
-      ? runtime.createPublishFacade
-      : (typeof globalScope.createMenuPublishFacade === 'function'
-          ? globalScope.createMenuPublishFacade.bind(globalScope)
-          : null);
+    const moduleCreatePublishService = typeof modules.createMenuPublishService === 'function'
+      ? modules.createMenuPublishService
+      : null;
     const createPublishService = typeof runtime.createPublishService === 'function'
       ? runtime.createPublishService
-      : (typeof globalScope.createMenuPublishService === 'function'
-          ? globalScope.createMenuPublishService.bind(globalScope)
-          : null);
+      : (moduleCreatePublishService
+          ? moduleCreatePublishService
+          : (typeof globalScope.createMenuPublishService === 'function'
+              ? globalScope.createMenuPublishService.bind(globalScope)
+              : null));
 
     function syncRequest(overrides = {}) {
       request = { ...request, ...sessionPorts.buildRequest(overrides) };
@@ -31,7 +31,7 @@
       return sessionPorts.buildSnapshot(source, request);
     }
 
-    let publishFacade = null;
+    let publishService = null;
 
     function getUnavailableResult(options = {}) {
       return {
@@ -43,53 +43,38 @@
       };
     }
 
-    function getPublishFacade() {
-      if (publishFacade) return publishFacade;
-      if (createPublishFacade) {
-        publishFacade = createPublishFacade(sessionPorts, {
-          ...runtime,
-          buildSnapshot,
-        });
-        return publishFacade;
-      }
-      if (createPublishService) {
-        const publishService = createPublishService(sessionPorts, {
-          ...runtime,
-          buildSnapshot,
-          buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
-        });
-        publishFacade = {
-          async prepare(options = {}) {
-            if (typeof publishService.prepare === 'function') {
-              return publishService.prepare(options);
-            }
-            return getUnavailableResult(options);
-          },
-          async commit(options = {}) {
-            if (options.intent === 'save' && typeof publishService.saveDraft === 'function') {
-              return publishService.saveDraft(options);
-            }
-            if (typeof publishService.publishUpdate === 'function') {
-              return publishService.publishUpdate(options);
-            }
-            return getUnavailableResult(options);
-          },
-        };
-        return publishFacade;
-      }
-      publishFacade = {
+    function getUnavailablePublishService() {
+      return {
         async prepare(options = {}) {
           return {
             ...getUnavailableResult(options),
           };
         },
-        async commit(options = {}) {
+        async saveDraft(options = {}) {
+          return {
+            ...getUnavailableResult(options),
+          };
+        },
+        async publishUpdate(options = {}) {
           return {
             ...getUnavailableResult(options),
           };
         },
       };
-      return publishFacade;
+    }
+
+    function getPublishService() {
+      if (publishService) return publishService;
+      if (createPublishService) {
+        publishService = createPublishService(sessionPorts, {
+          ...runtime,
+          buildSnapshot,
+          buildPreview: () => sessionPorts.buildPreview(buildSnapshot('preview')),
+        });
+        return publishService;
+      }
+      publishService = getUnavailablePublishService();
+      return publishService;
     }
 
     const session = {
@@ -161,11 +146,22 @@
       },
       async preparePublish(options = {}) {
         const nextRequest = syncRequest(options);
-        return getPublishFacade().prepare({ ...options, request: nextRequest });
+        const service = getPublishService();
+        if (typeof service.prepare === 'function') {
+          return service.prepare({ ...options, request: nextRequest });
+        }
+        return getUnavailableResult(options);
       },
       async commitPublish(options = {}) {
         const nextRequest = syncRequest(options);
-        return getPublishFacade().commit({ ...options, request: nextRequest });
+        const service = getPublishService();
+        if (options.intent === 'save' && typeof service.saveDraft === 'function') {
+          return service.saveDraft({ ...options, request: nextRequest });
+        }
+        if (typeof service.publishUpdate === 'function') {
+          return service.publishUpdate({ ...options, request: nextRequest });
+        }
+        return getUnavailableResult(options);
       },
       async saveDraft(options = {}) {
         return session.commitPublish({ ...options, intent: 'save' });

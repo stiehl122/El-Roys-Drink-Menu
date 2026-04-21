@@ -3306,94 +3306,6 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
   return createLegacyMenuPublishService(sessionPorts, runtime);
 }
 
-function createClientMenuPublishWorkflow({ ports }) {
-  return {
-    async preview(command = {}) {
-      const result = typeof ports.requestPublishPreview === 'function'
-        ? await ports.requestPublishPreview(command)
-        : { ok: false, payload: null };
-      if (!result?.ok) {
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: result?.payload?.error || 'Preview is unavailable right now.',
-        };
-      }
-      const payload = result.payload || {};
-      return {
-        ok: payload.ok !== false,
-        preview: payload.preview || null,
-        revisions: payload.revisions || {
-          liveRevision: command.request?.expectedLiveRevision ?? null,
-          draftRevision: command.request?.expectedDraftRevision ?? null,
-          notificationRevision: command.request?.expectedNotificationRevision ?? null,
-        },
-      };
-    },
-
-    async execute(command = {}) {
-      const mode = command.intent === 'save'
-        ? 'save'
-        : (command.intent === 'send' ? 'send' : 'save-and-send');
-      const result = await ports.publishMenuUpdate({
-        mode,
-        notify: command.intent === 'save' ? false : undefined,
-        selectedChangeIds: Array.isArray(command.request?.selectedChangeIds)
-          ? command.request.selectedChangeIds
-          : [],
-      });
-      const warnings = Array.isArray(result?.warnings)
-        ? result.warnings
-        : (result?.warningMessage ? [result.warningMessage] : []);
-      return {
-        ...result,
-        ok: result?.ok !== false,
-        userOutcome: {
-          successMessage: result?.successMessage || '',
-          warningMessage: result?.warningMessage || '',
-          warnings,
-        },
-        notification: result?.notification || result?.notificationStatus || null,
-      };
-    },
-  };
-}
-
-function createClientMenuPublishFacade(sessionPorts, runtime = {}) {
-  const createFacade = typeof globalThis.createMenuPublishFacade === 'function'
-    ? globalThis.createMenuPublishFacade.bind(globalThis)
-    : null;
-  if (typeof createFacade === 'function'
-      && (typeof sessionPorts.requestPublishPreview !== 'function' || typeof sessionPorts.publishMenuUpdate !== 'function')) {
-    return createFacade(sessionPorts, runtime);
-  }
-  if (typeof createFacade !== 'function') {
-    const publishService = createLegacyMenuPublishService(sessionPorts, runtime);
-    return {
-      async prepare(options = {}) {
-        if (typeof publishService.prepare === 'function') {
-          return publishService.prepare(options);
-        }
-        return {
-          ok: false,
-          userHandled: false,
-          userMessage: 'Preview is unavailable right now.',
-        };
-      },
-      async commit(options = {}) {
-        if (options.intent === 'save' && typeof publishService.saveDraft === 'function') {
-          return publishService.saveDraft(options);
-        }
-        return publishService.publishUpdate(options);
-      },
-    };
-  }
-  return createFacade(sessionPorts, {
-    ...runtime,
-    createWorkflow: createClientMenuPublishWorkflow,
-  });
-}
-
 function createMenuSessionLifecycle(ports) {
   const sessionPorts = ports || getMenuSessionPorts();
   const buildPublishService = (nextSessionPorts, runtime = {}) => {
@@ -3413,7 +3325,6 @@ function createMenuSessionLifecycle(ports) {
       try {
         return boundary.createMenuSessionLifecycle(sessionPorts, {
           getMenuSessionPorts: () => getMenuSessionPorts(),
-          createPublishFacade: (nextSessionPorts, runtime = {}) => createClientMenuPublishFacade(nextSessionPorts, runtime),
           createPublishService: buildPublishService,
         });
       } finally {
