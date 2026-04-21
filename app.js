@@ -2749,7 +2749,6 @@ function buildMenuSessionPreview(snapshot = buildMenuSessionSnapshot('preview'))
   const sections = buildNotificationPreviewSections(diff);
   const notificationChanges = sections.flatMap(section => section.changes);
   const saveOnlyChanges = snapshot.saveOnlyChanges || getDraftSaveOnlyChanges();
-  const patchMessage = notificationChanges.length ? buildPatchMessage(sections) : '';
   const hasLocalDraft = !!snapshot.dirty;
   const mode = hasLocalDraft ? 'save-and-send' : (notificationChanges.length ? 'send' : 'save');
   return {
@@ -2762,8 +2761,8 @@ function buildMenuSessionPreview(snapshot = buildMenuSessionSnapshot('preview'))
     sections,
     notificationChanges,
     saveOnlyChanges,
-    patchMessage,
-    truncated: patchMessage.length > 1000,
+    patchMessage: '',
+    truncated: false,
     snapshot,
     mode,
   };
@@ -2855,6 +2854,9 @@ function getMenuSessionPorts() {
     },
     async patchMenuDraftState(snapshot, savedAt) {
       return patchMenuDraftState(snapshot, savedAt);
+    },
+    async requestPublishPreview() {
+      return requestPublishPreviewThroughApi();
     },
     async publishMenuUpdate(options = {}) {
       const providedPreview = options.preview?.sections ? options.preview : null;
@@ -2974,10 +2976,10 @@ function getMenuSessionPorts() {
       return getRestaurantSpecialConfig(restaurantId)?.menuIds || [];
     },
     async dispatchNotification(payload) {
-      return dispatchMenuUpdateNotification(payload);
+      return sendMenuNotificationThroughApi(payload);
     },
     collectNotificationWarnings(summary) {
-      return collectNotificationWarnings(summary);
+      return summarizeNotificationWarnings(summary);
     },
     syncLocalCache(options = {}) {
       return syncLocalMenuCache(options);
@@ -2992,7 +2994,7 @@ function getMenuSessionPorts() {
       updateLastUpdatedLabel();
     },
     dedupeWarnings(warnings = []) {
-      return dedupePublisherWarnings(warnings);
+      return dedupeWarningMessages(warnings);
     },
   };
 }
@@ -3004,21 +3006,83 @@ function getSessionModuleBoundary() {
   return null;
 }
 
-function createMenuPublishService(sessionPorts, runtime = {}) {
-  if (!_sessionModuleDelegationStack.has('createMenuPublishService')) {
-    const boundary = getSessionModuleBoundary();
-    if (typeof boundary?.createMenuPublishService === 'function') {
-      _sessionModuleDelegationStack.add('createMenuPublishService');
-      try {
-        return boundary.createMenuPublishService(sessionPorts, runtime, {
-          fallback: () => createMenuPublishService(sessionPorts, runtime),
-        });
-      } finally {
-        _sessionModuleDelegationStack.delete('createMenuPublishService');
-      }
-    }
-  }
+function buildEmptyNotificationSummary() {
+  return {
+    anyOk: false,
+    anyError: false,
+    failedChannels: [],
+    allSkipped: false,
+  };
+}
 
+function summarizeNotificationWarnings(summary = {}) {
+  if (summary.allSkipped) return ['No notification channels were enabled for this menu.'];
+  if (summary.anyOk && summary.anyError) {
+    const failedChannels = Array.isArray(summary.failedChannels) ? summary.failedChannels : [];
+    return [`Some notification channels failed: ${failedChannels.map(channel => String(channel || '').toUpperCase()).join(', ')}.`];
+  }
+  return [];
+}
+
+function dedupeWarningMessages(warnings = []) {
+  return Array.from(new Set((warnings || []).filter(Boolean)));
+}
+
+function serializeSectionsForUpdateLog(sections = []) {
+  return (Array.isArray(sections) ? sections : []).map(section => ({
+    id: section.id,
+    icon: section.icon,
+    label: section.label,
+    displayOrder: Number.isFinite(Number(section.displayOrder)) ? Number(section.displayOrder) : 0,
+    added: (section.changes || []).filter(change => change.kind === 'added').map(change => change.name),
+    removed: (section.changes || []).filter(change => change.kind === 'removed').map(change => change.name),
+    eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
+    restored: (section.changes || []).filter(change => change.kind === 'restored').map(change => change.name),
+  }));
+}
+
+async function sendMenuNotificationThroughApi(payload = {}) {
+  if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) {
+    return {
+      ok: false,
+      skipped: true,
+      statusCode: 0,
+      summary: buildEmptyNotificationSummary(),
+    };
+  }
+  const result = await postApiJson('/api/manager', {
+    action: 'send_notification',
+    menu_id: payload.menuId || MENU_ID,
+    text: String(payload.patchMessage || '').trim(),
+  }, {
+    headers: getAuthorizedApiHeaders(),
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      statusCode: Number(result.status || 0),
+      userMessage: result.payload?.error || 'Update could not be sent.',
+      summary: buildEmptyNotificationSummary(),
+    };
+  }
+  const rows = Array.isArray(result.payload?.results) ? result.payload.results : [];
+  const summary = {
+    anyOk: rows.some(row => row?.ok),
+    anyError: rows.some(row => row?.ok === false),
+    failedChannels: rows.filter(row => row?.ok === false).map(row => row?.channel).filter(Boolean),
+    allSkipped: rows.length > 0 && rows.every(row => row?.skipped),
+  };
+  return {
+    ok: !summary.anyError,
+    skipped: summary.allSkipped,
+    partial: summary.anyOk && summary.anyError,
+    statusCode: Number(result.status || 200),
+    summary,
+  };
+}
+
+function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
   const buildSnapshot = typeof runtime.buildSnapshot === 'function'
     ? runtime.buildSnapshot
     : (() => ({ source: 'unknown' }));
@@ -3068,7 +3132,7 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
       const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
       const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
       const selectedSections = groupNotificationChangesBySection(selectedChanges);
-      const patchMessage = selectedSections.length ? buildPatchMessage(selectedSections) : '';
+      const patchMessage = String(preview.patchMessage || '').trim();
       const mode = options.mode || ((preview.mode === 'send' || preview.mode === 'update-only')
         ? (options.notify === false ? 'save' : 'send')
         : (options.notify === false ? 'save' : 'save-and-send'));
@@ -3110,7 +3174,7 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
         ok: true,
         skipped: !shouldNotify,
         statusCode: null,
-        summary: summarizeNotificationResults({}),
+        summary: buildEmptyNotificationSummary(),
       };
       if (shouldNotify) {
         delivery = await sessionPorts.dispatchNotification({
@@ -3185,7 +3249,7 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
           warnings.push('This device could not refresh its local cache after the send.');
         }
 
-        const logged = patchMessage ? await sessionPorts.logUpdate(serializeNotificationSectionsForLog(selectedSections), patchMessage) : true;
+        const logged = patchMessage ? await sessionPorts.logUpdate(serializeSectionsForUpdateLog(selectedSections), patchMessage) : true;
         if (!logged) {
           warnings.push('The recent-changes audit log could not be written for this send.');
         }
@@ -3224,16 +3288,122 @@ function createMenuPublishService(sessionPorts, runtime = {}) {
   return service;
 }
 
+function createMenuPublishService(sessionPorts, runtime = {}) {
+  if (!_sessionModuleDelegationStack.has('createMenuPublishService')) {
+    const boundary = getSessionModuleBoundary();
+    if (typeof boundary?.createMenuPublishService === 'function') {
+      _sessionModuleDelegationStack.add('createMenuPublishService');
+      try {
+        return boundary.createMenuPublishService(sessionPorts, runtime, {
+          fallback: () => createLegacyMenuPublishService(sessionPorts, runtime),
+        });
+      } finally {
+        _sessionModuleDelegationStack.delete('createMenuPublishService');
+      }
+    }
+  }
+
+  return createLegacyMenuPublishService(sessionPorts, runtime);
+}
+
+function createClientMenuPublishWorkflow({ ports }) {
+  return {
+    async preview(command = {}) {
+      const result = typeof ports.requestPublishPreview === 'function'
+        ? await ports.requestPublishPreview(command)
+        : { ok: false, payload: null };
+      if (!result?.ok) {
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: result?.payload?.error || 'Preview is unavailable right now.',
+        };
+      }
+      const payload = result.payload || {};
+      return {
+        ok: payload.ok !== false,
+        preview: payload.preview || null,
+        revisions: payload.revisions || {
+          liveRevision: command.request?.expectedLiveRevision ?? null,
+          draftRevision: command.request?.expectedDraftRevision ?? null,
+          notificationRevision: command.request?.expectedNotificationRevision ?? null,
+        },
+      };
+    },
+
+    async execute(command = {}) {
+      const mode = command.intent === 'save'
+        ? 'save'
+        : (command.intent === 'send' ? 'send' : 'save-and-send');
+      const result = await ports.publishMenuUpdate({
+        mode,
+        notify: command.intent === 'save' ? false : undefined,
+        selectedChangeIds: Array.isArray(command.request?.selectedChangeIds)
+          ? command.request.selectedChangeIds
+          : [],
+      });
+      const warnings = Array.isArray(result?.warnings)
+        ? result.warnings
+        : (result?.warningMessage ? [result.warningMessage] : []);
+      return {
+        ...result,
+        ok: result?.ok !== false,
+        userOutcome: {
+          successMessage: result?.successMessage || '',
+          warningMessage: result?.warningMessage || '',
+          warnings,
+        },
+        notification: result?.notification || result?.notificationStatus || null,
+      };
+    },
+  };
+}
+
+function createClientMenuPublishFacade(sessionPorts, runtime = {}) {
+  const createFacade = typeof globalThis.createMenuPublishFacade === 'function'
+    ? globalThis.createMenuPublishFacade.bind(globalThis)
+    : null;
+  if (typeof createFacade === 'function'
+      && (typeof sessionPorts.requestPublishPreview !== 'function' || typeof sessionPorts.publishMenuUpdate !== 'function')) {
+    return createFacade(sessionPorts, runtime);
+  }
+  if (typeof createFacade !== 'function') {
+    const publishService = createLegacyMenuPublishService(sessionPorts, runtime);
+    return {
+      async prepare(options = {}) {
+        if (typeof publishService.prepare === 'function') {
+          return publishService.prepare(options);
+        }
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: 'Preview is unavailable right now.',
+        };
+      },
+      async commit(options = {}) {
+        if (options.intent === 'save' && typeof publishService.saveDraft === 'function') {
+          return publishService.saveDraft(options);
+        }
+        return publishService.publishUpdate(options);
+      },
+    };
+  }
+  return createFacade(sessionPorts, {
+    ...runtime,
+    createWorkflow: createClientMenuPublishWorkflow,
+  });
+}
+
 function createMenuSessionLifecycle(ports) {
   const sessionPorts = ports || getMenuSessionPorts();
   const buildPublishService = (nextSessionPorts, runtime = {}) => {
     const boundary = getSessionModuleBoundary();
     if (typeof boundary?.createMenuPublishService === 'function') {
       return boundary.createMenuPublishService(nextSessionPorts, runtime, {
-        fallback: () => createMenuPublishService(nextSessionPorts, runtime),
+        fallback: () => createLegacyMenuPublishService(nextSessionPorts, runtime),
       });
     }
-    return createMenuPublishService(nextSessionPorts, runtime);
+    return createLegacyMenuPublishService(nextSessionPorts, runtime);
   };
 
   if (!_sessionModuleDelegationStack.has('createMenuSessionLifecycle')) {
@@ -3243,6 +3413,7 @@ function createMenuSessionLifecycle(ports) {
       try {
         return boundary.createMenuSessionLifecycle(sessionPorts, {
           getMenuSessionPorts: () => getMenuSessionPorts(),
+          createPublishFacade: (nextSessionPorts, runtime = {}) => createClientMenuPublishFacade(nextSessionPorts, runtime),
           createPublishService: buildPublishService,
         });
       } finally {
@@ -12125,12 +12296,17 @@ async function openPreview() {
   const modal = document.getElementById('modal-bg');
   if (!content || !saveMenuBtn || !saveSendBtn || !modal) return;
 
-  const apiResult = await requestPublishPreviewThroughApi();
-  if (!apiResult.ok) {
-    showToast(apiResult.payload?.error || 'Preview is unavailable right now.', 'error');
+  const result = await ensureCurrentMenuSession().preparePublish({
+    source: isAdminMode ? 'web_admin' : 'web_manager',
+    expectedLiveRevision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+    expectedDraftRevision: menuState._meta?.draftSavedTs ? Number(menuState._meta.draftSavedTs) : null,
+    expectedNotificationRevision: buildCurrentLocalDraftEnvelope()?.baseLastSentRevision ?? null,
+  });
+  if (!result?.ok || !result.preview) {
+    showToast(result?.userMessage || 'Preview is unavailable right now.', 'error');
     return;
   }
-  const preview = apiResult.payload?.preview;
+  const preview = result.preview;
   if (!preview || !Array.isArray(preview.sections) || !Array.isArray(preview.notificationChanges)) {
     showToast('Preview response was invalid. Please try again.', 'error');
     return;
@@ -12144,48 +12320,6 @@ function closeModal() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   modal.hidden = true;
-}
-
-// ─── LIVE PUBLISH ─────────────────────────────────────────────────────────────
-function buildPatchMessage(sections) {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
-  const timeStr = now.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
-  const cleanName = n => n.replace(/[\r\n]+/g, ' ').trim();
-  const menuLabel = _activeMenuName ? _activeMenuName.toUpperCase() : 'MENU';
-  const lines = [`🔥 ${menuLabel} UPDATES — ${dateStr} ${timeStr}`, ''];
-  (sections || []).forEach(section => {
-    lines.push(`${section.icon} ${section.label.toUpperCase()}`);
-    if (Array.isArray(section.changes)) {
-      section.changes.forEach(change => {
-        if (change.kind === 'added') lines.push(`  ✅ + ${cleanName(change.name)}`);
-        if (change.kind === 'removed') lines.push(`  ❌ - ${cleanName(change.name)}`);
-        if (change.kind === 'eightySixed') lines.push(`  🚫 86'd: ${cleanName(change.name)}`);
-        if (change.kind === 'restored') lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(change.name)}`);
-      });
-    } else {
-      (section.added || []).forEach(n => lines.push(`  ✅ + ${cleanName(n)}`));
-      (section.removed || []).forEach(n => lines.push(`  ❌ - ${cleanName(n)}`));
-      (section.eightySixed || []).forEach(n => lines.push(`  🚫 86'd: ${cleanName(n)}`));
-      (section.restored || []).forEach(n => lines.push(`  ✅ ${restoreLabel(section.id)}: ${cleanName(n)}`));
-    }
-    lines.push('');
-  });
-  const menuLink = getNotificationMenuLink();
-  if (menuLink) lines.push(`📋 Full menu: ${menuLink}`);
-  return lines.join('\n').trim();
-}
-
-function serializeNotificationSectionsForLog(sections = []) {
-  return (sections || []).map(section => ({
-    id: section.id,
-    icon: section.icon,
-    label: section.label,
-    added: (section.changes || []).filter(change => change.kind === 'added').map(change => change.name),
-    removed: (section.changes || []).filter(change => change.kind === 'removed').map(change => change.name),
-    eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
-    restored: (section.changes || []).filter(change => change.kind === 'restored').map(change => change.name),
-  }));
 }
 
 function setPreviewChangeSelected(changeId, checked) {
@@ -12226,162 +12360,6 @@ function buildSaveOnlyPreviewBlockHtml(changes = []) {
     `<div class="preview-line"><span>•</span> ${escHtml(change.message || change.label || 'Saved change')}</div>`
   )).join('')}`;
 }
-function dedupePublisherWarnings(warnings = []) {
-  return Array.from(new Set((warnings || []).filter(Boolean)));
-}
-
-function formatNotificationChannelName(channel) {
-  switch (channel) {
-    case 'groupme': return 'GroupMe';
-    case 'sms': return 'SMS';
-    case 'discord': return 'Discord';
-    case 'webhook': return 'Webhook';
-    default: return channel || 'Unknown channel';
-  }
-}
-
-function summarizeNotificationResults(results = {}) {
-  const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
-  const okChannels = [];
-  const skippedChannels = [];
-  const failedChannels = [];
-  const failedDetails = [];
-
-  entries.forEach(([channel, status]) => {
-    if (status === 'ok') {
-      okChannels.push(channel);
-      return;
-    }
-    if (status === 'skipped') {
-      skippedChannels.push(channel);
-      return;
-    }
-    failedChannels.push(channel);
-    failedDetails.push({
-      channel,
-      status: typeof status === 'string' ? status : 'error:unknown',
-    });
-  });
-
-  return {
-    results,
-    okChannels,
-    skippedChannels,
-    failedChannels,
-    failedDetails,
-    anyOk: okChannels.length > 0,
-    anyError: failedChannels.length > 0,
-    allSkipped: entries.length > 0 && skippedChannels.length === entries.length,
-  };
-}
-
-function collectNotificationWarnings(summary) {
-  if (!summary) return [];
-  const warnings = [];
-  if (summary.allSkipped) {
-    warnings.push('No notification channels were enabled for this menu.');
-  } else if (summary.anyOk && summary.anyError) {
-    warnings.push(`Some notification channels failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`);
-  }
-  return warnings;
-}
-
-function createNotificationDeliveryService(deps = {}) {
-  const fetchImpl = typeof deps.fetchImpl === 'function' ? deps.fetchImpl : fetch;
-  const summarizeResults = typeof deps.summarizeResults === 'function'
-    ? deps.summarizeResults
-    : summarizeNotificationResults;
-
-  return {
-    async sendMenuUpdate({ menuId, patchMessage, accessToken = '' }) {
-      const authHeaders = accessToken
-        ? { 'Authorization': `Bearer ${accessToken}` }
-        : {};
-
-      let response;
-      try {
-        response = await fetchImpl('/api/manager', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders },
-          body: JSON.stringify({ action: 'send_notification', menu_id: menuId, text: patchMessage }),
-        });
-      } catch (_) {
-        return {
-          ok: false,
-          statusCode: 0,
-          summary: summarizeResults({}),
-          userMessage: '❌ Network error. Check connection.',
-        };
-      }
-
-      let body = {};
-      try {
-        body = await response.json();
-      } catch (_) {
-        body = {};
-      }
-
-      const summary = summarizeResults(body?.results || {});
-      const statusCode = Number(response?.status || 0);
-      const is2xx = statusCode >= 200 && statusCode < 300;
-      if (is2xx) {
-        return {
-          ok: true,
-          statusCode,
-          partial: statusCode === 207,
-          results: body?.results || {},
-          summary,
-        };
-      }
-
-      if (statusCode === 401) {
-        return {
-          ok: false,
-          statusCode,
-          summary,
-          userMessage: '❌ Not authorized. Please sign in.',
-        };
-      }
-
-      if (statusCode === 403) {
-        return {
-          ok: false,
-          statusCode,
-          summary,
-          userMessage: '❌ Access denied. Your account role does not allow sending updates.',
-        };
-      }
-
-      if (statusCode === 400 && typeof body?.error === 'string' && body.error.trim()) {
-        return {
-          ok: false,
-          statusCode,
-          summary,
-          userMessage: `❌ ${body.error.trim()}`,
-        };
-      }
-
-      const failedSummary = summary.failedChannels.length
-        ? ` Failed: ${summary.failedChannels.map(formatNotificationChannelName).join(', ')}.`
-        : '';
-      return {
-        ok: false,
-        statusCode,
-        summary,
-        userMessage: `❌ Notification error. Check channel config in Admin settings.${failedSummary}`,
-      };
-    },
-  };
-}
-
-async function dispatchMenuUpdateNotification({ menuId, patchMessage }) {
-  return createNotificationDeliveryService().sendMenuUpdate({
-    menuId,
-    patchMessage,
-    accessToken: currentUser?.accessToken || '',
-  });
-}
-
 function snapshotLastSentState() {
   const lastSentState = {};
   CATEGORY_DEFS.forEach(cat => { lastSentState[cat.id] = menuState[cat.id]?.lastSent || []; });
@@ -12445,12 +12423,17 @@ async function sendUpdate(options = {}) {
   await flushFocusedManagerEditor();
   let preview = options.preview?.sections ? options.preview : _previewModalState;
   if (!preview) {
-    const previewResult = await requestPublishPreviewThroughApi();
-    if (!previewResult.ok) {
-      showToast(previewResult.payload?.error || 'Preview is unavailable right now.', 'error');
+    const prepared = await ensureCurrentMenuSession().preparePublish({
+      source: isAdminMode ? 'web_admin' : 'web_manager',
+      expectedLiveRevision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+      expectedDraftRevision: menuState._meta?.draftSavedTs ? Number(menuState._meta.draftSavedTs) : null,
+      expectedNotificationRevision: buildCurrentLocalDraftEnvelope()?.baseLastSentRevision ?? null,
+    });
+    if (!prepared?.ok || !prepared.preview) {
+      showToast(prepared?.userMessage || 'Preview is unavailable right now.', 'error');
       return;
     }
-    preview = previewResult.payload?.preview;
+    preview = prepared.preview;
     if (!preview || !Array.isArray(preview.notificationChanges)) {
       showToast('Preview response was invalid. Please try again.', 'error');
       return;
@@ -12465,28 +12448,41 @@ async function sendUpdate(options = {}) {
   }
 
   const selectedChangeIds = getSelectedPreviewChangeIds();
-  const mode = options.notify === false
+  const intent = options.notify === false
     ? 'save'
     : ((preview.mode === 'send' || preview.mode === 'update-only') ? 'send' : 'save-and-send');
-  setPreviewModalActionState(mode === 'save' ? 'save-menu' : (mode === 'send' ? 'send-update' : 'save-send'));
+  setPreviewModalActionState(intent === 'save' ? 'save-menu' : (intent === 'send' ? 'send-update' : 'save-send'));
 
   try {
-    const result = await ensureCurrentMenuSession().publishUpdate({ preview, mode, selectedChangeIds });
+    const result = await ensureCurrentMenuSession().commitPublish({
+      source: isAdminMode ? 'web_admin' : 'web_manager',
+      intent,
+      preview,
+      selectedChangeIds,
+      expectedLiveRevision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
+      expectedDraftRevision: menuState._meta?.draftSavedTs ? Number(menuState._meta.draftSavedTs) : null,
+      expectedNotificationRevision: buildCurrentLocalDraftEnvelope()?.baseLastSentRevision ?? null,
+    });
     if (result?.noop) {
       closeModal();
       return;
     }
     if (result?.ok) {
       closeModal();
-      showToast(result.successMessage || `✅ ${_activeMenuName || 'Menu'} updated.`, 'success');
+      const successMessage = result.userOutcome?.successMessage || result.successMessage || `✅ ${_activeMenuName || 'Menu'} updated.`;
+      showToast(successMessage, 'success');
       renderManagerWorkspace({ includeRecentChanges: false });
       updateDraftIndicator();
       renderRecentChanges();
-      const warnings = Array.isArray(result.warnings) ? result.warnings : (result.warningMessage ? [result.warningMessage] : []);
+      const warnings = Array.isArray(result.userOutcome?.warnings)
+        ? result.userOutcome.warnings
+        : (Array.isArray(result.warnings) ? result.warnings : (result.warningMessage ? [result.warningMessage] : []));
       warnings.forEach(message => showToast(`⚠️ ${message}`, 'warning'));
       return;
     }
-    if (result?.userMessage) showToast(result.userMessage, 'error');
+    if (result?.userOutcome?.warningMessage || result?.userMessage) {
+      showToast(result.userOutcome?.warningMessage || result.userMessage, 'error');
+    }
   } finally {
     setPreviewModalActionState();
   }

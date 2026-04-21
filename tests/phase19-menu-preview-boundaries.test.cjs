@@ -26,22 +26,51 @@ test('manager route supports server-owned preview and publish actions on one bou
   assert.match(publishRoute, /selected_group_ids/);
 });
 
-test('wave 4 publish command module exports canonical preview and selected-change publish contract', async () => {
-  const publishModuleSource = read('server/_menu-publish.js');
+test('wave 4 publish command module exports workflow-backed preview and publish helpers', async () => {
   const publishModule = await importApiModule('server/_menu-publish.js');
 
   assert.equal(typeof publishModule.previewMenuUpdateForMenu, 'function');
   assert.equal(typeof publishModule.publishMenuUpdateForMenu, 'function');
-  assert.match(publishModuleSource, /menu-publish-preview\.v2/);
-  assert.match(publishModuleSource, /serverOwned: true/);
-  assert.match(publishModuleSource, /Will Save Only/);
-  assert.match(publishModuleSource, /operation_id/);
-  assert.match(publishModuleSource, /eventType: 'send_failed'/);
-  assert.match(publishModuleSource, /__featured__/);
-  assert.match(publishModuleSource, /selected_change_ids/);
-  assert.match(publishModuleSource, /legacy_selected_change_ids/);
-  assert.match(publishModuleSource, /sections_by_outcome/);
-  assert.doesNotMatch(publishModuleSource, /previewDiff/);
+});
+
+test('wave 4 publish command module fails clearly when the ambient workflow factory is unavailable', async () => {
+  const publishModule = await importApiModule('server/_menu-publish.js');
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+
+  try {
+    globalThis.createMenuPublishWorkflow = null;
+    await assert.rejects(
+      publishModule.previewMenuUpdateForMenu({
+        actor: { id: 'tester' },
+        menuId: 'leroys-drinks',
+        source: 'test',
+        snapshot: {},
+      }),
+      error => error instanceof Error
+        && error.status === 500
+        && error.message === 'createMenuPublishWorkflow is unavailable'
+        && error.code === 'menu_publish_workflow_unavailable',
+    );
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+});
+
+test('wave 4 publish command module rejects unsupported menus with an Error instance', async () => {
+  const publishModule = await importApiModule('server/_menu-publish.js');
+
+  await assert.rejects(
+    publishModule.previewMenuUpdateForMenu({
+      actor: { id: 'tester' },
+      menuId: 'not-a-real-menu',
+      source: 'test',
+      snapshot: { cats: [] },
+    }),
+    error => error instanceof Error
+      && error.status === 400
+      && error.message === 'Unsupported menu_id'
+      && error.menuId === 'not-a-real-menu',
+  );
 });
 
 test('queue and publish preview boundaries preserve section display order metadata', async () => {
@@ -94,6 +123,7 @@ test('app runtime requests canonical preview and no longer posts legacy preview 
   assert.doesNotMatch(publishApiSource, /preview_diff/);
   assert.doesNotMatch(publishApiSource, /selected_sections/);
   assert.doesNotMatch(publishApiSource, /patch_message/);
-  assert.match(openPreviewSource, /requestPublishPreviewThroughApi/);
+  assert.match(openPreviewSource, /ensureCurrentMenuSession\(\)\.preparePublish\(/);
+  assert.doesNotMatch(openPreviewSource, /requestPublishPreviewThroughApi/);
   assert.doesNotMatch(openPreviewSource, /ensureCurrentMenuSession\(\)\.preview\(\)/);
 });

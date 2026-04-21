@@ -3,6 +3,10 @@ const test = require('node:test');
 
 const { loadAppSandbox } = require('../helpers/runtime.cjs');
 
+function toPlainValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
 function createMenuSessionPorts(overrides = {}) {
   const diff = [
     {
@@ -71,36 +75,130 @@ function createMenuSessionPorts(overrides = {}) {
   };
 }
 
-test('menu publish service boundary saves drafts and publishes updates', async () => {
+test('menu publish facade prepares and commits through the workflow boundary', async () => {
   const sandbox = loadAppSandbox();
-  const saveCalls = [];
-  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
-    publishMenuUpdate: async options => {
-      saveCalls.push(options);
-      if (options?.mode === 'save') {
-        return {
-          ok: true,
-          successMessage: 'quiet save',
-          snapshot: { source: 'saved-live' },
-        };
-      }
+  const prepareCalls = [];
+  const commitCalls = [];
+  const prepareOptions = {
+    pathname: '/elroyscantina',
+    search: '?menu=el-roys',
+    pageMode: 'manager',
+    requestedMenuId: 'menu-preview',
+    requestedMenuSlug: 'el-roys',
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  };
+  const commitOptions = {
+    pathname: '/elroyscantina',
+    search: '?menu=elroys-cantina-drinks',
+    pageMode: 'manager',
+    requestedMenuId: 'menu-commit',
+    requestedMenuSlug: 'elroys-cantina-drinks',
+    selectedChangeIds: ['beer::added::lager'],
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  };
+
+  sandbox.createMenuPublishWorkflow = ({ ports }) => ({
+    async preview(command) {
+      prepareCalls.push({ ports: !!ports, command });
       return {
         ok: true,
-        successMessage: '✅ Main Menu saved to the live menu.',
-        notificationStatus: null,
+        preview: {
+          hasChanges: true,
+          hasLocalDraft: true,
+          hasNotificationChanges: true,
+          notificationChanges: [{ id: 'beer::added::lager' }],
+          sections: [{ id: 'beer', changes: [] }],
+          mode: 'save-and-send',
+        },
+        revisions: {
+          liveRevision: 10,
+          draftRevision: 11,
+          notificationRevision: 9,
+        },
       };
     },
-  }));
+    async execute(command) {
+      commitCalls.push(command);
+      return {
+        ok: true,
+        preview: {
+          hasChanges: true,
+          hasLocalDraft: true,
+          hasNotificationChanges: true,
+          notificationChanges: [{ id: 'beer::added::lager' }],
+          sections: [{ id: 'beer', changes: [] }],
+          mode: 'save-and-send',
+        },
+        userOutcome: {
+          successMessage: 'published',
+          warningMessage: '',
+          warnings: [],
+        },
+        notification: {
+          attempted: true,
+          delivered: true,
+          partial: false,
+          summary: { okChannels: ['groupme'], skippedChannels: [], failedChannels: [] },
+          retryable: false,
+        },
+        queue: {
+          baselineAdvanced: true,
+          selectedChangeIds: ['beer::added::lager'],
+          clearedChangeIds: [],
+          featuredSiblingMenusSynced: [],
+        },
+        livePersistence: { attempted: true, persisted: true },
+      };
+    },
+  });
 
-  const draftResult = await lifecycle.saveDraft();
-  assert.equal(draftResult.ok, true);
-  assert.equal(draftResult.snapshot.source, 'saved-live');
-  assert.equal(saveCalls.length, 1);
-  assert.equal(saveCalls[0].mode, 'save');
-  assert.equal(saveCalls[0].notify, false);
-  assert.equal(saveCalls[0].preview.mode, 'update-only');
+  const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts());
+  const preview = await lifecycle.preparePublish(prepareOptions);
+  const result = await lifecycle.commitPublish(commitOptions);
 
-  const publishResult = await lifecycle.publishUpdate({ notify: false });
-  assert.equal(publishResult.ok, true);
-  assert.equal(publishResult.successMessage, '✅ Main Menu saved to the live menu.');
+  assert.equal(preview.ok, true);
+  assert.equal(result.ok, true);
+  assert.equal(prepareCalls.length, 1);
+  assert.equal(commitCalls.length, 1);
+  assert.equal(prepareCalls[0].ports, true);
+  assert.deepEqual(toPlainValue(prepareCalls[0].command.request), {
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  });
+  assert.deepEqual(toPlainValue(prepareCalls[0].command.snapshot.request), {
+    pathname: '/elroyscantina',
+    search: '?menu=el-roys',
+    pageMode: 'manager',
+    actor: null,
+    siteRestaurantId: 'restaurant-main',
+    requestedMenuId: 'menu-preview',
+    requestedMenuSlug: 'el-roys',
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  });
+  assert.deepEqual(toPlainValue(commitCalls[0].request), {
+    selectedChangeIds: ['beer::added::lager'],
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  });
+  assert.deepEqual(toPlainValue(commitCalls[0].snapshot.request), {
+    pathname: '/elroyscantina',
+    search: '?menu=elroys-cantina-drinks',
+    pageMode: 'manager',
+    actor: null,
+    siteRestaurantId: 'restaurant-main',
+    requestedMenuId: 'menu-commit',
+    requestedMenuSlug: 'elroys-cantina-drinks',
+    selectedChangeIds: ['beer::added::lager'],
+    expectedLiveRevision: 10,
+    expectedDraftRevision: 11,
+    expectedNotificationRevision: 9,
+  });
 });
