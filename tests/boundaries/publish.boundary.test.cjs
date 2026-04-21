@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadAppSandbox } = require('../helpers/runtime.cjs');
+const { loadAppSandbox, loadSandboxWithScripts } = require('../helpers/runtime.cjs');
 
 function toPlainValue(value) {
   return JSON.parse(JSON.stringify(value));
@@ -201,4 +201,57 @@ test('menu publish facade prepares and commits through the workflow boundary', a
     expectedDraftRevision: 11,
     expectedNotificationRevision: 9,
   });
+});
+
+test('menu session lifecycle prepares and commits through shared session modules without app-owned publish helpers', async () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/session/publish-service.js',
+    'core/session/menu-session.js',
+  ]);
+  const previewCalls = [];
+  const commitCalls = [];
+
+  sandbox.createMenuPublishFacade = () => {
+    throw new Error('session lifecycle should not read app-owned publish facade helpers');
+  };
+  sandbox.createMenuPublishService = () => {
+    throw new Error('session lifecycle should not read app-owned publish service helpers');
+  };
+  sandbox.__HF_SESSION_MODULES__.createMenuPublishService = (sessionPorts, runtime = {}) => ({
+    async prepare(options = {}) {
+      previewCalls.push({ sessionPorts: !!sessionPorts, options, runtime: !!runtime });
+      return {
+        ok: true,
+        preview: { hasChanges: true, sections: [], notificationChanges: [], mode: 'save-and-send' },
+        revisions: { liveRevision: 10, draftRevision: 11, notificationRevision: 9 },
+      };
+    },
+    async publishUpdate(options = {}) {
+      commitCalls.push({ sessionPorts: !!sessionPorts, options, runtime: !!runtime });
+      return {
+        ok: true,
+        userOutcome: { successMessage: 'published', warningMessage: '', warnings: [] },
+      };
+    },
+    async saveDraft(options = {}) {
+      commitCalls.push({ sessionPorts: !!sessionPorts, options: { ...options, intent: 'save' }, runtime: !!runtime });
+      return {
+        ok: true,
+        userOutcome: { successMessage: 'saved', warningMessage: '', warnings: [] },
+      };
+    },
+  });
+
+  const lifecycle = sandbox.__HF_SESSION_MODULES__.createMenuSessionLifecycle(createMenuSessionPorts(), {
+    createPublishService: sandbox.__HF_SESSION_MODULES__.createMenuPublishService,
+  });
+  const preview = await lifecycle.preparePublish({ expectedLiveRevision: 10 });
+  const commit = await lifecycle.publishUpdate({ selectedChangeIds: ['beer::added::lager'] });
+  const save = await lifecycle.saveDraft({});
+
+  assert.equal(preview.ok, true);
+  assert.equal(commit.ok, true);
+  assert.equal(save.ok, true);
+  assert.equal(previewCalls.length, 1);
+  assert.equal(commitCalls.length, 2);
 });
