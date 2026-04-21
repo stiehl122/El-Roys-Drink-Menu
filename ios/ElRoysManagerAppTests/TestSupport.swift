@@ -23,6 +23,58 @@ func routeStateMakeRestaurantRecord(id: String, slug: String) -> RestaurantRecor
   )
 }
 
+func routeStateMakeItem(
+  id: String = "item-1",
+  name: String = "House Margarita",
+  desc: String = "",
+  recipe: [String] = [],
+  price: String = "$12",
+  isEightySixed: Bool = false,
+  displayOrder: Int = 0,
+  onMenu: Bool = true,
+  visibility: String = "public",
+  upcharges: [ItemUpcharge] = [],
+  showDescription: Bool = true,
+  showRecipe: Bool = false
+) -> MenuItemPayload {
+  MenuItemPayload(
+    id: id,
+    name: name,
+    desc: desc,
+    recipe: recipe,
+    price: price,
+    isEightySixed: isEightySixed,
+    displayOrder: displayOrder,
+    onMenu: onMenu,
+    visibility: visibility,
+    upcharges: upcharges,
+    showDescription: showDescription,
+    showRecipe: showRecipe
+  )
+}
+
+func routeStateMakeCategory(
+  id: String = "cat-1",
+  menuId: String? = "menu-drinks",
+  key: String = "beer",
+  label: String = "Beer",
+  displayOrder: Int = 0,
+  items: [MenuItemPayload] = []
+) -> MenuCategoryPayload {
+  MenuCategoryPayload(
+    id: id,
+    menuId: menuId,
+    key: key,
+    label: label,
+    icon: "",
+    color: "",
+    sub: "",
+    placeholder: "",
+    displayOrder: displayOrder,
+    items: items
+  )
+}
+
 func routeStateMakeWorkspace(
   menuId: String = "menu-drinks",
   type: String = "drinks",

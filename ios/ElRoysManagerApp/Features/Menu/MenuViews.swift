@@ -1218,7 +1218,19 @@ private extension View {
   }
 }
 
-private struct EditableItemDraft: Equatable {
+struct EditableItemUpchargeDraft: Equatable, Hashable, Identifiable {
+  let id: UUID
+  var label: String
+  var price: String
+
+  init(id: UUID = UUID(), label: String = "", price: String = "+$0") {
+    self.id = id
+    self.label = label
+    self.price = price
+  }
+}
+
+struct EditableItemDraft: Equatable {
   var itemID: String?
   var originalCategoryKey: String?
   var categoryKey: String = ""
@@ -1226,6 +1238,7 @@ private struct EditableItemDraft: Equatable {
   var description = ""
   var price = ""
   var recipeText = ""
+  var upcharges: [EditableItemUpchargeDraft] = []
   var isEightySixed = false
   var showDescription = true
   var showRecipe = false
@@ -1248,10 +1261,53 @@ private struct EditableItemDraft: Equatable {
     description = item.desc
     price = item.price
     recipeText = item.recipe.joined(separator: "\n")
+    upcharges = item.upcharges.map { EditableItemUpchargeDraft(id: $0.id, label: $0.label, price: $0.price) }
     isEightySixed = item.isEightySixed
     showDescription = item.showDescription
     showRecipe = item.showRecipe
     self.isFoodMenu = isFoodMenu
+  }
+
+  mutating func addUpcharge(label: String = "", price: String = "+$0") {
+    upcharges.append(
+      EditableItemUpchargeDraft(
+        label: label.trimmingCharacters(in: .whitespacesAndNewlines),
+        price: price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "+$0" : price.trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+    )
+  }
+
+  mutating func removeUpcharge(id: UUID) {
+    upcharges.removeAll { $0.id == id }
+  }
+
+  func makeMenuItem(categoryKey: String) -> MenuItemPayload {
+    let trimmedCategoryKey = categoryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    let recipe = isFoodMenu ? [] : recipeText
+      .split(separator: "\n")
+      .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+    let normalizedUpcharges = upcharges.compactMap { entry -> ItemUpcharge? in
+      let trimmedLabel = entry.label.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmedLabel.isEmpty else { return nil }
+      let trimmedPrice = entry.price.trimmingCharacters(in: .whitespacesAndNewlines)
+      return ItemUpcharge(id: entry.id, label: trimmedLabel, price: trimmedPrice)
+    }
+
+    return MenuItemPayload(
+      id: itemID ?? "local-\(UUID().uuidString.lowercased())",
+      name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+      desc: description.trimmingCharacters(in: .whitespacesAndNewlines),
+      recipe: recipe,
+      price: price.trimmingCharacters(in: .whitespacesAndNewlines),
+      isEightySixed: isEightySixed,
+      displayOrder: 0,
+      onMenu: trimmedCategoryKey != EditableMenuDocument.uncategorizedKey,
+      visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
+      upcharges: normalizedUpcharges,
+      showDescription: showDescription,
+      showRecipe: isFoodMenu ? false : showRecipe
+    )
   }
 }
 
@@ -1293,6 +1349,23 @@ private struct ItemEditorSheet: View {
           if !session.menu.isFoodMenu {
             Toggle("Show Recipe", isOn: $draft.showRecipe)
             TextField("Recipe", text: $draft.recipeText, axis: .vertical)
+          }
+        }
+
+        Section("Upcharges") {
+          ForEach($draft.upcharges) { $entry in
+            VStack(alignment: .leading, spacing: 10) {
+              TextField("Label", text: $entry.label)
+              TextField("Price", text: $entry.price)
+            }
+
+            Button("Remove", role: .destructive) {
+              draft.removeUpcharge(id: entry.id)
+            }
+          }
+
+          Button("Add Upcharge") {
+            draft.addUpcharge()
           }
         }
 
@@ -1386,24 +1459,6 @@ private struct ItemEditorSheet: View {
       }
     }
 
-    let recipe = draft.isFoodMenu ? [] : draft.recipeText
-      .split(separator: "\n")
-      .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-      .filter { !$0.isEmpty }
-
-    return MenuItemPayload(
-      id: draft.itemID ?? "local-\(UUID().uuidString.lowercased())",
-      name: trimmedName,
-      desc: draft.description.trimmingCharacters(in: .whitespacesAndNewlines),
-      recipe: recipe,
-      price: draft.price.trimmingCharacters(in: .whitespacesAndNewlines),
-      isEightySixed: draft.isEightySixed,
-      displayOrder: 0,
-      onMenu: trimmedCategoryKey != EditableMenuDocument.uncategorizedKey,
-      visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
-      upcharges: [],
-      showDescription: draft.showDescription,
-      showRecipe: draft.isFoodMenu ? false : draft.showRecipe
-    )
+    return draft.makeMenuItem(categoryKey: trimmedCategoryKey)
   }
 }

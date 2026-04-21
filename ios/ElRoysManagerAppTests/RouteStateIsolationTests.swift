@@ -66,3 +66,71 @@ final class RouteStateIsolationTests: XCTestCase {
     XCTAssertTrue(appModel.editorSession(for: menu) === appModel.editorSession(for: menu))
   }
 }
+
+@MainActor
+final class UpchargeEditorTests: XCTestCase {
+  func testEditingItemPreservesExistingUpcharges() async throws {
+    let preservedUpcharge = ItemUpcharge(label: "Tallboy", price: "+$2")
+    let category = routeStateMakeCategory(
+      key: "beer",
+      label: "Beer",
+      items: [
+        routeStateMakeItem(
+          id: "item-1",
+          name: "Bloody Mary",
+          upcharges: [preservedUpcharge]
+        )
+      ]
+    )
+    let services = routeStateMakeServices(
+      workspaceClient: RouteStateStubWorkspaceClient(
+        payloads: [
+          routeStateMakeWorkspace(
+            menuId: "menu-drinks",
+            categories: [category]
+          )
+        ]
+      ),
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+    )
+
+    let appModel = AppModel(
+      services: services,
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+    appModel.authSession = routeStateMakeAuthSession()
+
+    let session = appModel.editorSession(for: routeStateMakeMenuRecord(id: "menu-drinks", type: "drinks"))
+    await session.load()
+
+    guard let item = session.document?.itemRecord(for: "item-1")?.item else {
+      return XCTFail("Expected seeded menu item")
+    }
+
+    var draft = EditableItemDraft(item: item, categoryKey: "beer", isFoodMenu: false)
+    draft.name = "Bloody Mary Deluxe"
+    let editedItem = draft.makeMenuItem(categoryKey: "beer")
+    session.upsertItem(editedItem, categoryKey: "beer", originalCategoryKey: "beer")
+
+    let saved = session.document?.itemRecord(for: "item-1")?.item
+    XCTAssertEqual(saved?.name, "Bloody Mary Deluxe")
+    XCTAssertEqual(saved?.upcharges.count, 1)
+    XCTAssertEqual(saved?.upcharges.first?.id, preservedUpcharge.id)
+    XCTAssertEqual(saved?.upcharges.first?.label, "Tallboy")
+    XCTAssertEqual(saved?.upcharges.first?.price, "+$2")
+  }
+
+  func testAddingAndRemovingUpchargesUpdatesDraft() {
+    var draft = EditableItemDraft(categoryKey: "beer", isFoodMenu: false)
+    draft.addUpcharge(label: "Michelada", price: "+$2")
+    draft.addUpcharge(label: "Chamoy Rim", price: "+$1")
+
+    let removedID = draft.upcharges[0].id
+    draft.removeUpcharge(id: removedID)
+
+    XCTAssertEqual(draft.upcharges.count, 1)
+    XCTAssertEqual(draft.upcharges[0].label, "Chamoy Rim")
+    XCTAssertEqual(draft.upcharges[0].price, "+$1")
+  }
+}
