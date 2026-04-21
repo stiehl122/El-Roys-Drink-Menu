@@ -170,6 +170,8 @@ test("leroy's lounge route owns both the board chip and the fallback chip", () =
 
   assert.match(html, /data-user-chip-scope="route"/);
   assert.match(html, /data-user-chip-scope="fallback"/);
+  assert.match(html, /class="public-fallback-userchip user-chip"/);
+  assert.match(html, /class="user-dropdown public-fallback-userchip-panel"/);
   assert.doesNotMatch(html, /id="ll-user-dropdown-name"/);
   assert.doesNotMatch(html, /id="user-dropdown-name"/);
 
