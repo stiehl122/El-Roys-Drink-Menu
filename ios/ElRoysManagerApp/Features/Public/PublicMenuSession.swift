@@ -20,6 +20,7 @@ final class PublicMenuSession {
     defer { isWorking = false }
 
     do {
+      notice = nil
       payload = try await appModel.loadPublicMenuPayload(menuId: menu.id)
     } catch {
       notice = FeatureNotice(
@@ -28,5 +29,9 @@ final class PublicMenuSession {
         message: error.localizedDescription
       )
     }
+  }
+
+  func clearNotice() {
+    notice = nil
   }
 }

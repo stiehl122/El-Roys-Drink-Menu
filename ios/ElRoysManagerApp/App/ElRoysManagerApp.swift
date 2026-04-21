@@ -39,13 +39,13 @@ private struct RootView: View {
               case .restaurantHub(let restaurant):
                 RestaurantHubView(model: model, restaurant: restaurant)
               case .publicMenu(let restaurant, let initialType):
-                PublicMenuScreen(model: model, restaurant: restaurant, initialType: initialType)
+                PublicMenuRoute(model: model, restaurant: restaurant, initialType: initialType)
               case .editor(let menu):
-                MenuEditorScreen(model: model, menu: menu)
+                MenuEditorRoute(model: model, menu: menu)
               case .restaurantTools(let restaurant):
-                RestaurantToolsScreen(model: model, restaurant: restaurant)
+                RestaurantToolsRoute(model: model, restaurant: restaurant)
               case .categoryTools(let menu):
-                RestaurantCategoryManagementScreen(model: model, menu: menu)
+                CategoryToolsRoute(model: model, menu: menu)
               case .routePreview(let menu):
                 RoutePreviewScreen(menu: menu, url: model.exactRoutePreviewURL(for: menu))
               }
@@ -56,6 +56,52 @@ private struct RootView: View {
         AuthGateView(model: model)
       }
     }
+  }
+}
+
+private struct PublicMenuRoute: View {
+  @Bindable var model: AppModel
+  let restaurant: RestaurantRecord
+  let initialType: String
+
+  var body: some View {
+    PublicMenuScreen(
+      restaurant: restaurant,
+      initialType: initialType,
+      menuForType: { type in
+        model.menu(for: restaurant.id, type: type)
+      },
+      sessionForMenu: { menu in
+        model.publicMenuSession(for: menu)
+      }
+    )
+  }
+}
+
+private struct MenuEditorRoute: View {
+  @Bindable var model: AppModel
+  let menu: MenuRecord
+
+  var body: some View {
+    MenuEditorScreen(session: model.editorSession(for: menu))
+  }
+}
+
+private struct RestaurantToolsRoute: View {
+  @Bindable var model: AppModel
+  let restaurant: RestaurantRecord
+
+  var body: some View {
+    RestaurantToolsScreen(session: model.restaurantToolsSession(for: restaurant))
+  }
+}
+
+private struct CategoryToolsRoute: View {
+  @Bindable var model: AppModel
+  let menu: MenuRecord
+
+  var body: some View {
+    RestaurantCategoryManagementScreen(session: model.editorSession(for: menu))
   }
 }
 

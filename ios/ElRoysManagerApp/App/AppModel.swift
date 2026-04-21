@@ -125,6 +125,9 @@ final class AppModel {
   @ObservationIgnored private var draftBaselineDocumentData: Data?
   @ObservationIgnored private var liveBaselineDocumentData: Data?
   @ObservationIgnored private let encoder = JSONEncoder()
+  @ObservationIgnored private var editorSessionsByMenuID: [String: MenuEditorSession] = [:]
+  @ObservationIgnored private var publicMenuSessionsByMenuID: [String: PublicMenuSession] = [:]
+  @ObservationIgnored private var restaurantToolsSessionsByRestaurantID: [String: RestaurantToolsSession] = [:]
 
   init(
     environment: AppEnvironment = .fromBundle(),
@@ -290,11 +293,41 @@ final class AppModel {
     editorHasLiveChanges = false
     draftBaselineDocumentData = nil
     liveBaselineDocumentData = nil
+    editorSessionsByMenuID = [:]
+    publicMenuSessionsByMenuID = [:]
+    restaurantToolsSessionsByRestaurantID = [:]
     notice = AppNotice(tone: .neutral, title: "Signed Out", message: "The stored device session has been cleared.")
   }
 
   func menu(for restaurantId: String, type: String) -> MenuRecord? {
     accessibleMenus.first { $0.restaurantId == restaurantId && $0.type.lowercased() == type.lowercased() }
+  }
+
+  func editorSession(for menu: MenuRecord) -> MenuEditorSession {
+    if let session = editorSessionsByMenuID[menu.id] {
+      return session
+    }
+    let session = MenuEditorSession(menu: menu, appModel: self)
+    editorSessionsByMenuID[menu.id] = session
+    return session
+  }
+
+  func publicMenuSession(for menu: MenuRecord) -> PublicMenuSession {
+    if let session = publicMenuSessionsByMenuID[menu.id] {
+      return session
+    }
+    let session = PublicMenuSession(menu: menu, appModel: self)
+    publicMenuSessionsByMenuID[menu.id] = session
+    return session
+  }
+
+  func restaurantToolsSession(for restaurant: RestaurantRecord) -> RestaurantToolsSession {
+    if let session = restaurantToolsSessionsByRestaurantID[restaurant.id] {
+      return session
+    }
+    let session = RestaurantToolsSession(restaurant: restaurant, appModel: self)
+    restaurantToolsSessionsByRestaurantID[restaurant.id] = session
+    return session
   }
 
   func loadWorkspace(menuId: String) async throws -> MenuWorkspacePayload {
@@ -742,6 +775,61 @@ final class AppModel {
     }
   }
 
+  func withInstalledEditorSession<Result>(
+    _ session: MenuEditorSession,
+    perform operation: (AppModel) throws -> Result
+  ) rethrows -> Result {
+    let snapshot = captureInstalledEditorSessionState()
+    installEditorSession(session)
+    defer {
+      syncInstalledEditorSession(into: session)
+      restoreInstalledEditorSessionState(snapshot)
+    }
+    return try operation(self)
+  }
+
+  func withInstalledEditorSession<Result>(
+    _ session: MenuEditorSession,
+    perform operation: @escaping @MainActor (AppModel) async throws -> Result
+  ) async rethrows -> Result {
+    let snapshot = captureInstalledEditorSessionState()
+    installEditorSession(session)
+    defer {
+      syncInstalledEditorSession(into: session)
+      restoreInstalledEditorSessionState(snapshot)
+    }
+    return try await operation(self)
+  }
+
+  func executeFeaturedAction(
+    action: String,
+    restaurantId: String,
+    currentToolsMenus: [String: MenuWorkspacePayload],
+    itemId: String? = nil,
+    slotId: String? = nil,
+    note: String? = nil,
+    direction: Int? = nil
+  ) async throws {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    let canEditFeatured = currentToolsMenus.values.contains {
+      $0.restaurant?.id == restaurantId && ($0.workspace.capabilities.canManageRestaurantSpecials || $0.workspace.permissions.canEditRestaurantSpecials)
+    }
+    guard canEditFeatured else {
+      throw FeatureSessionOperationError.featuredUnavailable
+    }
+    try await services.featuredTools.mutate(
+      action: action,
+      restaurantId: restaurantId,
+      itemId: itemId,
+      slotId: slotId,
+      note: note,
+      direction: direction,
+      accessToken: accessToken
+    )
+  }
+
   func saveFeaturedAction(action: String, restaurantId: String, itemId: String? = nil, slotId: String? = nil, note: String? = nil, direction: Int? = nil) async {
     guard let accessToken = authSession?.accessToken else { return }
     let canEditFeatured = currentToolsMenus.values.contains {
@@ -806,6 +894,76 @@ final class AppModel {
   private func persistSession(_ session: AuthSession) throws {
     authSession = session
     try sessionStore.saveSession(session)
+  }
+
+  private func captureInstalledEditorSessionState() -> InstalledEditorSessionState {
+    InstalledEditorSessionState(
+      isWorking: isWorking,
+      notice: notice,
+      currentPublicMenu: currentPublicMenu,
+      currentEditorWorkspace: currentEditorWorkspace,
+      currentEditorHistory: currentEditorHistory,
+      currentEditorDocument: currentEditorDocument,
+      currentEditorPreview: currentEditorPreview,
+      currentMenuId: currentMenuId,
+      selectedPreviewChangeIDs: selectedPreviewChangeIDs,
+      editorRefreshRequirement: editorRefreshRequirement,
+      editorHasServerUnsentChanges: editorHasServerUnsentChanges,
+      editorDirty: editorDirty,
+      editorHasLiveChanges: editorHasLiveChanges
+    )
+  }
+
+  private func installEditorSession(_ session: MenuEditorSession) {
+    isWorking = session.isWorking
+    notice = session.notice
+    currentPublicMenu = nil
+    currentEditorWorkspace = session.workspace
+    currentEditorHistory = session.history
+    currentEditorDocument = session.document
+    currentEditorPreview = session.preview
+    currentMenuId = session.menu.id
+    selectedPreviewChangeIDs = session.selectedPreviewChangeIDs
+    editorRefreshRequirement = session.refreshRequirement
+    editorHasServerUnsentChanges = session.hasServerUnsentChanges
+    editorDirty = session.hasLocalDraftChanges
+    editorHasLiveChanges = session.hasLiveMenuChanges
+  }
+
+  private func syncInstalledEditorSession(into session: MenuEditorSession) {
+    session.isWorking = isWorking
+    session.notice = notice
+    session.workspace = currentEditorWorkspace
+    session.history = currentEditorHistory
+    session.document = currentEditorDocument
+    session.preview = currentEditorPreview
+    session.selectedPreviewChangeIDs = selectedPreviewChangeIDs
+    session.refreshRequirement = editorRefreshRequirement
+    session.hasLocalDraftChanges = editorDirty
+    session.hasLiveMenuChanges = editorHasLiveChanges
+    session.hasServerUnsentChanges = editorHasServerUnsentChanges
+    session.canEditCategories = canEditCategories
+    session.canDiscardLocalDraft = canDiscardLocalDraft
+    session.canSaveQuietlyRemotely = canSaveQuietlyRemotely
+    session.canLoadPublishPreview = canLoadPublishPreview
+    session.canPublishRemotely = canPublishRemotely
+    session.menuStatusLabel = menuStatusLabel
+  }
+
+  private func restoreInstalledEditorSessionState(_ state: InstalledEditorSessionState) {
+    isWorking = state.isWorking
+    notice = state.notice
+    currentPublicMenu = state.currentPublicMenu
+    currentEditorWorkspace = state.currentEditorWorkspace
+    currentEditorHistory = state.currentEditorHistory
+    currentEditorDocument = state.currentEditorDocument
+    currentEditorPreview = state.currentEditorPreview
+    currentMenuId = state.currentMenuId
+    selectedPreviewChangeIDs = state.selectedPreviewChangeIDs
+    editorRefreshRequirement = state.editorRefreshRequirement
+    editorHasServerUnsentChanges = state.editorHasServerUnsentChanges
+    editorDirty = state.editorDirty
+    editorHasLiveChanges = state.editorHasLiveChanges
   }
 
   private func mutateEditorDocument(_ change: (inout EditableMenuDocument) -> Void) {
@@ -1252,6 +1410,33 @@ final class AppModel {
       notice = AppNotice(tone: .danger, title: label, message: error.localizedDescription)
     }
   }
+}
+
+private enum FeatureSessionOperationError: LocalizedError {
+  case featuredUnavailable
+
+  var errorDescription: String? {
+    switch self {
+    case .featuredUnavailable:
+      return "Featured tools are not enabled for this staff session."
+    }
+  }
+}
+
+private struct InstalledEditorSessionState {
+  var isWorking: Bool
+  var notice: AppNotice?
+  var currentPublicMenu: PublicMenuPayload?
+  var currentEditorWorkspace: MenuWorkspacePayload?
+  var currentEditorHistory: HistoryPayload?
+  var currentEditorDocument: EditableMenuDocument?
+  var currentEditorPreview: MenuPreviewPayload?
+  var currentMenuId: String?
+  var selectedPreviewChangeIDs: Set<String>
+  var editorRefreshRequirement: EditorRefreshRequirement?
+  var editorHasServerUnsentChanges: Bool
+  var editorDirty: Bool
+  var editorHasLiveChanges: Bool
 }
 
 private struct ItemDocumentState: Equatable {

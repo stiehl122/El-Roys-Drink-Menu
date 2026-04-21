@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 @MainActor
@@ -14,6 +15,15 @@ final class MenuEditorSession {
   var preview: MenuPreviewPayload?
   var refreshRequirement: EditorRefreshRequirement?
   var selectedPreviewChangeIDs: Set<String> = []
+  var hasLocalDraftChanges = false
+  var hasLiveMenuChanges = false
+  var hasServerUnsentChanges = false
+  var canEditCategories = false
+  var canDiscardLocalDraft = false
+  var canSaveQuietlyRemotely = false
+  var canLoadPublishPreview = false
+  var canPublishRemotely = false
+  var menuStatusLabel = "Live"
 
   init(menu: MenuRecord, appModel: AppModel) {
     self.menu = menu
@@ -23,22 +33,138 @@ final class MenuEditorSession {
   func load() async {
     isWorking = true
     defer { isWorking = false }
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.loadEditor(menuId: self.menu.id)
+    }
+  }
 
-    do {
-      let loadedWorkspace = try await appModel.loadWorkspace(menuId: menu.id)
-      let loadedHistory = try? await appModel.loadHistory(menuId: menu.id)
-      workspace = loadedWorkspace
-      history = loadedHistory
-      document = EditableMenuDocument(workspace: loadedWorkspace)
-      preview = nil
-      refreshRequirement = nil
-      selectedPreviewChangeIDs = []
-    } catch {
-      notice = FeatureNotice(
-        tone: .danger,
-        title: "Load Failed",
-        message: error.localizedDescription
-      )
+  func monitorRemoteChanges() async {
+    while !Task.isCancelled {
+      do {
+        try await Task.sleep(for: .seconds(12))
+      } catch {
+        return
+      }
+      if Task.isCancelled {
+        return
+      }
+      await checkForRemoteUpdate()
+    }
+  }
+
+  func checkForRemoteUpdate(force: Bool = false) async {
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.checkForRemoteMenuUpdate(menuId: self.menu.id, force: force)
+    }
+  }
+
+  func clearNotice() {
+    notice = nil
+  }
+
+  func discardLocalDraft() {
+    appModel.withInstalledEditorSession(self) { model in
+      model.discardLocalDraft()
+    }
+  }
+
+  func saveLiveMenu() async {
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.saveLiveMenu()
+    }
+  }
+
+  func loadPublishPreview() async {
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.loadPublishPreview()
+    }
+  }
+
+  func publishSelectedChanges() async {
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.publishSelectedChanges()
+    }
+  }
+
+  func refreshAfterRemoteUpdate(strategy: EditorRefreshStrategy) async {
+    await appModel.withInstalledEditorSession(self) { model in
+      await model.refreshEditorAfterRemoteUpdate(strategy: strategy)
+    }
+  }
+
+  func addCategory(label: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.addCategory(label: label)
+    }
+  }
+
+  func renameCategory(key: String, label: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.renameCategory(key: key, label: label)
+    }
+  }
+
+  func deleteCategory(key: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.deleteCategory(key: key)
+    }
+  }
+
+  func moveVisibleCategories(from source: IndexSet, to destination: Int) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.moveVisibleCategories(from: source, to: destination)
+    }
+  }
+
+  func moveItemToOffMenu(_ item: MenuItemPayload, from categoryKey: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.moveItemToOffMenu(item, from: categoryKey)
+    }
+  }
+
+  func restoreItemFromOffMenu(itemID: String, to categoryKey: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.restoreItemFromOffMenu(itemID: itemID, to: categoryKey)
+    }
+  }
+
+  func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.moveVisibleItems(in: categoryKey, from: source, to: destination)
+    }
+  }
+
+  func deleteItem(itemID: String, categoryKey: String) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.deleteItem(itemID: itemID, categoryKey: categoryKey)
+    }
+  }
+
+  func upsertItem(_ item: MenuItemPayload, categoryKey: String, originalCategoryKey: String?) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.upsertItem(item, categoryKey: categoryKey, originalCategoryKey: originalCategoryKey)
+    }
+  }
+
+  func setItemEightySixed(itemID: String, categoryKey: String, isEightySixed: Bool) {
+    appModel.withInstalledEditorSession(self) { model in
+      model.setItemEightySixed(itemID: itemID, categoryKey: categoryKey, isEightySixed: isEightySixed)
+    }
+  }
+
+  func canUseItemName(_ name: String, in categoryKey: String, excluding itemID: String? = nil) -> Bool {
+    !(document?.hasDuplicate(named: name, in: categoryKey, excluding: itemID) ?? false)
+  }
+
+  func lookupBarcode(_ barcode: String) async throws -> ProductLookupResult {
+    try await appModel.lookupBarcode(barcode)
+  }
+
+  func updatePreviewSelection(_ id: String, selected: Bool) {
+    if selected {
+      selectedPreviewChangeIDs.insert(id)
+    } else {
+      selectedPreviewChangeIDs.remove(id)
     }
   }
 }

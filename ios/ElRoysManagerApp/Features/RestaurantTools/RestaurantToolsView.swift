@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct RestaurantToolsScreen: View {
-  @Bindable var model: AppModel
-  let restaurant: RestaurantRecord
+  @Bindable var session: RestaurantToolsSession
   @State private var selectedType = "drinks"
   @State private var showingCatalog = false
   @State private var noteEditingSlot: FeaturedSlot?
@@ -14,7 +13,7 @@ struct RestaurantToolsScreen: View {
         headerCard
           .appEntryReveal()
 
-        if let notice = model.notice {
+        if let notice = session.notice {
           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
             .appEntryReveal(delay: 0.05)
         }
@@ -38,10 +37,10 @@ struct RestaurantToolsScreen: View {
       .padding(.top, 24)
       .padding(.bottom, 24)
     }
-    .navigationTitle(restaurant.name)
+    .navigationTitle(session.restaurant.name)
     .navigationBarTitleDisplayMode(.inline)
-    .task {
-      await model.loadRestaurantTools(for: restaurant.id)
+    .task(id: session.restaurant.id) {
+      await session.load()
     }
     .sheet(isPresented: $showingCatalog) {
       FeaturedCatalogSheet(
@@ -49,7 +48,7 @@ struct RestaurantToolsScreen: View {
         accent: accent,
         onSelect: { item in
           Task {
-            await model.saveFeaturedAction(action: "add", restaurantId: restaurant.id, itemId: item.id)
+            await session.saveFeaturedAction(action: "add", itemId: item.id)
             showingCatalog = false
           }
         }
@@ -62,7 +61,7 @@ struct RestaurantToolsScreen: View {
       TextField("Sell note", text: $noteText)
       Button("Save") {
         if let slot = noteEditingSlot {
-          Task { await model.saveFeaturedAction(action: "note", restaurantId: restaurant.id, slotId: slot.id, note: noteText) }
+          Task { await session.saveFeaturedAction(action: "note", slotId: slot.id, note: noteText) }
         }
       }
       Button("Cancel", role: .cancel) {}
@@ -92,7 +91,7 @@ struct RestaurantToolsScreen: View {
         title: { $0.capitalized }
       )
 
-      if let menu = model.menu(for: restaurant.id, type: selectedType) {
+      if let menu = session.menu(for: selectedType) {
         NavigationLink(value: AppDestination.categoryTools(menu)) {
           AppIslandButtonLabel(
             title: "Manage Categories",
@@ -158,17 +157,17 @@ struct RestaurantToolsScreen: View {
               slot: slot,
               accent: accent,
               onMoveUp: {
-                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: -1) }
+                Task { await session.saveFeaturedAction(action: "move", slotId: slot.id, direction: -1) }
               },
               onMoveDown: {
-                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: 1) }
+                Task { await session.saveFeaturedAction(action: "move", slotId: slot.id, direction: 1) }
               },
               onEditNote: {
                 noteEditingSlot = slot
                 noteText = slot.sellNote
               },
               onRemove: {
-                Task { await model.saveFeaturedAction(action: "remove", restaurantId: restaurant.id, slotId: slot.id) }
+                Task { await session.saveFeaturedAction(action: "remove", slotId: slot.id) }
               }
             )
           }
@@ -182,7 +181,7 @@ struct RestaurantToolsScreen: View {
         systemImage: "checkmark",
         accent: accent,
         action: {
-          Task { await model.saveFeaturedAction(action: "confirm", restaurantId: restaurant.id) }
+          Task { await session.saveFeaturedAction(action: "confirm") }
         }
       )
     }
@@ -234,17 +233,11 @@ struct RestaurantToolsScreen: View {
   }
 
   private var currentWorkspace: MenuWorkspacePayload? {
-    if let menu = model.menu(for: restaurant.id, type: selectedType) {
-      return model.currentToolsMenus[menu.id]
-    }
-    return nil
+    session.workspace(for: selectedType)
   }
 
   private var currentHistory: HistoryPayload? {
-    if let menu = model.menu(for: restaurant.id, type: selectedType) {
-      return model.currentToolsHistories[menu.id]
-    }
-    return nil
+    session.history(for: selectedType)
   }
 }
 

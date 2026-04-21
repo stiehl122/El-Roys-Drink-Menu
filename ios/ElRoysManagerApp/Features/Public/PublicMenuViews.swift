@@ -1,28 +1,37 @@
 import SwiftUI
 
 struct PublicMenuScreen: View {
-  @Bindable var model: AppModel
   let restaurant: RestaurantRecord
+  let menuForType: (String) -> MenuRecord?
+  let sessionForMenu: (MenuRecord) -> PublicMenuSession
   @State private var selectedType: String
 
-  init(model: AppModel, restaurant: RestaurantRecord, initialType: String = "drinks") {
-    self.model = model
+  init(
+    restaurant: RestaurantRecord,
+    initialType: String = "drinks",
+    menuForType: @escaping (String) -> MenuRecord?,
+    sessionForMenu: @escaping (MenuRecord) -> PublicMenuSession
+  ) {
     self.restaurant = restaurant
+    self.menuForType = menuForType
+    self.sessionForMenu = sessionForMenu
     _selectedType = State(initialValue: initialType)
   }
 
   var body: some View {
+    let session = selectedSession
+
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 22) {
         heroCard
           .appEntryReveal()
 
-        if let notice = model.notice {
+        if let notice = session?.notice {
           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
             .appEntryReveal(delay: 0.05)
         }
 
-        if let payload = model.currentPublicMenu {
+        if let payload = session?.payload {
           summaryStrip(payload: payload)
             .appEntryReveal(delay: 0.08)
 
@@ -48,8 +57,9 @@ struct PublicMenuScreen: View {
     }
     .navigationTitle(restaurant.name)
     .navigationBarTitleDisplayMode(.inline)
-    .task(id: selectedType) {
-      await reload()
+    .task(id: session?.menu.id) {
+      guard let session else { return }
+      await session.load()
     }
   }
 
@@ -118,13 +128,11 @@ struct PublicMenuScreen: View {
   }
 
   private var selectedMenu: MenuRecord? {
-    model.menu(for: restaurant.id, type: selectedType)
+    menuForType(selectedType)
   }
 
-  private func reload() async {
-    if let menu = selectedMenu {
-      await model.loadPublicMenu(menuId: menu.id)
-    }
+  private var selectedSession: PublicMenuSession? {
+    selectedMenu.map(sessionForMenu)
   }
 }
 

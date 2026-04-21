@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class RouteStateIsolationTests: XCTestCase {
-  func testEditorAndPublicSessionsDoNotOverwriteEachOther() async throws {
+  func testEditorAndPublicSessionsDoNotOverwriteEachOtherOrLeaveGlobalRouteStateInstalled() async throws {
     let services = routeStateMakeServices(
       workspaceClient: RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
       publicMenuClient: RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
@@ -17,8 +17,8 @@ final class RouteStateIsolationTests: XCTestCase {
     )
     appModel.authSession = routeStateMakeAuthSession()
 
-    let editorSession = MenuEditorSession(menu: routeStateMakeMenuRecord(id: "menu-drinks", type: "drinks"), appModel: appModel)
-    let publicSession = PublicMenuSession(menu: routeStateMakeMenuRecord(id: "menu-food", type: "food"), appModel: appModel)
+    let editorSession = appModel.editorSession(for: routeStateMakeMenuRecord(id: "menu-drinks", type: "drinks"))
+    let publicSession = appModel.publicMenuSession(for: routeStateMakeMenuRecord(id: "menu-food", type: "food"))
 
     await editorSession.load()
     await publicSession.load()
@@ -27,25 +27,42 @@ final class RouteStateIsolationTests: XCTestCase {
     XCTAssertEqual(editorSession.document?.menuId, "menu-drinks")
     XCTAssertEqual(publicSession.menu.id, "menu-food")
     XCTAssertEqual(publicSession.payload?.context.menu?.id, "menu-food")
+    XCTAssertNil(appModel.currentEditorDocument)
+    XCTAssertNil(appModel.currentPublicMenu)
+    XCTAssertNil(appModel.currentMenuId)
   }
 
-  func testRestaurantToolsSessionKeepsItsOwnNoticeAndLoadingState() async throws {
+  func testRestaurantToolsSessionLoadDoesNotWriteGlobalRestaurantToolsState() async throws {
     let services = routeStateMakeServices()
     let appModel = AppModel(
       services: services,
       sessionStore: RouteStateTestSessionStore(),
       offlineDraftStore: RouteStateTestOfflineDraftStore()
     )
+    appModel.authSession = routeStateMakeAuthSession()
+    appModel.bootstrap = try await services.bootstrap.fetch(accessToken: nil)
 
-    let restaurant = routeStateMakeRestaurantRecord(id: "rest-1", slug: "leroys-lounge")
-    let session = RestaurantToolsSession(restaurant: restaurant, appModel: appModel)
+    let restaurant = routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+    let session = appModel.restaurantToolsSession(for: restaurant)
 
-    session.notice = FeatureNotice.success("Saved", "Featured lineup updated.")
-    session.isWorking = true
+    await session.load()
 
-    XCTAssertEqual(session.notice?.title, "Saved")
-    XCTAssertTrue(session.isWorking)
+    XCTAssertFalse(session.toolsMenus.isEmpty)
+    XCTAssertTrue(appModel.currentToolsMenus.isEmpty)
+    XCTAssertTrue(appModel.currentToolsHistories.isEmpty)
     XCTAssertNil(appModel.notice)
     XCTAssertFalse(appModel.isWorking)
+  }
+
+  func testEditorSessionFactoryReusesSessionForSharedMenuRoutes() {
+    let appModel = AppModel(
+      services: routeStateMakeServices(),
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+
+    let menu = routeStateMakeMenuRecord(id: "menu-drinks", type: "drinks")
+
+    XCTAssertTrue(appModel.editorSession(for: menu) === appModel.editorSession(for: menu))
   }
 }
