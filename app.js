@@ -165,6 +165,17 @@ const LANDING_FILTER_STORAGE_KEY = 'hf_landing_admin_filters';
 const LANDING_MODEL = globalThis.__HF_LANDING_MODULES__.createLandingModel({
   domainConstants: DOMAIN_CONSTANTS,
 });
+const LANDING_STORE = globalThis.__HF_LANDING_MODULES__.createLandingStore({
+  model: LANDING_MODEL,
+  defaultActivePanel: 'landing-admin-panel-overview',
+  defaultFilters: getLandingDefaultFilters(),
+});
+const LANDING_DATA_SERVICE = globalThis.__HF_LANDING_MODULES__.createLandingDataService({
+  model: LANDING_MODEL,
+  store: LANDING_STORE,
+  fetchRecord: fetchLandingPageRecordThroughApi,
+  upsertRecord: upsertLandingPageRecordThroughApi,
+});
 
 function buildFallbackDomainConstants() {
   const restaurants = {
@@ -208,6 +219,17 @@ function buildFallbackDomainConstants() {
       admin: '/admin',
     },
   };
+}
+
+function syncLandingLegacyStateFromStore() {
+  _landingPageState = LANDING_STORE.getRecord();
+  _landingPageDirty = LANDING_STORE.isDirty();
+  _landingPageLoadPromise = LANDING_STORE.getLoadPromise();
+  _landingPageLoadError = LANDING_STORE.getLoadError();
+  _activeLandingAdminPanel = LANDING_STORE.getActivePanel();
+  _landingAdminFilters = LANDING_STORE.getFilters();
+  _landingReviewCarouselIndex = LANDING_STORE.getReviewCarouselIndex();
+  return _landingPageState;
 }
 
 function colorAt(palette, index) {
@@ -550,10 +572,11 @@ function buildLandingWeekRows(section = {}, restaurantId = '', todayKey = 'mon')
 function loadLandingFilters() {
   if (_landingAdminFilters) return _landingAdminFilters;
   try {
-    _landingAdminFilters = normalizeLandingFilters(JSON.parse(sessionStorage.getItem(LANDING_FILTER_STORAGE_KEY) || '{}'));
+    LANDING_STORE.setFilters(normalizeLandingFilters(JSON.parse(sessionStorage.getItem(LANDING_FILTER_STORAGE_KEY) || '{}')));
   } catch (_) {
-    _landingAdminFilters = getLandingDefaultFilters();
+    LANDING_STORE.setFilters(getLandingDefaultFilters());
   }
+  syncLandingLegacyStateFromStore();
   return _landingAdminFilters;
 }
 function getLandingSectionFilter(sectionId = '') {
@@ -569,6 +592,8 @@ function setLandingSectionFilter(sectionId = '', key = '', value = false) {
   const filters = loadLandingFilters();
   if (!filters[sectionId]) filters[sectionId] = { showArchived: false };
   filters[sectionId][key] = !!value;
+  LANDING_STORE.setFilters(filters);
+  syncLandingLegacyStateFromStore();
   saveLandingFilters();
 }
 function validateLandingEventItem(item = {}) {
@@ -3906,9 +3931,11 @@ function hasLandingAdminShell() {
 }
 
 function setLandingPageState(record, options = {}) {
-  _landingPageState = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  if (typeof options.dirty === 'boolean') _landingPageDirty = options.dirty;
-  return _landingPageState;
+  LANDING_STORE.setRecord(record || createDefaultLandingPageRecord(), {
+    dirty: typeof options.dirty === 'boolean' ? options.dirty : undefined,
+    loaded: true,
+  });
+  return syncLandingLegacyStateFromStore();
 }
 
 function landingSectionHasDiff(sectionId, record = _landingPageState) {
@@ -3920,11 +3947,12 @@ function getLandingDraftDiffSectionIds(record = _landingPageState) {
 }
 
 function syncLandingDirtyFlag(value = false) {
-  _landingPageDirty = !!value;
+  LANDING_STORE.setDirty(value);
+  syncLandingLegacyStateFromStore();
   return _landingPageDirty;
 }
 
-async function fetchLandingPageRecordFromSupabase(options = {}) {
+async function fetchLandingPageRecordThroughApi(options = {}) {
   const includeDraft = options.includeDraft === true;
   const payload = await readApiJsonOrNull(getLandingPageEndpoint(includeDraft), {
     headers: includeDraft ? getAuthorizedApiHeaders() : {},
@@ -3934,27 +3962,20 @@ async function fetchLandingPageRecordFromSupabase(options = {}) {
 }
 
 async function ensureLandingPageStateLoaded(options = {}) {
-  const { force = false, includeDraft = hasLandingAdminShell() } = options;
-  if (_landingPageState && !force) return _landingPageState;
-  if (_landingPageLoadPromise && !force) return _landingPageLoadPromise;
-  _landingPageLoadPromise = (async () => {
-    try {
-      const record = await fetchLandingPageRecordFromSupabase({ includeDraft });
-      _landingPageLoadError = '';
-      setLandingPageState(record, { dirty: false });
-      syncLandingDirtyFlag(false);
-      return _landingPageState;
-    } catch (error) {
-      _landingPageLoadError = error?.message || 'Landing page state could not be loaded.';
-      throw error;
-    } finally {
-      _landingPageLoadPromise = null;
-    }
-  })();
-  return _landingPageLoadPromise;
+  try {
+    const loaded = await LANDING_DATA_SERVICE.ensureLoaded({
+      ...options,
+      includeDraft: options.includeDraft ?? hasLandingAdminShell(),
+    });
+    syncLandingLegacyStateFromStore();
+    return loaded;
+  } catch (error) {
+    syncLandingLegacyStateFromStore();
+    throw error;
+  }
 }
 
-async function upsertLandingPageRecord(payload = {}, action = 'save_landing_page_draft') {
+async function upsertLandingPageRecordThroughApi(payload = {}, action = 'save_landing_page_draft') {
   if (!currentUser?.accessToken) throw new Error('Sign in as an admin to edit the landing page.');
   const result = await postApiJson('/api/admin', {
     action,
@@ -4584,12 +4605,14 @@ function renderLandingRootReviews(section = {}) {
     listEl.innerHTML = '';
     emptyEl.hidden = true;
     controlsEl.hidden = true;
-    _landingReviewCarouselIndex = 0;
+    LANDING_STORE.setReviewCarouselIndex(0);
+    syncLandingLegacyStateFromStore();
     return;
   }
   emptyEl.hidden = true;
   controlsEl.hidden = pairs.length <= 1;
-  _landingReviewCarouselIndex = Math.max(0, Math.min(_landingReviewCarouselIndex, pairs.length - 1));
+  LANDING_STORE.setReviewCarouselIndex(Math.max(0, Math.min(_landingReviewCarouselIndex, pairs.length - 1)));
+  syncLandingLegacyStateFromStore();
   listEl.innerHTML = pairs.map((pair, index) => `
     <article class="landing-review-pair ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" data-landing-review-pair="${index}">
       <article class="landing-review-card landing-review-card--leroys">
@@ -4613,7 +4636,8 @@ function renderLandingRootReviews(section = {}) {
 function setLandingReviewCarouselIndex(nextIndex = 0) {
   const pairEls = Array.from(document.querySelectorAll('[data-landing-review-pair]'));
   if (!pairEls.length) return;
-  _landingReviewCarouselIndex = Math.max(0, Math.min(Number(nextIndex) || 0, pairEls.length - 1));
+  LANDING_STORE.setReviewCarouselIndex(Math.max(0, Math.min(Number(nextIndex) || 0, pairEls.length - 1)));
+  syncLandingLegacyStateFromStore();
   pairEls.forEach((pairEl, index) => {
     pairEl.classList.toggle('is-active', index === _landingReviewCarouselIndex);
   });
@@ -4691,7 +4715,8 @@ async function initLandingRootPage() {
 }
 
 function focusLandingAdminPanel(panelId = 'landing-admin-panel-overview', trigger = null) {
-  _activeLandingAdminPanel = panelId || _activeLandingAdminPanel;
+  LANDING_STORE.setActivePanel(panelId || _activeLandingAdminPanel);
+  syncLandingLegacyStateFromStore();
   document.querySelectorAll('.landing-admin-panel').forEach(panel => {
     panel.classList.toggle('is-active', panel.id === _activeLandingAdminPanel);
   });
@@ -4718,7 +4743,7 @@ function setLandingHoursField(restaurantId, dayKey, field, value) {
     if (targetDay[field]) targetDay.closed = false;
   }
   record.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeLandingDay(targetDay);
-  _landingPageDirty = true;
+  syncLandingDirtyFlag(true);
   if (field === 'closed') {
     renderLandingAdminWorkspace();
     return;
@@ -4730,7 +4755,7 @@ function updateLandingDraftRecord(mutator = () => {}, options = {}) {
   const { rerender = true } = options;
   const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: true });
   mutator(record);
-  _landingPageDirty = true;
+  syncLandingDirtyFlag(true);
   if (rerender) renderLandingAdminWorkspace();
   return record;
 }
@@ -4981,14 +5006,8 @@ async function saveLandingPageDraft() {
   try {
     const record = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
     const timestamp = Date.now();
-    const nextRecord = await upsertLandingPageRecord({
-      draft_content: record.draftContent,
-      live_content: record.liveContent,
-      draft_saved_ts: timestamp,
-      live_published_ts: record.livePublishedTs ? Number(record.livePublishedTs) : null,
-    }, 'save_landing_page_draft');
-    setLandingPageState(nextRecord, { dirty: false });
-    syncLandingDirtyFlag(false);
+    await LANDING_DATA_SERVICE.saveDraft(record, timestamp);
+    syncLandingLegacyStateFromStore();
     renderLandingAdminWorkspace();
     showToast('✅ Landing page draft saved.', 'success');
   } catch (error) {
@@ -5064,20 +5083,9 @@ async function publishLandingPageSections() {
       showToast(`⚠️ Fix ${blockedSection.label.toLowerCase()} before publishing it live.`, 'error');
       return;
     }
-    const nextLiveRecord = applyLandingSectionPublish(currentRecord, selectedSectionIds);
     const timestamp = Date.now();
-    const persistedRecord = await upsertLandingPageRecord({
-      draft_content: currentRecord.draftContent,
-      live_content: nextLiveRecord.liveContent,
-      draft_saved_ts: currentRecord.draftSavedTs ? Number(currentRecord.draftSavedTs) : null,
-      live_published_ts: timestamp,
-    }, 'publish_landing_sections');
-    setLandingPageState({
-      ...persistedRecord,
-      liveContent: nextLiveRecord.liveContent,
-      livePublishedTs: String(timestamp),
-    }, { dirty: false });
-    syncLandingDirtyFlag(false);
+    await LANDING_DATA_SERVICE.publishSections(currentRecord, selectedSectionIds, timestamp);
+    syncLandingLegacyStateFromStore();
     renderLandingAdminWorkspace();
     if (hasLandingRootShell()) renderLandingRootPage(_landingPageState);
     closeLandingPublishModal();
