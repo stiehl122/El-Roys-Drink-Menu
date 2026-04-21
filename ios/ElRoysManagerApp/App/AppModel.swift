@@ -295,7 +295,9 @@ final class AppModel {
     guard bootstrap?.menus.contains(where: { $0.id == menuId }) == true else { return }
     currentMenuId = menuId
     await run("Loading Public Menu") { model in
-      model.currentPublicMenu = try await model.services.publicMenu.fetch(menuId: menuId, accessToken: model.authSession?.accessToken)
+      let payload = try await model.services.publicMenu.fetch(menuId: menuId, accessToken: model.authSession?.accessToken)
+      guard model.currentMenuId == menuId else { return }
+      model.currentPublicMenu = payload
     }
   }
 
@@ -411,10 +413,16 @@ final class AppModel {
           }
         }
       }
-      model.currentToolsMenus = menus
-      model.currentToolsHistories = histories
+      for (menuId, workspace) in menus {
+        model.currentToolsMenus[menuId] = workspace
+      }
+      for (menuId, history) in histories {
+        model.currentToolsHistories[menuId] = history
+      }
       model.homeDataVersion += 1
-      model.currentMenuId = menuIds.first
+      if model.currentMenuId == nil || !menuIds.contains(model.currentMenuId ?? "") {
+        model.currentMenuId = menuIds.first
+      }
     }
   }
 
@@ -603,6 +611,11 @@ final class AppModel {
 
   func restoreItemFromOffMenu(itemID: String, to categoryKey: String) {
     mutateEditorDocument { $0.restoreItemFromOffMenu(itemID: itemID, to: categoryKey) }
+  }
+
+  func moveVisibleCategories(from source: IndexSet, to destination: Int) {
+    guard canEditCategories else { return }
+    mutateEditorDocument { $0.moveVisibleCategories(from: source, to: destination) }
   }
 
   func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int) {
@@ -1180,8 +1193,13 @@ final class AppModel {
   }
 
   private func updateEditorStateFlags(for document: EditableMenuDocument) {
-    editorDirty = isDocumentDirty(document)
-    editorHasLiveChanges = isDocumentDifferentFromLive(document)
+    guard let currentData = try? documentData(for: document) else {
+      editorDirty = true
+      editorHasLiveChanges = true
+      return
+    }
+    editorDirty = draftBaselineDocumentData.map { currentData != $0 } ?? true
+    editorHasLiveChanges = liveBaselineDocumentData.map { currentData != $0 } ?? true
   }
 
   private func run(_ label: String, operation: @escaping @MainActor (AppModel) async throws -> Void) async {

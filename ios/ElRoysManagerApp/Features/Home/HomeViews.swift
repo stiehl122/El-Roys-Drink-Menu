@@ -59,7 +59,7 @@ struct RestaurantChooserView: View {
             theme: theme,
             namespace: switcherNamespace,
             onSelect: { slug in
-              withAnimation(.easeInOut(duration: 0.35)) {
+              withAnimation(AppMotion.settle) {
                 selectedRestaurantSlug = slug
                 expandedUpdateID = nil
               }
@@ -125,7 +125,6 @@ struct RestaurantChooserView: View {
     .navigationTitle("Home")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar(.hidden, for: .navigationBar)
-    .animation(.easeInOut(duration: 0.30), value: selectedRestaurantSlug)
     .task(id: selectedRestaurantSlug) {
       guard let restaurant = selectedRestaurant else { return }
       await model.loadRestaurantTools(for: restaurant.id)
@@ -400,7 +399,7 @@ private struct PulsingDot: View {
       if reduceMotion || scenePhase != .active {
         dot(phase: 0.5)
       } else {
-        TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { context in
+        TimelineView(.periodic(from: .now, by: 1.0 / 6.0)) { context in
           let t = context.date.timeIntervalSinceReferenceDate
           dot(phase: (sin(t * 2.6) + 1) / 2)
         }
@@ -434,7 +433,7 @@ private struct HomeRestaurantSwitcher: View {
 
   var body: some View {
     HStack(spacing: 0) {
-      ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
+      ForEach(options) { option in
         let isSelected = option.slug == selectedSlug
         Button {
           onSelect(option.slug)
@@ -468,7 +467,7 @@ private struct HomeRestaurantSwitcher: View {
         }
         .buttonStyle(.plain)
 
-        if index < options.count - 1 {
+        if option.id != options.last?.id {
           Rectangle()
             .fill(theme.accent.opacity(0.35))
             .frame(width: 0.6, height: 36)
@@ -526,7 +525,7 @@ private struct HomeRecentUpdatesCard: View {
               isExpanded: expandedUpdateID == update.id,
               theme: theme,
               onToggle: {
-                withAnimation(.easeInOut(duration: 0.22)) {
+                withAnimation(AppMotion.snap) {
                   expandedUpdateID = expandedUpdateID == update.id ? nil : update.id
                 }
               }
@@ -1050,7 +1049,7 @@ private struct HomeMedallionBorder: View {
       if reduceMotion || scenePhase != .active {
         medallion(at: .degrees(0))
       } else {
-        TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { context in
+        TimelineView(.periodic(from: .now, by: 1.0 / 6.0)) { context in
           let t = context.date.timeIntervalSinceReferenceDate
           let angle = Angle.degrees(t.truncatingRemainder(dividingBy: 12) / 12 * 360)
           medallion(at: angle)
@@ -1124,17 +1123,17 @@ private struct HomeBackground: View {
 
   @ViewBuilder
   private var motifCornerEmblem: some View {
-    GeometryReader { proxy in
-      switch theme.motif {
-      case .chevron:
-        DecoFan(color: theme.patternInk.opacity(0.35), rayCount: 13, radius: 210)
-          .frame(width: 210, height: 210)
-          .position(x: proxy.size.width - 60, y: 60)
-      case .diamond:
-        SunburstRays(color: theme.patternInk.opacity(0.55), rayCount: 30, innerRadius: 22, outerRadius: 220)
-          .frame(width: 220, height: 220)
-          .position(x: proxy.size.width - 40, y: 40)
-      }
+    switch theme.motif {
+    case .chevron:
+      DecoFan(color: theme.patternInk.opacity(0.35), rayCount: 13, radius: 210)
+        .frame(width: 210, height: 210)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .offset(x: 45, y: -45)
+    case .diamond:
+      SunburstRays(color: theme.patternInk.opacity(0.55), rayCount: 30, innerRadius: 22, outerRadius: 220)
+        .frame(width: 220, height: 220)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .offset(x: 70, y: -70)
     }
   }
 
@@ -1435,31 +1434,34 @@ private struct HomeBottomBarClusterModifier: ViewModifier {
   let theme: HomeTheme
 
   func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content
-        .glassEffect(.regular.tint(theme.bottomNavGlassTint.opacity(0.34)), in: .capsule)
-        .overlay {
+    content
+      .background {
+        ZStack {
           Capsule()
-            .stroke(theme.bottomNavSelectedBorder.opacity(0.56), lineWidth: 1)
-        }
-    } else {
-      content
-        .background(
-          LinearGradient(
-            colors: [
-              theme.bottomNavGlassTint.opacity(0.96),
-              theme.bottomNavGlassTint.opacity(0.84),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          ),
-          in: Capsule()
-        )
-        .overlay {
+            .fill(theme.bottomNavGlassTint.opacity(0.16))
+
           Capsule()
-            .stroke(theme.bottomNavSelectedBorder.opacity(0.56), lineWidth: 1)
+            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
+
+          Capsule()
+            .fill(
+              LinearGradient(
+                colors: [
+                  .white.opacity(0.82),
+                  theme.bottomNavGlassTint.opacity(0.86),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(5)
+
+          Capsule()
+            .stroke(.white.opacity(0.66), lineWidth: 0.7)
+            .padding(5)
         }
-    }
+        .shadow(color: theme.shadowTint.opacity(0.10), radius: 20, y: 12)
+      }
   }
 }
 
@@ -1467,13 +1469,31 @@ private struct HomeDetachedQRButtonModifier: ViewModifier {
   let theme: HomeTheme
 
   func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content
-        .glassEffect(.regular.tint(theme.bottomNavGlassTint.opacity(0.34)).interactive(), in: .circle)
-    } else {
-      content
-        .background(theme.bottomNavGlassTint.opacity(0.94), in: Circle())
-    }
+    content
+      .background {
+        ZStack {
+          Circle()
+            .fill(theme.bottomNavGlassTint.opacity(0.18))
+          Circle()
+            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
+          Circle()
+            .fill(
+              LinearGradient(
+                colors: [
+                  .white.opacity(0.88),
+                  theme.bottomNavGlassTint.opacity(0.92),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(5)
+          Circle()
+            .stroke(.white.opacity(0.64), lineWidth: 0.7)
+            .padding(5)
+        }
+        .shadow(color: theme.shadowTint.opacity(0.10), radius: 18, y: 10)
+      }
   }
 }
 
@@ -1482,21 +1502,41 @@ private struct HomeGlassChromeModifier: ViewModifier {
   let cornerRadius: CGFloat
 
   func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content
-        .glassEffect(.regular.tint(tint.opacity(0.20)), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay {
+    let innerRadius = max(18, cornerRadius - 7)
+
+    content
+      .background {
+        ZStack {
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(tint.opacity(0.24), lineWidth: 1)
-        }
-    } else {
-      content
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay {
+            .fill(tint.opacity(0.08))
+
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(tint.opacity(0.20), lineWidth: 1)
+            .stroke(tint.opacity(0.20), lineWidth: 0.9)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .fill(
+              LinearGradient(
+                colors: [
+                  .white.opacity(0.82),
+                  tint.opacity(0.14),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(6)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .stroke(.white.opacity(0.66), lineWidth: 0.7)
+            .padding(6)
         }
-    }
+        .shadow(color: tint.opacity(0.10), radius: 22, y: 12)
+        .shadow(color: themeShadow(tint: tint), radius: 20, y: 12)
+      }
+  }
+
+  private func themeShadow(tint: Color) -> Color {
+    tint.opacity(0.06)
   }
 }
 

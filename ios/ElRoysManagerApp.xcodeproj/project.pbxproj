@@ -20,6 +20,7 @@
 		4EF9C5DA4C838D7C2F7EDCCD /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */; };
 		504ADBCDE4287D896A097C9E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 984625EC61B70E28EBE29AA7 /* Foundation.framework */; };
 		51938CF52E3035B8FD40D98C /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FF3EEDF738DA7824619341B /* OfflineDraftStore.swift */; };
+		98B4C1D22A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */; };
 		77FA0AAB51126DD1E3349379 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */; };
 		B658E6A6DD31C472D6BDE8EA /* ElRoysManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EB2A5A1E80AEC9A6C5F892 /* ElRoysManagerApp.swift */; };
 		B74AD36AC43DEA6771F8A50B /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4960978B1EB557BC4FD6A6DC /* BarcodeScannerView.swift */; };
@@ -62,6 +63,7 @@
 		8EA9EC632EBEE43B8E14234E /* ElRoysManagerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ElRoysManagerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		95254918D5739FE7B2D38658 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		984625EC61B70E28EBE29AA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantCategoryManagementView.swift; sourceTree = "<group>"; };
 		AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
 		BACAEC402B9AB79F23A25C53 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
@@ -111,6 +113,7 @@
 			isa = PBXGroup;
 			children = (
 				E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */,
+				98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */,
 			);
 			path = Menu;
 			sourceTree = "<group>";
@@ -447,6 +450,7 @@
 				FB1FE66B120AC8EE6E3B36D4 /* AuthViews.swift in Sources */,
 				0DF17767BB6EF4F7AF0E8E4F /* HomeViews.swift in Sources */,
 				77FA0AAB51126DD1E3349379 /* MenuViews.swift in Sources */,
+				98B4C1D22A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift in Sources */,
 				4EF9C5DA4C838D7C2F7EDCCD /* RoutePreviewView.swift in Sources */,
 				075F36D0B1BF2C903520C45F /* PublicMenuViews.swift in Sources */,
 				2A514DBF47B17B337CB32D46 /* RestaurantToolsView.swift in Sources */,

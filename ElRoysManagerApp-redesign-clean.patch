@@ -1,0 +1,2165 @@
+diff --git a/ios/ElRoysManagerApp/App/ElRoysManagerApp.swift b/ios/ElRoysManagerApp/App/ElRoysManagerApp.swift
+index ad32a40..8a12d17 100644
+--- a/ios/ElRoysManagerApp/App/ElRoysManagerApp.swift
++++ b/ios/ElRoysManagerApp/App/ElRoysManagerApp.swift
+@@ -15,9 +15,7 @@ struct ElRoysManagerApp: App {
+   var body: some Scene {
+     WindowGroup {
+       RootView(model: model)
+-        .task {
+-          await model.start()
+-        }
++        .task { await model.start() }
+     }
+   }
+ }
+@@ -30,21 +28,8 @@ private struct RootView: View {
+       AppBackground()
+ 
+       if model.isLaunching {
+-        VStack(spacing: 18) {
+-          Text("El Roy's Manager")
+-            .font(.system(size: 34, weight: .bold, design: .rounded))
+-            .foregroundStyle(AppPalette.ink)
+-          Text("Native SwiftUI manager for Leroy's Lounge and El Roy's Cantina.")
+-            .font(.title3)
+-            .multilineTextAlignment(.center)
+-            .foregroundStyle(.secondary)
+-          ProgressView()
+-            .controlSize(.large)
+-          EnvironmentBadge(environment: model.environment)
+-        }
+-        .padding(28)
+-        .appGlassCard(tint: AppPalette.brand)
+-        .padding(24)
++        LaunchDeck(environment: model.environment)
++          .padding(24)
+       } else if model.isAuthenticated {
+         NavigationStack {
+           RestaurantChooserView(model: model)
+@@ -63,9 +48,61 @@ private struct RootView: View {
+               }
+             }
+         }
++        .tint(AppPalette.brand)
+       } else {
+         AuthGateView(model: model)
+       }
+     }
+   }
+ }
++
++private struct LaunchDeck: View {
++  let environment: AppEnvironment
++
++  var body: some View {
++    VStack(alignment: .leading, spacing: 22) {
++      HStack(alignment: .top) {
++        VStack(alignment: .leading, spacing: 12) {
++          AppEyebrow(title: "Native manager", tint: AppPalette.brass)
++          Text("El Roy's\nManager")
++            .font(AppTypography.display(42, weight: .bold))
++            .foregroundStyle(AppPalette.espresso)
++          Text("Editorial chrome, native performance, and the same live workspace pipeline used by the production manager.")
++            .font(AppTypography.body(16, weight: .medium))
++            .foregroundStyle(AppPalette.espresso.opacity(0.72))
++            .fixedSize(horizontal: false, vertical: true)
++        }
++        Spacer(minLength: 16)
++        VStack(alignment: .trailing, spacing: 10) {
++          EnvironmentBadge(environment: environment)
++          ProgressView()
++            .controlSize(.large)
++            .tint(AppPalette.brand)
++        }
++      }
++
++      HStack(spacing: 10) {
++        capsule(title: "Staff sign-in", tint: AppPalette.sage)
++        capsule(title: "Live menu tools", tint: AppPalette.cobalt)
++        capsule(title: "Preview routes", tint: AppPalette.brand)
++      }
++    }
++    .appGlassCard(tint: AppPalette.brand, cornerRadius: 38)
++    .frame(maxWidth: 620)
++    .appEntryReveal()
++  }
++
++  private func capsule(title: String, tint: Color) -> some View {
++    Text(title.uppercased())
++      .font(AppTypography.micro(9, weight: .bold))
++      .tracking(1.6)
++      .padding(.vertical, 8)
++      .padding(.horizontal, 10)
++      .background(tint.opacity(0.12), in: Capsule(style: .continuous))
++      .overlay {
++        Capsule(style: .continuous)
++          .stroke(tint.opacity(0.24), lineWidth: 0.7)
++      }
++      .foregroundStyle(tint)
++  }
++}
+diff --git a/ios/ElRoysManagerApp/Design/Glass.swift b/ios/ElRoysManagerApp/Design/Glass.swift
+index 4bed1db..d751f34 100644
+--- a/ios/ElRoysManagerApp/Design/Glass.swift
++++ b/ios/ElRoysManagerApp/Design/Glass.swift
+@@ -10,43 +10,78 @@ struct AppPalette {
+   static let warning = Color(red: 0.74, green: 0.50, blue: 0.18)
+   static let danger = Color(red: 0.71, green: 0.24, blue: 0.22)
+ 
+-  // Cinematic additions — consumed by the Home surface, safe to reuse elsewhere.
+-  static let brass      = Color(red: 0.757, green: 0.604, blue: 0.286)
+-  static let ember      = Color(red: 0.910, green: 0.381, blue: 0.164)
+-  static let oxblood    = Color(red: 0.478, green: 0.114, blue: 0.133)
+-  static let charcoal   = Color(red: 0.051, green: 0.043, blue: 0.043)
+-  static let ivory      = Color(red: 0.949, green: 0.913, blue: 0.847)
+-  static let cobalt     = Color(red: 0.118, green: 0.302, blue: 0.549)
+-  static let marigold   = Color(red: 0.910, green: 0.639, blue: 0.090)
+-  static let jade       = Color(red: 0.122, green: 0.373, blue: 0.227)
++  // Brand texture palette
++  static let brass = Color(red: 0.757, green: 0.604, blue: 0.286)
++  static let ember = Color(red: 0.910, green: 0.381, blue: 0.164)
++  static let oxblood = Color(red: 0.478, green: 0.114, blue: 0.133)
++  static let charcoal = Color(red: 0.051, green: 0.043, blue: 0.043)
++  static let ivory = Color(red: 0.949, green: 0.913, blue: 0.847)
++  static let cobalt = Color(red: 0.118, green: 0.302, blue: 0.549)
++  static let marigold = Color(red: 0.910, green: 0.639, blue: 0.090)
++  static let jade = Color(red: 0.122, green: 0.373, blue: 0.227)
+   static let terracotta = Color(red: 0.788, green: 0.416, blue: 0.231)
+   static let bloodOrange = Color(red: 0.780, green: 0.243, blue: 0.114)
++  static let sage = Color(red: 0.478, green: 0.545, blue: 0.431)
++  static let espresso = Color(red: 0.188, green: 0.137, blue: 0.110)
++  static let parchment = Color(red: 0.992, green: 0.972, blue: 0.936)
++  static let alabaster = Color(red: 0.978, green: 0.957, blue: 0.918)
++  static let linen = Color(red: 0.956, green: 0.921, blue: 0.862)
++}
++
++enum AppMotion {
++  static let reveal = Animation.timingCurve(0.32, 0.72, 0.0, 1.0, duration: 0.82)
++  static let settle = Animation.timingCurve(0.22, 0.86, 0.18, 1.0, duration: 0.62)
++  static let snap = Animation.timingCurve(0.32, 0.72, 0.0, 1.0, duration: 0.38)
++  static let press = Animation.interpolatingSpring(stiffness: 290, damping: 25)
++}
++
++enum AppTypography {
++  static func display(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
++    .system(size: size, weight: weight, design: .serif)
++  }
++
++  static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
++    .system(size: size, weight: weight, design: .rounded)
++  }
++
++  static func micro(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
++    .system(size: size, weight: weight, design: .monospaced)
++  }
+ }
+ 
+ struct AppBackground: View {
+   var body: some View {
+-    LinearGradient(
+-      colors: [
+-        AppPalette.canvasTop,
+-        Color.white.opacity(0.95),
+-        AppPalette.canvasBottom,
+-      ],
+-      startPoint: .topLeading,
+-      endPoint: .bottomTrailing
+-    )
+-    .overlay(alignment: .topTrailing) {
++    ZStack {
++      LinearGradient(
++        colors: [
++          AppPalette.parchment,
++          AppPalette.alabaster,
++          AppPalette.canvasBottom,
++        ],
++        startPoint: .topLeading,
++        endPoint: .bottomTrailing
++      )
++
+       Circle()
+-        .fill(AppPalette.brand.opacity(0.10))
+-        .frame(width: 240, height: 240)
+-        .blur(radius: 8)
+-        .offset(x: 80, y: -60)
+-    }
+-    .overlay(alignment: .bottomLeading) {
++        .fill(AppPalette.brand.opacity(0.12))
++        .frame(width: 320, height: 320)
++        .blur(radius: 24)
++        .offset(x: 128, y: -180)
++
++      Circle()
++        .fill(AppPalette.sage.opacity(0.10))
++        .frame(width: 360, height: 360)
++        .blur(radius: 34)
++        .offset(x: -160, y: 190)
++
+       Circle()
+-        .fill(AppPalette.accent.opacity(0.10))
+-        .frame(width: 300, height: 300)
+-        .blur(radius: 12)
+-        .offset(x: -90, y: 100)
++        .fill(AppPalette.brass.opacity(0.10))
++        .frame(width: 260, height: 260)
++        .blur(radius: 22)
++        .offset(x: -120, y: -240)
++
++      FilmGrain(intensity: 0.055, seed: 117)
++        .opacity(0.26)
+     }
+     .ignoresSafeArea()
+   }
+@@ -57,77 +92,311 @@ struct GlassCardModifier: ViewModifier {
+   var cornerRadius: CGFloat
+ 
+   func body(content: Content) -> some View {
+-    if #available(iOS 26.0, *) {
+-      content
+-        .padding(18)
+-        .glassEffect(.regular.tint(tint.opacity(0.18)), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+-        .overlay {
++    let innerRadius = max(18, cornerRadius - 7)
++
++    content
++      .padding(22)
++      .background {
++        ZStack {
+           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+-            .stroke(tint.opacity(0.20), lineWidth: 1)
++            .fill(tint.opacity(0.07))
++
++          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
++            .fill(.white.opacity(0.18))
++            .padding(0.75)
++
++          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
++            .stroke(tint.opacity(0.18), lineWidth: 0.9)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .fill(
++              LinearGradient(
++                colors: [
++                  AppPalette.parchment.opacity(0.98),
++                  AppPalette.linen.opacity(0.94),
++                ],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(6)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .stroke(.white.opacity(0.78), lineWidth: 0.75)
++            .padding(6)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .stroke(tint.opacity(0.14), lineWidth: 0.9)
++            .padding(6)
+         }
+-        .shadow(color: tint.opacity(0.14), radius: 18, y: 8)
+-    } else {
+-      content
+-        .padding(18)
+-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+-        .overlay {
++        .shadow(color: AppPalette.espresso.opacity(0.10), radius: 22, y: 14)
++        .shadow(color: tint.opacity(0.08), radius: 26, y: 16)
++      }
++  }
++}
++
++struct FieldChromeModifier: ViewModifier {
++  var tint: Color
++  var cornerRadius: CGFloat
++
++  func body(content: Content) -> some View {
++    let innerRadius = max(14, cornerRadius - 6)
++
++    content
++      .background {
++        ZStack {
++          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
++            .fill(tint.opacity(0.08))
++
+           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+-            .stroke(tint.opacity(0.18), lineWidth: 1)
++            .stroke(tint.opacity(0.18), lineWidth: 0.9)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .fill(
++              LinearGradient(
++                colors: [
++                  .white.opacity(0.88),
++                  AppPalette.parchment.opacity(0.92),
++                ],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(5)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .stroke(.white.opacity(0.66), lineWidth: 0.7)
++            .padding(5)
+         }
+-        .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
+-    }
++      }
++  }
++}
++
++struct AppPillChromeModifier: ViewModifier {
++  var accent: Color
++  var filled: Bool
++
++  func body(content: Content) -> some View {
++    content
++      .background {
++        let shell = Capsule()
++        let inner = Capsule()
++
++        ZStack {
++          shell
++            .fill(filled ? accent.opacity(0.16) : accent.opacity(0.08))
++          shell
++            .stroke(accent.opacity(filled ? 0.22 : 0.18), lineWidth: 0.9)
++          inner
++            .fill(
++              LinearGradient(
++                colors: filled
++                  ? [accent.opacity(0.72), accent.opacity(0.48)]
++                  : [.white.opacity(0.82), AppPalette.parchment.opacity(0.90)],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(5)
++          inner
++            .stroke(filled ? .white.opacity(0.24) : .white.opacity(0.64), lineWidth: 0.7)
++            .padding(5)
++        }
++        .shadow(color: accent.opacity(filled ? 0.18 : 0.08), radius: 18, y: 10)
++      }
+   }
+ }
+ 
+ extension View {
+-  func appGlassCard(tint: Color = AppPalette.brand, cornerRadius: CGFloat = 28) -> some View {
++  func appGlassCard(tint: Color = AppPalette.brand, cornerRadius: CGFloat = 30) -> some View {
+     modifier(GlassCardModifier(tint: tint, cornerRadius: cornerRadius))
+   }
++
++  func appFieldChrome(tint: Color = AppPalette.brass, cornerRadius: CGFloat = 22) -> some View {
++    modifier(FieldChromeModifier(tint: tint, cornerRadius: cornerRadius))
++  }
++
++  func appPillChrome(accent: Color = AppPalette.brand, filled: Bool = false) -> some View {
++    modifier(AppPillChromeModifier(accent: accent, filled: filled))
++  }
+ }
+ 
+ struct PrimaryGlassButtonStyle: ButtonStyle {
++  var accent: Color = AppPalette.brand
++
+   func makeBody(configuration: Configuration) -> some View {
+-    if #available(iOS 26.0, *) {
+-      configuration.label
+-        .buttonStyle(.glassProminent)
+-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
+-        .animation(.snappy(duration: 0.14), value: configuration.isPressed)
+-    } else {
+-      configuration.label
+-        .padding(.vertical, 12)
+-        .padding(.horizontal, 16)
+-        .frame(maxWidth: .infinity)
+-        .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+-        .foregroundStyle(.white)
+-        .opacity(configuration.isPressed ? 0.84 : 1)
+-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
+-        .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+-    }
++    configuration.label
++      .foregroundStyle(.white)
++      .scaleEffect(configuration.isPressed ? 0.985 : 1)
++      .opacity(configuration.isPressed ? 0.94 : 1)
++      .animation(AppMotion.press, value: configuration.isPressed)
++      .appPillChrome(accent: accent, filled: true)
+   }
+ }
+ 
+ struct SecondaryGlassButtonStyle: ButtonStyle {
++  var accent: Color = AppPalette.brass
++
+   func makeBody(configuration: Configuration) -> some View {
+-    if #available(iOS 26.0, *) {
+-      configuration.label
+-        .buttonStyle(.glass)
+-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
+-        .animation(.snappy(duration: 0.14), value: configuration.isPressed)
+-    } else {
+-      configuration.label
+-        .padding(.vertical, 12)
+-        .padding(.horizontal, 16)
+-        .frame(maxWidth: .infinity)
+-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+-        .overlay {
+-          RoundedRectangle(cornerRadius: 18, style: .continuous)
+-            .stroke(AppPalette.ink.opacity(0.12), lineWidth: 1)
++    configuration.label
++      .foregroundStyle(AppPalette.ink)
++      .scaleEffect(configuration.isPressed ? 0.988 : 1)
++      .opacity(configuration.isPressed ? 0.9 : 1)
++      .animation(AppMotion.press, value: configuration.isPressed)
++      .appPillChrome(accent: accent, filled: false)
++  }
++}
++
++struct AppEyebrow: View {
++  let title: String
++  var tint: Color = AppPalette.brass
++
++  var body: some View {
++    Text(title.uppercased())
++      .font(AppTypography.micro(10, weight: .bold))
++      .tracking(2.2)
++      .padding(.vertical, 8)
++      .padding(.horizontal, 12)
++      .background(tint.opacity(0.12), in: Capsule())
++      .overlay {
++        Capsule()
++          .stroke(tint.opacity(0.24), lineWidth: 0.8)
++      }
++      .foregroundStyle(tint)
++  }
++}
++
++struct AppIslandButtonLabel: View {
++  let title: String
++  var subtitle: String? = nil
++  let systemImage: String
++
++  var body: some View {
++    HStack(spacing: 14) {
++      VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 5) {
++        Text(title)
++          .font(AppTypography.body(16, weight: .bold))
++          .foregroundStyle(.white)
++        if let subtitle, !subtitle.isEmpty {
++          Text(subtitle)
++            .font(AppTypography.body(12, weight: .medium))
++            .foregroundStyle(.white.opacity(0.82))
++            .fixedSize(horizontal: false, vertical: true)
+         }
+-        .foregroundStyle(AppPalette.ink)
+-        .opacity(configuration.isPressed ? 0.84 : 1)
+-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
+-        .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
++      }
++
++      Spacer(minLength: 12)
++
++      ZStack {
++        Circle()
++          .fill(.white.opacity(0.16))
++        Circle()
++          .stroke(.white.opacity(0.30), lineWidth: 0.8)
++        Image(systemName: systemImage)
++          .font(.system(size: 14, weight: .semibold))
++          .foregroundStyle(.white)
++      }
++      .frame(width: 36, height: 36)
+     }
++    .padding(.horizontal, 18)
++    .padding(.vertical, 15)
++    .frame(maxWidth: .infinity)
++  }
++}
++
++struct AppIslandActionButton: View {
++  let title: String
++  var subtitle: String? = nil
++  let systemImage: String
++  var accent: Color = AppPalette.brand
++  var isEnabled: Bool = true
++  let action: () -> Void
++
++  var body: some View {
++    Button(action: action) {
++      AppIslandButtonLabel(
++        title: title,
++        subtitle: subtitle,
++        systemImage: systemImage
++      )
++    }
++    .buttonStyle(.plain)
++    .appPillChrome(accent: accent, filled: true)
++    .disabled(!isEnabled)
++    .opacity(isEnabled ? 1 : 0.55)
++    .scaleEffect(isEnabled ? 1 : 0.992)
++    .animation(AppMotion.snap, value: isEnabled)
++  }
++}
++
++struct AppSegmentedControl<Selection: Hashable>: View {
++  let options: [Selection]
++  @Binding var selection: Selection
++  var accent: Color = AppPalette.brand
++  var title: (Selection) -> String
++  @Namespace private var namespace
++
++  var body: some View {
++    HStack(spacing: 8) {
++      ForEach(Array(options.enumerated()), id: \.offset) { _, option in
++        let isSelected = option == selection
++        Button {
++          withAnimation(AppMotion.settle) {
++            selection = option
++          }
++        } label: {
++          Text(title(option).uppercased())
++            .font(AppTypography.micro(10, weight: .bold))
++            .tracking(1.7)
++            .foregroundStyle(isSelected ? AppPalette.ink : AppPalette.espresso.opacity(0.72))
++            .frame(maxWidth: .infinity)
++            .padding(.vertical, 14)
++            .background {
++              if isSelected {
++                Capsule()
++                  .fill(.white.opacity(0.74))
++                  .matchedGeometryEffect(id: "app-segmented-selection", in: namespace)
++                  .padding(3)
++              }
++            }
++        }
++        .buttonStyle(.plain)
++      }
++    }
++    .padding(4)
++    .background {
++      Capsule()
++        .fill(accent.opacity(0.10))
++      Capsule()
++        .stroke(accent.opacity(0.18), lineWidth: 0.9)
++      Capsule()
++        .stroke(.white.opacity(0.52), lineWidth: 0.6)
++        .padding(3)
++    }
++  }
++}
++
++struct AppEntryRevealModifier: ViewModifier {
++  let delay: Double
++  @State private var isVisible = false
++
++  func body(content: Content) -> some View {
++    content
++      .opacity(isVisible ? 1 : 0)
++      .offset(y: isVisible ? 0 : 18)
++      .scaleEffect(isVisible ? 1 : 0.985)
++      .onAppear {
++        guard !isVisible else { return }
++        withAnimation(AppMotion.reveal.delay(delay)) {
++          isVisible = true
++        }
++      }
++  }
++}
++
++extension View {
++  func appEntryReveal(delay: Double = 0) -> some View {
++    modifier(AppEntryRevealModifier(delay: delay))
+   }
+ }
+ 
+@@ -135,13 +404,19 @@ struct EnvironmentBadge: View {
+   let environment: AppEnvironment
+ 
+   var body: some View {
+-    Text(environment.isProduction ? "PRODUCTION" : environment.displayName.uppercased())
+-      .font(.caption2.weight(.semibold))
+-      .tracking(0.8)
+-      .padding(.vertical, 6)
+-      .padding(.horizontal, 10)
+-      .background(environment.isProduction ? AppPalette.success.opacity(0.16) : AppPalette.warning.opacity(0.18), in: Capsule())
+-      .foregroundStyle(environment.isProduction ? AppPalette.success : AppPalette.warning)
++    let tint = environment.isProduction ? AppPalette.success : AppPalette.warning
++
++    return Text(environment.isProduction ? "PRODUCTION" : environment.displayName.uppercased())
++      .font(AppTypography.micro(10, weight: .bold))
++      .tracking(1.8)
++      .padding(.vertical, 8)
++      .padding(.horizontal, 12)
++      .background(tint.opacity(0.12), in: Capsule())
++      .overlay {
++        Capsule()
++          .stroke(tint.opacity(0.24), lineWidth: 0.8)
++      }
++      .foregroundStyle(tint)
+   }
+ }
+ 
+diff --git a/ios/ElRoysManagerApp/Features/Auth/AuthViews.swift b/ios/ElRoysManagerApp/Features/Auth/AuthViews.swift
+index d2b46c6..35e1007 100644
+--- a/ios/ElRoysManagerApp/Features/Auth/AuthViews.swift
++++ b/ios/ElRoysManagerApp/Features/Auth/AuthViews.swift
+@@ -4,67 +4,165 @@ struct AuthGateView: View {
+   @Bindable var model: AppModel
+ 
+   var body: some View {
+-    ScrollView {
+-      VStack(alignment: .leading, spacing: 20) {
+-        VStack(alignment: .leading, spacing: 10) {
+-          EnvironmentBadge(environment: model.environment)
+-          Text("Staff Manager")
+-            .font(.system(size: 36, weight: .bold, design: .rounded))
+-            .foregroundStyle(AppPalette.ink)
+-          Text("Sign in with the same Supabase-backed staff account used on the web manager. Sessions are stored in Keychain and can be re-opened with biometrics.")
+-            .font(.title3)
+-            .foregroundStyle(.secondary)
+-        }
++    ScrollView(showsIndicators: false) {
++      VStack(alignment: .leading, spacing: 22) {
++        heroCard
++          .appEntryReveal()
+ 
+-        Picker("Mode", selection: $model.authMode) {
+-          ForEach(AuthScreenMode.allCases) { mode in
+-            Text(mode.rawValue).tag(mode)
+-          }
+-        }
+-        .pickerStyle(.segmented)
+-
+-        VStack(spacing: 14) {
+-          TextField("Staff email", text: $model.email)
+-            .keyboardType(.emailAddress)
+-            .textInputAutocapitalization(.never)
+-            .autocorrectionDisabled()
+-            .textFieldStyle(.roundedBorder)
+-
+-          if model.authMode != .reset {
+-            SecureField("Password", text: $model.password)
+-              .textFieldStyle(.roundedBorder)
+-          }
+-
+-          if model.authMode == .signUp {
+-            TextField("Display name", text: $model.displayName)
+-              .textFieldStyle(.roundedBorder)
+-          }
+-        }
++        AppSegmentedControl(
++          options: AuthScreenMode.allCases,
++          selection: $model.authMode,
++          accent: AppPalette.brand,
++          title: { $0.rawValue }
++        )
++        .appEntryReveal(delay: 0.05)
++
++        credentialsCard
++          .appEntryReveal(delay: 0.10)
+ 
+         if let notice = model.notice {
+           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
++            .appEntryReveal(delay: 0.14)
+         }
+ 
+-        Button(action: submit) {
+-          Label(primaryButtonTitle, systemImage: primaryButtonSymbol)
+-            .font(.headline)
+-            .frame(maxWidth: .infinity)
++        AppIslandActionButton(
++          title: primaryButtonTitle,
++          subtitle: primaryButtonSubtitle,
++          systemImage: primaryButtonSymbol,
++          accent: AppPalette.brand,
++          isEnabled: !model.isWorking,
++          action: submit
++        )
++        .appEntryReveal(delay: 0.18)
++
++        biometricCard
++          .appEntryReveal(delay: 0.22)
++
++        Color.clear.frame(height: 22)
++      }
++      .padding(.horizontal, 24)
++      .padding(.top, 34)
++      .padding(.bottom, 20)
++    }
++    .scrollBounceBehavior(.basedOnSize)
++  }
++
++  private var heroCard: some View {
++    VStack(alignment: .leading, spacing: 18) {
++      HStack {
++        EnvironmentBadge(environment: model.environment)
++        Spacer(minLength: 16)
++        AppEyebrow(title: model.authMode.rawValue, tint: AppPalette.sage)
++      }
++
++      VStack(alignment: .leading, spacing: 10) {
++        Text("Manager access\nwith floor-ready chrome.")
++          .font(AppTypography.display(40, weight: .bold))
++          .foregroundStyle(AppPalette.espresso)
++        Text("Sign in with the same Supabase-backed staff account used on the web manager. Sessions stay on device in Keychain and can be gated by Face ID or passcode.")
++          .font(AppTypography.body(16, weight: .medium))
++          .foregroundStyle(AppPalette.espresso.opacity(0.72))
++          .fixedSize(horizontal: false, vertical: true)
++      }
++
++      HStack(spacing: 10) {
++        detailPill(title: "Keychain session", tint: AppPalette.cobalt)
++        detailPill(title: "Native editor", tint: AppPalette.brass)
++        detailPill(title: "Live preview", tint: AppPalette.brand)
++      }
++    }
++    .appGlassCard(tint: AppPalette.brass, cornerRadius: 38)
++  }
++
++  private var credentialsCard: some View {
++    VStack(alignment: .leading, spacing: 16) {
++      AppEyebrow(title: "Credentials", tint: AppPalette.cobalt)
++
++      fieldGroup(title: "Staff email", systemImage: "envelope.open") {
++        TextField("manager@elroys.example", text: $model.email)
++          .keyboardType(.emailAddress)
++          .textInputAutocapitalization(.never)
++          .autocorrectionDisabled()
++          .font(AppTypography.body(16, weight: .medium))
++          .foregroundStyle(AppPalette.ink)
++          .padding(.horizontal, 16)
++          .padding(.vertical, 16)
++          .appFieldChrome(tint: AppPalette.cobalt)
++      }
++
++      if model.authMode != .reset {
++        fieldGroup(title: "Password", systemImage: "lock") {
++          SecureField("••••••••", text: $model.password)
++            .font(AppTypography.body(16, weight: .medium))
++            .foregroundStyle(AppPalette.ink)
++            .padding(.horizontal, 16)
++            .padding(.vertical, 16)
++            .appFieldChrome(tint: AppPalette.brand)
+         }
+-        .buttonStyle(PrimaryGlassButtonStyle())
+-        .disabled(model.isWorking)
++      }
+ 
+-        Toggle("Require Face ID / passcode before restoring the saved session", isOn: Binding(
++      if model.authMode == .signUp {
++        fieldGroup(title: "Display name", systemImage: "person.text.rectangle") {
++          TextField("Name used on edits and history", text: $model.displayName)
++            .font(AppTypography.body(16, weight: .medium))
++            .foregroundStyle(AppPalette.ink)
++            .padding(.horizontal, 16)
++            .padding(.vertical, 16)
++            .appFieldChrome(tint: AppPalette.sage)
++        }
++      }
++    }
++    .appGlassCard(tint: AppPalette.sage, cornerRadius: 34)
++  }
++
++  private var biometricCard: some View {
++    VStack(alignment: .leading, spacing: 14) {
++      AppEyebrow(title: "Device protection", tint: AppPalette.warning)
++      Text("Require Face ID or passcode before restoring the saved session.")
++        .font(AppTypography.body(15, weight: .medium))
++        .foregroundStyle(AppPalette.espresso)
++      Toggle(
++        "Biometric unlock",
++        isOn: Binding(
+           get: { SessionStore().biometricUnlockEnabled },
+           set: { SessionStore().biometricUnlockEnabled = $0 }
+-        ))
+-        .font(.footnote)
+-        .toggleStyle(.switch)
++        )
++      )
++      .tint(AppPalette.brand)
++      .font(AppTypography.body(15, weight: .semibold))
++      .foregroundStyle(AppPalette.ink)
++    }
++    .appGlassCard(tint: AppPalette.warning, cornerRadius: 30)
++  }
++
++  @ViewBuilder
++  private func fieldGroup<Content: View>(title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
++    VStack(alignment: .leading, spacing: 10) {
++      HStack(spacing: 8) {
++        Image(systemName: systemImage)
++          .font(.system(size: 12, weight: .semibold))
++          .foregroundStyle(AppPalette.brand)
++        Text(title.uppercased())
++          .font(AppTypography.micro(10, weight: .bold))
++          .tracking(1.8)
++          .foregroundStyle(AppPalette.espresso.opacity(0.76))
+       }
+-      .padding(24)
+-      .appGlassCard(tint: AppPalette.brand, cornerRadius: 30)
+-      .padding(24)
++      content()
+     }
+-    .scrollBounceBehavior(.basedOnSize)
++  }
++
++  private func detailPill(title: String, tint: Color) -> some View {
++    Text(title.uppercased())
++      .font(AppTypography.micro(9, weight: .bold))
++      .tracking(1.6)
++      .padding(.vertical, 8)
++      .padding(.horizontal, 10)
++      .background(tint.opacity(0.12), in: Capsule(style: .continuous))
++      .overlay {
++        Capsule(style: .continuous)
++          .stroke(tint.opacity(0.22), lineWidth: 0.7)
++      }
++      .foregroundStyle(tint)
+   }
+ 
+   private var primaryButtonTitle: String {
+@@ -78,14 +176,25 @@ struct AuthGateView: View {
+     }
+   }
+ 
++  private var primaryButtonSubtitle: String {
++    switch model.authMode {
++    case .signIn:
++      return "Restore the saved manager session and load the live workspace."
++    case .signUp:
++      return "Create a staff account and move straight into the native manager."
++    case .reset:
++      return "Send the recovery link to the staff email on file."
++    }
++  }
++
+   private var primaryButtonSymbol: String {
+     switch model.authMode {
+     case .signIn:
+-      return "person.crop.circle.badge.checkmark"
++      return "arrow.up.right"
+     case .signUp:
+-      return "person.crop.circle.badge.plus"
++      return "plus"
+     case .reset:
+-      return "envelope.badge"
++      return "paperplane"
+     }
+   }
+ 
+diff --git a/ios/ElRoysManagerApp/Features/Home/HomeViews.swift b/ios/ElRoysManagerApp/Features/Home/HomeViews.swift
+index e0d5a06..27fd13f 100644
+--- a/ios/ElRoysManagerApp/Features/Home/HomeViews.swift
++++ b/ios/ElRoysManagerApp/Features/Home/HomeViews.swift
+@@ -59,7 +59,7 @@ struct RestaurantChooserView: View {
+             theme: theme,
+             namespace: switcherNamespace,
+             onSelect: { slug in
+-              withAnimation(.easeInOut(duration: 0.35)) {
++              withAnimation(AppMotion.settle) {
+                 selectedRestaurantSlug = slug
+                 expandedUpdateID = nil
+               }
+@@ -125,7 +125,7 @@ struct RestaurantChooserView: View {
+     .navigationTitle("Home")
+     .navigationBarTitleDisplayMode(.inline)
+     .toolbar(.hidden, for: .navigationBar)
+-    .animation(.easeInOut(duration: 0.30), value: selectedRestaurantSlug)
++    .animation(AppMotion.settle, value: selectedRestaurantSlug)
+     .task(id: selectedRestaurantSlug) {
+       guard let restaurant = selectedRestaurant else { return }
+       await model.loadRestaurantTools(for: restaurant.id)
+@@ -526,7 +526,7 @@ private struct HomeRecentUpdatesCard: View {
+               isExpanded: expandedUpdateID == update.id,
+               theme: theme,
+               onToggle: {
+-                withAnimation(.easeInOut(duration: 0.22)) {
++                withAnimation(AppMotion.snap) {
+                   expandedUpdateID = expandedUpdateID == update.id ? nil : update.id
+                 }
+               }
+@@ -1435,31 +1435,34 @@ private struct HomeBottomBarClusterModifier: ViewModifier {
+   let theme: HomeTheme
+ 
+   func body(content: Content) -> some View {
+-    if #available(iOS 26.0, *) {
+-      content
+-        .glassEffect(.regular.tint(theme.bottomNavGlassTint.opacity(0.34)), in: .capsule)
+-        .overlay {
++    content
++      .background {
++        ZStack {
+           Capsule()
+-            .stroke(theme.bottomNavSelectedBorder.opacity(0.56), lineWidth: 1)
+-        }
+-    } else {
+-      content
+-        .background(
+-          LinearGradient(
+-            colors: [
+-              theme.bottomNavGlassTint.opacity(0.96),
+-              theme.bottomNavGlassTint.opacity(0.84),
+-            ],
+-            startPoint: .topLeading,
+-            endPoint: .bottomTrailing
+-          ),
+-          in: Capsule()
+-        )
+-        .overlay {
++            .fill(theme.bottomNavGlassTint.opacity(0.16))
++
++          Capsule()
++            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
++
++          Capsule()
++            .fill(
++              LinearGradient(
++                colors: [
++                  .white.opacity(0.82),
++                  theme.bottomNavGlassTint.opacity(0.86),
++                ],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(5)
++
+           Capsule()
+-            .stroke(theme.bottomNavSelectedBorder.opacity(0.56), lineWidth: 1)
++            .stroke(.white.opacity(0.66), lineWidth: 0.7)
++            .padding(5)
+         }
+-    }
++        .shadow(color: theme.shadowTint.opacity(0.10), radius: 20, y: 12)
++      }
+   }
+ }
+ 
+@@ -1467,13 +1470,31 @@ private struct HomeDetachedQRButtonModifier: ViewModifier {
+   let theme: HomeTheme
+ 
+   func body(content: Content) -> some View {
+-    if #available(iOS 26.0, *) {
+-      content
+-        .glassEffect(.regular.tint(theme.bottomNavGlassTint.opacity(0.34)).interactive(), in: .circle)
+-    } else {
+-      content
+-        .background(theme.bottomNavGlassTint.opacity(0.94), in: Circle())
+-    }
++    content
++      .background {
++        ZStack {
++          Circle()
++            .fill(theme.bottomNavGlassTint.opacity(0.18))
++          Circle()
++            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
++          Circle()
++            .fill(
++              LinearGradient(
++                colors: [
++                  .white.opacity(0.88),
++                  theme.bottomNavGlassTint.opacity(0.92),
++                ],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(5)
++          Circle()
++            .stroke(.white.opacity(0.64), lineWidth: 0.7)
++            .padding(5)
++        }
++        .shadow(color: theme.shadowTint.opacity(0.10), radius: 18, y: 10)
++      }
+   }
+ }
+ 
+@@ -1482,21 +1503,41 @@ private struct HomeGlassChromeModifier: ViewModifier {
+   let cornerRadius: CGFloat
+ 
+   func body(content: Content) -> some View {
+-    if #available(iOS 26.0, *) {
+-      content
+-        .glassEffect(.regular.tint(tint.opacity(0.20)), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+-        .overlay {
++    let innerRadius = max(18, cornerRadius - 7)
++
++    content
++      .background {
++        ZStack {
+           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+-            .stroke(tint.opacity(0.24), lineWidth: 1)
+-        }
+-    } else {
+-      content
+-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+-        .overlay {
++            .fill(tint.opacity(0.08))
++
+           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+-            .stroke(tint.opacity(0.20), lineWidth: 1)
++            .stroke(tint.opacity(0.20), lineWidth: 0.9)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .fill(
++              LinearGradient(
++                colors: [
++                  .white.opacity(0.82),
++                  tint.opacity(0.14),
++                ],
++                startPoint: .topLeading,
++                endPoint: .bottomTrailing
++              )
++            )
++            .padding(6)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .stroke(.white.opacity(0.66), lineWidth: 0.7)
++            .padding(6)
+         }
+-    }
++        .shadow(color: tint.opacity(0.10), radius: 22, y: 12)
++        .shadow(color: themeShadow(tint: tint), radius: 20, y: 12)
++      }
++  }
++
++  private func themeShadow(tint: Color) -> Color {
++    tint.opacity(0.06)
+   }
+ }
+ 
+diff --git a/ios/ElRoysManagerApp/Features/Menu/MenuViews.swift b/ios/ElRoysManagerApp/Features/Menu/MenuViews.swift
+index 7b0641b..e7a365d 100644
+--- a/ios/ElRoysManagerApp/Features/Menu/MenuViews.swift
++++ b/ios/ElRoysManagerApp/Features/Menu/MenuViews.swift
+@@ -570,7 +570,7 @@ private struct PublishPreviewActionButton: View {
+     .disabled(!enabled)
+     .opacity(enabled ? 1 : 0.5)
+     .scaleEffect(enabled ? 1 : 0.98)
+-    .animation(.easeOut(duration: 0.16), value: enabled)
++    .animation(AppMotion.snap, value: enabled)
+   }
+ }
+ 
+@@ -1210,32 +1210,23 @@ private enum EditorTypography {
+     case medium
+     case semibold
+     case bold
++
++    var fontWeight: Font.Weight {
++      switch self {
++      case .regular: return .regular
++      case .medium: return .medium
++      case .semibold: return .semibold
++      case .bold: return .bold
++      }
++    }
+   }
+ 
+   static func display(_ size: CGFloat, weight: Weight = .semibold) -> Font {
+-    switch weight {
+-    case .regular:
+-      return .custom("AvenirNextCondensed-Regular", size: size)
+-    case .medium:
+-      return .custom("AvenirNextCondensed-Medium", size: size)
+-    case .semibold:
+-      return .custom("AvenirNextCondensed-DemiBold", size: size)
+-    case .bold:
+-      return .custom("AvenirNextCondensed-Bold", size: size)
+-    }
++    AppTypography.display(size, weight: weight.fontWeight)
+   }
+ 
+   static func body(_ size: CGFloat, weight: Weight = .regular) -> Font {
+-    switch weight {
+-    case .regular:
+-      return .custom("AvenirNext-Regular", size: size)
+-    case .medium:
+-      return .custom("AvenirNext-Medium", size: size)
+-    case .semibold:
+-      return .custom("AvenirNext-DemiBold", size: size)
+-    case .bold:
+-      return .custom("AvenirNext-Bold", size: size)
+-    }
++    AppTypography.body(size, weight: weight.fontWeight)
+   }
+ }
+ 
+@@ -1245,17 +1236,30 @@ private struct MenuEditorSurfaceModifier: ViewModifier {
+   let radius: CGFloat
+ 
+   func body(content: Content) -> some View {
++    let innerRadius = max(18, radius - 7)
++
+     content
+       .padding(18)
+-      .background(
+-        LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
+-        in: RoundedRectangle(cornerRadius: radius, style: .continuous)
+-      )
+-      .overlay {
+-        RoundedRectangle(cornerRadius: radius, style: .continuous)
+-          .stroke(border, lineWidth: 1)
++      .background {
++        ZStack {
++          RoundedRectangle(cornerRadius: radius, style: .continuous)
++            .fill(border.opacity(0.08))
++
++          RoundedRectangle(cornerRadius: radius, style: .continuous)
++            .stroke(border.opacity(0.20), lineWidth: 0.9)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .fill(
++              LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
++            )
++            .padding(6)
++
++          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
++            .stroke(.white.opacity(0.64), lineWidth: 0.7)
++            .padding(6)
++        }
++        .shadow(color: border.opacity(0.12), radius: 22, y: 14)
+       }
+-      .shadow(color: border.opacity(0.16), radius: 18, y: 8)
+   }
+ }
+ 
+diff --git a/ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift b/ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift
+index 357106b..c072629 100644
+--- a/ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift
++++ b/ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift
+@@ -6,26 +6,58 @@ struct RoutePreviewScreen: View {
+   let menu: MenuRecord
+ 
+   var body: some View {
+-    VStack(spacing: 0) {
+-      HStack {
+-        VStack(alignment: .leading, spacing: 4) {
+-          Text("Exact Route Preview")
+-            .font(.headline)
+-          Text(model.exactRoutePreviewURL(for: menu).absoluteString)
+-            .font(.caption)
+-            .foregroundStyle(.secondary)
+-            .lineLimit(2)
+-        }
+-        Spacer()
+-      }
+-      .padding(16)
+-      .background(.thinMaterial)
++    VStack(spacing: 18) {
++      headerCard
++        .padding(.horizontal, 20)
++        .padding(.top, 16)
++        .appEntryReveal()
+ 
+-      WebPreview(url: model.exactRoutePreviewURL(for: menu))
++      ZStack {
++        RoundedRectangle(cornerRadius: 34, style: .continuous)
++          .fill(AppPalette.parchment.opacity(0.24))
++        RoundedRectangle(cornerRadius: 34, style: .continuous)
++          .stroke(AppPalette.cobalt.opacity(0.16), lineWidth: 0.9)
++        RoundedRectangle(cornerRadius: 28, style: .continuous)
++          .fill(.white.opacity(0.55))
++          .padding(6)
++        WebPreview(url: model.exactRoutePreviewURL(for: menu))
++          .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
++          .padding(6)
++      }
++      .padding(.horizontal, 20)
++      .padding(.bottom, 18)
++      .appEntryReveal(delay: 0.08)
++    }
++    .background {
++      AppBackground()
++        .ignoresSafeArea()
+     }
+     .navigationTitle(menu.displayTypeLabel)
+     .navigationBarTitleDisplayMode(.inline)
+   }
++
++  private var headerCard: some View {
++    VStack(alignment: .leading, spacing: 14) {
++      HStack {
++        AppEyebrow(title: "Exact route preview", tint: AppPalette.cobalt)
++        Spacer(minLength: 12)
++        Text(menu.displayTypeLabel.uppercased())
++          .font(AppTypography.micro(9, weight: .bold))
++          .tracking(1.6)
++          .foregroundStyle(AppPalette.espresso.opacity(0.62))
++      }
++
++      Text("Deployed guest-facing route")
++        .font(AppTypography.display(30, weight: .bold))
++        .foregroundStyle(AppPalette.espresso)
++
++      Text(model.exactRoutePreviewURL(for: menu).absoluteString)
++        .font(AppTypography.body(13, weight: .medium))
++        .foregroundStyle(AppPalette.espresso.opacity(0.70))
++        .textSelection(.enabled)
++    }
++    .appGlassCard(tint: AppPalette.cobalt, cornerRadius: 34)
++  }
+ }
+ 
+ private struct WebPreview: UIViewRepresentable {
+@@ -36,6 +68,9 @@ private struct WebPreview: UIViewRepresentable {
+     configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+     let webView = WKWebView(frame: .zero, configuration: configuration)
+     webView.scrollView.contentInsetAdjustmentBehavior = .never
++    webView.isOpaque = false
++    webView.backgroundColor = .clear
++    webView.scrollView.backgroundColor = .clear
+     webView.load(URLRequest(url: url))
+     return webView
+   }
+diff --git a/ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift b/ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift
+index 12740d5..dcc2778 100644
+--- a/ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift
++++ b/ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift
+@@ -12,41 +12,39 @@ struct PublicMenuScreen: View {
+   }
+ 
+   var body: some View {
+-    ScrollView {
+-      VStack(alignment: .leading, spacing: 18) {
+-        header
++    ScrollView(showsIndicators: false) {
++      VStack(alignment: .leading, spacing: 22) {
++        heroCard
++          .appEntryReveal()
+ 
+         if let notice = model.notice {
+           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
++            .appEntryReveal(delay: 0.05)
+         }
+ 
+         if let payload = model.currentPublicMenu {
++          summaryStrip(payload: payload)
++            .appEntryReveal(delay: 0.08)
++
+           if !payload.featuredGroups.isEmpty {
+-            FeaturedGroupsSection(groups: payload.featuredGroups)
++            FeaturedGroupsSection(groups: payload.featuredGroups, accent: accent)
++              .appEntryReveal(delay: 0.12)
+           }
+ 
+-          ForEach(payload.cats) { category in
+-            VStack(alignment: .leading, spacing: 10) {
+-              Text(category.label)
+-                .font(.title3.weight(.bold))
+-              if !category.sub.isEmpty {
+-                Text(category.sub)
+-                  .font(.subheadline)
+-                  .foregroundStyle(.secondary)
+-              }
+-              ForEach(category.items) { item in
+-                PublicMenuItemRow(item: item)
+-              }
+-            }
+-            .appGlassCard(tint: AppPalette.accent)
++          ForEach(Array(payload.cats.enumerated()), id: \.element.id) { index, category in
++            PublicMenuCategoryCard(category: category, accent: accent)
++              .appEntryReveal(delay: 0.16 + (Double(index) * 0.04))
+           }
+         } else {
+-          ProgressView("Loading menu...")
+-            .frame(maxWidth: .infinity)
+-            .padding()
++          loadingCard
++            .appEntryReveal(delay: 0.10)
+         }
++
++        Color.clear.frame(height: 28)
+       }
+-      .padding(24)
++      .padding(.horizontal, 24)
++      .padding(.top, 24)
++      .padding(.bottom, 24)
+     }
+     .navigationTitle(restaurant.name)
+     .navigationBarTitleDisplayMode(.inline)
+@@ -58,26 +56,89 @@ struct PublicMenuScreen: View {
+     }
+   }
+ 
+-  private var header: some View {
+-    VStack(alignment: .leading, spacing: 12) {
+-      Text("Public Menu")
+-        .font(.system(size: 30, weight: .bold, design: .rounded))
+-      Picker("Menu", selection: $selectedType) {
+-        Text("Drinks").tag("drinks")
+-        Text("Food").tag("food")
++  private var accent: Color {
++    selectedType == "food" ? AppPalette.jade : AppPalette.bloodOrange
++  }
++
++  private var heroCard: some View {
++    VStack(alignment: .leading, spacing: 18) {
++      HStack(alignment: .top) {
++        VStack(alignment: .leading, spacing: 12) {
++          AppEyebrow(title: "Public menu preview", tint: accent)
++          Text(restaurant.name)
++            .font(AppTypography.display(36, weight: .bold))
++            .foregroundStyle(AppPalette.espresso)
++          Text(selectedType == "food"
++            ? "Review the guest-facing food presentation with the same editorial spacing and hierarchy customers will see."
++            : "Review the guest-facing drinks presentation with premium card rhythm, featured highlights, and live menu structure.")
++            .font(AppTypography.body(15, weight: .medium))
++            .foregroundStyle(AppPalette.espresso.opacity(0.72))
++            .fixedSize(horizontal: false, vertical: true)
++        }
++        Spacer(minLength: 16)
+       }
+-      .pickerStyle(.segmented)
++
++      AppSegmentedControl(
++        options: ["drinks", "food"],
++        selection: $selectedType,
++        accent: accent,
++        title: { $0.capitalized }
++      )
+ 
+       if let menu = selectedMenu {
+         NavigationLink(value: AppDestination.routePreview(menu)) {
+-          Label("Open Exact Route Preview", systemImage: "safari")
+-            .font(.headline)
+-            .frame(maxWidth: .infinity)
++          AppIslandButtonLabel(
++            title: "Open exact route preview",
++            subtitle: "Verify the deployed path before publishing or sharing.",
++            systemImage: "arrow.up.right"
++          )
+         }
+-        .buttonStyle(SecondaryGlassButtonStyle())
++        .buttonStyle(.plain)
++        .appPillChrome(accent: accent, filled: true)
+       }
+     }
+-    .appGlassCard(tint: AppPalette.brand)
++    .appGlassCard(tint: accent, cornerRadius: 38)
++  }
++
++  private func summaryStrip(payload: PublicMenuPayload) -> some View {
++    let itemCount = payload.cats.reduce(into: 0) { partialResult, category in
++      partialResult += category.items.filter(\.onMenu).count
++    }
++
++    return HStack(spacing: 10) {
++      metricPill(title: "sections", value: "\(payload.cats.count)")
++      metricPill(title: "items", value: "\(itemCount)")
++      metricPill(title: "featured", value: "\(payload.featuredGroups.reduce(0) { $0 + $1.slots.count })")
++    }
++  }
++
++  private func metricPill(title: String, value: String) -> some View {
++    VStack(alignment: .leading, spacing: 5) {
++      Text(title.uppercased())
++        .font(AppTypography.micro(9, weight: .bold))
++        .tracking(1.6)
++        .foregroundStyle(accent)
++      Text(value)
++        .font(AppTypography.display(18, weight: .bold))
++        .foregroundStyle(AppPalette.espresso)
++    }
++    .padding(.horizontal, 14)
++    .padding(.vertical, 12)
++    .frame(maxWidth: .infinity, alignment: .leading)
++    .appFieldChrome(tint: accent, cornerRadius: 20)
++  }
++
++  private var loadingCard: some View {
++    VStack(spacing: 12) {
++      ProgressView()
++        .tint(accent)
++      Text("Loading public menu…")
++        .font(AppTypography.body(15, weight: .medium))
++        .foregroundStyle(AppPalette.espresso.opacity(0.72))
++    }
++    .frame(maxWidth: .infinity)
++    .padding(.vertical, 36)
++    .appGlassCard(tint: accent, cornerRadius: 34)
+   }
+ 
+   private var selectedMenu: MenuRecord? {
+@@ -93,74 +154,139 @@ struct PublicMenuScreen: View {
+ 
+ private struct FeaturedGroupsSection: View {
+   let groups: [FeaturedGroup]
++  let accent: Color
+ 
+   var body: some View {
+     VStack(alignment: .leading, spacing: 14) {
+-      Text("Featured")
+-        .font(.title3.weight(.bold))
++      HStack {
++        VStack(alignment: .leading, spacing: 6) {
++          AppEyebrow(title: "Featured", tint: accent)
++          Text("Spotlight groups")
++            .font(AppTypography.display(26, weight: .bold))
++            .foregroundStyle(AppPalette.espresso)
++        }
++        Spacer(minLength: 16)
++      }
++
+       ForEach(groups) { group in
+-        VStack(alignment: .leading, spacing: 10) {
+-          Text(group.name)
+-            .font(.headline)
++        VStack(alignment: .leading, spacing: 12) {
++          HStack {
++            Text(group.name)
++              .font(AppTypography.body(18, weight: .bold))
++              .foregroundStyle(AppPalette.espresso)
++            Spacer()
++            Text("\(group.slots.count) items")
++              .font(AppTypography.micro(9, weight: .bold))
++              .tracking(1.4)
++              .padding(.vertical, 7)
++              .padding(.horizontal, 10)
++              .background(accent.opacity(0.10), in: Capsule(style: .continuous))
++              .foregroundStyle(accent)
++          }
++
+           ForEach(group.slots) { slot in
+             HStack(alignment: .top, spacing: 12) {
+-              VStack(alignment: .leading, spacing: 4) {
++              VStack(alignment: .leading, spacing: 5) {
+                 Text(slot.item?.name ?? "Featured Item")
+-                  .font(.subheadline.weight(.semibold))
++                  .font(AppTypography.body(16, weight: .bold))
++                  .foregroundStyle(AppPalette.ink)
+                 if !slot.sellNote.isEmpty {
+                   Text(slot.sellNote)
+-                    .font(.footnote)
+-                    .foregroundStyle(.secondary)
++                    .font(AppTypography.body(13, weight: .medium))
++                    .foregroundStyle(AppPalette.espresso.opacity(0.70))
++                    .fixedSize(horizontal: false, vertical: true)
+                 }
+               }
+-              Spacer()
+-              Text(slot.item?.price ?? "")
+-                .font(.subheadline.monospacedDigit())
++              Spacer(minLength: 12)
++              if let price = slot.item?.price.nilIfBlank {
++                Text(price)
++                  .font(AppTypography.body(13, weight: .bold))
++                  .foregroundStyle(accent)
++                  .padding(.vertical, 7)
++                  .padding(.horizontal, 10)
++                  .background(accent.opacity(0.10), in: Capsule(style: .continuous))
++              }
+             }
++            .padding(14)
++            .appFieldChrome(tint: accent, cornerRadius: 20)
+           }
+         }
++        .appGlassCard(tint: accent, cornerRadius: 30)
+       }
+     }
+-    .appGlassCard(tint: AppPalette.warning)
++  }
++}
++
++private struct PublicMenuCategoryCard: View {
++  let category: MenuCategoryPayload
++  let accent: Color
++
++  var body: some View {
++    VStack(alignment: .leading, spacing: 16) {
++      VStack(alignment: .leading, spacing: 6) {
++        AppEyebrow(title: category.label, tint: accent)
++        if !category.sub.isEmpty {
++          Text(category.sub)
++            .font(AppTypography.body(14, weight: .medium))
++            .foregroundStyle(AppPalette.espresso.opacity(0.72))
++            .fixedSize(horizontal: false, vertical: true)
++        }
++      }
++
++      ForEach(category.items.filter(\.onMenu)) { item in
++        PublicMenuItemRow(item: item, accent: accent)
++      }
++    }
++    .appGlassCard(tint: accent, cornerRadius: 34)
+   }
+ }
+ 
+ private struct PublicMenuItemRow: View {
+   let item: MenuItemPayload
++  let accent: Color
+ 
+   var body: some View {
+-    VStack(alignment: .leading, spacing: 6) {
+-      HStack(alignment: .top) {
+-        VStack(alignment: .leading, spacing: 4) {
+-          Text(item.name)
+-            .font(.headline)
+-            .strikethrough(item.isEightySixed)
++    VStack(alignment: .leading, spacing: 10) {
++      HStack(alignment: .top, spacing: 12) {
++        VStack(alignment: .leading, spacing: 5) {
++          HStack(spacing: 8) {
++            Text(item.name)
++              .font(AppTypography.body(16, weight: .bold))
++              .foregroundStyle(AppPalette.ink)
++              .strikethrough(item.isEightySixed)
++            if item.isEightySixed {
++              Text("86'D")
++                .font(AppTypography.micro(9, weight: .bold))
++                .tracking(1.4)
++                .padding(.vertical, 5)
++                .padding(.horizontal, 8)
++                .background(AppPalette.danger.opacity(0.10), in: Capsule(style: .continuous))
++                .foregroundStyle(AppPalette.danger)
++            }
++          }
+           if item.showDescription, !item.desc.isEmpty {
+             Text(item.desc)
+-              .font(.subheadline)
+-              .foregroundStyle(.secondary)
++              .font(AppTypography.body(13, weight: .medium))
++              .foregroundStyle(AppPalette.espresso.opacity(0.70))
++              .fixedSize(horizontal: false, vertical: true)
+           }
+         }
+-        Spacer()
+-        Text(item.price)
+-          .font(.headline.monospacedDigit())
++        Spacer(minLength: 12)
++        Text(item.price.isEmpty ? "—" : item.price)
++          .font(AppTypography.body(13, weight: .bold))
++          .foregroundStyle(accent)
++          .padding(.vertical, 7)
++          .padding(.horizontal, 10)
++          .background(accent.opacity(0.10), in: Capsule(style: .continuous))
+       }
+ 
+       if item.showRecipe, !item.recipe.isEmpty {
+         Text(item.recipe.joined(separator: " • "))
+-          .font(.footnote)
+-          .foregroundStyle(.secondary)
+-      }
+-
+-      if item.isEightySixed {
+-        Text("86'D")
+-          .font(.caption2.weight(.bold))
+-          .padding(.vertical, 4)
+-          .padding(.horizontal, 8)
+-          .background(AppPalette.danger.opacity(0.16), in: Capsule())
+-          .foregroundStyle(AppPalette.danger)
++          .font(AppTypography.body(12, weight: .semibold))
++          .foregroundStyle(accent.opacity(0.86))
+       }
+     }
+-    .padding(.vertical, 6)
++    .padding(15)
++    .appFieldChrome(tint: accent, cornerRadius: 22)
+   }
+ }
+diff --git a/ios/ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift b/ios/ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift
+index 663ffa2..7307ce1 100644
+--- a/ios/ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift
++++ b/ios/ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift
+@@ -9,108 +9,34 @@ struct RestaurantToolsScreen: View {
+   @State private var noteText = ""
+ 
+   var body: some View {
+-    ScrollView {
+-      VStack(alignment: .leading, spacing: 18) {
+-        VStack(alignment: .leading, spacing: 12) {
+-          Text("Restaurant Tools")
+-            .font(.system(size: 30, weight: .bold, design: .rounded))
+-          Picker("Menu", selection: $selectedType) {
+-            Text("Drinks").tag("drinks")
+-            Text("Food").tag("food")
+-          }
+-          .pickerStyle(.segmented)
+-        }
+-        .appGlassCard(tint: AppPalette.brand)
++    ScrollView(showsIndicators: false) {
++      VStack(alignment: .leading, spacing: 22) {
++        headerCard
++          .appEntryReveal()
+ 
+         if let notice = model.notice {
+           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
++            .appEntryReveal(delay: 0.05)
+         }
+ 
+         if let workspace = currentWorkspace {
+-          VStack(alignment: .leading, spacing: 12) {
+-            HStack {
+-              Text("Featured")
+-                .font(.headline)
+-              Spacer()
+-              Button("Add From Catalog") {
+-                showingCatalog = true
+-              }
+-              .buttonStyle(SecondaryGlassButtonStyle())
+-              .frame(maxWidth: 170)
+-            }
+-
+-            ForEach(workspace.restaurantTools?.featuredGroups ?? []) { group in
+-              ForEach(group.slots) { slot in
+-                VStack(alignment: .leading, spacing: 8) {
+-                  HStack {
+-                    VStack(alignment: .leading, spacing: 4) {
+-                      Text(slot.item?.name ?? "Featured Item")
+-                        .font(.subheadline.weight(.semibold))
+-                      if !slot.sellNote.isEmpty {
+-                        Text(slot.sellNote)
+-                          .font(.footnote)
+-                          .foregroundStyle(.secondary)
+-                      }
+-                    }
+-                    Spacer()
+-                    Text(slot.item?.price ?? "")
+-                      .font(.subheadline.monospacedDigit())
+-                  }
+-
+-                  HStack {
+-                    Button("Up") {
+-                      Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: -1) }
+-                    }
+-                    .buttonStyle(SecondaryGlassButtonStyle())
+-                    Button("Down") {
+-                      Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: 1) }
+-                    }
+-                    .buttonStyle(SecondaryGlassButtonStyle())
+-                    Button("Note") {
+-                      noteEditingSlot = slot
+-                      noteText = slot.sellNote
+-                    }
+-                    .buttonStyle(SecondaryGlassButtonStyle())
+-                    Button("Remove") {
+-                      Task { await model.saveFeaturedAction(action: "remove", restaurantId: restaurant.id, slotId: slot.id) }
+-                    }
+-                    .buttonStyle(SecondaryGlassButtonStyle())
+-                  }
+-                }
+-                .padding(.vertical, 6)
+-              }
+-            }
+-
+-            Button("Confirm Featured Lineup") {
+-              Task { await model.saveFeaturedAction(action: "confirm", restaurantId: restaurant.id) }
+-            }
+-            .buttonStyle(PrimaryGlassButtonStyle())
+-          }
+-          .appGlassCard(tint: AppPalette.warning)
++          featuredLineupCard(workspace: workspace)
++            .appEntryReveal(delay: 0.08)
++        } else {
++          loadingCard
++            .appEntryReveal(delay: 0.08)
+         }
+ 
+-        if let history = currentHistory {
+-          VStack(alignment: .leading, spacing: 12) {
+-            Text("Recent Changes")
+-              .font(.headline)
+-            ForEach(history.logs) { entry in
+-              VStack(alignment: .leading, spacing: 6) {
+-                Text(entry.userName)
+-                  .font(.subheadline.weight(.semibold))
+-                Text(entry.message.isEmpty ? "No message provided." : entry.message)
+-                  .font(.footnote)
+-                  .foregroundStyle(.secondary)
+-                Text(entry.createdAt)
+-                  .font(.caption)
+-                  .foregroundStyle(.secondary)
+-              }
+-              .padding(.vertical, 4)
+-            }
+-          }
+-          .appGlassCard(tint: AppPalette.accent)
++        if let history = currentHistory, !history.logs.isEmpty {
++          historyCard(history)
++            .appEntryReveal(delay: 0.12)
+         }
++
++        Color.clear.frame(height: 24)
+       }
+-      .padding(24)
++      .padding(.horizontal, 24)
++      .padding(.top, 24)
++      .padding(.bottom, 24)
+     }
+     .navigationTitle(restaurant.name)
+     .navigationBarTitleDisplayMode(.inline)
+@@ -118,29 +44,16 @@ struct RestaurantToolsScreen: View {
+       await model.loadRestaurantTools(for: restaurant.id)
+     }
+     .sheet(isPresented: $showingCatalog) {
+-      NavigationStack {
+-        List(currentWorkspace?.restaurantTools?.siblingCatalog ?? []) { item in
+-          Button {
+-            Task {
+-              await model.saveFeaturedAction(action: "add", restaurantId: restaurant.id, itemId: item.id)
+-              showingCatalog = false
+-            }
+-          } label: {
+-            VStack(alignment: .leading, spacing: 4) {
+-              Text(item.name)
+-              Text("\(item.menuLabel) • \(item.cat)")
+-                .font(.caption)
+-                .foregroundStyle(.secondary)
+-            }
++      FeaturedCatalogSheet(
++        items: currentWorkspace?.restaurantTools?.siblingCatalog ?? [],
++        accent: accent,
++        onSelect: { item in
++          Task {
++            await model.saveFeaturedAction(action: "add", restaurantId: restaurant.id, itemId: item.id)
++            showingCatalog = false
+           }
+         }
+-        .navigationTitle("Add Featured Item")
+-        .toolbar {
+-          ToolbarItem(placement: .cancellationAction) {
+-            Button("Close") { showingCatalog = false }
+-          }
+-        }
+-      }
++      )
+     }
+     .alert("Edit Sell Note", isPresented: Binding(
+       get: { noteEditingSlot != nil },
+@@ -156,6 +69,167 @@ struct RestaurantToolsScreen: View {
+     }
+   }
+ 
++  private var accent: Color {
++    selectedType == "food" ? AppPalette.jade : AppPalette.bloodOrange
++  }
++
++  private var headerCard: some View {
++    VStack(alignment: .leading, spacing: 18) {
++      HStack(alignment: .top) {
++        VStack(alignment: .leading, spacing: 12) {
++          AppEyebrow(title: "Restaurant tools", tint: accent)
++          Text("Featured lineup control")
++            .font(AppTypography.display(34, weight: .bold))
++            .foregroundStyle(AppPalette.espresso)
++          Text("Curate the floor-facing spotlight list, manage sell notes, and confirm the final sequence before service.")
++            .font(AppTypography.body(15, weight: .medium))
++            .foregroundStyle(AppPalette.espresso.opacity(0.72))
++            .fixedSize(horizontal: false, vertical: true)
++        }
++        Spacer(minLength: 16)
++      }
++
++      AppSegmentedControl(
++        options: ["drinks", "food"],
++        selection: $selectedType,
++        accent: accent,
++        title: { $0.capitalized }
++      )
++
++      Button {
++        showingCatalog = true
++      } label: {
++        AppIslandButtonLabel(
++          title: "Add from catalog",
++          subtitle: "Pull an item from the sibling catalog into the featured sequence.",
++          systemImage: "plus"
++        )
++      }
++      .buttonStyle(.plain)
++      .appPillChrome(accent: accent, filled: true)
++      .disabled(currentWorkspace == nil)
++      .opacity(currentWorkspace == nil ? 0.55 : 1)
++    }
++    .appGlassCard(tint: accent, cornerRadius: 38)
++  }
++
++  private func featuredLineupCard(workspace: MenuWorkspacePayload) -> some View {
++    VStack(alignment: .leading, spacing: 16) {
++      HStack(alignment: .center) {
++        VStack(alignment: .leading, spacing: 6) {
++          AppEyebrow(title: "Featured", tint: accent)
++          Text("Current lineup")
++            .font(AppTypography.display(28, weight: .bold))
++            .foregroundStyle(AppPalette.espresso)
++        }
++        Spacer(minLength: 16)
++        Text("\(workspace.restaurantTools?.featuredGroups.reduce(0) { $0 + $1.slots.count } ?? 0) live slots")
++          .font(AppTypography.micro(9, weight: .bold))
++          .tracking(1.6)
++          .padding(.vertical, 8)
++          .padding(.horizontal, 10)
++          .background(accent.opacity(0.10), in: Capsule(style: .continuous))
++          .foregroundStyle(accent)
++      }
++
++      ForEach(workspace.restaurantTools?.featuredGroups ?? []) { group in
++        VStack(alignment: .leading, spacing: 12) {
++          HStack {
++            Text(group.name)
++              .font(AppTypography.body(18, weight: .bold))
++              .foregroundStyle(AppPalette.ink)
++            Spacer(minLength: 12)
++            Text("\(group.slots.count) items")
++              .font(AppTypography.micro(9, weight: .bold))
++              .tracking(1.4)
++              .foregroundStyle(AppPalette.espresso.opacity(0.68))
++          }
++
++          ForEach(group.slots) { slot in
++            FeaturedSlotCard(
++              slot: slot,
++              accent: accent,
++              onMoveUp: {
++                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: -1) }
++              },
++              onMoveDown: {
++                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: 1) }
++              },
++              onEditNote: {
++                noteEditingSlot = slot
++                noteText = slot.sellNote
++              },
++              onRemove: {
++                Task { await model.saveFeaturedAction(action: "remove", restaurantId: restaurant.id, slotId: slot.id) }
++              }
++            )
++          }
++        }
++        .appGlassCard(tint: accent, cornerRadius: 30)
++      }
++
++      AppIslandActionButton(
++        title: "Confirm featured lineup",
++        subtitle: "Lock the final sell sequence for service.",
++        systemImage: "checkmark",
++        accent: accent,
++        action: {
++          Task { await model.saveFeaturedAction(action: "confirm", restaurantId: restaurant.id) }
++        }
++      )
++    }
++    .appGlassCard(tint: AppPalette.brass, cornerRadius: 36)
++  }
++
++  private func historyCard(_ history: HistoryPayload) -> some View {
++    VStack(alignment: .leading, spacing: 14) {
++      AppEyebrow(title: "History", tint: AppPalette.cobalt)
++      Text("Recent changes")
++        .font(AppTypography.display(26, weight: .bold))
++        .foregroundStyle(AppPalette.espresso)
++
++      ForEach(Array(history.logs.prefix(6).enumerated()), id: \.element.id) { index, entry in
++        VStack(alignment: .leading, spacing: 6) {
++          HStack(spacing: 8) {
++            Text(entry.userName.nilIfBlank ?? "Unknown")
++              .font(AppTypography.body(15, weight: .bold))
++              .foregroundStyle(AppPalette.ink)
++            Text(entry.createdAt)
++              .font(AppTypography.micro(9, weight: .bold))
++              .tracking(1.3)
++              .foregroundStyle(AppPalette.espresso.opacity(0.58))
++          }
++          Text(entry.message.isEmpty ? "No message provided." : entry.message)
++            .font(AppTypography.body(13, weight: .medium))
++            .foregroundStyle(AppPalette.espresso.opacity(0.72))
++            .fixedSize(horizontal: false, vertical: true)
++        }
++        .padding(14)
++        .appFieldChrome(tint: AppPalette.cobalt, cornerRadius: 22)
++
++        if index < min(history.logs.count, 6) - 1 {
++          Rectangle()
++            .fill(AppPalette.cobalt.opacity(0.14))
++            .frame(height: 1)
++        }
++      }
++    }
++    .appGlassCard(tint: AppPalette.cobalt, cornerRadius: 34)
++  }
++
++  private var loadingCard: some View {
++    VStack(spacing: 12) {
++      ProgressView()
++        .tint(accent)
++      Text("Loading restaurant tools…")
++        .font(AppTypography.body(15, weight: .medium))
++        .foregroundStyle(AppPalette.espresso.opacity(0.72))
++    }
++    .frame(maxWidth: .infinity)
++    .padding(.vertical, 34)
++    .appGlassCard(tint: accent, cornerRadius: 34)
++  }
++
+   private var currentWorkspace: MenuWorkspacePayload? {
+     if let menu = model.menu(for: restaurant.id, type: selectedType) {
+       return model.currentToolsMenus[menu.id]
+@@ -170,3 +244,131 @@ struct RestaurantToolsScreen: View {
+     return nil
+   }
+ }
++
++private struct FeaturedSlotCard: View {
++  let slot: FeaturedSlot
++  let accent: Color
++  let onMoveUp: () -> Void
++  let onMoveDown: () -> Void
++  let onEditNote: () -> Void
++  let onRemove: () -> Void
++
++  var body: some View {
++    VStack(alignment: .leading, spacing: 12) {
++      HStack(alignment: .top, spacing: 12) {
++        VStack(alignment: .leading, spacing: 6) {
++          HStack(spacing: 8) {
++            Text(slot.item?.name ?? "Featured item")
++              .font(AppTypography.body(16, weight: .bold))
++              .foregroundStyle(AppPalette.ink)
++            if let confirmedAt = slot.confirmedAt.nilIfBlank {
++              Text("CONFIRMED")
++                .font(AppTypography.micro(8, weight: .bold))
++                .tracking(1.4)
++                .padding(.vertical, 5)
++                .padding(.horizontal, 8)
++                .background(AppPalette.success.opacity(0.10), in: Capsule(style: .continuous))
++                .foregroundStyle(AppPalette.success)
++                .help(confirmedAt)
++            }
++          }
++          if !slot.sellNote.isEmpty {
++            Text(slot.sellNote)
++              .font(AppTypography.body(13, weight: .medium))
++              .foregroundStyle(AppPalette.espresso.opacity(0.72))
++              .fixedSize(horizontal: false, vertical: true)
++          }
++        }
++        Spacer(minLength: 12)
++        if let price = slot.item?.price.nilIfBlank {
++          Text(price)
++            .font(AppTypography.body(13, weight: .bold))
++            .foregroundStyle(accent)
++            .padding(.vertical, 7)
++            .padding(.horizontal, 10)
++            .background(accent.opacity(0.10), in: Capsule(style: .continuous))
++        }
++      }
++
++      HStack(spacing: 8) {
++        toolButton(title: "Up", icon: "arrow.up", accent: accent, action: onMoveUp)
++        toolButton(title: "Down", icon: "arrow.down", accent: accent, action: onMoveDown)
++        toolButton(title: "Note", icon: "pencil", accent: AppPalette.brass, action: onEditNote)
++        toolButton(title: "Remove", icon: "trash", accent: AppPalette.danger, action: onRemove)
++      }
++    }
++    .padding(15)
++    .appFieldChrome(tint: accent, cornerRadius: 22)
++  }
++
++  private func toolButton(title: String, icon: String, accent: Color, action: @escaping () -> Void) -> some View {
++    Button(action: action) {
++      Label(title, systemImage: icon)
++        .font(AppTypography.micro(9, weight: .bold))
++        .tracking(1.2)
++        .padding(.horizontal, 11)
++        .padding(.vertical, 10)
++        .frame(maxWidth: .infinity)
++    }
++    .buttonStyle(.plain)
++    .foregroundStyle(accent)
++    .appPillChrome(accent: accent, filled: false)
++  }
++}
++
++private struct FeaturedCatalogSheet: View {
++  @Environment(\.dismiss) private var dismiss
++  let items: [SiblingCatalogItem]
++  let accent: Color
++  let onSelect: (SiblingCatalogItem) -> Void
++
++  var body: some View {
++    NavigationStack {
++      ScrollView(showsIndicators: false) {
++        VStack(alignment: .leading, spacing: 14) {
++          ForEach(items) { item in
++            Button {
++              onSelect(item)
++            } label: {
++              HStack(alignment: .top, spacing: 12) {
++                VStack(alignment: .leading, spacing: 6) {
++                  Text(item.name)
++                    .font(AppTypography.body(16, weight: .bold))
++                    .foregroundStyle(AppPalette.ink)
++                  Text("\(item.menuLabel) • \(item.cat)")
++                    .font(AppTypography.body(13, weight: .medium))
++                    .foregroundStyle(AppPalette.espresso.opacity(0.68))
++                  if !item.onMenu {
++                    Text("Off menu")
++                      .font(AppTypography.micro(8, weight: .bold))
++                      .tracking(1.4)
++                      .foregroundStyle(AppPalette.warning)
++                  }
++                }
++                Spacer(minLength: 12)
++                Image(systemName: "arrow.up.right")
++                  .font(.system(size: 14, weight: .semibold))
++                  .foregroundStyle(accent)
++              }
++              .padding(15)
++            }
++            .buttonStyle(.plain)
++            .appFieldChrome(tint: accent, cornerRadius: 22)
++          }
++        }
++        .padding(24)
++      }
++      .background {
++        AppBackground()
++          .ignoresSafeArea()
++      }
++      .navigationTitle("Add Featured Item")
++      .navigationBarTitleDisplayMode(.inline)
++      .toolbar {
++        ToolbarItem(placement: .cancellationAction) {
++          Button("Close") { dismiss() }
++        }
++      }
++    }
++  }
++}
+diff --git a/ios/ElRoysManagerApp/Features/Scanner/BarcodeScannerView.swift b/ios/ElRoysManagerApp/Features/Scanner/BarcodeScannerView.swift
+index b55cd89..0b757a1 100644
+--- a/ios/ElRoysManagerApp/Features/Scanner/BarcodeScannerView.swift
++++ b/ios/ElRoysManagerApp/Features/Scanner/BarcodeScannerView.swift
+@@ -8,26 +8,73 @@ struct BarcodeScannerSheet: View {
+ 
+   var body: some View {
+     NavigationStack {
+-      VStack(spacing: 18) {
+-        BarcodeScannerCaptureView { code in
+-          scannedCode = code
++      ScrollView(showsIndicators: false) {
++        VStack(alignment: .leading, spacing: 20) {
++          VStack(alignment: .leading, spacing: 14) {
++            AppEyebrow(title: "Barcode capture", tint: AppPalette.cobalt)
++            Text("Scan or paste a UPC")
++              .font(AppTypography.display(32, weight: .bold))
++              .foregroundStyle(AppPalette.espresso)
++            Text("Use the live camera feed for speed, then fall back to manual entry when a label is damaged or hard to frame.")
++              .font(AppTypography.body(15, weight: .medium))
++              .foregroundStyle(AppPalette.espresso.opacity(0.72))
++              .fixedSize(horizontal: false, vertical: true)
++          }
++          .appGlassCard(tint: AppPalette.cobalt, cornerRadius: 36)
++          .appEntryReveal()
++
++          ZStack {
++            BarcodeScannerCaptureView { code in
++              scannedCode = code
++            }
++            scannerOverlay
++          }
++          .frame(height: 320)
++          .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
++          .overlay {
++            RoundedRectangle(cornerRadius: 32, style: .continuous)
++              .stroke(AppPalette.cobalt.opacity(0.24), lineWidth: 1)
++          }
++          .appEntryReveal(delay: 0.06)
++
++          VStack(alignment: .leading, spacing: 12) {
++            Text("Manual fallback")
++              .font(AppTypography.micro(10, weight: .bold))
++              .tracking(1.8)
++              .foregroundStyle(AppPalette.cobalt)
++            TextField("Enter UPC", text: $scannedCode)
++              .keyboardType(.numberPad)
++              .font(AppTypography.body(16, weight: .medium))
++              .padding(.horizontal, 16)
++              .padding(.vertical, 16)
++              .appFieldChrome(tint: AppPalette.cobalt)
++          }
++          .appGlassCard(tint: AppPalette.brass, cornerRadius: 30)
++          .appEntryReveal(delay: 0.10)
++
++          AppIslandActionButton(
++            title: "Use this barcode",
++            subtitle: "Insert the captured value into the item editor.",
++            systemImage: "arrow.up.right",
++            accent: AppPalette.brand,
++            isEnabled: !scannedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
++            action: {
++              onFound(scannedCode)
++              dismiss()
++            }
++          )
++          .appEntryReveal(delay: 0.14)
+         }
+-        .frame(height: 320)
+-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+-
+-        TextField("Manual UPC fallback", text: $scannedCode)
+-          .keyboardType(.numberPad)
+-          .textFieldStyle(.roundedBorder)
+-
+-        Button("Use This Barcode") {
+-          onFound(scannedCode)
+-          dismiss()
+-        }
+-        .buttonStyle(PrimaryGlassButtonStyle())
+-        .disabled(scannedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
++        .padding(.horizontal, 24)
++        .padding(.top, 24)
++        .padding(.bottom, 24)
++      }
++      .background {
++        AppBackground()
++          .ignoresSafeArea()
+       }
+-      .padding(24)
+       .navigationTitle("Scan Barcode")
++      .navigationBarTitleDisplayMode(.inline)
+       .toolbar {
+         ToolbarItem(placement: .cancellationAction) {
+           Button("Close") { dismiss() }
+@@ -35,6 +82,40 @@ struct BarcodeScannerSheet: View {
+       }
+     }
+   }
++
++  private var scannerOverlay: some View {
++    GeometryReader { proxy in
++      let size = min(proxy.size.width, proxy.size.height) * 0.58
++      let line: CGFloat = 26
++      let stroke = AppPalette.ivory.opacity(0.92)
++      let frameRect = CGRect(
++        x: (proxy.size.width - size) / 2,
++        y: (proxy.size.height - size) / 2,
++        width: size,
++        height: size
++      )
++
++      Path { path in
++        path.move(to: CGPoint(x: frameRect.minX, y: frameRect.minY + line))
++        path.addLine(to: CGPoint(x: frameRect.minX, y: frameRect.minY))
++        path.addLine(to: CGPoint(x: frameRect.minX + line, y: frameRect.minY))
++
++        path.move(to: CGPoint(x: frameRect.maxX - line, y: frameRect.minY))
++        path.addLine(to: CGPoint(x: frameRect.maxX, y: frameRect.minY))
++        path.addLine(to: CGPoint(x: frameRect.maxX, y: frameRect.minY + line))
++
++        path.move(to: CGPoint(x: frameRect.minX, y: frameRect.maxY - line))
++        path.addLine(to: CGPoint(x: frameRect.minX, y: frameRect.maxY))
++        path.addLine(to: CGPoint(x: frameRect.minX + line, y: frameRect.maxY))
++
++        path.move(to: CGPoint(x: frameRect.maxX - line, y: frameRect.maxY))
++        path.addLine(to: CGPoint(x: frameRect.maxX, y: frameRect.maxY))
++        path.addLine(to: CGPoint(x: frameRect.maxX, y: frameRect.maxY - line))
++      }
++      .stroke(stroke, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
++    }
++    .allowsHitTesting(false)
++  }
+ }
+ 
+ private struct BarcodeScannerCaptureView: UIViewControllerRepresentable {

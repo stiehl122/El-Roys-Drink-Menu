@@ -5947,9 +5947,53 @@ function isItemRecipePublic(item) {
   return !!item?.showRecipe;
 }
 
+function canonicalNumericDisplayOrder(value, fallback = Number.MAX_SAFE_INTEGER) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function canonicalCompareText(left = '', right = '') {
+  return String(left || '').localeCompare(String(right || ''));
+}
+
+function compareCanonicalCategoryOrder(left = {}, right = {}) {
+  const leftIsUncategorized = left?.key === UNCATEGORIZED_ID;
+  const rightIsUncategorized = right?.key === UNCATEGORIZED_ID;
+  if (leftIsUncategorized !== rightIsUncategorized) {
+    return leftIsUncategorized ? 1 : -1;
+  }
+
+  const displayDelta = canonicalNumericDisplayOrder(left?.display_order) - canonicalNumericDisplayOrder(right?.display_order);
+  if (displayDelta !== 0) return displayDelta;
+
+  const keyDelta = canonicalCompareText(left?.key, right?.key);
+  if (keyDelta !== 0) return keyDelta;
+
+  return canonicalCompareText(left?.id, right?.id);
+}
+
+function compareCanonicalItemOrder(left = {}, right = {}) {
+  const displayDelta = canonicalNumericDisplayOrder(left?.display_order) - canonicalNumericDisplayOrder(right?.display_order);
+  if (displayDelta !== 0) return displayDelta;
+
+  const idDelta = canonicalCompareText(left?.id, right?.id);
+  if (idDelta !== 0) return idDelta;
+
+  return canonicalCompareText(left?.name, right?.name);
+}
+
+function sortCanonicalCategories(categories = []) {
+  return (Array.isArray(categories) ? categories : []).slice().sort(compareCanonicalCategoryOrder);
+}
+
+function sortCanonicalItems(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareCanonicalItemOrder);
+}
+
 function hydrateState({ cats, meta, restaurant }) {
-  const realCats = (cats || []).filter(c => c.key !== UNCATEGORIZED_ID);
-  const uncatCat = (cats || []).find(c => c.key === UNCATEGORIZED_ID);
+  const orderedCats = sortCanonicalCategories(cats);
+  const realCats = orderedCats.filter(c => c.key !== UNCATEGORIZED_ID);
+  const uncatCat = orderedCats.find(c => c.key === UNCATEGORIZED_ID);
 
   if (uncatCat) _uncatCategoryUuid = uncatCat.id;
 
@@ -5972,8 +6016,7 @@ function hydrateState({ cats, meta, restaurant }) {
   const hasLastSentTs = !!meta?.last_sent_ts;
   menuState = {};
   realCats.forEach(c => {
-    const items = (c.items || [])
-      .sort((a, b) => a.display_order - b.display_order)
+    const items = sortCanonicalItems(c.items)
       .map(i => hydrateMenuItem(i));
     const hasStoredLastSent = Object.prototype.hasOwnProperty.call(lastSentState, c.key);
     menuState[c.key] = {
@@ -5986,7 +6029,7 @@ function hydrateState({ cats, meta, restaurant }) {
 
   if (uncatCat) {
     menuState[UNCATEGORIZED_ID] = {
-      items: (uncatCat.items || []).map(i => hydrateMenuItem(i, { onMenu: false })),
+      items: sortCanonicalItems(uncatCat.items).map(i => hydrateMenuItem(i, { onMenu: false })),
       lastSent: [],
     };
   }
@@ -6025,8 +6068,9 @@ function applyPersistedDraftState(draftState = {}) {
     liveLastSentState[cat.id] = (menuState[cat.id]?.lastSent || []).map(cloneMenuItemState);
   });
 
-  const realCats = cats.filter(cat => cat.key !== UNCATEGORIZED_ID);
-  const uncatCat = cats.find(cat => cat.key === UNCATEGORIZED_ID) || null;
+  const orderedCats = sortCanonicalCategories(cats);
+  const realCats = orderedCats.filter(cat => cat.key !== UNCATEGORIZED_ID);
+  const uncatCat = orderedCats.find(cat => cat.key === UNCATEGORIZED_ID) || null;
 
   CATEGORY_DEFS = realCats.map(cat => ({
     id: cat.key,
@@ -6042,8 +6086,7 @@ function applyPersistedDraftState(draftState = {}) {
   menuState = {};
   realCats.forEach(cat => {
     menuState[cat.key] = {
-      items: (cat.items || [])
-        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      items: sortCanonicalItems(cat.items)
         .map(item => hydrateMenuItem(item)),
       lastSent: liveLastSentState[cat.key] || [],
     };
@@ -6052,8 +6095,7 @@ function applyPersistedDraftState(draftState = {}) {
   _uncatCategoryUuid = normalizeDraftCategoryUuid(uncatCat?.id || '', UNCATEGORIZED_ID);
   if (uncatCat) {
     menuState[UNCATEGORIZED_ID] = {
-      items: (uncatCat.items || [])
-        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+      items: sortCanonicalItems(uncatCat.items)
         .map(item => hydrateMenuItem(item, { onMenu: false })),
       lastSent: [],
     };
@@ -6661,7 +6703,7 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
   const normalized = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
     ? cloneJsonCompatible(snapshot, {})
     : {};
-  return {
+  return sortDraftDocumentInPlace({
     context: normalized.context && typeof normalized.context === 'object' ? normalized.context : null,
     cats: Array.isArray(normalized.cats) ? normalized.cats : [],
     meta: normalized.meta && typeof normalized.meta === 'object' ? normalized.meta : {},
@@ -6670,7 +6712,7 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
     save_only_changes: Array.isArray(normalized.save_only_changes)
       ? normalized.save_only_changes
       : (Array.isArray(normalized.saveOnlyChanges) ? normalized.saveOnlyChanges : []),
-  };
+  });
 }
 
 function stripDraftDocumentForComparison(snapshot = {}) {
@@ -6792,17 +6834,26 @@ function buildLocalDraftOverlapSummary(baseSnapshot = null, localSnapshot = null
 }
 
 function sortDraftDocumentInPlace(snapshot = {}) {
-  snapshot.cats = (Array.isArray(snapshot.cats) ? snapshot.cats : []).sort((left, right) => (
-    Number(left?.display_order || 0) - Number(right?.display_order || 0)
-  ));
-  snapshot.cats.forEach(category => {
-    category.items = (Array.isArray(category.items) ? category.items : []).sort((left, right) => (
-      Number(left?.display_order || 0) - Number(right?.display_order || 0)
-    ));
-  });
+  snapshot.cats = sortCanonicalCategories(snapshot.cats).map((category, categoryIndex) => ({
+    ...category,
+    display_order: category.key === UNCATEGORIZED_ID ? 9999 : categoryIndex,
+    items: sortCanonicalItems(category.items).map((item, itemIndex) => ({
+      ...item,
+      display_order: itemIndex,
+    })),
+  }));
   snapshot.featured_groups = (Array.isArray(snapshot.featured_groups) ? snapshot.featured_groups : []).sort((left, right) => (
     Number(left?.display_order || 0) - Number(right?.display_order || 0)
-  ));
+  )).map((group, groupIndex) => ({
+    ...group,
+    display_order: groupIndex,
+    slots: (Array.isArray(group?.slots) ? group.slots : []).sort((left, right) => (
+      Number(left?.display_order || 0) - Number(right?.display_order || 0)
+    )).map((slot, slotIndex) => ({
+      ...slot,
+      display_order: slotIndex,
+    })),
+  }));
   return snapshot;
 }
 
@@ -6849,8 +6900,9 @@ function mergeLocalDraftSnapshots({
   const remoteCategoryKeys = new Set(remoteDelta.categoryChanges.keys());
 
   Array.from(localDelta.categoryChanges.entries())
-    .sort((left, right) => (
-      Number(left[1]?.display_order || Number.MAX_SAFE_INTEGER) - Number(right[1]?.display_order || Number.MAX_SAFE_INTEGER)
+    .sort((left, right) => compareCanonicalCategoryOrder(
+      left[1] || { key: left[0] },
+      right[1] || { key: right[0] },
     ))
     .forEach(([key, categoryState]) => {
       if (strategy === 'update-local' && remoteCategoryKeys.has(key)) return;

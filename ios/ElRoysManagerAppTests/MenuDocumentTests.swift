@@ -209,6 +209,135 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.category(for: "beer")?.items.last?.onMenu, false)
   }
 
+  func testEditableDocumentWorkspaceCanonicalizesServerOrdering() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "cat-wine",
+        menuId: "menu",
+        key: "wine",
+        label: "Wine",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 2,
+        items: [
+          makeItem(id: "item-b", name: "Bordeaux", displayOrder: 1),
+          makeItem(id: "item-a", name: "Albarino", displayOrder: 1),
+          makeItem(id: "item-c", name: "Chianti", displayOrder: 0)
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "cat-uncat",
+        menuId: "menu",
+        key: EditableMenuDocument.uncategorizedKey,
+        label: "Uncategorized",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "hidden-1", name: "Hidden", displayOrder: 0, onMenu: false, visibility: "off_menu")
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "cat-beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "beer-2", name: "Z Lager", displayOrder: 1),
+          makeItem(id: "beer-1", name: "A Lager", displayOrder: 1)
+        ]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+
+    XCTAssertEqual(document.cats.map { $0.key }, ["beer", "wine", EditableMenuDocument.uncategorizedKey])
+    XCTAssertEqual(document.category(for: "beer")?.items.map { $0.id }, ["beer-1", "beer-2"])
+    XCTAssertEqual(document.category(for: "wine")?.items.map { $0.id }, ["item-c", "item-a", "item-b"])
+  }
+
+  func testEditableDocumentWorkspaceMissingDisplayOrderSortsToEnd() throws {
+    let data = Data("""
+    {
+      "cats": [
+        {
+          "id": "cat-missing",
+          "key": "seasonal",
+          "label": "Seasonal",
+          "items": [
+            {
+              "id": "item-missing",
+              "name": "Mystery Pour",
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        },
+        {
+          "id": "cat-beer",
+          "key": "beer",
+          "label": "Beer",
+          "display_order": 0,
+          "items": [
+            {
+              "id": "beer-missing",
+              "name": "Late Tap",
+              "visibility": "public",
+              "on_menu": true
+            },
+            {
+              "id": "beer-first",
+              "name": "First Tap",
+              "display_order": 0,
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        }
+      ],
+      "meta": {},
+      "context": {
+        "kind": "menu-workspace",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "workspace": {
+        "accessible_menu_ids": ["menu"],
+        "shared_draft": { "exists": false },
+        "permissions": { "can_manage": true },
+        "capabilities": {
+          "can_save_draft": true,
+          "can_save_live_menu": true,
+          "can_publish_updates": true
+        },
+        "revisions": {
+          "live_revision": 10
+        }
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(MenuWorkspacePayload.self, from: data)
+    let document = EditableMenuDocument(workspace: payload)
+
+    XCTAssertEqual(document.cats.map(\.key), ["beer", "seasonal"])
+    XCTAssertEqual(document.category(for: "beer")?.items.map(\.id), ["beer-first", "beer-missing"])
+  }
+
   func testEditableDocumentNormalizesDuplicateAndMissingIdentifiers() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -294,7 +423,7 @@ final class MenuDocumentTests: XCTestCase {
     let cardSource = String(source[cardRange.lowerBound..<recoveryRange.lowerBound])
 
     XCTAssertTrue(cardSource.contains("List {"))
-    XCTAssertTrue(cardSource.contains("Reorder Items"))
+    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
   }
 
   func testMenuEditorSwipeListUsesTrailingEightySixActionOnly() throws {
@@ -656,6 +785,198 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.workspace.hasUnsentChanges, true)
     XCTAssertEqual(payload.workspace.revisions.liveRevision, 200)
     XCTAssertEqual(payload.workspace.revisions.notificationBaselineRevision, 150)
+  }
+
+  func testPublicMenuPayloadDecodingCanonicalizesServerOrdering() throws {
+    let data = Data("""
+    {
+      "cats": [
+        {
+          "id": "cat-z",
+          "menu_id": "menu",
+          "key": "wine",
+          "label": "Wine",
+          "display_order": 2,
+          "items": [
+            {
+              "id": "item-b",
+              "name": "Bordeaux",
+              "display_order": 1,
+              "visibility": "public",
+              "on_menu": true
+            },
+            {
+              "id": "item-a",
+              "name": "Albarino",
+              "display_order": 1,
+              "visibility": "public",
+              "on_menu": true
+            },
+            {
+              "id": "item-c",
+              "name": "Chianti",
+              "display_order": 0,
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        },
+        {
+          "id": "cat-u",
+          "menu_id": "menu",
+          "key": "__uncategorized__",
+          "label": "Uncategorized",
+          "display_order": 0,
+          "items": [
+            {
+              "id": "hidden-1",
+              "name": "Hidden",
+              "display_order": 0,
+              "visibility": "off_menu",
+              "on_menu": false
+            }
+          ]
+        },
+        {
+          "id": "cat-a",
+          "menu_id": "menu",
+          "key": "beer",
+          "label": "Beer",
+          "display_order": 0,
+          "items": [
+            {
+              "id": "beer-2",
+              "name": "Z Lager",
+              "display_order": 1,
+              "visibility": "public",
+              "on_menu": true
+            },
+            {
+              "id": "beer-1",
+              "name": "A Lager",
+              "display_order": 1,
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        }
+      ],
+      "meta": {
+        "last_updated_ts": 1712705100000
+      },
+      "restaurant": {
+        "id": "leroys-lounge",
+        "slug": "leroyslounge",
+        "name": "Leroy's Lounge"
+      },
+      "featured_groups": [],
+      "context": {
+        "kind": "menu-public",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "capabilities": {
+        "guest_readable": true,
+        "requires_auth": false,
+        "includes_draft_state": false,
+        "includes_notification_config": false
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(PublicMenuPayload.self, from: data)
+
+    XCTAssertEqual(payload.cats.map(\.key), ["beer", "wine", EditableMenuDocument.uncategorizedKey])
+    XCTAssertEqual(payload.cats[0].items.map(\.id), ["beer-1", "beer-2"])
+    XCTAssertEqual(payload.cats[1].items.map(\.id), ["item-c", "item-a", "item-b"])
+  }
+
+  func testPublicMenuPayloadDecodingMissingDisplayOrderSortsToEnd() throws {
+    let data = Data("""
+    {
+      "cats": [
+        {
+          "id": "cat-missing",
+          "key": "seasonal",
+          "label": "Seasonal",
+          "items": [
+            {
+              "id": "item-missing",
+              "name": "Mystery Pour",
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        },
+        {
+          "id": "cat-beer",
+          "key": "beer",
+          "label": "Beer",
+          "display_order": 0,
+          "items": [
+            {
+              "id": "beer-missing",
+              "name": "Late Tap",
+              "visibility": "public",
+              "on_menu": true
+            },
+            {
+              "id": "beer-first",
+              "name": "First Tap",
+              "display_order": 0,
+              "visibility": "public",
+              "on_menu": true
+            }
+          ]
+        }
+      ],
+      "meta": {},
+      "featured_groups": [],
+      "context": {
+        "kind": "menu-public",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "capabilities": {
+        "guest_readable": true,
+        "requires_auth": false,
+        "includes_draft_state": false,
+        "includes_notification_config": false
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(PublicMenuPayload.self, from: data)
+
+    XCTAssertEqual(payload.cats.map(\.key), ["beer", "seasonal"])
+    XCTAssertEqual(payload.cats[0].items.map(\.id), ["beer-first", "beer-missing"])
+  }
+
+  func testPublicMenuPayloadDecodingRequiresCatsMetaAndFeaturedGroups() {
+    let missingMeta = Data("""
+    {
+      "cats": [],
+      "context": { "kind": "menu-public" },
+      "capabilities": {
+        "guest_readable": true,
+        "requires_auth": false,
+        "includes_draft_state": false,
+        "includes_notification_config": false
+      }
+    }
+    """.utf8)
+
+    XCTAssertThrowsError(try JSONDecoder.backend.decode(PublicMenuPayload.self, from: missingMeta))
   }
 
   @MainActor
@@ -2444,7 +2765,15 @@ final class MenuDocumentTests: XCTestCase {
     )
   }
 
-  private func makeItem(id: String, name: String, price: String = "$14", desc: String = "") -> MenuItemPayload {
+  private func makeItem(
+    id: String,
+    name: String,
+    price: String = "$14",
+    desc: String = "",
+    displayOrder: Int = 0,
+    onMenu: Bool = true,
+    visibility: String = "public"
+  ) -> MenuItemPayload {
     MenuItemPayload(
       id: id,
       name: name,
@@ -2452,9 +2781,9 @@ final class MenuDocumentTests: XCTestCase {
       recipe: [],
       price: price,
       isEightySixed: false,
-      displayOrder: 0,
-      onMenu: true,
-      visibility: "public",
+      displayOrder: displayOrder,
+      onMenu: onMenu,
+      visibility: visibility,
       upcharges: [],
       showDescription: true,
       showRecipe: false

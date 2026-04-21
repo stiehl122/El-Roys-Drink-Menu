@@ -25,6 +25,49 @@ function sortByKnownOrder(values = [], knownOrder = [], key = 'id') {
   return values.slice().sort((a, b) => knownOrder.indexOf(a[key]) - knownOrder.indexOf(b[key]));
 }
 
+function numericDisplayOrder(value, fallback = Number.MAX_SAFE_INTEGER) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function compareText(left = '', right = '') {
+  return String(left || '').localeCompare(String(right || ''));
+}
+
+function compareCategoryOrder(left = {}, right = {}) {
+  const leftIsUncategorized = left?.key === '__uncategorized__';
+  const rightIsUncategorized = right?.key === '__uncategorized__';
+  if (leftIsUncategorized !== rightIsUncategorized) {
+    return leftIsUncategorized ? 1 : -1;
+  }
+
+  const displayDelta = numericDisplayOrder(left?.display_order) - numericDisplayOrder(right?.display_order);
+  if (displayDelta !== 0) return displayDelta;
+
+  const keyDelta = compareText(left?.key, right?.key);
+  if (keyDelta !== 0) return keyDelta;
+
+  return compareText(left?.id, right?.id);
+}
+
+function compareItemOrder(left = {}, right = {}) {
+  const displayDelta = numericDisplayOrder(left?.display_order) - numericDisplayOrder(right?.display_order);
+  if (displayDelta !== 0) return displayDelta;
+
+  const idDelta = compareText(left?.id, right?.id);
+  if (idDelta !== 0) return idDelta;
+
+  return compareText(left?.name, right?.name);
+}
+
+function sortCategories(categories = []) {
+  return (Array.isArray(categories) ? categories : []).slice().sort(compareCategoryOrder);
+}
+
+function sortCategoryItems(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareItemOrder);
+}
+
 export function getKnownMenus() {
   return sortByKnownOrder(Object.values(MENUS)
     .filter(menu => menu?.id)
@@ -141,7 +184,10 @@ export async function readMenuStateBundle(menuId) {
       type: menuRow.type || 'drinks',
       restaurantId: menuRow.restaurant_id || '',
     },
-    cats: Array.isArray(cats) ? cats : [],
+    cats: sortCategories(cats).map(category => ({
+      ...category,
+      items: sortCategoryItems(category?.items),
+    })),
     meta: metaRows?.[0] || {},
     restaurant: restaurantRows?.[0] || null,
     featuredCurrentIds,
@@ -220,7 +266,7 @@ function sanitizePublicCategory(category = {}) {
     sub: category.sub || '',
     placeholder: category.placeholder || '',
     display_order: Number.isFinite(Number(category.display_order)) ? Number(category.display_order) : 0,
-    items: (Array.isArray(category.items) ? category.items : [])
+    items: sortCategoryItems(category.items)
       .filter(isGuestVisibleItem)
       .map(sanitizePublicItem),
   };
@@ -387,7 +433,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
 
 export function createPublicMenuPayload(bundle, { featuredGroups = [], featuredCompatibility = null } = {}) {
   return {
-    cats: (bundle?.cats || [])
+    cats: sortCategories(bundle?.cats || [])
       .map(sanitizePublicCategory)
       .filter(category => category.key !== '__uncategorized__')
       .filter(category => Array.isArray(category.items) ? category.items.length > 0 : true),
