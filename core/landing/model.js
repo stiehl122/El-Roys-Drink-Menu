@@ -727,7 +727,9 @@
       return optionMarkup.join('');
     }
 
-    function renderHoursRowsHtml(section, restaurantId, restaurantLabel) {
+    function renderHoursRowsHtml(section, restaurantId, restaurantLabel, options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      const setFieldHandlerName = settings.setFieldHandlerName ? String(settings.setFieldHandlerName) : '';
       const restaurantHours = getHoursForRestaurant(section, restaurantId);
       return `
     <article class="landing-admin-hours-card">
@@ -743,6 +745,15 @@
           const day = restaurantHours.days[dayKey];
           const safeRestaurantId = escAttrJs(restaurantId || '');
           const safeDayKey = escAttrJs(dayKey);
+          const openOnChange = setFieldHandlerName
+            ? `${setFieldHandlerName}(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)`
+            : '';
+          const closeOnChange = setFieldHandlerName
+            ? `${setFieldHandlerName}(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)`
+            : '';
+          const closedOnChange = setFieldHandlerName
+            ? `${setFieldHandlerName}(${safeRestaurantId}, ${safeDayKey}, 'closed', this.checked)`
+            : '';
           return `
             <div class="landing-hours-day-row">
               <div class="landing-hours-day-header">
@@ -756,7 +767,7 @@
                   data-landing-hours-day="${escHtml(dayKey)}"
                   aria-label="${escHtml(`${restaurantLabel || ''} ${landingDayLabels[dayKey]} open time`)}"
                   ${day.closed ? 'disabled' : ''}
-                  onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'open', this.value)"
+                  ${openOnChange ? `onchange="${openOnChange}"` : ''}
                 >
                   ${renderTimeSelectOptions(day.open, 'Open time')}
                 </select>
@@ -767,7 +778,7 @@
                   data-landing-hours-day="${escHtml(dayKey)}"
                   aria-label="${escHtml(`${restaurantLabel || ''} ${landingDayLabels[dayKey]} close time`)}"
                   ${day.closed ? 'disabled' : ''}
-                  onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'close', this.value)"
+                  ${closeOnChange ? `onchange="${closeOnChange}"` : ''}
                 >
                   ${renderTimeSelectOptions(day.close, 'Close time')}
                 </select>
@@ -781,7 +792,7 @@
                     data-landing-hours-restaurant="${escHtml(restaurantId || '')}"
                     data-landing-hours-day="${escHtml(dayKey)}"
                     ${day.closed ? 'checked' : ''}
-                    onchange="setLandingHoursField(${safeRestaurantId}, ${safeDayKey}, 'closed', this.checked)"
+                    ${closedOnChange ? `onchange="${closedOnChange}"` : ''}
                   >
                   Closed
                 </label>
@@ -845,20 +856,28 @@
     }
 
     return {
+      normalizeTimestamp: normalizeTimestamp,
       createDefaultDay: createDefaultLandingDay,
       createDefaultHoursRestaurant: createDefaultLandingHoursRestaurant,
-      createDefaultContent: createDefaultContent,
-      createDefaultRecord: createDefaultRecord,
+      createDefaultImportMeta: createDefaultImportMeta,
       createDefaultEventItem: createDefaultEventItem,
       createDefaultNewsItem: createDefaultNewsItem,
       createDefaultReviewItem: createDefaultReviewItem,
+      createDefaultContent: createDefaultContent,
+      createDefaultRecord: createDefaultRecord,
       normalizeDay: normalizeDay,
       normalizeHoursRestaurant: normalizeHoursRestaurant,
+      normalizeEventItem: normalizeEventItem,
+      normalizeNewsItem: normalizeNewsItem,
+      normalizeReviewItem: normalizeReviewItem,
       normalizeContent: normalizeContent,
       normalizeRecord: normalizeRecord,
       normalizeTarget: normalizeTarget,
       normalizeImportMeta: normalizeImportMeta,
       normalizeTimeValue: normalizeTimeValue,
+      validateEventItem: validateEventItem,
+      validateNewsItem: validateNewsItem,
+      validateReviewItem: validateReviewItem,
       validateHoursSection: validateHoursSection,
       validateEventsSection: validateEventsSection,
       validateNewsSection: validateNewsSection,

@@ -306,58 +306,16 @@ function createDefaultLandingHoursRestaurant() {
   return LANDING_MODEL.createDefaultHoursRestaurant();
 }
 function createDefaultLandingImportMeta(sourceUrl = '') {
-  return {
-    sourceUrl: sourceUrl ? String(sourceUrl) : '',
-    lastAttemptTs: '',
-    lastSuccessTs: '',
-    status: LANDING_IMPORT_STATUS_IDLE,
-    messages: [],
-  };
+  return LANDING_MODEL.createDefaultImportMeta(sourceUrl);
 }
 function createDefaultLandingEventItem() {
-  return {
-    id: uid(),
-    target: LANDING_TARGET_BOTH,
-    title: '',
-    eventDate: '',
-    startTime: '',
-    endTime: '',
-    timingNote: '',
-    body: '',
-    archived: false,
-    archivedAt: '',
-    updatedAt: '',
-  };
+  return LANDING_MODEL.createDefaultEventItem();
 }
 function createDefaultLandingNewsItem() {
-  return {
-    id: uid(),
-    target: LANDING_TARGET_BOTH,
-    title: '',
-    body: '',
-    href: '',
-    source: '',
-    publishedDate: '',
-    imageUrl: '',
-    archived: false,
-    archivedAt: '',
-    updatedAt: '',
-    importMeta: createDefaultLandingImportMeta(),
-  };
+  return LANDING_MODEL.createDefaultNewsItem();
 }
 function createDefaultLandingReviewItem() {
-  return {
-    id: uid(),
-    href: '',
-    author: '',
-    quote: '',
-    source: 'Google Review',
-    rating: '',
-    archived: false,
-    archivedAt: '',
-    updatedAt: '',
-    importMeta: createDefaultLandingImportMeta(),
-  };
+  return LANDING_MODEL.createDefaultReviewItem();
 }
 function createDefaultLandingContent() {
   return LANDING_MODEL.createDefaultContent();
@@ -366,9 +324,7 @@ function createDefaultLandingPageRecord() {
   return LANDING_MODEL.createDefaultRecord();
 }
 function normalizeLandingTimestamp(value) {
-  if (value === null || value === undefined || value === '') return '';
-  const num = Number(value);
-  return Number.isFinite(num) && num > 0 ? String(num) : '';
+  return LANDING_MODEL.normalizeTimestamp(value);
 }
 function normalizeLandingDay(rawDay = {}) {
   return LANDING_MODEL.normalizeDay(rawDay);
@@ -383,51 +339,13 @@ function normalizeLandingImportMeta(rawMeta = {}) {
   return LANDING_MODEL.normalizeImportMeta(rawMeta);
 }
 function normalizeLandingEventItem(rawItem = {}) {
-  return {
-    id: rawItem?.id ? String(rawItem.id) : uid(),
-    target: normalizeLandingTarget(rawItem?.target, { allowBoth: true }),
-    title: rawItem?.title ? String(rawItem.title) : '',
-    eventDate: rawItem?.eventDate ? String(rawItem.eventDate) : '',
-    startTime: normalizeLandingTimeValue(rawItem?.startTime),
-    endTime: normalizeLandingTimeValue(rawItem?.endTime),
-    timingNote: rawItem?.timingNote ? String(rawItem.timingNote) : '',
-    body: rawItem?.body ? String(rawItem.body) : '',
-    archived: !!rawItem?.archived,
-    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
-    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
-  };
+  return LANDING_MODEL.normalizeEventItem(rawItem);
 }
 function normalizeLandingNewsItem(rawItem = {}) {
-  return {
-    id: rawItem?.id ? String(rawItem.id) : uid(),
-    target: normalizeLandingTarget(rawItem?.target, { allowBoth: true }),
-    title: rawItem?.title ? String(rawItem.title) : '',
-    body: rawItem?.body ? String(rawItem.body) : '',
-    href: rawItem?.href ? String(rawItem.href) : '',
-    source: rawItem?.source ? String(rawItem.source) : '',
-    publishedDate: rawItem?.publishedDate ? String(rawItem.publishedDate) : (rawItem?.publishedAt ? String(rawItem.publishedAt) : ''),
-    imageUrl: rawItem?.imageUrl ? String(rawItem.imageUrl) : '',
-    archived: !!rawItem?.archived,
-    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
-    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
-    importMeta: normalizeLandingImportMeta(rawItem?.importMeta || {}),
-  };
+  return LANDING_MODEL.normalizeNewsItem(rawItem);
 }
 function normalizeLandingReviewItem(rawItem = {}) {
-  const rating = Number(rawItem?.rating);
-  const normalizedRating = Number.isFinite(rating) && rating >= 1 && rating <= 5 ? Math.round(rating) : '';
-  return {
-    id: rawItem?.id ? String(rawItem.id) : uid(),
-    href: rawItem?.href ? String(rawItem.href) : '',
-    author: rawItem?.author ? String(rawItem.author) : '',
-    quote: rawItem?.quote ? String(rawItem.quote) : '',
-    source: rawItem?.source ? String(rawItem.source) : 'Google Review',
-    rating: normalizedRating,
-    archived: !!rawItem?.archived,
-    archivedAt: normalizeLandingTimestamp(rawItem?.archivedAt),
-    updatedAt: normalizeLandingTimestamp(rawItem?.updatedAt),
-    importMeta: normalizeLandingImportMeta(rawItem?.importMeta || {}),
-  };
+  return LANDING_MODEL.normalizeReviewItem(rawItem);
 }
 function normalizeLandingContent(rawContent = {}) {
   return LANDING_MODEL.normalizeContent(rawContent);
@@ -654,42 +572,13 @@ function setLandingSectionFilter(sectionId = '', key = '', value = false) {
   saveLandingFilters();
 }
 function validateLandingEventItem(item = {}) {
-  const issues = [];
-  if (!item.target) issues.push('target');
-  if (!item.title?.trim()) issues.push('title');
-  if (!isLandingIsoDate(item.eventDate)) issues.push('date');
-  if (parseLandingTimeToMinutes(item.startTime) === null) issues.push('start time');
-  if (parseLandingTimeToMinutes(item.endTime) === null && !item.timingNote?.trim()) issues.push('end time or note');
-  if (!item.body?.trim()) issues.push('description');
-  return {
-    valid: issues.length === 0,
-    missingFields: issues,
-  };
+  return LANDING_MODEL.validateEventItem(item);
 }
 function validateLandingNewsItem(item = {}) {
-  const issues = [];
-  if (!item.target) issues.push('target');
-  if (!item.title?.trim()) issues.push('headline');
-  if (!isLandingAbsoluteUrl(item.href)) issues.push('article URL');
-  if (!item.source?.trim()) issues.push('source');
-  if (!isLandingIsoDate(item.publishedDate)) issues.push('publish date');
-  if (!item.importMeta?.lastAttemptTs) issues.push('import record');
-  return {
-    valid: issues.length === 0,
-    missingFields: issues,
-  };
+  return LANDING_MODEL.validateNewsItem(item);
 }
 function validateLandingReviewItem(item = {}) {
-  const issues = [];
-  if (!isLandingAbsoluteUrl(item.href)) issues.push('review URL');
-  if (!item.author?.trim()) issues.push('author');
-  if (!item.quote?.trim()) issues.push('quote');
-  if (!Number.isFinite(Number(item.rating)) || Number(item.rating) < 1 || Number(item.rating) > 5) issues.push('rating');
-  if (!item.importMeta?.lastAttemptTs) issues.push('import record');
-  return {
-    valid: issues.length === 0,
-    missingFields: issues,
-  };
+  return LANDING_MODEL.validateReviewItem(item);
 }
 function validateLandingEventsSection(section = {}) {
   return LANDING_MODEL.validateEventsSection(section);
@@ -4100,7 +3989,9 @@ function getLandingSectionStatus(sectionId, record = _landingPageState) {
 }
 
 function renderLandingHoursRowsHtml(section = {}, restaurantId = '', restaurantLabel = '') {
-  return LANDING_MODEL.renderHoursRowsHtml(section, restaurantId, restaurantLabel);
+  return LANDING_MODEL.renderHoursRowsHtml(section, restaurantId, restaurantLabel, {
+    setFieldHandlerName: 'setLandingHoursField',
+  });
 }
 function renderLandingTargetOptionsHtml(selectedTarget = '', options = {}) {
   return LANDING_MODEL.renderTargetOptionsHtml(selectedTarget, options);

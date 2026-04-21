@@ -25,10 +25,18 @@ test('landing model factory publishes selected draft sections without mutating l
     'core/landing/model.js',
   ]);
   const model = sandbox.__HF_LANDING_MODULES__.createLandingModel();
+  assert.equal(typeof model.createDefaultImportMeta, 'function');
   assert.equal(typeof model.createDefaultContent, 'function');
+  assert.equal(typeof model.normalizeTimestamp, 'function');
   assert.equal(typeof model.normalizeDay, 'function');
   assert.equal(typeof model.normalizeHoursRestaurant, 'function');
+  assert.equal(typeof model.normalizeEventItem, 'function');
+  assert.equal(typeof model.normalizeNewsItem, 'function');
+  assert.equal(typeof model.normalizeReviewItem, 'function');
   assert.equal(typeof model.normalizeContent, 'function');
+  assert.equal(typeof model.validateEventItem, 'function');
+  assert.equal(typeof model.validateNewsItem, 'function');
+  assert.equal(typeof model.validateReviewItem, 'function');
   const record = model.createDefaultRecord();
 
   record.draftContent.news.items.push({
@@ -47,4 +55,35 @@ test('landing model factory publishes selected draft sections without mutating l
   assert.equal(record.liveContent.news.items.length, 0);
   assert.equal(published.liveContent.news.items.length, 1);
   assert.equal(model.validateNewsSection(published.liveContent.news).valid, true);
+});
+
+test('landing model hours rows html uses injected handler names instead of app globals', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/landing/model.js',
+  ]);
+  const model = sandbox.__HF_LANDING_MODULES__.createLandingModel();
+  const restaurants = model.getConstants().RESTAURANTS;
+  const hours = model.createDefaultRecord().draftContent.hours;
+
+  hours.restaurants[restaurants.LEROYS.id].days.wed = {
+    closed: false,
+    open: '16:00',
+    close: '23:00',
+  };
+
+  const genericHtml = model.renderHoursRowsHtml(
+    hours,
+    restaurants.LEROYS.id,
+    restaurants.LEROYS.name,
+    { setFieldHandlerName: 'handleHourChange' }
+  );
+  const noHandlerHtml = model.renderHoursRowsHtml(
+    hours,
+    restaurants.LEROYS.id,
+    restaurants.LEROYS.name
+  );
+
+  assert.match(genericHtml, /onchange="handleHourChange\(/);
+  assert.doesNotMatch(genericHtml, /setLandingHoursField\(/);
+  assert.doesNotMatch(noHandlerHtml, /onchange="/);
 });
