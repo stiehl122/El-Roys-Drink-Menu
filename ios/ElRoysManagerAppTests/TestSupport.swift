@@ -197,15 +197,18 @@ func routeStateMakeAuthSession() -> AuthSession {
 func routeStateMakeServices(
   workspaceClient: WorkspaceClienting = RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
   publicMenuClient: PublicMenuClienting = RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
-  historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+  historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
+  liveSaveClient: LiveSaveClienting? = nil
 ) -> AppServices {
-  AppServices(
+  let resolvedLiveSaveClient = liveSaveClient
+    ?? RouteStateStubLiveSaveClient(workspaceClient: workspaceClient as? RouteStateStubWorkspaceClient)
+  return AppServices(
     bootstrap: RouteStateStubBootstrapClient(),
     auth: RouteStateStubAuthClient(),
     workspace: workspaceClient,
     publicMenu: publicMenuClient,
     draft: RouteStateStubDraftClient(),
-    liveSave: RouteStateStubLiveSaveClient(),
+    liveSave: resolvedLiveSaveClient,
     publish: RouteStateStubPublishClient(),
     history: historyClient,
     featuredTools: RouteStateStubFeaturedToolsClient(),
@@ -317,20 +320,39 @@ final class RouteStateStubAuthClient: AuthClienting {
 }
 
 final class RouteStateStubWorkspaceClient: WorkspaceClienting {
-  private let payloads: [MenuWorkspacePayload]
+  private var payloadsByMenuID: [String: MenuWorkspacePayload]
+  private let fallbackPayload: MenuWorkspacePayload?
 
   init(payloads: [MenuWorkspacePayload]) {
-    self.payloads = payloads
+    self.payloadsByMenuID = Dictionary(
+      uniqueKeysWithValues: payloads.compactMap { payload in
+        guard let menuId = payload.context.menu?.id else { return nil }
+        return (menuId, payload)
+      }
+    )
+    self.fallbackPayload = payloads.first
   }
 
   func fetch(menuId: String, accessToken: String) async throws -> MenuWorkspacePayload {
-    if let payload = payloads.first(where: { $0.context.menu?.id == menuId }) {
+    if let payload = payloadsByMenuID[menuId] {
       return payload
     }
-    if let payload = payloads.first {
+    if let payload = fallbackPayload {
       return payload
     }
     throw RouteStateTestError.message("Missing workspace payload for \(menuId)")
+  }
+
+  func applyLiveSave(menuId: String, snapshot: MenuSnapshotPayload, ts: Int?) {
+    guard var payload = payloadsByMenuID[menuId] ?? fallbackPayload else { return }
+    payload.cats = snapshot.cats
+    payload.meta = snapshot.meta
+    payload.restaurant = snapshot.restaurant
+    if let ts {
+      payload.meta.lastUpdatedTs = ts
+      payload.workspace.revisions.liveRevision = ts
+    }
+    payloadsByMenuID[menuId] = payload
   }
 }
 
@@ -357,8 +379,28 @@ final class RouteStateStubDraftClient: DraftClienting {
 }
 
 final class RouteStateStubLiveSaveClient: LiveSaveClienting {
+  private let workspaceClient: RouteStateStubWorkspaceClient?
+  private let ts: Int
+
+  init(workspaceClient: RouteStateStubWorkspaceClient? = nil, ts: Int = 20) {
+    self.workspaceClient = workspaceClient
+    self.ts = ts
+  }
+
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String) async throws -> PublishResponse {
-    throw RouteStateTestError.message("Unused in this test")
+    workspaceClient?.applyLiveSave(menuId: menuId, snapshot: snapshot, ts: ts)
+    return PublishResponse(
+      ok: true,
+      action: "save",
+      ts: ts,
+      preview: nil,
+      currentRevisions: nil,
+      notificationStatus: nil,
+      warnings: nil,
+      warningMessage: nil,
+      successMessage: nil,
+      selectedChangeIds: nil
+    )
   }
 }
 

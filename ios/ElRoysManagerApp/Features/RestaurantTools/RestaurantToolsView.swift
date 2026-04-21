@@ -290,7 +290,9 @@ struct RestaurantInventoryScreen: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
           if !row.onMenu {
             Button("Prune", role: .destructive) {
-              session.prune(itemID: row.id, fromMenuID: row.menuID, categoryKey: row.categoryKey)
+              Task {
+                await session.prune(itemID: row.id, fromMenuID: row.menuID, categoryKey: row.categoryKey)
+              }
             }
           }
         }

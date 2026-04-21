@@ -272,7 +272,7 @@ final class RestaurantToolsInventoryTests: XCTestCase {
     await session.load()
     let offMenuItem = try XCTUnwrap(session.inventoryRows.first(where: { !$0.onMenu }))
 
-    session.prune(
+    await session.prune(
       itemID: offMenuItem.id,
       fromMenuID: offMenuItem.menuID,
       categoryKey: offMenuItem.categoryKey

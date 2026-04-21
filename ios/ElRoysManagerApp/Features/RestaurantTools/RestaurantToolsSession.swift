@@ -95,12 +95,38 @@ final class RestaurantToolsSession {
     return toolsHistories[menu.id]
   }
 
-  func prune(itemID: String, fromMenuID menuID: String, categoryKey: String) {
-    guard var workspace = toolsMenus[menuID] else { return }
-    var document = EditableMenuDocument(workspace: workspace)
-    document.deleteItem(itemID: itemID, categoryKey: categoryKey)
-    workspace.cats = document.cats
-    toolsMenus[menuID] = workspace
+  func prune(itemID: String, fromMenuID menuID: String, categoryKey: String) async {
+    guard let menu = toolsMenus[menuID]?.context.menu ?? accessibleMenu(for: menuID) else { return }
+
+    isWorking = true
+    defer { isWorking = false }
+
+    let editorSession = MenuEditorSession(menu: menu, appModel: appModel)
+    await editorSession.load()
+    guard editorSession.document != nil else {
+      notice = editorSession.notice
+      return
+    }
+
+    editorSession.deleteItem(itemID: itemID, categoryKey: categoryKey)
+    await editorSession.saveLiveMenu()
+    if let editorNotice = editorSession.notice, editorNotice.tone == .danger {
+      notice = editorNotice
+      return
+    }
+
+    do {
+      let payloads = try await appModel.loadRestaurantToolsPayloads(for: restaurant.id)
+      toolsMenus = payloads.menus
+      toolsHistories = payloads.histories
+      notice = FeatureNotice.success("Item Pruned", "The off-menu item was removed from the restaurant inventory.")
+    } catch {
+      notice = FeatureNotice(
+        tone: .danger,
+        title: "Refreshing Inventory",
+        message: error.localizedDescription
+      )
+    }
   }
 
   func saveFeaturedAction(
@@ -134,5 +160,9 @@ final class RestaurantToolsSession {
         message: error.localizedDescription
       )
     }
+  }
+
+  private func accessibleMenu(for menuID: String) -> MenuRecord? {
+    appModel.accessibleMenus.first(where: { $0.id == menuID })
   }
 }
