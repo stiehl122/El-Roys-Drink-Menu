@@ -10,6 +10,7 @@
 		1619A5144C7ADCFA72C8ED3F /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF994D3A2941E287BD4FCFD /* RestaurantCategoryManagementView.swift */; };
 		1E2A2E92ADE251BFC6735026 /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 677BFA1FC29CBADCA32BBEF5 /* OfflineDraftStore.swift */; };
 		38A424A5FADDF9352ACAFCFC /* BackendClients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163E668E69F623D6F9C35FF /* BackendClients.swift */; };
+		3C1C6D4B1A2F4E4BA0A1B001 /* MenuEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1C6D4A1A2F4E4BA0A1B001 /* MenuEditorSession.swift */; };
 		4210EF47438191968C349DA5 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E292A54CAEAE090189BD6F4 /* MenuViews.swift */; };
 		4285CEDED841CF08D1FABBBE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7850DF6EDD303187853D3D60 /* Foundation.framework */; };
 		46727CC5A950281E5F5F3BA0 /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01247C3874B035A98D155A3E /* HomeViews.swift */; };
@@ -24,10 +25,14 @@
 		9521F4C96EE0A0A1FABB707B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2737E4B23ABB3D2A8BD3DFD /* Glass.swift */; };
 		AF7D0EB527C62D3C76CF5261 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A257F57CAABCD32EAB80F39 /* Assets.xcassets */; };
 		CA10B53E7C31DA1A6DD42B29 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D5E3ED05F5E7457292567D /* RestaurantToolsView.swift */; };
+		725C89A3A5E84B82B1A1B002 /* RestaurantToolsSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 725C89A2A5E84B82B1A1B002 /* RestaurantToolsSession.swift */; };
 		D037A7BE20055914A56D37F7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D5D376AB1F741A7F63B9F0 /* AppModel.swift */; };
 		E22DB70309FD8C42F9C87629 /* PublicMenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4B9BCDC98C11B1A0E876B2 /* PublicMenuViews.swift */; };
+		E4D6A4C21B2C4E50A0A1B003 /* PublicMenuSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4D6A4C11B2C4E50A0A1B003 /* PublicMenuSession.swift */; };
 		F0080EEDC6F72111EEC84D1D /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381F6958DAD2BDCFE63D73B2 /* ElRoysManagerAppUITests.swift */; };
 		F350CC708F6F708242DB6363 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */; };
+		F3A7A1D31B2C4E50A0A1B004 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A7A1D21B2C4E50A0A1B004 /* TestSupport.swift */; };
+		F3A7A1D51B2C4E50A0A1B005 /* RouteStateIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3A7A1D41B2C4E50A0A1B005 /* RouteStateIsolationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +64,11 @@
 		6163E668E69F623D6F9C35FF /* BackendClients.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackendClients.swift; sourceTree = "<group>"; };
 		677BFA1FC29CBADCA32BBEF5 /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
 		7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
+		3C1C6D4A1A2F4E4BA0A1B001 /* MenuEditorSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuEditorSession.swift; sourceTree = "<group>"; };
+		E4D6A4C11B2C4E50A0A1B003 /* PublicMenuSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuSession.swift; sourceTree = "<group>"; };
+		725C89A2A5E84B82B1A1B002 /* RestaurantToolsSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsSession.swift; sourceTree = "<group>"; };
+		F3A7A1D21B2C4E50A0A1B004 /* TestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		F3A7A1D41B2C4E50A0A1B005 /* RouteStateIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteStateIsolationTests.swift; sourceTree = "<group>"; };
 		7850DF6EDD303187853D3D60 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		78D5D376AB1F741A7F63B9F0 /* AppModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		8E292A54CAEAE090189BD6F4 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
@@ -122,6 +132,7 @@
 		264680E6FC3DE7103A722A39 /* Menu */ = {
 			isa = PBXGroup;
 			children = (
+				3C1C6D4A1A2F4E4BA0A1B001 /* MenuEditorSession.swift */,
 				8E292A54CAEAE090189BD6F4 /* MenuViews.swift */,
 				9DF994D3A2941E287BD4FCFD /* RestaurantCategoryManagementView.swift */,
 			);
@@ -131,6 +142,7 @@
 		30CAB7FD7A88F82D7B09C83A /* RestaurantTools */ = {
 			isa = PBXGroup;
 			children = (
+				725C89A2A5E84B82B1A1B002 /* RestaurantToolsSession.swift */,
 				21D5E3ED05F5E7457292567D /* RestaurantToolsView.swift */,
 			);
 			path = RestaurantTools;
@@ -181,6 +193,7 @@
 		8180C733CD9364453F5AA694 /* Public */ = {
 			isa = PBXGroup;
 			children = (
+				E4D6A4C11B2C4E50A0A1B003 /* PublicMenuSession.swift */,
 				BB4B9BCDC98C11B1A0E876B2 /* PublicMenuViews.swift */,
 			);
 			path = Public;
@@ -235,6 +248,8 @@
 		BE24EDBA12E540B6293437BE /* ElRoysManagerAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				F3A7A1D41B2C4E50A0A1B005 /* RouteStateIsolationTests.swift */,
+				F3A7A1D21B2C4E50A0A1B004 /* TestSupport.swift */,
 				7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */,
 			);
 			path = ElRoysManagerAppTests;
@@ -418,6 +433,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				F350CC708F6F708242DB6363 /* MenuDocumentTests.swift in Sources */,
+				F3A7A1D31B2C4E50A0A1B004 /* TestSupport.swift in Sources */,
+				F3A7A1D51B2C4E50A0A1B005 /* RouteStateIsolationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -428,13 +445,16 @@
 				D037A7BE20055914A56D37F7 /* AppModel.swift in Sources */,
 				840C3E50EF06561832859F7D /* ElRoysManagerApp.swift in Sources */,
 				38A424A5FADDF9352ACAFCFC /* BackendClients.swift in Sources */,
+				3C1C6D4B1A2F4E4BA0A1B001 /* MenuEditorSession.swift in Sources */,
 				9521F4C96EE0A0A1FABB707B /* Glass.swift in Sources */,
 				560CB578088580D1FDEDC923 /* AuthViews.swift in Sources */,
 				46727CC5A950281E5F5F3BA0 /* HomeViews.swift in Sources */,
 				4210EF47438191968C349DA5 /* MenuViews.swift in Sources */,
 				1619A5144C7ADCFA72C8ED3F /* RestaurantCategoryManagementView.swift in Sources */,
 				65844C9F17B4F0D6530E8F7F /* RoutePreviewView.swift in Sources */,
+				E4D6A4C21B2C4E50A0A1B003 /* PublicMenuSession.swift in Sources */,
 				E22DB70309FD8C42F9C87629 /* PublicMenuViews.swift in Sources */,
+				725C89A3A5E84B82B1A1B002 /* RestaurantToolsSession.swift in Sources */,
 				CA10B53E7C31DA1A6DD42B29 /* RestaurantToolsView.swift in Sources */,
 				726691CA88B8EB0D50330C6F /* BarcodeScannerView.swift in Sources */,
 				887B83FE43EEA98288934D6F /* AppModels.swift in Sources */,
@@ -804,6 +824,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = FCM3AK447F;
 				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_TESTABILITY = YES;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;

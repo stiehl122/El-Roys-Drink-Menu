@@ -1,0 +1,348 @@
+import Foundation
+@testable import ElRoysManagerApp
+
+func routeStateMakeMenuRecord(id: String, type: String, restaurantId: String = "leroys-lounge") -> MenuRecord {
+  MenuRecord(
+    id: id,
+    slug: type,
+    name: type.capitalized,
+    type: type,
+    restaurantId: restaurantId,
+    canManage: true
+  )
+}
+
+func routeStateMakeRestaurantRecord(id: String, slug: String) -> RestaurantRecord {
+  RestaurantRecord(
+    id: id,
+    slug: slug,
+    name: "Leroy's Lounge",
+    canAccess: true,
+    design: nil,
+    useCustomDesign: nil
+  )
+}
+
+func routeStateMakeWorkspace(
+  menuId: String = "menu-drinks",
+  type: String = "drinks",
+  restaurantId: String = "leroys-lounge",
+  categories: [MenuCategoryPayload] = [],
+  meta: MenuMetaPayload = MenuMetaPayload(
+    botId: nil,
+    notifications: nil,
+    notificationMenuLink: nil,
+    lastUpdatedTs: 10,
+    lastSentTs: 10,
+    lastSentState: nil,
+    lastSentCategories: [],
+    lastSentFeatured: [],
+    draftState: nil,
+    draftSavedTs: nil,
+    draftSavedByUserId: nil,
+    draftSavedByName: nil,
+    draftSavedSource: nil
+  ),
+  restaurant: RestaurantRecord? = nil,
+  restaurantTools: RestaurantToolsPayload? = nil,
+  revisions: WorkspaceRevisions = WorkspaceRevisions(
+    liveRevision: 10,
+    draftRevision: nil,
+    lastSentRevision: 10,
+    notificationBaselineRevision: 10
+  ),
+  menuStatus: String = "",
+  hasUnsentChanges: Bool? = nil,
+  permissions: WorkspacePermissions = WorkspacePermissions(
+    canManage: true,
+    canAdmin: true,
+    canEditRestaurantSpecials: false,
+    canReadRestaurantTools: false
+  ),
+  capabilities: WorkspaceCapabilities = WorkspaceCapabilities(
+    canSaveDraft: true,
+    canSaveLiveMenu: true,
+    canPublishUpdates: true,
+    canManageRestaurantSpecials: false,
+    canReadRestaurantTools: false,
+    canManageAdminSettings: false,
+    includesDraftAuthorship: true,
+    includesRestaurantTools: false
+  )
+) -> MenuWorkspacePayload {
+  let menu = routeStateMakeMenuRecord(id: menuId, type: type, restaurantId: restaurantId)
+  let resolvedRestaurant = restaurant ?? routeStateMakeRestaurantRecord(id: restaurantId, slug: restaurantId)
+  let resolvedSharedDraft = SharedDraftInfo(
+    exists: false,
+    savedAt: revisions.draftRevision,
+    savedBy: nil,
+    source: ""
+  )
+  return MenuWorkspacePayload(
+    cats: categories,
+    meta: meta,
+    restaurant: resolvedRestaurant,
+    restaurantTools: restaurantTools,
+    context: MenuContext(kind: "menu-workspace", menu: menu),
+    workspace: WorkspaceState(
+      actor: ActorProfile(id: "staff-1", name: "Alex", role: "manager"),
+      accessibleMenuIds: [menuId],
+      hasSharedDraft: resolvedSharedDraft.exists,
+      sharedDraft: resolvedSharedDraft,
+      menuStatus: menuStatus,
+      hasUnsentChanges: hasUnsentChanges,
+      permissions: permissions,
+      capabilities: capabilities,
+      revisions: revisions
+    ),
+    capabilities: nil
+  )
+}
+
+func routeStateMakePublicMenuPayload(menuId: String, type: String = "food") -> PublicMenuPayload {
+  PublicMenuPayload(
+    cats: [],
+    meta: routeStateMakeWorkspace(menuId: menuId, type: type).meta,
+    restaurant: routeStateMakeRestaurantRecord(id: "rest-1", slug: "leroys-lounge"),
+    featuredGroups: [],
+    context: MenuContext(kind: "public-menu", menu: routeStateMakeMenuRecord(id: menuId, type: type)),
+    capabilities: PublicMenuCapabilities(
+      guestReadable: true,
+      requiresAuth: false,
+      includesDraftState: false,
+      includesNotificationConfig: true
+    )
+  )
+}
+
+func routeStateMakeHistoryPayload(menuId: String = "menu-drinks", type: String = "drinks") -> HistoryPayload {
+  HistoryPayload(
+    logs: [],
+    context: HistoryContext(
+      kind: "menu-history",
+      menu: routeStateMakeMenuRecord(id: menuId, type: type),
+      restaurant: routeStateMakeRestaurantRecord(id: "rest-1", slug: "leroys-lounge")
+    ),
+    actor: ActorProfile(id: "staff-1", name: "Alex", role: "manager"),
+    history: HistorySummary(days: 7, limit: 25, count: 0, scope: "menu", partial: false),
+    capabilities: HistoryCapabilities(canReadHistory: true, includesMessage: true, includesSource: true)
+  )
+}
+
+func routeStateMakeAuthSession() -> AuthSession {
+  AuthSession(
+    accessToken: "token",
+    refreshToken: "refresh",
+    expiresAt: Date().addingTimeInterval(3600),
+    userID: "staff-1",
+    email: "staff@example.com",
+    name: "Alex",
+    role: "manager",
+    accessibleMenuIds: ["menu-drinks", "menu-food"]
+  )
+}
+
+func routeStateMakeServices(
+  workspaceClient: WorkspaceClienting = RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
+  publicMenuClient: PublicMenuClienting = RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
+  historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+) -> AppServices {
+  AppServices(
+    bootstrap: RouteStateStubBootstrapClient(),
+    auth: RouteStateStubAuthClient(),
+    workspace: workspaceClient,
+    publicMenu: publicMenuClient,
+    draft: RouteStateStubDraftClient(),
+    liveSave: RouteStateStubLiveSaveClient(),
+    publish: RouteStateStubPublishClient(),
+    history: historyClient,
+    featuredTools: RouteStateStubFeaturedToolsClient(),
+    preview: RouteStateStubPreviewClient(),
+    productLookup: RouteStateStubProductLookupClient()
+  )
+}
+
+enum RouteStateTestError: LocalizedError {
+  case message(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .message(let value):
+      return value
+    }
+  }
+}
+
+final class RouteStateTestSessionStore: SessionStoring {
+  var biometricUnlockEnabled: Bool = false
+  private var storedSession: AuthSession?
+
+  func loadSession(promptForBiometrics: Bool) async throws -> AuthSession {
+    guard let storedSession else {
+      throw SessionStoreError.notFound
+    }
+    return storedSession
+  }
+
+  func saveSession(_ session: AuthSession) throws {
+    storedSession = session
+  }
+
+  func clearSession() throws {
+    storedSession = nil
+  }
+}
+
+final class RouteStateTestOfflineDraftStore: OfflineDraftStoring {
+  var clientScopeId: String = "test-device"
+  var draft: LocalDraftEnvelope?
+  var loadError: Error?
+  var savedEnvelopes: [LocalDraftEnvelope] = []
+  var removedDraftKeys: [String] = []
+
+  func loadDraft(userId: String, menuId: String) throws -> LocalDraftEnvelope? {
+    if let loadError {
+      throw loadError
+    }
+    return draft
+  }
+
+  func saveDraft(_ envelope: LocalDraftEnvelope) throws {
+    draft = envelope
+    savedEnvelopes.append(envelope)
+  }
+
+  func removeDraft(userId: String, menuId: String) throws {
+    removedDraftKeys.append("\(userId)::\(menuId)")
+    if draft?.userId == userId && draft?.menuId == menuId {
+      draft = nil
+    }
+  }
+
+  func loadAllDrafts() throws -> [LocalDraftEnvelope] {
+    draft.map { [$0] } ?? []
+  }
+}
+
+final class RouteStateStubBootstrapClient: BootstrapClienting {
+  func fetch(accessToken: String?) async throws -> SessionBootstrapPayload {
+    SessionBootstrapPayload(
+      actor: ActorProfile(id: "staff-1", name: "Alex", role: "manager"),
+      appVersion: "test",
+      defaultMenuId: "menu-drinks",
+      capabilities: BootstrapCapabilities(canAccessManager: true, canAccessAdmin: false, canManageAnyMenu: true),
+      menus: [
+        routeStateMakeMenuRecord(id: "menu-drinks", type: "drinks"),
+        routeStateMakeMenuRecord(id: "menu-food", type: "food")
+      ],
+      restaurants: [
+        routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+      ],
+      access: BootstrapAccess(accessibleMenuIds: ["menu-drinks", "menu-food"], accessibleRestaurantIds: ["leroys-lounge"]),
+      config: nil,
+      readiness: nil,
+      loopAudit: nil
+    )
+  }
+}
+
+final class RouteStateStubAuthClient: AuthClienting {
+  func signIn(email: String, password: String) async throws -> AuthSession {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
+  func signUp(email: String, password: String, name: String) async throws -> AuthSession {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
+  func refresh(session: AuthSession) async throws -> AuthSession {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
+  func sendReset(email: String, redirectTo: URL) async throws {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}
+
+final class RouteStateStubWorkspaceClient: WorkspaceClienting {
+  private let payloads: [MenuWorkspacePayload]
+  private var fetchCount = 0
+
+  init(payloads: [MenuWorkspacePayload]) {
+    self.payloads = payloads
+  }
+
+  func fetch(menuId: String, accessToken: String) async throws -> MenuWorkspacePayload {
+    let index = min(fetchCount, max(payloads.count - 1, 0))
+    fetchCount += 1
+    return payloads[index]
+  }
+}
+
+final class RouteStateStubPublicMenuClient: PublicMenuClienting {
+  private let payload: PublicMenuPayload
+
+  init(payload: PublicMenuPayload) {
+    self.payload = payload
+  }
+
+  func fetch(menuId: String, accessToken: String?) async throws -> PublicMenuPayload {
+    payload
+  }
+}
+
+final class RouteStateStubDraftClient: DraftClienting {
+  func save(menuId: String, snapshot: MenuSnapshotPayload, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
+  func clear(menuId: String, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}
+
+final class RouteStateStubLiveSaveClient: LiveSaveClienting {
+  func save(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, accessToken: String) async throws -> PublishResponse {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}
+
+final class RouteStateStubPublishClient: PublishClienting {
+  func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}
+
+final class RouteStateStubHistoryClient: HistoryClienting {
+  let payload: HistoryPayload
+
+  init(payload: HistoryPayload) {
+    self.payload = payload
+  }
+
+  func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload {
+    payload
+  }
+}
+
+final class RouteStateStubFeaturedToolsClient: FeaturedToolsClienting {
+  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}
+
+final class RouteStateStubPreviewClient: PreviewClienting {
+  func exactRouteURL(for menu: MenuRecord) -> URL {
+    URL(string: "https://example.com") ?? URL(fileURLWithPath: "/")
+  }
+}
+
+final class RouteStateStubProductLookupClient: ProductLookupClienting {
+  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+}

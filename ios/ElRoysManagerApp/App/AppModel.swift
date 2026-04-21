@@ -9,12 +9,18 @@ enum AuthScreenMode: String, CaseIterable, Identifiable {
   var id: String { rawValue }
 }
 
-struct AppNotice: Identifiable, Equatable {
+struct FeatureNotice: Identifiable, Equatable {
   let id = UUID()
   var tone: StatusBanner.Tone
   var title: String
   var message: String
+
+  static func success(_ title: String, _ message: String) -> FeatureNotice {
+    FeatureNotice(tone: .success, title: title, message: message)
+  }
 }
+
+typealias AppNotice = FeatureNotice
 
 enum EditorRefreshStrategy {
   case keepLocalDrafts
@@ -291,27 +297,86 @@ final class AppModel {
     accessibleMenus.first { $0.restaurantId == restaurantId && $0.type.lowercased() == type.lowercased() }
   }
 
+  func loadWorkspace(menuId: String) async throws -> MenuWorkspacePayload {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+  }
+
+  func loadHistory(menuId: String) async throws -> HistoryPayload {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.history.fetch(menuId: menuId, accessToken: accessToken)
+  }
+
+  func loadPublicMenuPayload(menuId: String) async throws -> PublicMenuPayload {
+    try await services.publicMenu.fetch(menuId: menuId, accessToken: authSession?.accessToken)
+  }
+
+  func loadRestaurantToolsPayloads(
+    for restaurantId: String
+  ) async throws -> (menus: [String: MenuWorkspacePayload], histories: [String: HistoryPayload]) {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    let workspaceClient = services.workspace
+    let historyClient = services.history
+    let menuIds = accessibleMenus.filter { $0.restaurantId == restaurantId }.map(\.id)
+    guard !menuIds.isEmpty else {
+      return (menus: [:], histories: [:])
+    }
+
+    var menus: [String: MenuWorkspacePayload] = [:]
+    var histories: [String: HistoryPayload] = [:]
+    try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload?).self) { group in
+      for menuId in menuIds {
+        group.addTask {
+          let workspace = try await workspaceClient.fetch(menuId: menuId, accessToken: accessToken)
+          let history: HistoryPayload?
+          do {
+            history = try await historyClient.fetch(menuId: menuId, accessToken: accessToken)
+          } catch {
+            history = nil
+            #if DEBUG
+              print("Restaurant tools history unavailable for \(menuId): \(error)")
+            #endif
+          }
+          return (menuId, workspace, history)
+        }
+      }
+      for try await (menuId, workspace, history) in group {
+        menus[menuId] = workspace
+        if let history {
+          histories[menuId] = history
+        }
+      }
+    }
+    return (menus: menus, histories: histories)
+  }
+
   func loadPublicMenu(menuId: String) async {
     guard bootstrap?.menus.contains(where: { $0.id == menuId }) == true else { return }
     currentMenuId = menuId
     await run("Loading Public Menu") { model in
-      let payload = try await model.services.publicMenu.fetch(menuId: menuId, accessToken: model.authSession?.accessToken)
+      let payload = try await model.loadPublicMenuPayload(menuId: menuId)
       guard model.currentMenuId == menuId else { return }
       model.currentPublicMenu = payload
     }
   }
 
   func loadEditor(menuId: String) async {
-    guard let accessToken = authSession?.accessToken else {
+    guard authSession?.accessToken != nil else {
       notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Editing is only available to authenticated staff.")
       return
     }
     currentMenuId = menuId
     await run("Loading Editor") { model in
-      let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let workspace = try await model.loadWorkspace(menuId: menuId)
       let history: HistoryPayload?
       do {
-        history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
+        history = try await model.loadHistory(menuId: menuId)
       } catch {
         history = nil
         #if DEBUG
@@ -381,42 +446,18 @@ final class AppModel {
   }
 
   func loadRestaurantTools(for restaurantId: String) async {
-    guard let accessToken = authSession?.accessToken else {
+    guard authSession?.accessToken != nil else {
       notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Restaurant tools require an authenticated staff session.")
       return
     }
     let menuIds = accessibleMenus.filter { $0.restaurantId == restaurantId }.map(\.id)
     guard !menuIds.isEmpty else { return }
     await run("Loading Restaurant Tools") { model in
-      var menus: [String: MenuWorkspacePayload] = [:]
-      var histories: [String: HistoryPayload] = [:]
-      try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload?).self) { group in
-        for menuId in menuIds {
-          group.addTask {
-            let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
-            let history: HistoryPayload?
-            do {
-              history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
-            } catch {
-              history = nil
-              #if DEBUG
-                print("Restaurant tools history unavailable for \(menuId): \(error)")
-              #endif
-            }
-            return (menuId, workspace, history)
-          }
-        }
-        for try await (menuId, workspace, history) in group {
-          menus[menuId] = workspace
-          if let history {
-            histories[menuId] = history
-          }
-        }
-      }
-      for (menuId, workspace) in menus {
+      let payloads = try await model.loadRestaurantToolsPayloads(for: restaurantId)
+      for (menuId, workspace) in payloads.menus {
         model.currentToolsMenus[menuId] = workspace
       }
-      for (menuId, history) in histories {
+      for (menuId, history) in payloads.histories {
         model.currentToolsHistories[menuId] = history
       }
       model.homeDataVersion += 1
