@@ -382,130 +382,55 @@ function normalizeLandingTimeValue(value = '') {
   return LANDING_MODEL.normalizeTimeValue(value);
 }
 function parseLandingTimeToMinutes(value = '') {
-  const normalized = normalizeLandingTimeValue(value);
-  if (!normalized) return null;
-  const [hours, minutes] = normalized.split(':').map(Number);
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return hours * 60 + minutes;
+  return LANDING_MODEL.parseTimeToMinutes(value);
 }
 function formatLandingMinutes(minutes) {
-  if (!Number.isFinite(minutes)) return '';
-  const normalized = ((Math.floor(minutes) % 1440) + 1440) % 1440;
-  const hours24 = Math.floor(normalized / 60);
-  const mins = normalized % 60;
-  const suffix = hours24 >= 12 ? 'PM' : 'AM';
-  const hours12 = hours24 % 12 || 12;
-  return mins === 0 ? `${hours12} ${suffix}` : `${hours12}:${String(mins).padStart(2, '0')} ${suffix}`;
+  return LANDING_MODEL.formatMinutes(minutes);
 }
 function getLandingTimeSelectOptions() {
-  const options = [];
-  for (let minutes = 0; minutes < 1440; minutes += 15) {
-    const hours24 = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    options.push({
-      value: `${String(hours24).padStart(2, '0')}:${String(mins).padStart(2, '0')}`,
-      label: formatLandingMinutes(minutes),
-    });
-  }
-  return options;
+  return LANDING_MODEL.getTimeSelectOptions();
 }
-const LANDING_TIME_SELECT_OPTIONS = getLandingTimeSelectOptions();
 function renderLandingTimeSelectOptions(selectedValue = '', placeholder = 'Select time') {
-  const normalized = normalizeLandingTimeValue(selectedValue);
-  const optionMarkup = [`<option value="">${escHtml(placeholder)}</option>`];
-  const hasSelectedValue = normalized && LANDING_TIME_SELECT_OPTIONS.some(option => option.value === normalized);
-  if (normalized && !hasSelectedValue) {
-    const fallbackMinutes = parseLandingTimeToMinutes(normalized);
-    optionMarkup.push(
-      `<option value="${escHtml(normalized)}" selected>${escHtml(fallbackMinutes === null ? normalized : formatLandingMinutes(fallbackMinutes))}</option>`
-    );
-  }
-  LANDING_TIME_SELECT_OPTIONS.forEach(option => {
-    optionMarkup.push(
-      `<option value="${escHtml(option.value)}" ${option.value === normalized ? 'selected' : ''}>${escHtml(option.label)}</option>`
-    );
-  });
-  return optionMarkup.join('');
+  return LANDING_MODEL.renderTimeSelectOptions(selectedValue, placeholder);
 }
 function isLandingIsoDate(value = '') {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+  return LANDING_MODEL.isIsoDate(value);
 }
 function formatLandingDateLabel(value = '', options = {}) {
-  if (!isLandingIsoDate(value)) return value ? String(value) : '';
-  const [year, month, day] = value.split('-').map(Number);
-  const utcDate = new Date(Date.UTC(year, month - 1, day));
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    month: options.short ? 'short' : 'long',
-    day: 'numeric',
-    year: options.year === false ? undefined : 'numeric',
-    timeZone: 'UTC',
-  });
-  return formatter.format(utcDate).replace(', ', options.short && options.year === false ? ' ' : ', ');
+  return LANDING_MODEL.formatDateLabel(value, options);
 }
 function getLandingTargetLabel(target = '') {
-  if (target === LANDING_TARGET_BOTH) return 'Both';
-  const restaurant = knownLandingRestaurants().find(entry => entry.id === target);
-  return restaurant ? restaurant.name : 'Both';
+  return LANDING_MODEL.getTargetLabel(target);
 }
 function getLandingTargetAccentClass(target = '') {
-  if (target === RESTAURANTS.LEROYS.id) return 'landing-tag--leroys';
-  if (target === RESTAURANTS.ELROYS.id) return 'landing-tag--elroys';
-  return 'landing-tag--both';
+  return LANDING_MODEL.getTargetAccentClass(target);
 }
 function formatLandingImportStatusLabel(status = '') {
-  if (status === LANDING_IMPORT_STATUS_IMPORTED) return 'Imported';
-  if (status === LANDING_IMPORT_STATUS_PARTIAL) return 'Partial';
-  if (status === LANDING_IMPORT_STATUS_FAILED) return 'Needs Repair';
-  return 'Waiting';
+  return LANDING_MODEL.formatImportStatusLabel(status);
 }
 function formatLandingImportTimestamp(meta = {}) {
-  return meta?.lastSuccessTs
-    ? `Imported ${formatLandingTimestampLabel(meta.lastSuccessTs)}`
-    : (meta?.lastAttemptTs ? `Tried ${formatLandingTimestampLabel(meta.lastAttemptTs)}` : 'Not imported yet');
+  return LANDING_MODEL.formatImportTimestamp(meta);
 }
 function isLandingAbsoluteUrl(value = '') {
-  try {
-    const url = new URL(String(value || '').trim());
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch (_) {
-    return false;
-  }
+  return LANDING_MODEL.isAbsoluteUrl(value);
 }
 function getLandingEventDateRank(value = '') {
-  if (!isLandingIsoDate(value)) return Number.MAX_SAFE_INTEGER;
-  return Date.parse(`${value}T00:00:00Z`);
+  return LANDING_MODEL.getEventDateRank(value);
 }
 function sortLandingEvents(items = []) {
-  return items.slice().sort((a, b) => {
-    const rankDelta = getLandingEventDateRank(a.eventDate) - getLandingEventDateRank(b.eventDate);
-    if (rankDelta !== 0) return rankDelta;
-    const startDelta = (parseLandingTimeToMinutes(a.startTime) ?? Number.MAX_SAFE_INTEGER) - (parseLandingTimeToMinutes(b.startTime) ?? Number.MAX_SAFE_INTEGER);
-    if (startDelta !== 0) return startDelta;
-    return String(a.title || '').localeCompare(String(b.title || ''));
-  });
+  return LANDING_MODEL.sortEvents(items);
 }
 function sortLandingNews(items = []) {
-  return items.slice().sort((a, b) => {
-    const aRank = isLandingIsoDate(a.publishedDate) ? Date.parse(`${a.publishedDate}T00:00:00Z`) : 0;
-    const bRank = isLandingIsoDate(b.publishedDate) ? Date.parse(`${b.publishedDate}T00:00:00Z`) : 0;
-    if (aRank !== bRank) return bRank - aRank;
-    return (Number(b.updatedAt || 0) || 0) - (Number(a.updatedAt || 0) || 0);
-  });
+  return LANDING_MODEL.sortNews(items);
 }
 function sortLandingReviews(items = []) {
-  return items.slice().sort((a, b) => {
-    const successDelta = (Number(b.importMeta?.lastSuccessTs || 0) || 0) - (Number(a.importMeta?.lastSuccessTs || 0) || 0);
-    if (successDelta !== 0) return successDelta;
-    return (Number(b.updatedAt || 0) || 0) - (Number(a.updatedAt || 0) || 0);
-  });
+  return LANDING_MODEL.sortReviews(items);
 }
 function getLandingActiveItems(items = []) {
-  return Array.isArray(items) ? items.filter(item => !item?.archived) : [];
+  return LANDING_MODEL.getActiveItems(items);
 }
 function getLandingVisibleItems(items = [], showArchived = false) {
-  if (showArchived) return Array.isArray(items) ? items.slice() : [];
-  return getLandingActiveItems(items);
+  return LANDING_MODEL.getVisibleItems(items, showArchived);
 }
 function getLandingDefaultFilters() {
   return {
@@ -523,11 +448,7 @@ function normalizeLandingFilters(raw = {}) {
   };
 }
 function formatLandingHoursRange(day = {}) {
-  if (day?.closed) return 'Closed';
-  const openMinutes = parseLandingTimeToMinutes(day.open);
-  const closeMinutes = parseLandingTimeToMinutes(day.close);
-  if (openMinutes === null || closeMinutes === null) return 'Hours unavailable';
-  return `${formatLandingMinutes(openMinutes)} - ${formatLandingMinutes(closeMinutes)}`;
+  return LANDING_MODEL.formatHoursRange(day);
 }
 function getLandingDayOffsetKey(dayKey, offset = 0) {
   const index = LANDING_DAY_ORDER.indexOf(dayKey);
@@ -558,16 +479,10 @@ function getRestaurantLocalParts(now = Date.now(), timeZone = RESTAURANT_TIME_ZO
   };
 }
 function getLandingHoursForRestaurant(section = {}, restaurantId = '') {
-  return normalizeLandingHoursRestaurant(section?.restaurants?.[restaurantId] || {});
+  return LANDING_MODEL.getHoursForRestaurant(section, restaurantId);
 }
 function buildLandingWeekRows(section = {}, restaurantId = '', todayKey = 'mon') {
-  const restaurantHours = getLandingHoursForRestaurant(section, restaurantId);
-  return LANDING_DAY_ORDER.map(dayKey => ({
-    dayKey,
-    label: LANDING_DAY_LABELS[dayKey] || dayKey,
-    isToday: dayKey === todayKey,
-    rangeLabel: formatLandingHoursRange(restaurantHours.days[dayKey]),
-  }));
+  return LANDING_MODEL.buildWeekRows(section, restaurantId, todayKey);
 }
 function loadLandingFilters() {
   if (_landingAdminFilters) return _landingAdminFilters;

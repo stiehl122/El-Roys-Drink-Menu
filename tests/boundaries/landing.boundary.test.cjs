@@ -160,6 +160,26 @@ test('landing model factory publishes selected draft sections without mutating l
   assert.equal(typeof model.normalizeNewsItem, 'function');
   assert.equal(typeof model.normalizeReviewItem, 'function');
   assert.equal(typeof model.normalizeContent, 'function');
+  assert.equal(typeof model.parseTimeToMinutes, 'function');
+  assert.equal(typeof model.formatMinutes, 'function');
+  assert.equal(typeof model.getTimeSelectOptions, 'function');
+  assert.equal(typeof model.renderTimeSelectOptions, 'function');
+  assert.equal(typeof model.isIsoDate, 'function');
+  assert.equal(typeof model.formatDateLabel, 'function');
+  assert.equal(typeof model.getTargetLabel, 'function');
+  assert.equal(typeof model.getTargetAccentClass, 'function');
+  assert.equal(typeof model.formatImportStatusLabel, 'function');
+  assert.equal(typeof model.formatImportTimestamp, 'function');
+  assert.equal(typeof model.isAbsoluteUrl, 'function');
+  assert.equal(typeof model.getEventDateRank, 'function');
+  assert.equal(typeof model.sortEvents, 'function');
+  assert.equal(typeof model.sortNews, 'function');
+  assert.equal(typeof model.sortReviews, 'function');
+  assert.equal(typeof model.getActiveItems, 'function');
+  assert.equal(typeof model.getVisibleItems, 'function');
+  assert.equal(typeof model.formatHoursRange, 'function');
+  assert.equal(typeof model.getHoursForRestaurant, 'function');
+  assert.equal(typeof model.buildWeekRows, 'function');
   assert.equal(typeof model.validateEventItem, 'function');
   assert.equal(typeof model.validateNewsItem, 'function');
   assert.equal(typeof model.validateReviewItem, 'function');
@@ -181,6 +201,61 @@ test('landing model factory publishes selected draft sections without mutating l
   assert.equal(record.liveContent.news.items.length, 0);
   assert.equal(published.liveContent.news.items.length, 1);
   assert.equal(model.validateNewsSection(published.liveContent.news).valid, true);
+
+  const restaurants = model.getConstants().RESTAURANTS;
+  const hours = model.createDefaultRecord().draftContent.hours;
+  hours.restaurants[restaurants.LEROYS.id].days.fri = {
+    closed: false,
+    open: '16:00',
+    close: '23:30',
+  };
+
+  assert.equal(model.parseTimeToMinutes('16:15'), 975);
+  assert.equal(model.formatMinutes(975), '4:15 PM');
+  assert.equal(model.getTimeSelectOptions()[0].value, '00:00');
+  assert.match(model.renderTimeSelectOptions('16:15', 'Start time'), /option value="16:15" selected/);
+  assert.equal(model.isIsoDate('2026-04-12'), true);
+  assert.equal(model.formatDateLabel('2026-04-12', { short: true, year: false }), 'Apr 12');
+  assert.equal(model.getTargetLabel(restaurants.LEROYS.id), "Leroy's Lounge");
+  assert.equal(model.getTargetAccentClass(restaurants.ELROYS.id), 'landing-tag--elroys');
+  assert.equal(model.formatImportStatusLabel('failed'), 'Needs Repair');
+  assert.equal(model.formatImportTimestamp({ lastAttemptTs: '1710000000000' }).startsWith('Tried '), true);
+  assert.equal(model.isAbsoluteUrl('https://example.com/story'), true);
+  assert.equal(model.getEventDateRank('not-a-date'), Number.MAX_SAFE_INTEGER);
+  assert.deepEqual(
+    model.sortEvents([
+      { title: 'B', eventDate: '2026-06-01', startTime: '18:00' },
+      { title: 'A', eventDate: '2026-05-01', startTime: '18:00' },
+    ]).map(item => item.title),
+    ['A', 'B']
+  );
+  assert.deepEqual(
+    model.sortNews([
+      { title: 'Older', publishedDate: '2026-04-01', updatedAt: '1' },
+      { title: 'Newer', publishedDate: '2026-04-02', updatedAt: '1' },
+    ]).map(item => item.title),
+    ['Newer', 'Older']
+  );
+  assert.deepEqual(
+    model.sortReviews([
+      { author: 'Older', updatedAt: '1', importMeta: { lastSuccessTs: '10' } },
+      { author: 'Newer', updatedAt: '1', importMeta: { lastSuccessTs: '20' } },
+    ]).map(item => item.author),
+    ['Newer', 'Older']
+  );
+  assert.equal(model.getActiveItems([{ archived: false }, { archived: true }]).length, 1);
+  assert.equal(model.getVisibleItems([{ archived: false }, { archived: true }], true).length, 2);
+  assert.equal(model.formatHoursRange(hours.restaurants[restaurants.LEROYS.id].days.fri), '4 PM - 11:30 PM');
+  assert.equal(model.getHoursForRestaurant(hours, restaurants.LEROYS.id).days.fri.open, '16:00');
+  assert.equal(
+    JSON.stringify(model.buildWeekRows(hours, restaurants.LEROYS.id, 'fri').find(row => row.dayKey === 'fri')),
+    JSON.stringify({
+      dayKey: 'fri',
+      label: 'Friday',
+      isToday: true,
+      rangeLabel: '4 PM - 11:30 PM',
+    })
+  );
 });
 
 test('landing model hours rows html uses injected handler names instead of app globals', () => {

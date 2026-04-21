@@ -353,6 +353,20 @@
       return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
     }
 
+    function formatDateLabel(value, options) {
+      const settings = options && typeof options === 'object' ? options : {};
+      if (!isIsoDate(value)) return value ? String(value) : '';
+      const [year, month, day] = String(value).split('-').map(Number);
+      const utcDate = new Date(Date.UTC(year, month - 1, day));
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        month: settings.short ? 'short' : 'long',
+        day: 'numeric',
+        year: settings.year === false ? undefined : 'numeric',
+        timeZone: 'UTC',
+      });
+      return formatter.format(utcDate).replace(', ', settings.short && settings.year === false ? ' ' : ', ');
+    }
+
     function isAbsoluteUrl(value) {
       try {
         const url = new URL(String(value || '').trim());
@@ -395,6 +409,11 @@
 
     function getActiveItems(items) {
       return Array.isArray(items) ? items.filter(item => !item || !item.archived ? true : false) : [];
+    }
+
+    function getVisibleItems(items, showArchived) {
+      if (showArchived) return Array.isArray(items) ? items.slice() : [];
+      return getActiveItems(items);
     }
 
     function validateEventItem(item) {
@@ -536,6 +555,31 @@
       const suffix = hours24 >= 12 ? 'PM' : 'AM';
       const hours12 = hours24 % 12 || 12;
       return mins === 0 ? `${hours12} ${suffix}` : `${hours12}:${String(mins).padStart(2, '0')} ${suffix}`;
+    }
+
+    function getTargetLabel(target) {
+      if (target === landingTargetBoth) return 'Both';
+      const restaurant = knownLandingRestaurants().find(entry => entry.id === target);
+      return restaurant ? restaurant.name : 'Both';
+    }
+
+    function getTargetAccentClass(target) {
+      if (target === restaurants.LEROYS.id) return 'landing-tag--leroys';
+      if (target === restaurants.ELROYS.id) return 'landing-tag--elroys';
+      return 'landing-tag--both';
+    }
+
+    function formatImportStatusLabel(status) {
+      if (status === landingImportStatusImported) return 'Imported';
+      if (status === landingImportStatusPartial) return 'Partial';
+      if (status === landingImportStatusFailed) return 'Needs Repair';
+      return 'Waiting';
+    }
+
+    function formatImportTimestamp(meta) {
+      return meta && meta.lastSuccessTs
+        ? `Imported ${formatLandingTimestampLabel(meta.lastSuccessTs)}`
+        : (meta && meta.lastAttemptTs ? `Tried ${formatLandingTimestampLabel(meta.lastAttemptTs)}` : 'Not imported yet');
     }
 
     function formatHoursRange(day) {
@@ -875,6 +919,26 @@
       normalizeTarget: normalizeTarget,
       normalizeImportMeta: normalizeImportMeta,
       normalizeTimeValue: normalizeTimeValue,
+      parseTimeToMinutes: parseTimeToMinutes,
+      formatMinutes: formatMinutes,
+      getTimeSelectOptions: getTimeSelectOptions,
+      renderTimeSelectOptions: renderTimeSelectOptions,
+      isIsoDate: isIsoDate,
+      formatDateLabel: formatDateLabel,
+      getTargetLabel: getTargetLabel,
+      getTargetAccentClass: getTargetAccentClass,
+      formatImportStatusLabel: formatImportStatusLabel,
+      formatImportTimestamp: formatImportTimestamp,
+      isAbsoluteUrl: isAbsoluteUrl,
+      getEventDateRank: getEventDateRank,
+      sortEvents: sortEvents,
+      sortNews: sortNews,
+      sortReviews: sortReviews,
+      getActiveItems: getActiveItems,
+      getVisibleItems: getVisibleItems,
+      formatHoursRange: formatHoursRange,
+      getHoursForRestaurant: getHoursForRestaurant,
+      buildWeekRows: buildWeekRows,
       validateEventItem: validateEventItem,
       validateNewsItem: validateNewsItem,
       validateReviewItem: validateReviewItem,
