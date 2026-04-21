@@ -3,17 +3,20 @@
     {
       "idiom" : "iphone",
       "scale" : "2x",
-      "size" : "60x60"
+      "size" : "60x60",
+      "filename" : "ELROYSTEMPLOGO-120.png"
     },
     {
       "idiom" : "iphone",
       "scale" : "3x",
-      "size" : "60x60"
+      "size" : "60x60",
+      "filename" : "ELROYSTEMPLOGO-180.png"
     },
     {
       "idiom" : "ios-marketing",
       "scale" : "1x",
-      "size" : "1024x1024"
+      "size" : "1024x1024",
+      "filename" : "ELROYSTEMPLOGO-1024.png"
     }
   ],
   "info" : {
