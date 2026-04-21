@@ -845,10 +845,16 @@
     }
 
     return {
+      createDefaultDay: createDefaultLandingDay,
+      createDefaultHoursRestaurant: createDefaultLandingHoursRestaurant,
+      createDefaultContent: createDefaultContent,
       createDefaultRecord: createDefaultRecord,
       createDefaultEventItem: createDefaultEventItem,
       createDefaultNewsItem: createDefaultNewsItem,
       createDefaultReviewItem: createDefaultReviewItem,
+      normalizeDay: normalizeDay,
+      normalizeHoursRestaurant: normalizeHoursRestaurant,
+      normalizeContent: normalizeContent,
       normalizeRecord: normalizeRecord,
       normalizeTarget: normalizeTarget,
       normalizeImportMeta: normalizeImportMeta,

@@ -300,14 +300,10 @@ function knownLandingRestaurants() {
   return Object.values(RESTAURANTS).sort((a, b) => KNOWN_RESTAURANT_ORDER.indexOf(a.id) - KNOWN_RESTAURANT_ORDER.indexOf(b.id));
 }
 function createDefaultLandingDay() {
-  return { closed: true, open: '', close: '' };
+  return LANDING_MODEL.createDefaultDay();
 }
 function createDefaultLandingHoursRestaurant() {
-  const days = {};
-  LANDING_DAY_ORDER.forEach(dayKey => {
-    days[dayKey] = createDefaultLandingDay();
-  });
-  return { days };
+  return LANDING_MODEL.createDefaultHoursRestaurant();
 }
 function createDefaultLandingImportMeta(sourceUrl = '') {
   return {
@@ -364,19 +360,7 @@ function createDefaultLandingReviewItem() {
   };
 }
 function createDefaultLandingContent() {
-  const restaurants = {};
-  const reviewRestaurants = {};
-  knownLandingRestaurants().forEach(restaurant => {
-    restaurants[restaurant.id] = createDefaultLandingHoursRestaurant();
-    reviewRestaurants[restaurant.id] = [];
-  });
-  return {
-    overview: {},
-    hours: { restaurants },
-    events: { items: [] },
-    news: { items: [] },
-    reviews: { restaurants: reviewRestaurants },
-  };
+  return LANDING_MODEL.createDefaultContent();
 }
 function createDefaultLandingPageRecord() {
   return LANDING_MODEL.createDefaultRecord();
@@ -387,21 +371,10 @@ function normalizeLandingTimestamp(value) {
   return Number.isFinite(num) && num > 0 ? String(num) : '';
 }
 function normalizeLandingDay(rawDay = {}) {
-  const closed = !!rawDay?.closed;
-  const open = normalizeLandingTimeValue(rawDay?.open);
-  const close = normalizeLandingTimeValue(rawDay?.close);
-  return {
-    closed,
-    open: closed ? '' : open,
-    close: closed ? '' : close,
-  };
+  return LANDING_MODEL.normalizeDay(rawDay);
 }
 function normalizeLandingHoursRestaurant(rawRestaurant = {}) {
-  const days = {};
-  LANDING_DAY_ORDER.forEach(dayKey => {
-    days[dayKey] = normalizeLandingDay(rawRestaurant?.days?.[dayKey]);
-  });
-  return { days };
+  return LANDING_MODEL.normalizeHoursRestaurant(rawRestaurant);
 }
 function normalizeLandingTarget(value = '', options = {}) {
   return LANDING_MODEL.normalizeTarget(value, options);
@@ -457,28 +430,7 @@ function normalizeLandingReviewItem(rawItem = {}) {
   };
 }
 function normalizeLandingContent(rawContent = {}) {
-  const defaults = createDefaultLandingContent();
-  const hoursRestaurants = {};
-  const reviewRestaurants = {};
-  knownLandingRestaurants().forEach(restaurant => {
-    hoursRestaurants[restaurant.id] = normalizeLandingHoursRestaurant(rawContent?.hours?.restaurants?.[restaurant.id] || defaults.hours.restaurants[restaurant.id]);
-    reviewRestaurants[restaurant.id] = Array.isArray(rawContent?.reviews?.restaurants?.[restaurant.id])
-      ? rawContent.reviews.restaurants[restaurant.id].map(normalizeLandingReviewItem)
-      : defaults.reviews.restaurants[restaurant.id];
-  });
-  return {
-    overview: rawContent?.overview && typeof rawContent.overview === 'object' ? cloneJsonCompatible(rawContent.overview, {}) : {},
-    hours: { restaurants: hoursRestaurants },
-    events: {
-      items: Array.isArray(rawContent?.events?.items) ? rawContent.events.items.map(normalizeLandingEventItem) : [],
-    },
-    news: {
-      items: Array.isArray(rawContent?.news?.items) ? rawContent.news.items.map(normalizeLandingNewsItem) : [],
-    },
-    reviews: {
-      restaurants: reviewRestaurants,
-    },
-  };
+  return LANDING_MODEL.normalizeContent(rawContent);
 }
 function normalizeLandingPageRecord(rawRecord = {}) {
   return LANDING_MODEL.normalizeRecord(rawRecord);

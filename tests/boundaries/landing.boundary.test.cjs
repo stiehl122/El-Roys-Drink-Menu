@@ -25,6 +25,10 @@ test('landing model factory publishes selected draft sections without mutating l
     'core/landing/model.js',
   ]);
   const model = sandbox.__HF_LANDING_MODULES__.createLandingModel();
+  assert.equal(typeof model.createDefaultContent, 'function');
+  assert.equal(typeof model.normalizeDay, 'function');
+  assert.equal(typeof model.normalizeHoursRestaurant, 'function');
+  assert.equal(typeof model.normalizeContent, 'function');
   const record = model.createDefaultRecord();
 
   record.draftContent.news.items.push({
