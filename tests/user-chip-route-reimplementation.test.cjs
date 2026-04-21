@@ -149,3 +149,17 @@ test('manager route owns a rail user chip inside the drawer action stack', () =>
   assert.match(css, /body\.manager-dossier-shell \.manager-userchip/);
   assert.match(css, /body\.manager-stitch-shell \.manager-userchip/);
 });
+
+test('admin route owns a topbar user chip with the shared data contract', () => {
+  const html = read('admin/index.html');
+  const css = read('style.css');
+
+  assert.match(html, /class="admin-userchip"/);
+  assert.match(html, /data-user-chip-variant="topbar"/);
+  assert.match(html, /data-user-chip-trigger/);
+  assert.match(html, /data-user-chip-panel/);
+  assert.doesNotMatch(html, /id="user-chip"/);
+
+  assert.match(css, /\.admin-console-topbar \.admin-userchip/);
+  assert.match(css, /\.admin-console-topbar \.admin-userchip-trigger/);
+});
