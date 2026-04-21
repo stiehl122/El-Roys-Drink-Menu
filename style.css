@@ -1383,6 +1383,16 @@ body.admin-console-page .wrapper {
   background: var(--admin-panel);
   border: 1px solid var(--admin-outline);
   color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .admin-console-topbar .manager-btn:hover,
@@ -1396,6 +1406,11 @@ body.admin-console-page .wrapper {
 
 .admin-console-topbar .admin-userchip.open .user-dropdown {
   display: block;
+}
+
+.admin-console-topbar .admin-userchip [data-user-chip-initials] {
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .admin-console-topbar .user-dropdown {
