@@ -106,6 +106,8 @@ app_target.build_configurations.each do |config|
   settings['INFOPLIST_KEY_UIApplicationSceneManifest_Generation'] = 'YES'
   settings['INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents'] = 'YES'
   settings['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
+  settings['INFOPLIST_KEY_UISupportedInterfaceOrientations'] = 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'
+  settings['INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad'] = 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'
   settings['INFOPLIST_KEY_NSCameraUsageDescription'] = 'Scan drink and food item barcodes to prefill add-item fields.'
   settings['INFOPLIST_KEY_NSFaceIDUsageDescription'] = 'Unlock the saved staff session before restoring manager access.'
   settings['INFOPLIST_KEY_CFBundleDisplayName'] = "El Roy's Manager"
