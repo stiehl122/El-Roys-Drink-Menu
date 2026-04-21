@@ -20,6 +20,8 @@ const DEFAULT_RUNTIME_SCRIPTS = [
   'core/ui/admin/switcher.js',
   'core/ui/public/footer-actions.js',
   'core/ui/public/renderer-default.js',
+  'core/session/menu-publish-workflow.js',
+  'core/session/menu-publish-facade.js',
   'core/session/publish-service.js',
   'core/session/menu-session.js',
   'core/data/menu-state-loader.js',

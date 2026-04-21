@@ -6,86 +6,67 @@
     : {};
 
   function createMenuPublishServiceImpl(sessionPorts, runtime = {}, options = {}) {
-    const buildSnapshot = typeof runtime.buildSnapshot === 'function'
-      ? runtime.buildSnapshot
-      : (() => ({ source: 'unknown' }));
-    const buildPreview = typeof runtime.buildPreview === 'function'
-      ? runtime.buildPreview
-      : (() => sessionPorts.buildPreview(buildSnapshot('preview')));
-    const buildFallbackService = typeof options.fallback === 'function'
-      ? options.fallback
+    const createPublishFacade = typeof runtime.createPublishFacade === 'function'
+      ? runtime.createPublishFacade
+      : (typeof globalScope.createMenuPublishFacade === 'function'
+          ? globalScope.createMenuPublishFacade.bind(globalScope)
+          : null);
+    const facade = typeof createPublishFacade === 'function'
+      ? createPublishFacade(sessionPorts, runtime)
       : null;
+    let fallbackService = null;
 
-    // Resolve the legacy fallback once during boundary construction so we do not
-    // recurse back through the boundary later when publish is invoked.
-    const fallbackService = buildFallbackService ? buildFallbackService() : null;
-    const resolveDraftChangeCount = snapshot => {
-      const diff = Array.isArray(snapshot?.notifyDiff) ? snapshot.notifyDiff : [];
-      const saveOnlyChanges = Array.isArray(snapshot?.saveOnlyChanges) ? snapshot.saveOnlyChanges : [];
-      const diffLineCount = typeof globalScope.countDiffLines === 'function'
-        ? globalScope.countDiffLines(diff)
-        : diff.reduce((count, section) => (
-            count + (section.added?.length || 0) +
-            (section.removed?.length || 0) +
-            (section.eightySixed?.length || 0) +
-            (section.restored?.length || 0)
-          ), 0);
-      return diffLineCount + saveOnlyChanges.length;
-    };
-    const buildSaveDraftNoop = (preview, snapshot, source = 'draft-noop') => ({
-      ok: false,
-      noop: true,
-      preview,
-      snapshot: buildSnapshot(source),
-    });
+    function getFallbackService() {
+      if (fallbackService !== null) return fallbackService;
+      fallbackService = typeof options.fallback === 'function'
+        ? options.fallback()
+        : undefined;
+      return fallbackService;
+    }
 
     return {
-      async saveDraft(options = {}) {
-        const snapshot = buildSnapshot('draft');
-        const preview = options.preview?.sections ? options.preview : buildPreview();
-        const hasLocalDraft = !!snapshot?.dirty || !!preview?.hasLocalDraft;
-        const hasChanges = !!preview?.hasChanges || resolveDraftChangeCount(snapshot) > 0;
-
-        if (!hasLocalDraft || !hasChanges) {
-          return buildSaveDraftNoop(preview, snapshot);
+      async saveDraft(opts = {}) {
+        if (facade && typeof facade.commit === 'function') {
+          return facade.commit({ ...opts, intent: 'save' });
         }
-
-        const request = {
-          ...options,
-          preview,
-          mode: 'save',
-          notify: false,
-        };
-
-        if (typeof sessionPorts.publishMenuUpdate === 'function') {
-          return sessionPorts.publishMenuUpdate(request);
+        const fallback = getFallbackService();
+        if (fallback && typeof fallback.saveDraft === 'function') {
+          return fallback.saveDraft(opts);
         }
-        if (fallbackService && typeof fallbackService.publishUpdate === 'function') {
-          return fallbackService.publishUpdate(request);
-        }
-
         return {
           ok: false,
           userHandled: false,
           userMessage: 'Publish service is unavailable.',
-          preview,
-          snapshot: buildSnapshot('save-unavailable'),
         };
       },
 
-      async publishUpdate(options = {}) {
-        if (typeof sessionPorts.publishMenuUpdate === 'function') {
-          return sessionPorts.publishMenuUpdate(options);
+      async publishUpdate(opts = {}) {
+        if (facade && typeof facade.commit === 'function') {
+          return facade.commit(opts);
         }
-        if (fallbackService && typeof fallbackService.publishUpdate === 'function') {
-          return fallbackService.publishUpdate(options);
+        const fallback = getFallbackService();
+        if (fallback && typeof fallback.publishUpdate === 'function') {
+          return fallback.publishUpdate(opts);
         }
         return {
           ok: false,
           userHandled: false,
           userMessage: 'Publish service is unavailable.',
-          preview: options.preview?.sections ? options.preview : buildPreview(),
-          snapshot: buildSnapshot('publish-unavailable'),
+        };
+      },
+
+      async prepare(opts = {}) {
+        if (facade && typeof facade.prepare === 'function') {
+          return facade.prepare(opts);
+        }
+        const fallback = getFallbackService();
+        if (fallback && typeof fallback.prepare === 'function') {
+          return fallback.prepare(opts);
+        }
+        return {
+          ok: false,
+          userHandled: false,
+          userMessage: 'Publish service is unavailable.',
         };
       },
     };
@@ -93,7 +74,7 @@
 
   modules.createMenuPublishService = function createMenuPublishServiceBoundary(sessionPorts, runtime = {}, options = {}) {
     if (options && typeof options.impl === 'function') {
-      return options.impl(sessionPorts, runtime);
+      return options.impl(sessionPorts, runtime, options);
     }
     return createMenuPublishServiceImpl(sessionPorts, runtime, options);
   };

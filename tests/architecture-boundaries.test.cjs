@@ -11,6 +11,12 @@ const {
   setState,
 } = require('./helpers/runtime.cjs');
 
+const ROOT = path.join(__dirname, '..');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
+
 function setupRouteDom(sandbox, prefix) {
   const doc = sandbox.document;
   const pageClass = prefix === 'll' ? '.ll-board-page' : '.erc-page';
@@ -171,6 +177,222 @@ function createMenuSessionPorts(overrides = {}) {
   };
 }
 
+function installPublishFacadeStub(sandbox, overrides = {}) {
+  sandbox.createMenuPublishFacade = (sessionPorts, deps = {}) => {
+    const buildSnapshot = typeof deps.buildSnapshot === 'function'
+      ? deps.buildSnapshot
+      : ((source, request) => sessionPorts.buildSnapshot(source, request));
+    const buildPreview = () => sessionPorts.buildPreview(buildSnapshot('preview'));
+
+    function normalizeMode(options = {}, preview) {
+      if (options.mode) return options.mode;
+      if (options.intent === 'save') return 'save';
+      if (options.intent === 'send') return 'send';
+      if (options.intent === 'save-and-send') return 'save-and-send';
+      if (options.notify === false) return 'save';
+      return (preview?.mode === 'send' || preview?.mode === 'update-only') ? 'send' : 'save-and-send';
+    }
+
+    async function commitThroughLegacyService(options = {}, preview, mode) {
+      const selectedChangeIds = options.selectedChangeIds || preview.notificationChanges.map(change => change.id);
+      const selectedChanges = preview.notificationChanges.filter(change => selectedChangeIds.includes(change.id));
+      const selectedSections = sandbox.groupNotificationChangesBySection(selectedChanges);
+      const patchMessage = selectedSections.length
+        ? (typeof sandbox.buildPatchMessage === 'function'
+            ? sandbox.buildPatchMessage(selectedSections)
+            : (preview.patchMessage || 'Patch message'))
+        : '';
+      if (!preview.hasChanges) {
+        return {
+          ok: false,
+          noop: true,
+          preview,
+          snapshot: buildSnapshot('publish-noop'),
+        };
+      }
+
+      const warnings = [];
+      let liveSaveTs = null;
+      if (preview.hasLocalDraft || preview.hasSharedDraft) {
+        const persisted = await sessionPorts.persistState({ silentFailure: true });
+        if (!persisted) {
+          return {
+            ok: false,
+            preview,
+            userHandled: true,
+            snapshot: buildSnapshot('publish-live-save-failed'),
+          };
+        }
+        liveSaveTs = sessionPorts.now();
+        try {
+          await sessionPorts.patchMenuMeta({ last_updated_ts: liveSaveTs });
+          await sessionPorts.patchMenuDraftState(null, liveSaveTs);
+        } catch (_) {
+          warnings.push('Live menu saved, but the draft metadata could not be fully synced.');
+        }
+        sessionPorts.commitLiveSave?.(liveSaveTs);
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) warnings.push('This device could not refresh its local cache after the live save.');
+      }
+
+      const shouldNotify = (mode === 'save-and-send' || mode === 'send') && selectedSections.length > 0;
+      let delivery = {
+        ok: true,
+        skipped: !shouldNotify,
+        statusCode: null,
+        summary: typeof sandbox.summarizeNotificationResults === 'function'
+          ? sandbox.summarizeNotificationResults({})
+          : { anyOk: false, anyError: false, failedChannels: [], allSkipped: true },
+      };
+      if (shouldNotify) {
+        delivery = await sessionPorts.dispatchNotification({
+          menuId: sessionPorts.getMenuId(),
+          patchMessage,
+        });
+      }
+
+      if (shouldNotify && delivery.partial) {
+        warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs attention.`,
+          snapshot: buildSnapshot('send-partial'),
+        };
+      }
+
+      if (shouldNotify && !delivery.ok) {
+        warnings.push(delivery.userMessage || 'Update could not be sent.');
+        return {
+          ok: true,
+          preview,
+          notificationStatus: delivery,
+          warnings: sessionPorts.dedupeWarnings(warnings),
+          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
+          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs to be sent.`,
+          snapshot: buildSnapshot('send-failed-live-saved'),
+        };
+      }
+
+      if (shouldNotify) warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
+
+      if (mode === 'save-and-send' || mode === 'send') {
+        const ts = liveSaveTs || sessionPorts.now();
+        const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
+        const restaurantId = sessionPorts.getRestaurantId();
+        const restaurantMenuIds = sessionPorts.canEditRestaurantSpecials(restaurantId)
+          ? sessionPorts.getRestaurantMenuIds(restaurantId)
+          : [];
+        const patchResults = await Promise.all([
+          sessionPorts.patchMenuMeta({
+            last_updated_ts: ts,
+            last_sent_ts: ts,
+            last_sent_state: sessionPorts.snapshotCurrentItemsAsLastSent(),
+            last_sent_categories: preview.diff.map(section => section.id),
+            last_sent_featured: currentFeaturedIds,
+          }),
+          ...restaurantMenuIds
+            .filter(menuId => menuId && menuId !== sessionPorts.getMenuId())
+            .map(menuId => sessionPorts.patchMenuMetaForMenu(menuId, {
+              last_sent_featured: currentFeaturedIds,
+            })),
+        ]);
+        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
+          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
+        }
+
+        sessionPorts.commitPublished({
+          diff: preview.diff,
+          ts,
+          featuredIds: currentFeaturedIds,
+        });
+
+        const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
+        if (!cacheSynced) warnings.push('This device could not refresh its local cache after the send.');
+
+        const logged = patchMessage
+          ? await sessionPorts.logUpdate(
+            typeof sandbox.serializeNotificationSectionsForLog === 'function'
+              ? sandbox.serializeNotificationSectionsForLog(selectedSections)
+              : selectedSections,
+            patchMessage,
+          )
+          : true;
+        if (!logged) warnings.push('The recent-changes audit log could not be written for this send.');
+
+        const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+        return {
+          ok: true,
+          preview,
+          ts,
+          truncated: preview.truncated,
+          notificationStatus: shouldNotify ? delivery : null,
+          warnings: finalWarnings,
+          warningMessage: finalWarnings[0] || '',
+          successMessage: shouldNotify
+            ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved and sent!`
+            : `✅ ${sessionPorts.getMenuName() || 'Menu'} update list cleared without notifying channels.`,
+          snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
+        };
+      }
+
+      const finalWarnings = sessionPorts.dedupeWarnings(warnings);
+      return {
+        ok: true,
+        preview,
+        ts: liveSaveTs || sessionPorts.now(),
+        truncated: preview.truncated,
+        notificationStatus: shouldNotify ? delivery : null,
+        warnings: finalWarnings,
+        warningMessage: finalWarnings[0] || '',
+        successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved to the live menu.`,
+        snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'saved-live'),
+      };
+    }
+
+    return {
+      async prepare(options = {}) {
+        if (typeof overrides.prepare === 'function') {
+          return overrides.prepare({ sessionPorts, deps, options, buildSnapshot, buildPreview });
+        }
+        return {
+          ok: true,
+          preview: buildPreview(),
+        };
+      },
+      async commit(options = {}) {
+        const preview = options.preview?.sections ? options.preview : buildPreview();
+        const mode = normalizeMode(options, preview);
+        if (typeof overrides.commit === 'function') {
+          return overrides.commit({
+            sessionPorts,
+            deps,
+            options,
+            preview,
+            mode,
+            buildSnapshot,
+            buildPreview,
+            commitThroughLegacyService,
+          });
+        }
+        if (typeof sessionPorts.publishMenuUpdate === 'function') {
+          return sessionPorts.publishMenuUpdate({
+            ...options,
+            preview,
+            mode,
+            notify: mode !== 'save',
+          });
+        }
+        return commitThroughLegacyService(options, preview, mode);
+      },
+    };
+  };
+}
+
 test('menu session lifecycle handles redirect and fallback-aware open results', async () => {
   const sandbox = loadAppSandbox();
   const restored = [];
@@ -258,6 +480,7 @@ test('menu session lifecycle routes poll and manual refreshes through one bounda
 test('menu session lifecycle saveDraft routes quiet saves through the publish boundary', async () => {
   const sandbox = loadAppSandbox();
   const publishCalls = [];
+  installPublishFacadeStub(sandbox);
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
     buildSnapshot: (source, request) => ({ source, request, dirty: true }),
@@ -284,6 +507,7 @@ test('menu session lifecycle saveDraft routes quiet saves through the publish bo
 test('menu publish service exposes quiet-save and publish boundaries directly', async () => {
   const sandbox = loadAppSandbox();
   const quietSaveCalls = [];
+  installPublishFacadeStub(sandbox);
 
   const ports = createMenuSessionPorts({
     buildSnapshot: source => ({ source, dirty: true }),
@@ -323,6 +547,7 @@ test('menu publish service exposes quiet-save and publish boundaries directly', 
 test('menu session lifecycle publishes updates through one preview-aware boundary', async () => {
   const sandbox = loadAppSandbox();
   const patchCalls = [];
+  installPublishFacadeStub(sandbox);
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
     patchMenuMeta: async update => {
@@ -351,6 +576,7 @@ test('menu session lifecycle publishes updates through one preview-aware boundar
 test('menu session lifecycle can publish without firing notifications', async () => {
   const sandbox = loadAppSandbox();
   let notificationCalls = 0;
+  installPublishFacadeStub(sandbox);
 
   const lifecycle = sandbox.createMenuSessionLifecycle(createMenuSessionPorts({
     canEditRestaurantSpecials: () => false,
@@ -372,43 +598,21 @@ test('menu session lifecycle can publish without firing notifications', async ()
   assert.match(result.successMessage, /saved to the live menu/i);
 });
 
-test('notification delivery service normalizes API channel results', async () => {
-  const sandbox = loadAppSandbox();
-  const requests = [];
-  const service = sandbox.createNotificationDeliveryService({
-    fetchImpl: async (url, options = {}) => {
-      requests.push([url, options]);
-      return {
-        status: 207,
-        async json() {
-          return {
-            results: {
-              groupme: 'ok',
-              sms: 'error:500',
-              discord: 'skipped',
-            },
-          };
-        },
-      };
-    },
-  });
+test('app runtime delegates preview and commit through the session publish facade', () => {
+  const source = read('app.js');
+  const openPreviewStart = source.indexOf('async function openPreview()');
+  const openPreviewEnd = source.indexOf('function closeModal()', openPreviewStart);
+  const openPreviewSource = source.slice(openPreviewStart, openPreviewEnd);
+  const sendUpdateStart = source.indexOf('async function sendUpdate(options = {})');
+  const sendUpdateEnd = source.indexOf('// ─── TOAST', sendUpdateStart);
+  const sendUpdateSource = source.slice(sendUpdateStart, sendUpdateEnd);
 
-  const result = await service.sendMenuUpdate({
-    menuId: 'menu-main',
-    patchMessage: 'Patch message',
-    accessToken: 'token-1',
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(result.partial, true);
-  assert.equal(result.statusCode, 207);
-  assert.deepEqual(Array.from(result.summary.okChannels || []), ['groupme']);
-  assert.deepEqual(Array.from(result.summary.failedChannels || []), ['sms']);
-  assert.deepEqual(Array.from(result.summary.skippedChannels || []), ['discord']);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0][0], '/api/manager');
-  assert.equal(JSON.parse(requests[0][1].body).action, 'send_notification');
-  assert.equal(requests[0][1].headers.Authorization, 'Bearer token-1');
+  assert.match(openPreviewSource, /preparePublish\(/);
+  assert.match(sendUpdateSource, /commitPublish\(/);
+  assert.doesNotMatch(sendUpdateSource, /publishMenuThroughApi/);
+  assert.doesNotMatch(sendUpdateSource, /requestPublishPreviewThroughApi/);
+  assert.doesNotMatch(source, /function createNotificationDeliveryService\(/);
+  assert.doesNotMatch(source, /async function dispatchMenuUpdateNotification\(/);
 });
 
 test('draft ledger service provides action-bar and item badge state through one boundary', () => {
@@ -574,6 +778,15 @@ test('save actions blur the focused editor before publishing workspace changes',
   const sandbox = loadAppSandbox();
   let blurred = false;
   const requests = [];
+  installPublishFacadeStub(sandbox, {
+    prepare: async ({ buildPreview }) => {
+      const apiResult = await sandbox.requestPublishPreviewThroughApi();
+      return {
+        ok: apiResult.ok,
+        preview: apiResult.payload?.preview || buildPreview(),
+      };
+    },
+  });
 
   sandbox.document.activeElement = {
     tagName: 'INPUT',
@@ -675,6 +888,7 @@ test('save-only menu edits stay in the draft session until save', async () => {
 test('save draft routes a quiet live save through the publish boundary and leaves the queue unsent', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
+  installPublishFacadeStub(sandbox);
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
@@ -727,6 +941,7 @@ test('save draft routes a quiet live save through the publish boundary and leave
 test('save menu quietly writes a local draft to live and leaves unsent changes behind', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
+  installPublishFacadeStub(sandbox);
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
