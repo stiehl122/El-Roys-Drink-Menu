@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import '../core/session/menu-publish-workflow.js';
+
 import { getRestaurantSpecialConfig } from './_auth.js';
 import {
   MAX_NOTIFICATION_TEXT_LENGTH,
@@ -14,7 +16,6 @@ import {
   patchMenuMetaForMenu,
   patchMenuMetaForMenuWithCompatibility,
   readMenuMeta,
-  readRevisionState,
   saveLiveMenuForMenu,
 } from './_menu-write.js';
 import {
@@ -33,38 +34,11 @@ import {
 
 const PREVIEW_CONTRACT = 'menu-publish-preview.v2';
 
-function summarizeSkippedNotification() {
-  return {
-    results: {},
-    okChannels: [],
-    skippedChannels: [],
-    failedChannels: [],
-    anyOk: false,
-    anyError: false,
-    allSkipped: false,
-  };
-}
-
-function createNotificationStatus(delivery, shouldNotify) {
-  if (!shouldNotify) {
-    return {
-      ok: true,
-      skipped: true,
-      partial: false,
-      statusCode: null,
-      summary: summarizeSkippedNotification(),
-      results: {},
-    };
-  }
-
-  return {
-    ok: delivery.status < 400,
-    skipped: false,
-    partial: delivery.status === 207,
-    statusCode: delivery.status,
-    summary: delivery.summary,
-    results: delivery.results,
-  };
+function createMenuPublishError(status, message, extras = {}) {
+  const error = new Error(message);
+  error.status = status;
+  Object.assign(error, extras);
+  return error;
 }
 
 function collectNotificationWarnings(summary = {}) {
@@ -148,23 +122,6 @@ function serializeNotificationSectionsForLog(sections = []) {
     eightySixed: (section.changes || []).filter(change => change.kind === 'eightySixed').map(change => change.name),
     restored: (section.changes || []).filter(change => change.kind === 'restored').map(change => change.name),
   }));
-}
-
-function serializeSaveOnlyChangesForLog(saveOnlyChanges = []) {
-  const names = (Array.isArray(saveOnlyChanges) ? saveOnlyChanges : [])
-    .map(change => change?.label || change?.message || '')
-    .map(label => String(label || '').trim())
-    .filter(Boolean);
-  if (!names.length) return [];
-  return [{
-    id: '__save_only__',
-    icon: '💾',
-    label: 'Will Save Only',
-    added: names,
-    removed: [],
-    eightySixed: [],
-    restored: [],
-  }];
 }
 
 function buildPatchMessage(sections = [], { menuName = '', menuLink = '', now = new Date() } = {}) {
@@ -303,30 +260,6 @@ async function buildFeaturedQueueState(knownMenu = null, meta = {}) {
     notificationChanges,
     diff,
     unsentItemIds: [...addedIds],
-  };
-}
-
-function buildSectionsByOutcome({
-  preview = {},
-  selectedGroupIds = [],
-} = {}) {
-  const selectableGroups = Array.isArray(preview?.changeGroups)
-    ? preview.changeGroups.filter(group => group?.selectable)
-    : [];
-  const defaultIds = selectableGroups.map(group => group.id);
-  const selectedIds = selectedGroupIds.length ? selectedGroupIds : defaultIds;
-  const selectedSet = new Set(selectedIds.map(id => String(id || '').trim()).filter(Boolean));
-  const notificationChanges = Array.isArray(preview?.notificationChanges) ? preview.notificationChanges : [];
-  const selectedLines = notificationChanges.filter(change => selectedSet.has(String(change?.groupId || '').trim()));
-  const clearLines = notificationChanges.filter(change => (
-    !selectedSet.has(String(change?.groupId || '').trim()) &&
-    defaultIds.includes(String(change?.groupId || '').trim())
-  ));
-
-  return {
-    willSend: groupNotificationChangesBySection(selectedLines),
-    willClearWithoutSending: groupNotificationChangesBySection(clearLines),
-    willSaveOnly: Array.isArray(preview?.saveOnlyChanges) ? preview.saveOnlyChanges : [],
   };
 }
 
@@ -471,7 +404,7 @@ async function buildCanonicalPreviewForMenu({
     .filter(group => group?.selectable)
     .map(group => group.id);
 
-  const preview = {
+  return {
     mode,
     hasChanges: hasNotificationChanges || hasSaveOnlyChanges,
     hasLocalDraft: previewContext.hasLocalDraft,
@@ -492,73 +425,123 @@ async function buildCanonicalPreviewForMenu({
       contract: PREVIEW_CONTRACT,
       currentFeaturedIds: featuredState.currentFeaturedIds,
       unsentItemIds: queueState.unsentItemIds,
+      lastSentState: snapshotLastSentState(snapshot),
     },
   };
-  preview.sectionsByOutcome = buildSectionsByOutcome({ preview, selectedGroupIds: selectionDefaults });
-  return preview;
 }
 
-function assertPublishRevisions({
-  expectedLiveRevision,
-  expectedDraftRevision,
-  expectedNotificationRevision,
-  meta,
-  menuId,
-}) {
-  const currentRevisions = readRevisionState(meta);
-  const notificationBaselineRevision = expectedNotificationRevision ?? expectedDraftRevision ?? null;
-  assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts || null, 'live_revision', {
-    menuId,
-    command: 'menu-publish.v2',
-    currentRevisions,
-  });
-  assertExpectedRevision(notificationBaselineRevision, meta?.last_sent_ts || null, 'notification_revision', {
-    menuId,
-    command: 'menu-publish.v2',
-    currentRevisions,
-  });
-  return currentRevisions;
-}
-
-function normalizePublishMode(mode = '', previewMode = 'save') {
-  const normalized = String(mode || '').trim().toLowerCase();
-  if (normalized === 'save') return 'save';
-  if (normalized === 'save-only') return 'save';
-  if (normalized === 'save-and-send') return 'save-and-send';
-  if (normalized === 'save-and-update') return 'save-and-send';
-  if (normalized === 'send') return 'send';
-  if (normalized === 'update-only') return 'send';
-  return normalizePublishMode(previewMode || 'save', 'save');
-}
-
-function mergeDowngradedFields(...compatResults) {
-  const merged = [];
-  compatResults.forEach(result => {
-    (Array.isArray(result?.downgradedFields) ? result.downgradedFields : []).forEach(field => {
-      if (!merged.includes(field)) merged.push(field);
-    });
-  });
-  return merged;
-}
-
-async function appendHistoryEvent({
-  menuId,
-  actor,
-  source,
-  operationId,
-  eventType,
+function createWorkflowPatchMessage({
   sections = [],
-  message = '',
+  menuName = '',
+  menuLink = '',
 }) {
-  if (!message) return { downgradedFields: [] };
-  return insertUpdateLog({
-    menuId,
-    actor,
-    diff: serializeNotificationSectionsForLog(sections),
-    message,
-    source,
-    operationId,
-    eventType,
+  return buildPatchMessage(sections, { menuName, menuLink });
+}
+
+function createWorkflowSelection(preview, selectedChangeIds = null, legacySelectedSections = []) {
+  const selection = resolveSelection(preview, selectedChangeIds, legacySelectedSections);
+  return {
+    selectedChangeIds: selection.selectedGroupIds,
+    selectedSections: groupNotificationChangesBySection(selection.selectedLines),
+    clearedChangeIds: selection.clearGroups.map(group => group.id),
+    clearedSections: groupNotificationChangesBySection(selection.clearLines),
+  };
+}
+
+function createServerMenuPublishPorts() {
+  return {
+    menus: {
+      async readContext(menuId) {
+        const knownMenu = getKnownMenuById(menuId);
+        if (!knownMenu) {
+          throw createMenuPublishError(400, 'Unsupported menu_id', { menuId });
+        }
+        const meta = await readMenuMeta(menuId);
+        const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(knownMenu.restaurantId);
+        return { knownMenu, meta, currentFeaturedIds };
+      },
+      async saveLiveMenu(input) {
+        return saveLiveMenuForMenu(input);
+      },
+      async patchMeta({ menuId, patch, optionalFields = [] }) {
+        return patchMenuMetaForMenuWithCompatibility(menuId, patch, { optionalFields });
+      },
+      async patchSiblingFeatured({ menuIds, featuredIds }) {
+        return Promise.all(
+          (Array.isArray(menuIds) ? menuIds : []).map(menuId => patchMenuMetaForMenu(menuId, {
+            last_sent_featured: featuredIds,
+          })),
+        );
+      },
+    },
+    governance: {
+      async assertCategoryGovernanceAllowed(input) {
+        return assertCategoryGovernanceAllowed({ ...input, requireCategorySnapshot: true });
+      },
+      assertRevisions({ menuId, meta, expectedLiveRevision, expectedDraftRevision, expectedNotificationRevision }) {
+        assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts, 'live_revision', { menuId });
+        assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts, 'draft_revision', { menuId });
+        assertExpectedRevision(expectedNotificationRevision, meta?.last_sent_ts, 'notification_revision', { menuId });
+        return {
+          liveRevision: meta?.last_updated_ts || null,
+          draftRevision: meta?.draft_saved_ts || null,
+          notificationRevision: meta?.last_sent_ts || null,
+        };
+      },
+    },
+    preview: {
+      buildCanonical: buildCanonicalPreviewForMenu,
+      resolveSelection({ preview, selectedChangeIds }) {
+        return createWorkflowSelection(preview, selectedChangeIds, []);
+      },
+    },
+    notifications: {
+      async deliver({ menuId, message }) {
+        const delivery = await deliverMenuNotification(menuId, truncateNotificationText(message));
+        return {
+          delivered: delivery.status < 400,
+          partial: delivery.status === 207,
+          summary: delivery.summary,
+          retryable: delivery.status >= 400 || delivery.status === 207,
+        };
+      },
+    },
+    audit: {
+      async append(event) {
+        return insertUpdateLog({
+          menuId: event.menuId,
+          actor: event.actor,
+          diff: serializeNotificationSectionsForLog(event.sections),
+          message: event.message,
+          source: inferAuditSource(event.actor, event.source),
+          operationId: event.operationId,
+          eventType: event.eventType,
+        });
+      },
+    },
+    clock: { now: () => Date.now() },
+    ids: { operationId: () => randomUUID() },
+    format: {
+      patchMessage: createWorkflowPatchMessage,
+      warningSummary: collectNotificationWarnings,
+    },
+  };
+}
+
+function getServerPublishWorkflowFactory() {
+  const workflowFactory = globalThis.createMenuPublishWorkflow;
+  if (typeof workflowFactory !== 'function') {
+    throw createMenuPublishError(500, 'createMenuPublishWorkflow is unavailable', {
+      code: 'menu_publish_workflow_unavailable',
+    });
+  }
+  return workflowFactory;
+}
+
+function createServerPublishWorkflow() {
+  const workflowFactory = getServerPublishWorkflowFactory();
+  return workflowFactory({
+    ports: createServerMenuPublishPorts(),
   });
 }
 
@@ -571,42 +554,27 @@ export async function previewMenuUpdateForMenu({
   expectedDraftRevision = null,
   expectedNotificationRevision = null,
 }) {
-  void actor;
-  void source;
-  const knownMenu = getKnownMenuById(menuId);
-  if (!knownMenu) {
-    throw { status: 400, message: 'Unsupported menu_id' };
-  }
-
-  await assertCategoryGovernanceAllowed({
+  const workflow = createServerPublishWorkflow();
+  const result = await workflow.preview({
+    menuId,
     actor,
-    menuId,
-    snapshot,
-    requireCategorySnapshot: true,
-  });
-
-  const meta = await readMenuMeta(menuId);
-  const currentRevisions = assertPublishRevisions({
-    expectedLiveRevision,
-    expectedDraftRevision,
-    expectedNotificationRevision,
-    meta,
-    menuId,
-  });
-  const preview = await buildCanonicalPreviewForMenu({
-    snapshot,
-    meta,
-    knownMenu,
+    source,
+    snapshot: snapshot || {},
+    request: {
+      expectedLiveRevision,
+      expectedDraftRevision,
+      expectedNotificationRevision,
+    },
   });
 
   return {
     ok: true,
     action: 'preview',
-    preview,
-    current_revisions: currentRevisions,
+    preview: result.preview,
+    current_revisions: result.revisions,
     reconnect: null,
     compatibility: {
-      contract: PREVIEW_CONTRACT,
+      contract: 'menu-publish-workflow.v1',
       serverOwned: true,
     },
   };
@@ -619,288 +587,44 @@ export async function publishMenuUpdateForMenu({
   source,
   snapshot = {},
   selectedChangeIds = null,
-  legacySelectedSections = [],
   expectedLiveRevision = null,
   expectedDraftRevision = null,
   expectedNotificationRevision = null,
 }) {
-  const knownMenu = getKnownMenuById(menuId);
-  if (!knownMenu) {
-    throw { status: 400, message: 'Unsupported menu_id' };
-  }
-
-  await assertCategoryGovernanceAllowed({
+  const workflow = createServerPublishWorkflow();
+  const result = await workflow.execute({
+    menuId,
     actor,
-    menuId,
-    snapshot,
-    requireCategorySnapshot: true,
-  });
-
-  const meta = await readMenuMeta(menuId);
-  const currentRevisions = assertPublishRevisions({
-    expectedLiveRevision,
-    expectedDraftRevision,
-    expectedNotificationRevision,
-    meta,
-    menuId,
-  });
-  const preview = await buildCanonicalPreviewForMenu({
-    snapshot,
-    meta,
-    knownMenu,
-  });
-  const selection = resolveSelection(preview, selectedChangeIds, legacySelectedSections);
-  const selectedSections = groupNotificationChangesBySection(selection.selectedLines);
-  const clearSections = groupNotificationChangesBySection(selection.clearLines);
-  const selectedPatchMessage = selectedSections.length
-    ? buildPatchMessage(selectedSections, {
-      menuName: knownMenu?.name || '',
-      menuLink: String(meta?.notifications?.menu_url || '').trim(),
-    })
-    : '';
-  const publishMode = normalizePublishMode(mode, preview.mode);
-  const shouldPersistLive = publishMode !== 'send';
-  const shouldNotify = (publishMode === 'save-and-send' || publishMode === 'send') && selectedSections.length > 0;
-  const shouldAdvanceQueueBaseline = (publishMode === 'save-and-send' || publishMode === 'send') && (
-    selectedSections.length > 0 || clearSections.length > 0
-  );
-  const ts = Date.now();
-  const normalizedSource = inferAuditSource(actor, source);
-  const operationId = randomUUID();
-  const warnings = [];
-  const historyCompat = [];
-
-  if (shouldPersistLive) {
-    await saveLiveMenuForMenu({
-      menuId,
-      snapshot,
+    source,
+    intent: mode === 'save' ? 'save' : (mode === 'send' ? 'send' : 'save-and-send'),
+    snapshot: snapshot || {},
+    request: {
+      selectedChangeIds: Array.isArray(selectedChangeIds) ? selectedChangeIds : null,
       expectedLiveRevision,
-      actor,
-    });
-  }
-
-  const notificationStatus = shouldNotify
-    ? createNotificationStatus(await deliverMenuNotification(menuId, truncateNotificationText(selectedPatchMessage)), true)
-    : createNotificationStatus(null, false);
-
-  if (shouldNotify && (notificationStatus.partial || !notificationStatus.ok)) {
-    if (notificationStatus.partial) {
-      warnings.push(...collectNotificationWarnings(notificationStatus.summary));
-      warnings.push('Some channels did not receive the update. The queue was preserved so you can retry.');
-    } else {
-      warnings.push('Update could not be sent. The queue was preserved.');
-    }
-
-    const [metaCompatibility, failedSendCompatibility] = await Promise.all([
-      patchMenuMetaForMenuWithCompatibility(menuId, {
-        last_updated_ts: shouldPersistLive ? ts : (meta?.last_updated_ts || null),
-        draft_state: shouldPersistLive ? {} : (meta?.draft_state || {}),
-        draft_saved_ts: shouldPersistLive ? null : (meta?.draft_saved_ts || null),
-        draft_saved_by_user_id: shouldPersistLive ? null : (meta?.draft_saved_by_user_id ?? undefined),
-        draft_saved_by_name: shouldPersistLive ? '' : (meta?.draft_saved_by_name ?? undefined),
-        draft_saved_source: shouldPersistLive ? '' : (meta?.draft_saved_source ?? undefined),
-      }, {
-        optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
-      }),
-      appendHistoryEvent({
-        menuId,
-        actor,
-        source: normalizedSource,
-        operationId,
-        eventType: 'send_failed',
-        sections: selectedSections,
-        message: notificationStatus.partial
-          ? 'Notification delivery was partially successful. Queue preserved for retry.'
-          : 'Notification delivery failed. Queue preserved for retry.',
-      }),
-    ]);
-    historyCompat.push(failedSendCompatibility);
-
-    return {
-      ok: true,
-      ts,
-      preview,
-      sections_by_outcome: buildSectionsByOutcome({
-        preview,
-        selectedGroupIds: selection.selectedGroupIds,
-      }),
-      current_revisions: {
-        ...currentRevisions,
-        live_revision: shouldPersistLive ? ts : currentRevisions.live_revision,
-      },
-      notificationStatus,
-      warnings,
-      warningMessage: warnings[0] || '',
-      successMessage: `✅ ${knownMenu.name || 'Menu'} saved live. Send attempt failed and the queue was preserved.`,
-      selected_change_ids: selection.selectedGroupIds,
-      legacy_selected_change_ids: selection.selectedLines.map(change => change.id),
-      operation_id: operationId,
-      compatibility: {
-        contract: PREVIEW_CONTRACT,
-        serverOwned: true,
-        downgradedFields: mergeDowngradedFields(metaCompatibility, ...historyCompat),
-        sourceStamped: !mergeDowngradedFields(...historyCompat).includes('source'),
-        typedHistory: !mergeDowngradedFields(...historyCompat).includes('event_type'),
-        operationGrouping: !mergeDowngradedFields(...historyCompat).includes('operation_id'),
-      },
-    };
-  }
-
-  warnings.push(...collectNotificationWarnings(notificationStatus.summary));
-  const currentFeaturedIds = Array.isArray(preview?.metadata?.currentFeaturedIds)
-    ? preview.metadata.currentFeaturedIds
-    : await readCurrentFeaturedIdsForRestaurant(knownMenu.restaurantId);
-  const siblingMenuIds = (getRestaurantSpecialConfig(knownMenu.restaurantId)?.menuIds || [])
-    .filter(candidateId => candidateId && candidateId !== menuId);
-  const lastSentState = snapshotLastSentState(snapshot);
-
-  if (publishMode === 'save') {
-    const [metaCompatibility, quietSaveCompatibility] = await Promise.all([
-      patchMenuMetaForMenuWithCompatibility(menuId, {
-        last_updated_ts: ts,
-        draft_state: {},
-        draft_saved_ts: null,
-        draft_saved_by_user_id: null,
-        draft_saved_by_name: '',
-        draft_saved_source: '',
-      }, {
-        optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
-      }),
-      insertUpdateLog({
-        menuId,
-        actor,
-        diff: serializeSaveOnlyChangesForLog(preview.saveOnlyChanges),
-        message: preview.hasNotificationChanges
-          ? 'Saved live quietly. Notification queue was preserved for later send.'
-          : 'Saved live quietly.',
-        source: normalizedSource,
-        operationId,
-        eventType: 'quiet_save',
-      }),
-    ]);
-    historyCompat.push(quietSaveCompatibility);
-
-    return {
-      ok: true,
-      ts,
-      preview,
-      sections_by_outcome: buildSectionsByOutcome({
-        preview,
-        selectedGroupIds: selection.selectedGroupIds,
-      }),
-      current_revisions: {
-        ...currentRevisions,
-        live_revision: ts,
-      },
-      notificationStatus: null,
-      warnings,
-      warningMessage: warnings[0] || '',
-      successMessage: preview.hasNotificationChanges
-        ? `✅ ${knownMenu.name || 'Menu'} saved live. Queue is ready to send.`
-        : `✅ ${knownMenu.name || 'Menu'} saved to the live menu.`,
-      selected_change_ids: selection.selectedGroupIds,
-      legacy_selected_change_ids: selection.selectedLines.map(change => change.id),
-      operation_id: operationId,
-      compatibility: {
-        contract: PREVIEW_CONTRACT,
-        serverOwned: true,
-        downgradedFields: mergeDowngradedFields(metaCompatibility, ...historyCompat),
-        sourceStamped: !mergeDowngradedFields(...historyCompat).includes('source'),
-        typedHistory: !mergeDowngradedFields(...historyCompat).includes('event_type'),
-        operationGrouping: !mergeDowngradedFields(...historyCompat).includes('operation_id'),
-      },
-    };
-  }
-
-  const [metaCompatibility] = await Promise.all([
-    patchMenuMetaForMenuWithCompatibility(menuId, {
-      last_updated_ts: shouldPersistLive ? ts : (meta?.last_updated_ts || currentRevisions.live_revision || null),
-      last_sent_ts: shouldAdvanceQueueBaseline ? ts : (meta?.last_sent_ts || null),
-      last_sent_state: shouldAdvanceQueueBaseline ? lastSentState : (meta?.last_sent_state || {}),
-      last_sent_categories: shouldAdvanceQueueBaseline
-        ? (Array.isArray(preview?.diff) ? preview.diff.map(section => section.id).filter(Boolean) : [])
-        : (Array.isArray(meta?.last_sent_categories) ? meta.last_sent_categories : []),
-      last_sent_featured: shouldAdvanceQueueBaseline
-        ? currentFeaturedIds
-        : (Array.isArray(meta?.last_sent_featured) ? meta.last_sent_featured : []),
-      draft_state: shouldPersistLive ? {} : (meta?.draft_state || {}),
-      draft_saved_ts: shouldPersistLive ? null : (meta?.draft_saved_ts || null),
-      draft_saved_by_user_id: shouldPersistLive ? null : (meta?.draft_saved_by_user_id ?? undefined),
-      draft_saved_by_name: shouldPersistLive ? '' : (meta?.draft_saved_by_name ?? undefined),
-      draft_saved_source: shouldPersistLive ? '' : (meta?.draft_saved_source ?? undefined),
-    }, {
-      optionalFields: ['last_sent_featured', 'draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
-    }),
-    ...(shouldAdvanceQueueBaseline
-      ? siblingMenuIds.map(candidateId => patchMenuMetaForMenu(candidateId, {
-          last_sent_featured: currentFeaturedIds,
-        }))
-      : []),
-  ]);
-
-  if (selectedSections.length > 0 && shouldNotify) {
-    const sendCompatibility = await appendHistoryEvent({
-      menuId,
-      actor,
-      source: normalizedSource,
-      operationId,
-      eventType: 'send_notification',
-      sections: selectedSections,
-      message: selectedPatchMessage || 'Sent menu update notification.',
-    });
-    historyCompat.push(sendCompatibility);
-  }
-
-  if (clearSections.length > 0) {
-    const clearCompatibility = await appendHistoryEvent({
-      menuId,
-      actor,
-      source: normalizedSource,
-      operationId,
-      eventType: 'clear_without_send',
-      sections: clearSections,
-      message: `Cleared ${clearSections.reduce((count, section) => count + (section.changes || []).length, 0)} queued line(s) without sending.`,
-    });
-    historyCompat.push(clearCompatibility);
-  }
-
-  const queueWasClearedWithoutSend = clearSections.length > 0 && !shouldNotify;
-  const successMessage = shouldNotify
-    ? (clearSections.length > 0
-        ? `✅ ${knownMenu.name || 'Menu'} sent selected updates and cleared unchecked lines.`
-        : `✅ ${knownMenu.name || 'Menu'} updates sent.`)
-    : (queueWasClearedWithoutSend
-        ? `✅ ${knownMenu.name || 'Menu'} update list cleared without notifying channels.`
-        : `✅ ${knownMenu.name || 'Menu'} save completed.`);
+      expectedDraftRevision,
+      expectedNotificationRevision,
+    },
+  });
 
   return {
-    ok: true,
-    ts,
-    preview,
-    sections_by_outcome: buildSectionsByOutcome({
-      preview,
-      selectedGroupIds: selection.selectedGroupIds,
-    }),
-    current_revisions: {
-      ...currentRevisions,
-      live_revision: shouldPersistLive ? ts : currentRevisions.live_revision,
-      last_sent_revision: shouldAdvanceQueueBaseline ? ts : currentRevisions.last_sent_revision,
-      draft_revision: shouldPersistLive ? null : currentRevisions.draft_revision,
+    ok: result.ok,
+    ts: result.ts,
+    preview: result.preview,
+    current_revisions: result.revisions,
+    notificationStatus: result.notification,
+    warnings: result.userOutcome.warnings,
+    warningMessage: result.userOutcome.warningMessage,
+    successMessage: result.userOutcome.successMessage,
+    selected_change_ids: result.queue.selectedChangeIds,
+    sections_by_outcome: {
+      sent: result.queue.selectedChangeIds,
+      cleared: result.queue.clearedChangeIds,
     },
-    notificationStatus: shouldNotify ? notificationStatus : null,
-    warnings,
-    warningMessage: warnings[0] || '',
-    successMessage,
-    selected_change_ids: selection.selectedGroupIds,
-    legacy_selected_change_ids: selection.selectedLines.map(change => change.id),
-    operation_id: operationId,
+    operation_id: result.operationId,
     compatibility: {
-      contract: PREVIEW_CONTRACT,
+      contract: 'menu-publish-workflow.v1',
       serverOwned: true,
-      downgradedFields: mergeDowngradedFields(metaCompatibility, ...historyCompat),
-      sourceStamped: !mergeDowngradedFields(...historyCompat).includes('source'),
-      typedHistory: !mergeDowngradedFields(...historyCompat).includes('event_type'),
-      operationGrouping: !mergeDowngradedFields(...historyCompat).includes('operation_id'),
+      downgradedFields: result.compatibility.downgradedFields,
     },
   };
 }
