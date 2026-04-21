@@ -146,6 +146,11 @@ body.route-restaurant.route-restaurant--elroy {
     calc(1.5rem + var(--erc-safe-left));
 }
 
+#restaurant-site-wrapper .erc-brand-heading {
+  margin: 0;
+  min-width: 0;
+}
+
 #restaurant-site-wrapper .erc-brand-group {
   display: flex;
   align-items: center;
@@ -163,15 +168,10 @@ body.route-restaurant.route-restaurant--elroy {
   outline: none;
 }
 
-#restaurant-site-wrapper .erc-brand {
-  margin: 0;
-  color: var(--erc-primary);
-  font-family: 'Newsreader', serif;
-  font-size: clamp(1.8rem, 2.8vw, 3rem);
-  font-style: italic;
-  font-weight: 700;
-  line-height: 0.95;
-  text-wrap: balance;
+#restaurant-site-wrapper .erc-brand-logo {
+  display: block;
+  width: clamp(11rem, 22vw, 16rem);
+  height: auto;
 }
 
 #restaurant-site-wrapper .erc-menu-toggle {
@@ -792,12 +792,10 @@ body.route-restaurant.route-restaurant--elroy {
   max-width: 28rem;
 }
 
-#restaurant-site-wrapper .erc-footer-title {
-  margin: 0;
-  color: rgb(255 238 214 / 1);
-  font-family: 'Newsreader', serif;
-  font-size: 2.1rem;
-  font-style: italic;
+#restaurant-site-wrapper .erc-footer-logo {
+  display: block;
+  width: min(100%, 14rem);
+  height: auto;
 }
 
 #restaurant-site-wrapper .erc-footer-updated,
@@ -1009,8 +1007,8 @@ body.route-restaurant.route-restaurant--elroy {
     padding-bottom: 0.68rem;
   }
 
-  #restaurant-site-wrapper .erc-brand {
-    font-size: 1.55rem;
+  #restaurant-site-wrapper .erc-brand-logo {
+    width: clamp(9.5rem, 42vw, 12rem);
   }
 
   #restaurant-site-wrapper .erc-sister-link {
