@@ -1,6 +1,6 @@
 ---
 name: map-architecture
-description: Update `docs/current-architecture-flowchart.md` to match the latest tracked architecture across web, iOS, server, and data boundaries. Use when users ask to refresh architecture docs, verify client/server boundaries, or audit direct client-to-Supabase or client-to-external-service calls.
+description: Update `docs/architecture/current-flowchart.md` to match the latest tracked architecture across web, iOS, server, and data boundaries. Use when users ask to refresh architecture docs, verify client/server boundaries, or audit direct client-to-Supabase or client-to-external-service calls.
 ---
 
 # Map Architecture
@@ -10,7 +10,7 @@ current tracked code, especially when boundary correctness matters.
 
 ## Ownership
 
-- `docs/current-architecture-flowchart.md`
+- `docs/architecture/current-flowchart.md`
 
 ## Primary Goal
 
@@ -63,7 +63,7 @@ The chart and notes must emphasize:
 ## Output
 
 Report:
-- whether `docs/current-architecture-flowchart.md` was updated
+- whether `docs/architecture/current-flowchart.md` was updated
 - the major boundary changes reflected in the chart
 - each direct client-to-service violation found, with file anchors
 - any remaining unknowns that need manual confirmation
