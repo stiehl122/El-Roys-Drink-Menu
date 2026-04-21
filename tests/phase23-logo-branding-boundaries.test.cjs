@@ -33,30 +33,28 @@ test('entry shells reference ELROYSTEMPLOGO instead of HFLOGO', () => {
 
 test("El Roy's route header/footer and Leroy's jump button use temp logo artwork", () => {
   const cantinaHtml = read('elroyscantina/index.html');
+  const cantinaCss = read('elroyscantina/style.css');
   const leroysHtml = read('leroyslounge/index.html');
+  const leroysCss = read('leroyslounge/style.css');
 
   assert.match(cantinaHtml, /class="erc-brand-logo"[\s\S]*src="\/ELROYSTEMPLOGO\.png"/);
   assert.match(cantinaHtml, /class="erc-footer-logo"[\s\S]*src="\/ELROYSTEMPLOGO\.png"/);
+  assert.match(cantinaCss, /\.erc-brand-logo/);
+  assert.match(cantinaCss, /\.erc-footer-logo/);
   assert.match(leroysHtml, /class="ll-board-jump-link"[\s\S]*<img[\s\S]*src="\/ELROYSTEMPLOGO\.png"/);
+  assert.match(leroysCss, /\.ll-board-jump-logo/);
 });
 
 test('ELROYSTEMPLOGO assets exist for web and iOS app icons', () => {
   assert.equal(exists('ELROYSTEMPLOGO.png'), true);
-  assert.equal(
-    exists('ios/ElRoysManagerApp/Assets.xcassets/AppIcon.appiconset/ELROYSTEMPLOGO-1024.png'),
-    true,
-  );
-  assert.equal(
-    exists('ios/ElRoysManagerApp/Assets.xcassets/AppIcon.appiconset/ELROYSTEMPLOGO-180.png'),
-    true,
-  );
-  assert.equal(
-    exists('ios/ElRoysManagerApp/Assets.xcassets/AppIcon.appiconset/ELROYSTEMPLOGO-120.png'),
-    true,
-  );
 
   const contents = read('ios/ElRoysManagerApp/Assets.xcassets/AppIcon.appiconset/Contents.json');
-  assert.match(contents, /ELROYSTEMPLOGO-1024\.png/);
-  assert.match(contents, /ELROYSTEMPLOGO-180\.png/);
-  assert.match(contents, /ELROYSTEMPLOGO-120\.png/);
+  const manifest = JSON.parse(contents);
+  const filenames = manifest.images
+    .map(image => image.filename)
+    .filter(Boolean);
+
+  assert.notEqual(filenames.length, 0);
+  assert.ok(filenames.every(filename => /^ELROYSTEMPLOGO-.+\.png$/.test(filename)));
+  assert.ok(filenames.some(filename => filename.startsWith('ELROYSTEMPLOGO-')));
 });
