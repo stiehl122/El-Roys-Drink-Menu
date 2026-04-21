@@ -120,4 +120,13 @@ test('user chip runtime supports mixed rollout roots, hydration, open/close, and
   assert.equal(legacyChip.root.classList.contains('open'), true);
   getState(sandbox, 'toggleUserDropdown()');
   assert.equal(legacyChip.root.classList.contains('open'), false);
+
+  const neutralActive = createElement('div', 'neutral-active');
+  neutralActive.closest = () => null;
+  document.activeElement = neutralActive;
+  assert.equal(getState(sandbox, 'getUserChipRoot()?.id || ""'), 'user-chip');
+  getState(sandbox, 'toggleUserDropdown()');
+  assert.equal(legacyChip.root.classList.contains('open'), true);
+  getState(sandbox, 'toggleUserDropdown()');
+  assert.equal(legacyChip.root.classList.contains('open'), false);
 });
