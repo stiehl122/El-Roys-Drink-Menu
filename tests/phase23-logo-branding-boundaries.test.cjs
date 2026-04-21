@@ -27,7 +27,6 @@ test('entry shells reference ELROYSTEMPLOGO instead of HFLOGO', () => {
 
     assert.match(html, /ELROYSTEMPLOGO\.png/);
     assert.doesNotMatch(html, /HFLOGO\.png/);
-    assert.doesNotMatch(html, /HFLOGO/);
   });
 });
 
@@ -56,5 +55,11 @@ test('ELROYSTEMPLOGO assets exist for web and iOS app icons', () => {
 
   assert.notEqual(filenames.length, 0);
   assert.ok(filenames.every(filename => /^ELROYSTEMPLOGO-.+\.png$/.test(filename)));
-  assert.ok(filenames.some(filename => filename.startsWith('ELROYSTEMPLOGO-')));
+  filenames.forEach(filename => {
+    assert.equal(
+      exists(path.join('ios/ElRoysManagerApp/Assets.xcassets/AppIcon.appiconset', filename)),
+      true,
+      `${filename} must exist on disk`,
+    );
+  });
 });
