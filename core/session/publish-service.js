@@ -19,6 +19,12 @@
       ? createPublishFacade(sessionPorts, runtime)
       : null;
     let fallbackService = null;
+    const buildSnapshot = typeof runtime.buildSnapshot === 'function'
+      ? runtime.buildSnapshot
+      : (() => ({ source: 'unknown' }));
+    const buildPreview = typeof runtime.buildPreview === 'function'
+      ? runtime.buildPreview
+      : (() => sessionPorts.buildPreview?.(buildSnapshot('preview')));
 
     function getFallbackService() {
       if (fallbackService !== null) return fallbackService;
@@ -36,6 +42,15 @@
       };
     }
 
+    function buildSaveDraftNoop(preview, source = 'draft-noop') {
+      return {
+        ok: false,
+        noop: true,
+        preview,
+        snapshot: buildSnapshot(source),
+      };
+    }
+
     async function prepare(opts = {}) {
       if (facade && typeof facade.prepare === 'function') {
         return facade.prepare(opts);
@@ -48,6 +63,23 @@
     }
 
     async function saveDraft(opts = {}) {
+      if (typeof sessionPorts.publishMenuUpdate === 'function') {
+        const snapshot = buildSnapshot('draft');
+        const preview = opts.preview?.sections ? opts.preview : buildPreview();
+        const hasLocalDraft = !!snapshot.dirty || !!preview?.hasLocalDraft;
+        const hasChanges = !!preview?.hasChanges;
+
+        if (!hasLocalDraft || !hasChanges) {
+          return buildSaveDraftNoop(preview);
+        }
+
+        return sessionPorts.publishMenuUpdate({
+          ...opts,
+          preview,
+          mode: 'save',
+          notify: false,
+        });
+      }
       if (facade && typeof facade.commit === 'function') {
         return facade.commit({ ...opts, intent: 'save' });
       }
@@ -59,6 +91,9 @@
     }
 
     async function publishUpdate(opts = {}) {
+      if (typeof sessionPorts.publishMenuUpdate === 'function') {
+        return sessionPorts.publishMenuUpdate(opts);
+      }
       if (facade && typeof facade.commit === 'function') {
         return facade.commit(opts);
       }
