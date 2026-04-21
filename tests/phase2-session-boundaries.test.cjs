@@ -33,6 +33,7 @@ test('app createMenuPublishService delegates through session module boundary', (
   assert.equal(result.delegated, true);
   assert.equal(result.type, 'publish');
   assert.equal(calls.length, 1);
+  assert.equal(typeof calls[0][2]?.fallback, 'function');
 });
 
 test('app createMenuSessionLifecycle delegates through session module boundary', () => {
