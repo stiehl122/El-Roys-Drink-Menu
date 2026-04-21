@@ -49,6 +49,14 @@ def add_tree(group, directory, target, resource_target: target)
     next if entry.start_with?('.')
 
     full_path = File.join(directory, entry)
+    ext = File.extname(entry)
+
+    if ext == '.xcassets'
+      file_ref = group.new_file(entry)
+      resource_target.resources_build_phase.add_file_reference(file_ref, true)
+      next
+    end
+
     if File.directory?(full_path)
       subgroup = group.new_group(entry, entry)
       add_tree(subgroup, full_path, target, resource_target: resource_target)
@@ -56,7 +64,6 @@ def add_tree(group, directory, target, resource_target: target)
     end
 
     file_ref = group.new_file(entry)
-    ext = File.extname(entry)
     case ext
     when '.swift'
       target.source_build_phase.add_file_reference(file_ref, true)

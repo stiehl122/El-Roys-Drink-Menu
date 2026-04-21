@@ -13,6 +13,18 @@
       "filename" : "ELROYSTEMPLOGO-180.png"
     },
     {
+      "idiom" : "ipad",
+      "scale" : "2x",
+      "size" : "76x76",
+      "filename" : "ELROYSTEMPLOGO-152.png"
+    },
+    {
+      "idiom" : "ipad",
+      "scale" : "2x",
+      "size" : "83.5x83.5",
+      "filename" : "ELROYSTEMPLOGO-167.png"
+    },
+    {
       "idiom" : "ios-marketing",
       "scale" : "1x",
       "size" : "1024x1024",

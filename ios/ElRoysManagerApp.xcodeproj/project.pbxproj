@@ -7,316 +7,325 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		075F36D0B1BF2C903520C45F /* PublicMenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3593CD916F5376C28FFC065 /* PublicMenuViews.swift */; };
-		0DF17767BB6EF4F7AF0E8E4F /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84134DB7CAEAA908459C8CE4 /* HomeViews.swift */; };
-		0E96C68A25E14C6CFFB8141F /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */; };
-		1BDA730FB963924901FBD4A6 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BACAEC402B9AB79F23A25C53 /* AppModels.swift */; };
-		1EB7EDA43B335386D9714689 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 984625EC61B70E28EBE29AA7 /* Foundation.framework */; };
-		269B5820EF3BD170310838D0 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3052B7FC5E6C4B92BCBB47B6 /* MenuDocumentTests.swift */; };
-		2A514DBF47B17B337CB32D46 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 603A2398CB2CF2EEA99C8CA8 /* RestaurantToolsView.swift */; };
-		2EA8206AF97F293F3CBEC151 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 984625EC61B70E28EBE29AA7 /* Foundation.framework */; };
-		32D8D46E2087CFC34C896FB1 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37F113DC84E3D882A61BC0A /* AppModel.swift */; };
-		41BAB58AABE8A026F9742DE8 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10DC14234E3A5AD660732ABF /* Glass.swift */; };
-		4EF9C5DA4C838D7C2F7EDCCD /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */; };
-		504ADBCDE4287D896A097C9E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 984625EC61B70E28EBE29AA7 /* Foundation.framework */; };
-		51938CF52E3035B8FD40D98C /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FF3EEDF738DA7824619341B /* OfflineDraftStore.swift */; };
-		98B4C1D22A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */; };
-		77FA0AAB51126DD1E3349379 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */; };
-		B658E6A6DD31C472D6BDE8EA /* ElRoysManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EB2A5A1E80AEC9A6C5F892 /* ElRoysManagerApp.swift */; };
-		B74AD36AC43DEA6771F8A50B /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4960978B1EB557BC4FD6A6DC /* BarcodeScannerView.swift */; };
-		CC2BA8D31EE33D93717FE9D4 /* BackendClients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67BA26A5438F6F58657911AD /* BackendClients.swift */; };
-		F583EED5C4CED8B83C7A6325 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95254918D5739FE7B2D38658 /* SessionStore.swift */; };
-		FB1FE66B120AC8EE6E3B36D4 /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58BAAD2469B54D517FD6B0A6 /* AuthViews.swift */; };
+		1619A5144C7ADCFA72C8ED3F /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DF994D3A2941E287BD4FCFD /* RestaurantCategoryManagementView.swift */; };
+		1E2A2E92ADE251BFC6735026 /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 677BFA1FC29CBADCA32BBEF5 /* OfflineDraftStore.swift */; };
+		38A424A5FADDF9352ACAFCFC /* BackendClients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6163E668E69F623D6F9C35FF /* BackendClients.swift */; };
+		4210EF47438191968C349DA5 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E292A54CAEAE090189BD6F4 /* MenuViews.swift */; };
+		4285CEDED841CF08D1FABBBE /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7850DF6EDD303187853D3D60 /* Foundation.framework */; };
+		46727CC5A950281E5F5F3BA0 /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01247C3874B035A98D155A3E /* HomeViews.swift */; };
+		560CB578088580D1FDEDC923 /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 230EEE760507D5EA46270E50 /* AuthViews.swift */; };
+		65844C9F17B4F0D6530E8F7F /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43EE7DAEFFAB44C6A7147870 /* RoutePreviewView.swift */; };
+		6744FEE9387C017662101786 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC6A79F1B137BF75C269A78 /* SessionStore.swift */; };
+		726691CA88B8EB0D50330C6F /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7101CC67B69952A757E1D3 /* BarcodeScannerView.swift */; };
+		73D554966349720C07D1A480 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7850DF6EDD303187853D3D60 /* Foundation.framework */; };
+		840C3E50EF06561832859F7D /* ElRoysManagerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F38D92B7D7AFD60E39BCC4 /* ElRoysManagerApp.swift */; };
+		887B83FE43EEA98288934D6F /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFE4B93D96BC6F604C105D19 /* AppModels.swift */; };
+		895265203C743CF81CEA03CF /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7850DF6EDD303187853D3D60 /* Foundation.framework */; };
+		9521F4C96EE0A0A1FABB707B /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2737E4B23ABB3D2A8BD3DFD /* Glass.swift */; };
+		AF7D0EB527C62D3C76CF5261 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A257F57CAABCD32EAB80F39 /* Assets.xcassets */; };
+		CA10B53E7C31DA1A6DD42B29 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D5E3ED05F5E7457292567D /* RestaurantToolsView.swift */; };
+		D037A7BE20055914A56D37F7 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78D5D376AB1F741A7F63B9F0 /* AppModel.swift */; };
+		E22DB70309FD8C42F9C87629 /* PublicMenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4B9BCDC98C11B1A0E876B2 /* PublicMenuViews.swift */; };
+		F0080EEDC6F72111EEC84D1D /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 381F6958DAD2BDCFE63D73B2 /* ElRoysManagerAppUITests.swift */; };
+		F350CC708F6F708242DB6363 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		A5DE0333613B0543DF7BB7AD /* PBXContainerItemProxy */ = {
+		A6B83BD2304154B56C05A79A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 85DA13D02E4B6F72E228C041 /* Project object */;
+			containerPortal = 3F09CA6107F73106A634CD18 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0C082950AC88C5E7355886CC;
+			remoteGlobalIDString = F00420BF53E89B7DF5BB49FC;
 			remoteInfo = ElRoysManagerApp;
 		};
-		EEDF0539A617BC3B263C5ED9 /* PBXContainerItemProxy */ = {
+		DF0B790E5310711A3497BC1E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = 85DA13D02E4B6F72E228C041 /* Project object */;
+			containerPortal = 3F09CA6107F73106A634CD18 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 0C082950AC88C5E7355886CC;
+			remoteGlobalIDString = F00420BF53E89B7DF5BB49FC;
 			remoteInfo = ElRoysManagerApp;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		10DC14234E3A5AD660732ABF /* Glass.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
-		1FF3EEDF738DA7824619341B /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
-		28CC30EC4B30E6F4D0BFCDE8 /* ElRoysManagerAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ElRoysManagerAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		3052B7FC5E6C4B92BCBB47B6 /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
-		34EB2A5A1E80AEC9A6C5F892 /* ElRoysManagerApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerApp.swift; sourceTree = "<group>"; };
-		4960978B1EB557BC4FD6A6DC /* BarcodeScannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
-		58BAAD2469B54D517FD6B0A6 /* AuthViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthViews.swift; sourceTree = "<group>"; };
-		5EC812C3BAE0F7C6924CA883 /* ElRoysManagerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ElRoysManagerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		603A2398CB2CF2EEA99C8CA8 /* RestaurantToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsView.swift; sourceTree = "<group>"; };
-		67BA26A5438F6F58657911AD /* BackendClients.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackendClients.swift; sourceTree = "<group>"; };
-		7C583553A19E8A99DB2FCB06 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
-		84134DB7CAEAA908459C8CE4 /* HomeViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
-		886370B05588ADB2B9200AB8 /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
-		8EA9EC632EBEE43B8E14234E /* ElRoysManagerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ElRoysManagerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		95254918D5739FE7B2D38658 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
-		984625EC61B70E28EBE29AA7 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantCategoryManagementView.swift; sourceTree = "<group>"; };
-		AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
-		BACAEC402B9AB79F23A25C53 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
-		D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
-		E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
-		F0F348AEDABC4AE027B7FFAC /* Contents.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; path = Contents.json; sourceTree = "<group>"; };
-		F3593CD916F5376C28FFC065 /* PublicMenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuViews.swift; sourceTree = "<group>"; };
-		F37F113DC84E3D882A61BC0A /* AppModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		01247C3874B035A98D155A3E /* HomeViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
+		0A7101CC67B69952A757E1D3 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		21D5E3ED05F5E7457292567D /* RestaurantToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsView.swift; sourceTree = "<group>"; };
+		230EEE760507D5EA46270E50 /* AuthViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthViews.swift; sourceTree = "<group>"; };
+		381F6958DAD2BDCFE63D73B2 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
+		3A257F57CAABCD32EAB80F39 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		3B50538B851A1F6FDC77B352 /* ElRoysManagerApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ElRoysManagerApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		43EE7DAEFFAB44C6A7147870 /* RoutePreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
+		6163E668E69F623D6F9C35FF /* BackendClients.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackendClients.swift; sourceTree = "<group>"; };
+		677BFA1FC29CBADCA32BBEF5 /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
+		7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
+		7850DF6EDD303187853D3D60 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		78D5D376AB1F741A7F63B9F0 /* AppModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		8E292A54CAEAE090189BD6F4 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
+		9DF994D3A2941E287BD4FCFD /* RestaurantCategoryManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantCategoryManagementView.swift; sourceTree = "<group>"; };
+		B2215B8C5E0DA9393FDC0056 /* ElRoysManagerAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ElRoysManagerAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB4B9BCDC98C11B1A0E876B2 /* PublicMenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuViews.swift; sourceTree = "<group>"; };
+		C2737E4B23ABB3D2A8BD3DFD /* Glass.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
+		CD7FC3886819095D0E0FBFB5 /* ElRoysManagerAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ElRoysManagerAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		CFC6A79F1B137BF75C269A78 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		D0F38D92B7D7AFD60E39BCC4 /* ElRoysManagerApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerApp.swift; sourceTree = "<group>"; };
+		FFE4B93D96BC6F604C105D19 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		2DEA782974D2C792CFEBAA58 /* Frameworks */ = {
+		9788E703FE4D399C80BDDF1D /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2EA8206AF97F293F3CBEC151 /* Foundation.framework in Frameworks */,
+				73D554966349720C07D1A480 /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		4C551D70D62D686F114C1579 /* Frameworks */ = {
+		D184AC9995E199DCDEC925CB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				504ADBCDE4287D896A097C9E /* Foundation.framework in Frameworks */,
+				895265203C743CF81CEA03CF /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6F08641F06631ACFB2212BBB /* Frameworks */ = {
+		F1CA6EE6F5238D15ACA52A86 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1EB7EDA43B335386D9714689 /* Foundation.framework in Frameworks */,
+				4285CEDED841CF08D1FABBBE /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		011FF2527CBB00F6B956EC9E /* Public */ = {
+		0A7E4A58BDF3E461FC5B2964 = {
 			isa = PBXGroup;
 			children = (
-				F3593CD916F5376C28FFC065 /* PublicMenuViews.swift */,
+				FCA05B96D54611C3B6690408 /* Products */,
+				EC83F31E6C8618C7BFB4A507 /* Frameworks */,
+				FCEADD368EE4E3A777B3EE20 /* ElRoysManagerApp */,
+				BE24EDBA12E540B6293437BE /* ElRoysManagerAppTests */,
+				6FE569C5311CC6726A06C286 /* ElRoysManagerAppUITests */,
 			);
-			path = Public;
 			sourceTree = "<group>";
 		};
-		058E6BB2A848DA121F18BCED /* Menu */ = {
+		1A37A23F37BE8814C34CBCE9 /* iOS */ = {
 			isa = PBXGroup;
 			children = (
-				E4D3CFF2A8BA4E1EF4B02B03 /* MenuViews.swift */,
-				98B4C1D32A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift */,
-			);
-			path = Menu;
-			sourceTree = "<group>";
-		};
-		1163BF169A09CCB57DEE8D54 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				8EA9EC632EBEE43B8E14234E /* ElRoysManagerApp.app */,
-				5EC812C3BAE0F7C6924CA883 /* ElRoysManagerAppTests.xctest */,
-				28CC30EC4B30E6F4D0BFCDE8 /* ElRoysManagerAppUITests.xctest */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		1505DEB0003C0F8CF972BECC /* RestaurantTools */ = {
-			isa = PBXGroup;
-			children = (
-				603A2398CB2CF2EEA99C8CA8 /* RestaurantToolsView.swift */,
-			);
-			path = RestaurantTools;
-			sourceTree = "<group>";
-		};
-		2002CCA44A3AC0A22D9F1FEE /* ElRoysManagerAppTests */ = {
-			isa = PBXGroup;
-			children = (
-				3052B7FC5E6C4B92BCBB47B6 /* MenuDocumentTests.swift */,
-			);
-			path = ElRoysManagerAppTests;
-			sourceTree = "<group>";
-		};
-		2F39C84FE7DE6A67579DA1AC /* ElRoysManagerAppUITests */ = {
-			isa = PBXGroup;
-			children = (
-				D6643FCD672AA78BFDDC9BB0 /* ElRoysManagerAppUITests.swift */,
-			);
-			path = ElRoysManagerAppUITests;
-			sourceTree = "<group>";
-		};
-		3C2BC271451F8F16F1163BA5 /* Design */ = {
-			isa = PBXGroup;
-			children = (
-				10DC14234E3A5AD660732ABF /* Glass.swift */,
-			);
-			path = Design;
-			sourceTree = "<group>";
-		};
-		3DE4E475B48DE117E9E11883 /* Storage */ = {
-			isa = PBXGroup;
-			children = (
-				1FF3EEDF738DA7824619341B /* OfflineDraftStore.swift */,
-				95254918D5739FE7B2D38658 /* SessionStore.swift */,
-			);
-			path = Storage;
-			sourceTree = "<group>";
-		};
-		40C29DBBB0D642468F724BD4 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				9C6D9C83472B11B8B77FB11C /* iOS */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		4DC7D08B4A94BA3A53AB316E /* Preview */ = {
-			isa = PBXGroup;
-			children = (
-				AA1F85E2F0DEF0F6E95E021D /* RoutePreviewView.swift */,
-			);
-			path = Preview;
-			sourceTree = "<group>";
-		};
-		4E3151E980C266952DD2794D /* ElRoysManagerApp */ = {
-			isa = PBXGroup;
-			children = (
-				DD889B0BDD1D26779D2FA943 /* App */,
-				DCF8D9C16AFB3269911EF5DA /* Assets.xcassets */,
-				5A7EF5A86857E56C8BEDF4DF /* Clients */,
-				3C2BC271451F8F16F1163BA5 /* Design */,
-				593966B32688A9A420B03EF1 /* Features */,
-				E55C2123D52C57ACD07B3008 /* Models */,
-				3DE4E475B48DE117E9E11883 /* Storage */,
-			);
-			path = ElRoysManagerApp;
-			sourceTree = "<group>";
-		};
-		55F2FB0B74668548287CF1E0 /* Home */ = {
-			isa = PBXGroup;
-			children = (
-				84134DB7CAEAA908459C8CE4 /* HomeViews.swift */,
-			);
-			path = Home;
-			sourceTree = "<group>";
-		};
-		593966B32688A9A420B03EF1 /* Features */ = {
-			isa = PBXGroup;
-			children = (
-				671E05F6479B41CA1C7B4FD1 /* Auth */,
-				55F2FB0B74668548287CF1E0 /* Home */,
-				058E6BB2A848DA121F18BCED /* Menu */,
-				4DC7D08B4A94BA3A53AB316E /* Preview */,
-				011FF2527CBB00F6B956EC9E /* Public */,
-				1505DEB0003C0F8CF972BECC /* RestaurantTools */,
-				80CD8F44B69F8BE54CAA2EB2 /* Scanner */,
-			);
-			path = Features;
-			sourceTree = "<group>";
-		};
-		5A7EF5A86857E56C8BEDF4DF /* Clients */ = {
-			isa = PBXGroup;
-			children = (
-				67BA26A5438F6F58657911AD /* BackendClients.swift */,
-			);
-			path = Clients;
-			sourceTree = "<group>";
-		};
-		671E05F6479B41CA1C7B4FD1 /* Auth */ = {
-			isa = PBXGroup;
-			children = (
-				58BAAD2469B54D517FD6B0A6 /* AuthViews.swift */,
-			);
-			path = Auth;
-			sourceTree = "<group>";
-		};
-		80CD8F44B69F8BE54CAA2EB2 /* Scanner */ = {
-			isa = PBXGroup;
-			children = (
-				4960978B1EB557BC4FD6A6DC /* BarcodeScannerView.swift */,
-			);
-			path = Scanner;
-			sourceTree = "<group>";
-		};
-		8A63A39D9CE0BAB1D4448254 /* AppIcon.appiconset */ = {
-			isa = PBXGroup;
-			children = (
-				886370B05588ADB2B9200AB8 /* Contents.json */,
-			);
-			path = AppIcon.appiconset;
-			sourceTree = "<group>";
-		};
-		9C6D9C83472B11B8B77FB11C /* iOS */ = {
-			isa = PBXGroup;
-			children = (
-				984625EC61B70E28EBE29AA7 /* Foundation.framework */,
+				7850DF6EDD303187853D3D60 /* Foundation.framework */,
 			);
 			name = iOS;
 			sourceTree = "<group>";
 		};
-		DB4E1409EBB8E7421A789E78 /* AccentColor.colorset */ = {
+		264680E6FC3DE7103A722A39 /* Menu */ = {
 			isa = PBXGroup;
 			children = (
-				7C583553A19E8A99DB2FCB06 /* Contents.json */,
+				8E292A54CAEAE090189BD6F4 /* MenuViews.swift */,
+				9DF994D3A2941E287BD4FCFD /* RestaurantCategoryManagementView.swift */,
 			);
-			path = AccentColor.colorset;
+			path = Menu;
 			sourceTree = "<group>";
 		};
-		DCF8D9C16AFB3269911EF5DA /* Assets.xcassets */ = {
+		30CAB7FD7A88F82D7B09C83A /* RestaurantTools */ = {
 			isa = PBXGroup;
 			children = (
-				DB4E1409EBB8E7421A789E78 /* AccentColor.colorset */,
-				8A63A39D9CE0BAB1D4448254 /* AppIcon.appiconset */,
-				F0F348AEDABC4AE027B7FFAC /* Contents.json */,
+				21D5E3ED05F5E7457292567D /* RestaurantToolsView.swift */,
 			);
-			path = Assets.xcassets;
+			path = RestaurantTools;
 			sourceTree = "<group>";
 		};
-		DD889B0BDD1D26779D2FA943 /* App */ = {
+		387A122ECF9417C36A8D23FF /* Design */ = {
 			isa = PBXGroup;
 			children = (
-				F37F113DC84E3D882A61BC0A /* AppModel.swift */,
-				34EB2A5A1E80AEC9A6C5F892 /* ElRoysManagerApp.swift */,
+				C2737E4B23ABB3D2A8BD3DFD /* Glass.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
+		496CFC276A713C65DC791C48 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				78D5D376AB1F741A7F63B9F0 /* AppModel.swift */,
+				D0F38D92B7D7AFD60E39BCC4 /* ElRoysManagerApp.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
 		};
-		E55C2123D52C57ACD07B3008 /* Models */ = {
+		49F87E109EFD0C689A8E532C /* Storage */ = {
 			isa = PBXGroup;
 			children = (
-				BACAEC402B9AB79F23A25C53 /* AppModels.swift */,
+				677BFA1FC29CBADCA32BBEF5 /* OfflineDraftStore.swift */,
+				CFC6A79F1B137BF75C269A78 /* SessionStore.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		6C59F9B912E7BE979AEFC3E0 /* Auth */ = {
+			isa = PBXGroup;
+			children = (
+				230EEE760507D5EA46270E50 /* AuthViews.swift */,
+			);
+			path = Auth;
+			sourceTree = "<group>";
+		};
+		6FE569C5311CC6726A06C286 /* ElRoysManagerAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				381F6958DAD2BDCFE63D73B2 /* ElRoysManagerAppUITests.swift */,
+			);
+			path = ElRoysManagerAppUITests;
+			sourceTree = "<group>";
+		};
+		8180C733CD9364453F5AA694 /* Public */ = {
+			isa = PBXGroup;
+			children = (
+				BB4B9BCDC98C11B1A0E876B2 /* PublicMenuViews.swift */,
+			);
+			path = Public;
+			sourceTree = "<group>";
+		};
+		83242193BC28247CECABABA3 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				6C59F9B912E7BE979AEFC3E0 /* Auth */,
+				876A8D8F89FCC2B01C6C3CDC /* Home */,
+				264680E6FC3DE7103A722A39 /* Menu */,
+				AE4CAA6274616A87159CB476 /* Preview */,
+				8180C733CD9364453F5AA694 /* Public */,
+				30CAB7FD7A88F82D7B09C83A /* RestaurantTools */,
+				864BCF1F80F286C93DB1EBB8 /* Scanner */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		864BCF1F80F286C93DB1EBB8 /* Scanner */ = {
+			isa = PBXGroup;
+			children = (
+				0A7101CC67B69952A757E1D3 /* BarcodeScannerView.swift */,
+			);
+			path = Scanner;
+			sourceTree = "<group>";
+		};
+		876A8D8F89FCC2B01C6C3CDC /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				01247C3874B035A98D155A3E /* HomeViews.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		9C3C11D587D37EEF0AA4ED92 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				FFE4B93D96BC6F604C105D19 /* AppModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
 		};
-		FDB8E8F4CD9FD0F0A9AF85AF = {
+		AE4CAA6274616A87159CB476 /* Preview */ = {
 			isa = PBXGroup;
 			children = (
-				1163BF169A09CCB57DEE8D54 /* Products */,
-				40C29DBBB0D642468F724BD4 /* Frameworks */,
-				4E3151E980C266952DD2794D /* ElRoysManagerApp */,
-				2002CCA44A3AC0A22D9F1FEE /* ElRoysManagerAppTests */,
-				2F39C84FE7DE6A67579DA1AC /* ElRoysManagerAppUITests */,
+				43EE7DAEFFAB44C6A7147870 /* RoutePreviewView.swift */,
 			);
+			path = Preview;
+			sourceTree = "<group>";
+		};
+		BE24EDBA12E540B6293437BE /* ElRoysManagerAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				7493636C91AA80E8E417A6DF /* MenuDocumentTests.swift */,
+			);
+			path = ElRoysManagerAppTests;
+			sourceTree = "<group>";
+		};
+		DFEFD0EA09A6E68C352ACAFF /* Clients */ = {
+			isa = PBXGroup;
+			children = (
+				6163E668E69F623D6F9C35FF /* BackendClients.swift */,
+			);
+			path = Clients;
+			sourceTree = "<group>";
+		};
+		EC83F31E6C8618C7BFB4A507 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				1A37A23F37BE8814C34CBCE9 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		FCA05B96D54611C3B6690408 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3B50538B851A1F6FDC77B352 /* ElRoysManagerApp.app */,
+				CD7FC3886819095D0E0FBFB5 /* ElRoysManagerAppTests.xctest */,
+				B2215B8C5E0DA9393FDC0056 /* ElRoysManagerAppUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FCEADD368EE4E3A777B3EE20 /* ElRoysManagerApp */ = {
+			isa = PBXGroup;
+			children = (
+				496CFC276A713C65DC791C48 /* App */,
+				3A257F57CAABCD32EAB80F39 /* Assets.xcassets */,
+				DFEFD0EA09A6E68C352ACAFF /* Clients */,
+				387A122ECF9417C36A8D23FF /* Design */,
+				83242193BC28247CECABABA3 /* Features */,
+				9C3C11D587D37EEF0AA4ED92 /* Models */,
+				49F87E109EFD0C689A8E532C /* Storage */,
+			);
+			path = ElRoysManagerApp;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0C082950AC88C5E7355886CC /* ElRoysManagerApp */ = {
+		CF7793BABFE63489116FF705 /* ElRoysManagerAppUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E544CDCE323EF1E7D2766EFB /* Build configuration list for PBXNativeTarget "ElRoysManagerApp" */;
+			buildConfigurationList = 6D0E0879FEBA77E1534E5278 /* Build configuration list for PBXNativeTarget "ElRoysManagerAppUITests" */;
 			buildPhases = (
-				EE821343D35937B2BB216E23 /* Sources */,
-				4C551D70D62D686F114C1579 /* Frameworks */,
-				0D8A63A52CE8C85B12CD0CF0 /* Resources */,
+				4D4F5F6D07077A391B874D19 /* Sources */,
+				D184AC9995E199DCDEC925CB /* Frameworks */,
+				EECDFBFBF3E4FC9BFBE6F63A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				F9F6C82C77E852705A71839B /* PBXTargetDependency */,
+			);
+			name = ElRoysManagerAppUITests;
+			productName = ElRoysManagerAppUITests;
+			productReference = B2215B8C5E0DA9393FDC0056 /* ElRoysManagerAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		DF73788BC28E58015AC69D8F /* ElRoysManagerAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9FC29C3B001390208F94785E /* Build configuration list for PBXNativeTarget "ElRoysManagerAppTests" */;
+			buildPhases = (
+				6EB0424D894452F774C328B7 /* Sources */,
+				9788E703FE4D399C80BDDF1D /* Frameworks */,
+				71582F39999BDCDF6E5CEFD9 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A97A112E024130382FDF5B33 /* PBXTargetDependency */,
+			);
+			name = ElRoysManagerAppTests;
+			productName = ElRoysManagerAppTests;
+			productReference = CD7FC3886819095D0E0FBFB5 /* ElRoysManagerAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		F00420BF53E89B7DF5BB49FC /* ElRoysManagerApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 95E0121340948A07839EEB67 /* Build configuration list for PBXNativeTarget "ElRoysManagerApp" */;
+			buildPhases = (
+				80BD90352B719587278AE119 /* Sources */,
+				F1CA6EE6F5238D15ACA52A86 /* Frameworks */,
+				D4E4438E0B0A38F261D8F988 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -324,69 +333,33 @@
 			);
 			name = ElRoysManagerApp;
 			productName = ElRoysManagerApp;
-			productReference = 8EA9EC632EBEE43B8E14234E /* ElRoysManagerApp.app */;
+			productReference = 3B50538B851A1F6FDC77B352 /* ElRoysManagerApp.app */;
 			productType = "com.apple.product-type.application";
-		};
-		18304BDA78573A4E1DE3CBF8 /* ElRoysManagerAppTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 128EF1A13E4654157EDFE53F /* Build configuration list for PBXNativeTarget "ElRoysManagerAppTests" */;
-			buildPhases = (
-				F34EB431B9E26621EEC0A0C2 /* Sources */,
-				6F08641F06631ACFB2212BBB /* Frameworks */,
-				66C6AA73FBBF5C57BCB8743E /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				E454D830CDF0D2ABEC1CABA2 /* PBXTargetDependency */,
-			);
-			name = ElRoysManagerAppTests;
-			productName = ElRoysManagerAppTests;
-			productReference = 5EC812C3BAE0F7C6924CA883 /* ElRoysManagerAppTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		607AC9FD9721BFD53C788F31 /* ElRoysManagerAppUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 1A9822D0FEFF51A81A30AB23 /* Build configuration list for PBXNativeTarget "ElRoysManagerAppUITests" */;
-			buildPhases = (
-				879D6AA755BDE9E738B74A07 /* Sources */,
-				2DEA782974D2C792CFEBAA58 /* Frameworks */,
-				0D57C756017048A78869FCA5 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				74EDE134FD9CA9C13793DD9C /* PBXTargetDependency */,
-			);
-			name = ElRoysManagerAppUITests;
-			productName = ElRoysManagerAppUITests;
-			productReference = 28CC30EC4B30E6F4D0BFCDE8 /* ElRoysManagerAppUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		85DA13D02E4B6F72E228C041 /* Project object */ = {
+		3F09CA6107F73106A634CD18 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
-					0C082950AC88C5E7355886CC = {
+					CF7793BABFE63489116FF705 = {
 						CreatedOnToolsVersion = 26.3;
+						TestTargetID = F00420BF53E89B7DF5BB49FC;
 					};
-					18304BDA78573A4E1DE3CBF8 = {
+					DF73788BC28E58015AC69D8F = {
 						CreatedOnToolsVersion = 26.3;
-						TestTargetID = 0C082950AC88C5E7355886CC;
+						TestTargetID = F00420BF53E89B7DF5BB49FC;
 					};
-					607AC9FD9721BFD53C788F31 = {
+					F00420BF53E89B7DF5BB49FC = {
 						CreatedOnToolsVersion = 26.3;
-						TestTargetID = 0C082950AC88C5E7355886CC;
 					};
 				};
 			};
-			buildConfigurationList = 9668FF73398EEBF70F38D5E1 /* Build configuration list for PBXProject "ElRoysManagerApp" */;
+			buildConfigurationList = 70D96B68C9CA2D75A1C9BA40 /* Build configuration list for PBXProject "ElRoysManagerApp" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -394,34 +367,35 @@
 				en,
 				Base,
 			);
-			mainGroup = FDB8E8F4CD9FD0F0A9AF85AF;
-			productRefGroup = 1163BF169A09CCB57DEE8D54 /* Products */;
+			mainGroup = 0A7E4A58BDF3E461FC5B2964;
+			productRefGroup = FCA05B96D54611C3B6690408 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0C082950AC88C5E7355886CC /* ElRoysManagerApp */,
-				18304BDA78573A4E1DE3CBF8 /* ElRoysManagerAppTests */,
-				607AC9FD9721BFD53C788F31 /* ElRoysManagerAppUITests */,
+				F00420BF53E89B7DF5BB49FC /* ElRoysManagerApp */,
+				DF73788BC28E58015AC69D8F /* ElRoysManagerAppTests */,
+				CF7793BABFE63489116FF705 /* ElRoysManagerAppUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		0D57C756017048A78869FCA5 /* Resources */ = {
+		71582F39999BDCDF6E5CEFD9 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		0D8A63A52CE8C85B12CD0CF0 /* Resources */ = {
+		D4E4438E0B0A38F261D8F988 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF7D0EB527C62D3C76CF5261 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		66C6AA73FBBF5C57BCB8743E /* Resources */ = {
+		EECDFBFBF3E4FC9BFBE6F63A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -431,100 +405,63 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		879D6AA755BDE9E738B74A07 /* Sources */ = {
+		4D4F5F6D07077A391B874D19 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0E96C68A25E14C6CFFB8141F /* ElRoysManagerAppUITests.swift in Sources */,
+				F0080EEDC6F72111EEC84D1D /* ElRoysManagerAppUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		EE821343D35937B2BB216E23 /* Sources */ = {
+		6EB0424D894452F774C328B7 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				32D8D46E2087CFC34C896FB1 /* AppModel.swift in Sources */,
-				B658E6A6DD31C472D6BDE8EA /* ElRoysManagerApp.swift in Sources */,
-				CC2BA8D31EE33D93717FE9D4 /* BackendClients.swift in Sources */,
-				41BAB58AABE8A026F9742DE8 /* Glass.swift in Sources */,
-				FB1FE66B120AC8EE6E3B36D4 /* AuthViews.swift in Sources */,
-				0DF17767BB6EF4F7AF0E8E4F /* HomeViews.swift in Sources */,
-				77FA0AAB51126DD1E3349379 /* MenuViews.swift in Sources */,
-				98B4C1D22A2F4E0BA1C9D301 /* RestaurantCategoryManagementView.swift in Sources */,
-				4EF9C5DA4C838D7C2F7EDCCD /* RoutePreviewView.swift in Sources */,
-				075F36D0B1BF2C903520C45F /* PublicMenuViews.swift in Sources */,
-				2A514DBF47B17B337CB32D46 /* RestaurantToolsView.swift in Sources */,
-				B74AD36AC43DEA6771F8A50B /* BarcodeScannerView.swift in Sources */,
-				1BDA730FB963924901FBD4A6 /* AppModels.swift in Sources */,
-				51938CF52E3035B8FD40D98C /* OfflineDraftStore.swift in Sources */,
-				F583EED5C4CED8B83C7A6325 /* SessionStore.swift in Sources */,
+				F350CC708F6F708242DB6363 /* MenuDocumentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F34EB431B9E26621EEC0A0C2 /* Sources */ = {
+		80BD90352B719587278AE119 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				269B5820EF3BD170310838D0 /* MenuDocumentTests.swift in Sources */,
+				D037A7BE20055914A56D37F7 /* AppModel.swift in Sources */,
+				840C3E50EF06561832859F7D /* ElRoysManagerApp.swift in Sources */,
+				38A424A5FADDF9352ACAFCFC /* BackendClients.swift in Sources */,
+				9521F4C96EE0A0A1FABB707B /* Glass.swift in Sources */,
+				560CB578088580D1FDEDC923 /* AuthViews.swift in Sources */,
+				46727CC5A950281E5F5F3BA0 /* HomeViews.swift in Sources */,
+				4210EF47438191968C349DA5 /* MenuViews.swift in Sources */,
+				1619A5144C7ADCFA72C8ED3F /* RestaurantCategoryManagementView.swift in Sources */,
+				65844C9F17B4F0D6530E8F7F /* RoutePreviewView.swift in Sources */,
+				E22DB70309FD8C42F9C87629 /* PublicMenuViews.swift in Sources */,
+				CA10B53E7C31DA1A6DD42B29 /* RestaurantToolsView.swift in Sources */,
+				726691CA88B8EB0D50330C6F /* BarcodeScannerView.swift in Sources */,
+				887B83FE43EEA98288934D6F /* AppModels.swift in Sources */,
+				1E2A2E92ADE251BFC6735026 /* OfflineDraftStore.swift in Sources */,
+				6744FEE9387C017662101786 /* SessionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		74EDE134FD9CA9C13793DD9C /* PBXTargetDependency */ = {
+		A97A112E024130382FDF5B33 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ElRoysManagerApp;
-			target = 0C082950AC88C5E7355886CC /* ElRoysManagerApp */;
-			targetProxy = EEDF0539A617BC3B263C5ED9 /* PBXContainerItemProxy */;
+			target = F00420BF53E89B7DF5BB49FC /* ElRoysManagerApp */;
+			targetProxy = A6B83BD2304154B56C05A79A /* PBXContainerItemProxy */;
 		};
-		E454D830CDF0D2ABEC1CABA2 /* PBXTargetDependency */ = {
+		F9F6C82C77E852705A71839B /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			name = ElRoysManagerApp;
-			target = 0C082950AC88C5E7355886CC /* ElRoysManagerApp */;
-			targetProxy = A5DE0333613B0543DF7BB7AD /* PBXContainerItemProxy */;
+			target = F00420BF53E89B7DF5BB49FC /* ElRoysManagerApp */;
+			targetProxy = DF0B790E5310711A3497BC1E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		061405B3A73A2CA664F3CFD8 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				APPBaseURL = "https://el-roys-drink-menu.vercel.app";
-				APPEnvironmentName = Preview;
-				APPPublicOrigin = "https://el-roys-drink-menu.vercel.app";
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				ENABLE_DEBUG_DYLIB = NO;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
-				PRODUCT_NAME = ElRoysManagerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		17A0C1358D193169C8C08F57 /* Preview */ = {
+		2215DBD4A846FA015764AD2A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -561,6 +498,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = FCM3AK447F;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -593,9 +531,42 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
-			name = Preview;
+			name = Debug;
 		};
-		18A70DC98CF2FDFE0C29CC95 /* Release */ = {
+		2794767C4FD5F8CB3FC8607A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPBaseURL = "https://el-roys-drink-menu.vercel.app";
+				APPEnvironmentName = Preview;
+				APPPublicOrigin = "https://el-roys-drink-menu.vercel.app";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
+				PRODUCT_NAME = ElRoysManagerApp;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		36EB18AF622B8FBFE6F41706 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPBaseURL = "https://el-roys-drink-menu.vercel.app";
@@ -604,12 +575,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				ENABLE_DEBUG_DYLIB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
@@ -625,7 +593,6 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -633,7 +600,29 @@
 			};
 			name = Release;
 		};
-		5E6695D0EC619D6B2A787671 /* Preview */ = {
+		44B7E401A9B46C6D02987209 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
+				PRODUCT_NAME = ElRoysManagerAppTests;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
+			};
+			name = Debug;
+		};
+		49447CEDF881DB217987325D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
@@ -641,7 +630,50 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.uitests;
+				PRODUCT_NAME = ElRoysManagerAppUITests;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = ElRoysManagerApp;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		641DE79939E5C98CF9A95736 /* Preview */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
+				PRODUCT_NAME = ElRoysManagerAppTests;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
+			};
+			name = Preview;
+		};
+		7CBB694B32DD4981726A7ED4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -653,150 +685,9 @@
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = ElRoysManagerApp;
 			};
-			name = Preview;
-		};
-		8686BF8FD275F8C3270839FF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
-				PRODUCT_NAME = ElRoysManagerAppTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		974BB7A561E9AB3E9FCEB7E1 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.1.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
-				PRODUCT_NAME = ElRoysManagerApp;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
 			name = Debug;
 		};
-		A70B04F1B2B6DD78CFE48896 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
-				PRODUCT_NAME = ElRoysManagerAppTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
-			};
-			name = Debug;
-		};
-		ACBE1CED753A8738CC2E565F /* Preview */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
-				PRODUCT_NAME = ElRoysManagerAppTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
-			};
-			name = Preview;
-		};
-		CAF631050F78C12D36B6545E /* Preview */ = {
+		8C79C5793DDD300DE98124ED /* Preview */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				APPBaseURL = "https://el-roys-drink-menu.vercel.app";
@@ -805,11 +696,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
@@ -825,36 +714,13 @@
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Preview;
 		};
-		D0AE4A50BAE590F3575BC002 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.uitests;
-				PRODUCT_NAME = ElRoysManagerAppUITests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = ElRoysManagerApp;
-			};
-			name = Debug;
-		};
-		D420998332DB39673127B70F /* Release */ = {
+		A3C32FF3AF911F45ECBAB807 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -891,6 +757,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = FCM3AK447F;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -918,7 +785,102 @@
 			};
 			name = Release;
 		};
-		E0F9A946B128010CCC51A425 /* Release */ = {
+		B0469271DB4792BB2ADF853F /* Preview */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = FCM3AK447F;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
+				PRODUCT_NAME = ElRoysManagerApp;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Preview;
+		};
+		D502A6395BCCDDDB1C3C0B22 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
+				PRODUCT_NAME = ElRoysManagerAppTests;
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ElRoysManagerApp.app/ElRoysManagerApp";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		FC0251E3F49C8F0173CDA82C /* Preview */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
@@ -926,7 +888,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
@@ -937,54 +898,53 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = ElRoysManagerApp;
-				VALIDATE_PRODUCT = YES;
 			};
-			name = Release;
+			name = Preview;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		128EF1A13E4654157EDFE53F /* Build configuration list for PBXNativeTarget "ElRoysManagerAppTests" */ = {
+		6D0E0879FEBA77E1534E5278 /* Build configuration list for PBXNativeTarget "ElRoysManagerAppUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				8686BF8FD275F8C3270839FF /* Release */,
-				A70B04F1B2B6DD78CFE48896 /* Debug */,
-				ACBE1CED753A8738CC2E565F /* Preview */,
+				49447CEDF881DB217987325D /* Release */,
+				7CBB694B32DD4981726A7ED4 /* Debug */,
+				FC0251E3F49C8F0173CDA82C /* Preview */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		1A9822D0FEFF51A81A30AB23 /* Build configuration list for PBXNativeTarget "ElRoysManagerAppUITests" */ = {
+		70D96B68C9CA2D75A1C9BA40 /* Build configuration list for PBXProject "ElRoysManagerApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				E0F9A946B128010CCC51A425 /* Release */,
-				D0AE4A50BAE590F3575BC002 /* Debug */,
-				5E6695D0EC619D6B2A787671 /* Preview */,
+				2215DBD4A846FA015764AD2A /* Debug */,
+				A3C32FF3AF911F45ECBAB807 /* Release */,
+				B0469271DB4792BB2ADF853F /* Preview */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		9668FF73398EEBF70F38D5E1 /* Build configuration list for PBXProject "ElRoysManagerApp" */ = {
+		95E0121340948A07839EEB67 /* Build configuration list for PBXNativeTarget "ElRoysManagerApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				974BB7A561E9AB3E9FCEB7E1 /* Debug */,
-				D420998332DB39673127B70F /* Release */,
-				17A0C1358D193169C8C08F57 /* Preview */,
+				36EB18AF622B8FBFE6F41706 /* Release */,
+				2794767C4FD5F8CB3FC8607A /* Debug */,
+				8C79C5793DDD300DE98124ED /* Preview */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E544CDCE323EF1E7D2766EFB /* Build configuration list for PBXNativeTarget "ElRoysManagerApp" */ = {
+		9FC29C3B001390208F94785E /* Build configuration list for PBXNativeTarget "ElRoysManagerAppTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				18A70DC98CF2FDFE0C29CC95 /* Release */,
-				061405B3A73A2CA664F3CFD8 /* Debug */,
-				CAF631050F78C12D36B6545E /* Preview */,
+				D502A6395BCCDDDB1C3C0B22 /* Release */,
+				44B7E401A9B46C6D02987209 /* Debug */,
+				641DE79939E5C98CF9A95736 /* Preview */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 85DA13D02E4B6F72E228C041 /* Project object */;
+	rootObject = 3F09CA6107F73106A634CD18 /* Project object */;
 }
