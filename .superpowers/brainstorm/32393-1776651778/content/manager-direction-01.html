@@ -1,0 +1,577 @@
+<style>
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .card {
+    border-radius: 0;
+    overflow: hidden;
+    border: 1px solid #1a1a1a;
+    background: #f4f4f0;
+  }
+
+  .card-body {
+    padding: 14px 16px 18px;
+  }
+
+  .lane-note {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5d5d58;
+  }
+
+  .mockup {
+    min-height: 480px;
+    border-radius: 0;
+    overflow: hidden;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .manager-preview {
+    position: relative;
+    min-height: 480px;
+    display: grid;
+    grid-template-columns: 116px minmax(0, 1fr);
+    background: #f4f4f0;
+    color: #050505;
+    font-family: "Arial Narrow", "Helvetica Neue", sans-serif;
+  }
+
+  .manager-preview.dark {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .rail {
+    display: grid;
+    align-content: start;
+    gap: 1px;
+    background: currentColor;
+  }
+
+  .rail > div {
+    min-height: 42px;
+    background: inherit;
+    color: inherit;
+    padding: 10px 12px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .rail.light > div {
+    background: #f4f4f0;
+    color: #050505;
+  }
+
+  .rail.dark > div {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .stage {
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 1px;
+    background: currentColor;
+  }
+
+  .topbar,
+  .content,
+  .dock {
+    background: inherit;
+    color: inherit;
+  }
+
+  .light .topbar,
+  .light .content,
+  .light .dock {
+    background: #f4f4f0;
+    color: #050505;
+  }
+
+  .dark .topbar,
+  .dark .content,
+  .dark .dock {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 12px;
+    padding: 16px;
+    border-bottom: 3px solid #050505;
+  }
+
+  .dark .topbar {
+    border-bottom-color: #e61919;
+  }
+
+  .brand {
+    display: grid;
+    gap: 4px;
+  }
+
+  .kicker {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .title {
+    margin: 0;
+    font-size: clamp(28px, 2vw, 38px);
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+    font-weight: 900;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .pill {
+    padding: 7px 10px;
+    border: 1px solid currentColor;
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .alert {
+    color: #e61919;
+    border-color: #e61919;
+  }
+
+  .content {
+    padding: 16px;
+    display: grid;
+    gap: 1px;
+    background: #050505;
+  }
+
+  .dark .content {
+    background: #e61919;
+  }
+
+  .hero,
+  .stats,
+  .panels {
+    background: #f4f4f0;
+    color: #050505;
+  }
+
+  .dark .hero,
+  .dark .stats,
+  .dark .panels {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.3fr 0.7fr;
+    gap: 1px;
+    min-height: 132px;
+  }
+
+  .hero-copy,
+  .hero-side {
+    padding: 16px;
+  }
+
+  .hero-copy {
+    background:
+      linear-gradient(90deg, transparent 0 82%, rgba(230, 25, 25, 0.12) 82% 100%),
+      #f4f4f0;
+  }
+
+  .dark .hero-copy {
+    background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.04) 0 2px, transparent 2px 4px),
+      #121212;
+  }
+
+  .hero-copy h4,
+  .hero-side h4,
+  .panel h4 {
+    margin: 0 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .hero-copy p {
+    margin: 0;
+    font-size: 22px;
+    line-height: 0.94;
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    text-transform: uppercase;
+  }
+
+  .hero-side {
+    display: grid;
+    align-content: space-between;
+    border-left: 1px solid currentColor;
+  }
+
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: #050505;
+  }
+
+  .dark .metrics {
+    background: #e61919;
+  }
+
+  .metric {
+    background: #f4f4f0;
+    color: #050505;
+    padding: 12px 14px;
+    min-height: 74px;
+  }
+
+  .dark .metric {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .metric strong {
+    display: block;
+    font-size: 28px;
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    margin-top: 8px;
+  }
+
+  .panels {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: #050505;
+  }
+
+  .dark .panels {
+    background: #e61919;
+  }
+
+  .panel {
+    min-height: 140px;
+    padding: 14px;
+    background: #f4f4f0;
+    color: #050505;
+  }
+
+  .dark .panel {
+    background: #121212;
+    color: #eaeaea;
+  }
+
+  .panel-lines {
+    display: grid;
+    gap: 7px;
+  }
+
+  .panel-lines span {
+    display: block;
+    height: 10px;
+    background: rgba(5, 5, 5, 0.12);
+  }
+
+  .dark .panel-lines span {
+    background: rgba(234, 234, 234, 0.16);
+  }
+
+  .dock {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-top: 3px solid #e61919;
+  }
+
+  .dock-copy {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .dock-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .button {
+    padding: 10px 14px;
+    border: 1px solid currentColor;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .button.primary {
+    background: #e61919;
+    color: #f4f4f0;
+    border-color: #e61919;
+  }
+
+  .terminal-grid::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg, transparent 0 2px, rgba(255,255,255,0.04) 2px 4px);
+    mix-blend-mode: screen;
+  }
+
+  .barcode {
+    display: grid;
+    grid-auto-flow: column;
+    gap: 2px;
+    justify-content: start;
+  }
+
+  .barcode span {
+    width: 3px;
+    height: 18px;
+    background: currentColor;
+    opacity: 0.75;
+  }
+
+  .swiss-oversize {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+    font-size: 88px;
+    line-height: 0.8;
+    font-weight: 900;
+    letter-spacing: -0.08em;
+    color: rgba(230, 25, 25, 0.18);
+    pointer-events: none;
+  }
+
+  @media (max-width: 1100px) {
+    .cards {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<h2>/manager brutalist direction study</h2>
+<p class="subtitle">Same functions, same shell structure, three different visual attitudes. Pick the one that should anchor the redesign.</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="manager-preview light">
+        <div class="swiss-oversize">01</div>
+        <div class="rail light">
+          <div>[ overview ]</div>
+          <div>[ edit items ]</div>
+          <div>[ pricing ]</div>
+          <div>[ descriptions ]</div>
+          <div>[ categories ]</div>
+          <div>[ database ]</div>
+        </div>
+        <div class="stage light">
+          <div class="topbar">
+            <div class="brand">
+              <div class="kicker">manager workspace / revision 08</div>
+              <h3 class="title">Swiss Print</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">menu switch</div>
+              <div class="pill alert">draft live</div>
+            </div>
+          </div>
+          <div class="content">
+            <div class="hero">
+              <div class="hero-copy">
+                <h4>service overview</h4>
+                <p>Move with print-shop force and giant hierarchy.</p>
+              </div>
+              <div class="hero-side">
+                <div class="barcode"><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="kicker">unit / manager-01</div>
+              </div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><div class="kicker">status</div><strong>LIVE</strong></div>
+              <div class="metric"><div class="kicker">active</div><strong>128</strong></div>
+              <div class="metric"><div class="kicker">86 watch</div><strong>07</strong></div>
+            </div>
+            <div class="panels">
+              <div class="panel">
+                <h4>featured lineup</h4>
+                <div class="panel-lines"><span></span><span></span><span></span><span style="width:74%"></span></div>
+              </div>
+              <div class="panel">
+                <h4>recent changes</h4>
+                <div class="panel-lines"><span></span><span></span><span style="width:82%"></span><span style="width:68%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">publishing dock /// no rounded corners /// hazard-first hierarchy</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Swiss Industrial Print</h3>
+      <p class="lane-note">Light substrate. Big numerals. Hard black rules. Red used as command ink.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="manager-preview dark terminal-grid">
+        <div class="rail dark">
+          <div>&gt;&gt;&gt; overview</div>
+          <div>&gt;&gt;&gt; edit items</div>
+          <div>&gt;&gt;&gt; pricing</div>
+          <div>&gt;&gt;&gt; descriptions</div>
+          <div>&gt;&gt;&gt; categories</div>
+          <div>&gt;&gt;&gt; database</div>
+        </div>
+        <div class="stage dark">
+          <div class="topbar">
+            <div class="brand">
+              <div class="kicker">mgr console / tactical telemetry / rev 2.6</div>
+              <h3 class="title">Telemetry CRT</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">operator</div>
+              <div class="pill alert">unsent queue</div>
+            </div>
+          </div>
+          <div class="content">
+            <div class="hero">
+              <div class="hero-copy">
+                <h4>[ service overview ]</h4>
+                <p>Dense, terminal-like, scanlined, more operator-console than editorial.</p>
+              </div>
+              <div class="hero-side">
+                <div class="barcode"><span></span><span></span><span></span><span></span><span></span></div>
+                <div class="kicker">node / mgr-telemetry</div>
+              </div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><div class="kicker">status</div><strong>LIVE</strong></div>
+              <div class="metric"><div class="kicker">active</div><strong>128</strong></div>
+              <div class="metric"><div class="kicker">86 watch</div><strong>07</strong></div>
+            </div>
+            <div class="panels">
+              <div class="panel">
+                <h4>[ featured ]</h4>
+                <div class="panel-lines"><span></span><span></span><span></span><span style="width:74%"></span></div>
+              </div>
+              <div class="panel">
+                <h4>[ recent changes ]</h4>
+                <div class="panel-lines"><span></span><span></span><span style="width:82%"></span><span style="width:68%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">publish controls feel like a protected operations strip</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Tactical Telemetry</h3>
+      <p class="lane-note">Dark substrate. Monospace-heavy density. Scanlines, diagnostics, command-console tone.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="mockup">
+      <div class="manager-preview light">
+        <div class="rail light">
+          <div>overview</div>
+          <div>edit items</div>
+          <div>pricing</div>
+          <div>descriptions</div>
+          <div>categories</div>
+          <div>database</div>
+        </div>
+        <div class="stage light">
+          <div class="topbar" style="border-bottom-width:1px;">
+            <div class="brand">
+              <div class="kicker">manager / plate dossier / section grid</div>
+              <h3 class="title">Dossier Grid</h3>
+            </div>
+            <div class="actions">
+              <div class="pill">rev 08</div>
+              <div class="pill alert">07 unsent</div>
+            </div>
+          </div>
+          <div class="content">
+            <div class="hero">
+              <div class="hero-copy" style="background:#f4f4f0;">
+                <h4>overview</h4>
+                <p>Still brutalist, but calmer and more archival than the other two.</p>
+              </div>
+              <div class="hero-side">
+                <div class="kicker">record / 11A</div>
+                <div class="kicker">sector / east</div>
+              </div>
+            </div>
+            <div class="metrics">
+              <div class="metric"><div class="kicker">status</div><strong>LIVE</strong></div>
+              <div class="metric"><div class="kicker">active</div><strong>128</strong></div>
+              <div class="metric"><div class="kicker">86</div><strong>07</strong></div>
+            </div>
+            <div class="panels">
+              <div class="panel">
+                <h4>featured</h4>
+                <div class="panel-lines"><span></span><span></span><span></span><span style="width:74%"></span></div>
+              </div>
+              <div class="panel">
+                <h4>recent</h4>
+                <div class="panel-lines"><span></span><span></span><span style="width:82%"></span><span style="width:68%"></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dock">
+            <div class="dock-copy">more restrained hierarchy, less theatrical force</div>
+            <div class="dock-actions">
+              <div class="button">save</div>
+              <div class="button primary">send</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Archival Dossier</h3>
+      <p class="lane-note">Light substrate. Grid-first and rigid, but quieter and more document-oriented.</p>
+    </div>
+  </div>
+</div>

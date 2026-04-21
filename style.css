@@ -526,13 +526,64 @@
   .admin-btn.active { background: #2b4d74; border-color: #4a90d9; }
   .header-signin-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
   .header-signin-btn:hover { background: rgba(253,244,236,0.27); }
-  /* Avatar chip */
-  .user-chip { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 20px; padding: 5px 10px; cursor: pointer; color: var(--cream); font-size: 12px; user-select: none; }
-  .user-chip:hover { background: rgba(253,244,236,0.27); }
-  #user-initials { font-weight: 700; font-size: 13px; }
+  /* Shared user-chip behavior primitives */
+  [data-user-chip] {
+    position: relative;
+  }
+  [data-user-chip-trigger] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  [data-user-chip-panel],
+  .user-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-width: 140px;
+    z-index: 50;
+    text-align: left;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  [data-user-chip] [data-user-chip-panel] {
+    right: 0;
+  }
+  [data-user-chip].open [data-user-chip-panel],
+  .user-chip.open .user-dropdown {
+    display: block;
+  }
+  .public-fallback-userchip {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  .public-fallback-userchip-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(253,244,236,0.15);
+    border: 1px solid rgba(253,244,236,0.38);
+    border-radius: 20px;
+    padding: 5px 10px;
+    color: var(--cream);
+    font-size: 12px;
+    user-select: none;
+  }
+  .public-fallback-userchip-trigger:hover {
+    background: rgba(253,244,236,0.27);
+  }
+  #user-initials,
+  [data-user-chip-initials] {
+    font-weight: 700;
+    font-size: 13px;
+  }
   /* Dropdown */
-  .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; min-width: 140px; z-index: 50; text-align: left; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
-  .user-chip.open .user-dropdown { display: block; }
   .user-dropdown-name { font-weight: 600; font-size: 14px; color: var(--charcoal); }
   .user-dropdown-role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
   .user-dropdown-divider { height: 1px; background: var(--border); margin: 10px 0; }
@@ -1345,7 +1396,7 @@ body.admin-console-page .wrapper {
 }
 
 .admin-console-topbar .header-action-group,
-.admin-console-topbar .user-chip {
+.admin-console-topbar .admin-userchip {
   position: static;
 }
 
@@ -1355,8 +1406,7 @@ body.admin-console-page .wrapper {
   gap: 8px;
 }
 
-.admin-console-topbar .manager-btn,
-.admin-console-topbar .user-chip {
+.admin-console-topbar .manager-btn {
   min-height: 38px;
   border-radius: 4px;
   background: var(--admin-panel);
@@ -1374,15 +1424,44 @@ body.admin-console-page .wrapper {
   color: var(--admin-sidebar);
 }
 
-.admin-console-topbar .manager-btn:hover,
-.admin-console-topbar .user-chip:hover {
-  background: var(--admin-panel-soft);
-}
-
-.admin-console-topbar .user-chip {
+.admin-console-topbar .admin-userchip-trigger {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
   border-radius: 999px;
   padding-inline: 12px;
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-outline);
+  color: var(--admin-ink);
+  font-family: "Public Sans", var(--font-heading);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.admin-console-topbar .manager-btn:hover,
+.admin-console-topbar .admin-userchip-trigger:hover {
+  background: var(--admin-panel-soft);
+}
+
+.admin-console-topbar .admin-userchip {
+  position: relative;
+}
+
+.admin-console-topbar .admin-userchip.open .user-dropdown {
+  display: block;
+}
+
+.admin-console-topbar .admin-userchip [data-user-chip-initials] {
+  font-weight: 700;
+  font-size: 13px;
 }
 
 .admin-console-topbar .user-dropdown {
@@ -1953,7 +2032,7 @@ body.admin-console-page .picker-box {
   }
 
   .admin-console-topbar .manager-btn,
-  .admin-console-topbar .user-chip,
+  .admin-console-topbar .admin-userchip-trigger,
   .admin-console-primary-btn,
   .admin-user-name-row .btn-small,
   .admin-user-role-editor .btn-small,
@@ -1999,7 +2078,7 @@ body.admin-console-page .picker-box {
     width: 100%;
   }
 
-  body.admin-console-page .admin-console-topbar .user-chip {
+  body.admin-console-page .admin-console-topbar .admin-userchip-trigger {
     width: auto;
     min-width: 88px;
     justify-content: center;
@@ -2053,14 +2132,14 @@ body.admin-console-page .picker-box {
     letter-spacing: 0.08em;
   }
   .header-signin-btn,
-  .user-chip {
+  .public-fallback-userchip {
     top: 12px;
     right: 12px;
   }
-  .user-chip {
+  .public-fallback-userchip-trigger {
     max-width: calc(100% - 24px);
   }
-  .user-dropdown {
+  .public-fallback-userchip .public-fallback-userchip-panel {
     right: -2px;
     max-width: min(18rem, calc(100vw - 24px));
   }
@@ -2241,7 +2320,7 @@ body.manager-stitch-shell button:focus-visible,
 body.manager-stitch-shell input:focus-visible,
 body.manager-stitch-shell textarea:focus-visible,
 body.manager-stitch-shell summary:focus-visible,
-body.manager-stitch-shell .user-chip:focus-visible,
+body.manager-stitch-shell .manager-userchip-trigger:focus-visible,
 body.manager-stitch-shell .settings-rail-btn:focus-visible {
   outline: 2px solid var(--manager-shell-primary);
   outline-offset: 2px;
@@ -2470,30 +2549,37 @@ body.manager-stitch-shell .btn-small:hover {
   color: var(--manager-shell-bg);
 }
 
-body.manager-stitch-shell .manager-shell-user-tools {
-  display: flex;
-  align-items: center;
-  gap: 0;
+body.manager-stitch-shell .manager-userchip {
+  position: relative;
 }
 
-body.manager-stitch-shell .user-chip {
-  position: static;
+body.manager-stitch-shell .manager-userchip-trigger {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--manager-shell-border);
   border-radius: 2px;
   background: var(--manager-shell-surface-muted);
-  border: 1px solid var(--manager-shell-border);
   color: var(--manager-shell-primary);
-  padding: 10px 12px;
 }
 
 body.manager-stitch-shell .manager-shell-switch-btn,
 body.manager-stitch-shell #admin-btn,
-body.manager-stitch-shell .user-chip {
+body.manager-stitch-shell .manager-userchip-trigger {
   min-height: 42px;
 }
 
-body.manager-stitch-shell .user-chip:hover {
+body.manager-stitch-shell .manager-userchip-trigger:hover {
   background: var(--manager-shell-primary);
   color: var(--manager-shell-bg);
+}
+
+body.manager-stitch-shell .manager-userchip.open .user-dropdown {
+  display: block;
 }
 
 body.manager-stitch-shell .user-dropdown {
@@ -2848,7 +2934,7 @@ body.manager-stitch-shell .db-search-row input {
 }
 
 body.manager-stitch-shell .manager-btn,
-body.manager-stitch-shell .user-chip,
+body.manager-stitch-shell .manager-userchip-trigger,
 body.manager-stitch-shell .settings-rail-btn,
 body.manager-stitch-shell .btn-small,
 body.manager-stitch-shell .save-btn,
@@ -4325,7 +4411,7 @@ body.manager-stitch-shell .header-action-group {
 }
 
 body.manager-stitch-shell .manager-btn,
-body.manager-stitch-shell .user-chip {
+body.manager-stitch-shell .manager-userchip-trigger {
   min-height: 36px;
   padding: 0 12px;
   border-radius: 12px;
@@ -4616,6 +4702,46 @@ body.manager-stitch-shell .featured-specials-editor {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+body.manager-stitch-shell .featured-specials-access-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--manager-shell-border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(248, 243, 233, 0.98), rgba(239, 228, 211, 0.92));
+}
+
+body.manager-stitch-shell .featured-specials-access-kicker {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 11px;
+  font-family: var(--manager-shell-mono, 'IBM Plex Mono', monospace);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.manager-stitch-shell .featured-specials-access-note h4 {
+  margin: 0;
+  color: var(--manager-shell-primary);
+  font-family: 'Noto Serif', serif;
+  font-size: clamp(1.4rem, 2.1vw, 1.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+body.manager-stitch-shell .featured-specials-access-copy,
+body.manager-stitch-shell .featured-specials-access-detail {
+  margin: 0;
+  color: var(--manager-shell-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.manager-stitch-shell .featured-specials-access-detail {
+  color: var(--manager-shell-primary);
 }
 
 body.manager-stitch-shell .featured-specials-head {
@@ -6086,6 +6212,1906 @@ body.manager-stitch-shell #manager-description-section .recipe-field-block .add-
   }
 }
 
+/* ─── MANAGER DOSSIER SHELL ──────────────────────────────────────────────── */
+body.manager-dossier-shell,
+body.manager-mode.manager-dossier-shell {
+  --font-heading: 'Noto Serif', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-accent: 'IBM Plex Mono', 'SFMono-Regular', Consolas, monospace;
+  --manager-dossier-canvas: #e9e1d2;
+  --manager-dossier-panel: #f8f3e9;
+  --manager-dossier-panel-strong: #efe4d3;
+  --manager-dossier-ink: #1c1914;
+  --manager-dossier-muted: #5d5548;
+  --manager-dossier-olive: #4f5a3c;
+  --manager-dossier-olive-soft: rgba(79, 90, 60, 0.12);
+  --manager-dossier-accent: #3b3124;
+  --manager-dossier-red: #9f3125;
+  --manager-dossier-red-soft: rgba(159, 49, 37, 0.12);
+  --manager-dossier-border: rgba(34, 27, 18, 0.18);
+  --manager-dossier-border-strong: rgba(34, 27, 18, 0.34);
+  --manager-dossier-rule: rgba(34, 27, 18, 0.1);
+  --manager-dossier-overlay: rgba(28, 25, 20, 0.48);
+  --manager-dossier-shadow: rgba(50, 38, 20, 0.12);
+  --bg: var(--manager-dossier-canvas);
+  --surface: var(--manager-dossier-panel);
+  --card: var(--manager-dossier-panel-strong);
+  --border: var(--manager-dossier-border);
+  --text: var(--manager-dossier-ink);
+  --muted: var(--manager-dossier-muted);
+  --fire: var(--manager-dossier-accent);
+  --ember: var(--manager-dossier-olive);
+  --gold: var(--manager-dossier-olive);
+  --prune-divider: var(--manager-dossier-border);
+  --danger-bg: var(--manager-dossier-red-soft);
+  --danger-border: rgba(159, 49, 37, 0.34);
+  background: var(--manager-dossier-canvas);
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-body);
+  color-scheme: light;
+  align-items: stretch;
+  overflow-x: hidden;
+  padding: 0 0 calc(208px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.manager-dossier-shell a,
+body.manager-dossier-shell button,
+body.manager-dossier-shell input,
+body.manager-dossier-shell textarea,
+body.manager-dossier-shell summary {
+  touch-action: manipulation;
+}
+
+body.manager-dossier-shell a:focus-visible,
+body.manager-dossier-shell button:focus-visible,
+body.manager-dossier-shell input:focus-visible,
+body.manager-dossier-shell textarea:focus-visible,
+body.manager-dossier-shell summary:focus-visible,
+body.manager-dossier-shell .manager-userchip-trigger:focus-visible,
+body.manager-dossier-shell .settings-rail-btn:focus-visible {
+  outline: 2px solid var(--manager-dossier-accent);
+  outline-offset: 2px;
+}
+
+body.manager-dossier-shell .manager-shell-skip-link {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 95;
+  padding: 10px 12px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: var(--manager-dossier-accent);
+  color: var(--manager-dossier-panel);
+  text-decoration: none;
+  font-family: var(--font-accent);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transform: translateY(-150%);
+  transition: transform 0.18s ease;
+}
+
+body.manager-dossier-shell .manager-shell-skip-link:focus {
+  transform: translateY(0);
+}
+
+body.manager-dossier-shell .wrapper,
+body.manager-dossier-shell #app-shell,
+body.manager-dossier-shell #manager-view {
+  width: 100%;
+}
+
+body.manager-dossier-shell #app-shell {
+  max-width: none;
+  padding: 0;
+}
+
+body.manager-dossier-shell #app-shell > header.manager-shell-topbar {
+  position: static;
+  margin: 0;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-inner {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  display: grid;
+  gap: 10px;
+  padding: 10px 0 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-dossier-brand,
+body.manager-dossier-shell .manager-dossier-action-cluster,
+body.manager-dossier-shell .manager-dossier-user-tools {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .manager-dossier-brand-row,
+body.manager-dossier-shell .manager-shell-rail-head-row,
+body.manager-dossier-shell .manager-dossier-action-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+body.manager-dossier-shell .manager-dossier-title-block,
+body.manager-dossier-shell .manager-dossier-rail-title-block {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+body.manager-dossier-shell .manager-dossier-kicker,
+body.manager-dossier-shell .manager-dossier-panel-label,
+body.manager-dossier-shell .manager-shell-field-label,
+body.manager-dossier-shell .settings-section-kicker,
+body.manager-dossier-shell .settings-rail-kicker,
+body.manager-dossier-shell .workspace-actions-title,
+body.manager-dossier-shell .manager-shell-footer-kicker,
+body.manager-dossier-shell .manager-shell-drawer-kicker,
+body.manager-dossier-shell .manager-shell-locked-kicker,
+body.manager-dossier-shell .active-menu-label,
+body.manager-dossier-shell .manager-shell-stat-label,
+body.manager-dossier-shell .manager-shell-rail-note,
+body.manager-dossier-shell .history-archive-copy,
+body.manager-dossier-shell .history-archive-count,
+body.manager-dossier-shell .featured-special-order,
+body.manager-dossier-shell .pricing-inline-label,
+body.manager-dossier-shell .manager-shell-disclosure summary span:first-child {
+  margin: 0;
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-title,
+body.manager-dossier-shell #app-shell > header h1 {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.55rem, 4vw, 2.6rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+body.manager-dossier-shell .manager-dossier-meta-strip,
+body.manager-dossier-shell .manager-shell-header-badges,
+body.manager-dossier-shell .manager-shell-footer-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-dossier-meta-tag,
+body.manager-dossier-shell .manager-shell-header-badge,
+body.manager-dossier-shell .manager-shell-footer-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+  color: var(--manager-dossier-accent);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-inner,
+body.manager-dossier-shell .manager-dossier-header-panel,
+body.manager-dossier-shell .manager-shell-meta-card,
+body.manager-dossier-shell .manager-shell-menu-bar,
+body.manager-dossier-shell .manager-shell-locked-card,
+body.manager-dossier-shell .manager-shell-rail,
+body.manager-dossier-shell .manager-dossier-drawer-meta,
+body.manager-dossier-shell .manager-shell-footer,
+body.manager-dossier-shell .manager-shell-actionbar,
+body.manager-dossier-shell .manager-dossier-meta-tag,
+body.manager-dossier-shell .manager-shell-header-badge,
+body.manager-dossier-shell .manager-shell-footer-pill,
+body.manager-dossier-shell .manager-shell-menu-toggle,
+body.manager-dossier-shell .manager-shell-mobile-drawer-trigger,
+body.manager-dossier-shell .manager-shell-rail-close,
+body.manager-dossier-shell .manager-shell-drawer-return,
+body.manager-dossier-shell .manager-shell-drawer-admin,
+body.manager-dossier-shell .manager-shell-drawer-switch,
+body.manager-dossier-shell .manager-shell-drawer-add-item,
+body.manager-dossier-shell .settings-rail-btn {
+  border-radius: 0;
+}
+
+body.manager-dossier-shell .manager-shell-header-badge--muted,
+body.manager-dossier-shell .manager-shell-footer-pill {
+  color: var(--manager-dossier-muted);
+}
+
+body.manager-dossier-shell .manager-dossier-header-grid,
+body.manager-dossier-shell .manager-shell-header-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  max-width: 22rem;
+}
+
+body.manager-dossier-shell .manager-dossier-header-panel,
+body.manager-dossier-shell .manager-shell-meta-card,
+body.manager-dossier-shell .manager-shell-menu-bar {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .header-sub,
+body.manager-dossier-shell .workspace-actions-sub,
+body.manager-dossier-shell .manager-shell-drawer-copy,
+body.manager-dossier-shell .manager-shell-footer-note {
+  margin: 0;
+  color: var(--manager-dossier-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+body.manager-dossier-shell .manager-shell-menu-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+}
+
+body.manager-dossier-shell .active-menu-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions,
+body.manager-dossier-shell .header-action-group,
+body.manager-dossier-shell .manager-shell-user-tools {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .manager-dossier-action-row {
+  align-items: stretch;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .save-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn,
+body.manager-dossier-shell .manager-shell-actionbar .save-btn,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn,
+body.manager-dossier-shell .manager-shell-menu-toggle,
+body.manager-dossier-shell .manager-shell-mobile-drawer-trigger,
+body.manager-dossier-shell .manager-shell-rail-close,
+body.manager-dossier-shell .manager-shell-drawer-return,
+body.manager-dossier-shell .manager-shell-drawer-admin,
+body.manager-dossier-shell .manager-shell-drawer-switch,
+body.manager-dossier-shell .manager-shell-drawer-add-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+  box-shadow: none;
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small {
+  padding-inline: 12px;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn,
+body.manager-dossier-shell .manager-shell-drawer-return,
+body.manager-dossier-shell .manager-shell-locked-primary {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-drawer-admin {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .save-btn:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small:hover,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .save-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn:hover,
+body.manager-dossier-shell .manager-shell-menu-toggle:hover,
+body.manager-dossier-shell .manager-shell-mobile-drawer-trigger:hover,
+body.manager-dossier-shell .manager-shell-rail-close:hover,
+body.manager-dossier-shell .manager-shell-drawer-return:hover,
+body.manager-dossier-shell .manager-shell-drawer-admin:hover,
+body.manager-dossier-shell .manager-shell-drawer-switch:hover,
+body.manager-dossier-shell .manager-shell-drawer-add-item:hover {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .save-btn:disabled,
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn:disabled,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small:disabled,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn:disabled,
+body.manager-dossier-shell .manager-shell-actionbar .save-btn:disabled,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn:disabled,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small:disabled,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .save-btn,
+body.manager-dossier-shell .manager-shell-actionbar .save-btn {
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .manager-shell-menu-toggle,
+body.manager-dossier-shell .manager-shell-mobile-drawer-trigger,
+body.manager-dossier-shell .manager-shell-rail-close {
+  width: 42px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+body.manager-dossier-shell .manager-shell-menu-toggle {
+  display: inline-flex;
+}
+
+body.manager-dossier-shell .manager-shell-menu-toggle[hidden] {
+  display: none;
+}
+
+body.manager-dossier-shell .manager-userchip,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn {
+  position: relative;
+}
+
+body.manager-dossier-shell .manager-userchip {
+  width: 100%;
+}
+
+body.manager-dossier-shell .manager-userchip-trigger {
+  width: 100%;
+}
+
+body.manager-dossier-shell .manager-userchip-trigger,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small,
+body.manager-dossier-shell .manager-shell-actionbar .manager-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+  max-width: none;
+}
+
+body.manager-dossier-shell .manager-userchip.open .user-dropdown {
+  display: block;
+}
+
+body.manager-dossier-shell .user-dropdown {
+  top: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  min-width: min(220px, 100%);
+  background: var(--manager-dossier-panel);
+  border: 1px solid var(--manager-dossier-border-strong);
+  color: var(--manager-dossier-ink);
+  box-shadow: 8px 8px 0 var(--manager-dossier-shadow);
+  border-radius: 0;
+}
+
+body.manager-dossier-shell .user-dropdown-name,
+body.manager-dossier-shell .user-dropdown-signout {
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell .user-dropdown-role {
+  color: var(--manager-dossier-muted);
+}
+
+body.manager-dossier-shell #loading-view {
+  min-height: calc(100vh - 220px);
+  padding: 52px 20px 28px;
+}
+
+body.manager-dossier-shell #loading-view.loading-view-locked {
+  justify-content: flex-start;
+  min-height: calc(100vh - 180px);
+  gap: 18px;
+}
+
+body.manager-dossier-shell .spinner {
+  border-top-color: var(--manager-dossier-accent);
+  box-shadow: 0 0 0 8px rgba(255, 255, 255, 0.12);
+}
+
+body.manager-dossier-shell .manager-shell-locked-card {
+  width: min(100%, 620px);
+  padding: 22px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: var(--manager-dossier-panel);
+  box-shadow: 10px 10px 0 var(--manager-dossier-shadow);
+}
+
+body.manager-dossier-shell .manager-shell-locked-card h2 {
+  margin: 16px 0 8px;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  line-height: 0.96;
+}
+
+body.manager-dossier-shell .manager-shell-locked-copy {
+  margin: 0;
+  color: var(--manager-dossier-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+body.manager-dossier-shell .manager-shell-locked-actions {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .manager-shell-locked-secondary {
+  background: transparent;
+}
+
+body.manager-dossier-shell .manager-shell-layout {
+  width: min(1460px, calc(100% - 20px));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  padding-top: 18px;
+}
+
+body.manager-dossier-shell .manager-shell-stage,
+body.manager-dossier-shell .manager-shell-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+body.manager-dossier-shell .manager-shell-backdrop {
+  display: none;
+}
+
+body.manager-dossier-shell .manager-shell-backdrop:not([hidden]) {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 74;
+  background: var(--manager-dossier-overlay);
+}
+
+body.manager-dossier-shell .manager-shell-rail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(90vw, 340px);
+  padding: calc(18px + env(safe-area-inset-top)) 12px calc(22px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--manager-dossier-panel);
+  border-right: 2px solid var(--manager-dossier-border-strong);
+  box-shadow: 12px 0 24px var(--manager-dossier-shadow);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translateX(-104%);
+  opacity: 0;
+  transition: transform 0.24s ease, opacity 0.18s ease;
+  z-index: 80;
+}
+
+body.manager-dossier-shell .manager-shell-rail.is-open {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+body.manager-dossier-shell .settings-section,
+body.manager-dossier-shell .manager-shell-overview-card,
+body.manager-dossier-shell .manager-shell-footer,
+body.manager-dossier-shell .manager-shell-actionbar,
+body.manager-dossier-shell .manager-dossier-drawer-meta {
+  border: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel);
+  box-shadow: 8px 8px 0 var(--manager-dossier-shadow);
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-shell-rail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-shell-rail-head-row {
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .settings-rail-kicker {
+  color: var(--manager-dossier-ink);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+body.manager-dossier-shell .manager-shell-rail-updated {
+  display: block;
+  padding: 0 2px;
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta .manager-shell-menu-bar,
+body.manager-dossier-shell .manager-dossier-drawer-meta .manager-userchip {
+  align-self: stretch;
+  width: 100%;
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta .manager-userchip-trigger {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+body.manager-dossier-shell .manager-dossier-drawer-meta .manager-userchip-trigger > span:first-child {
+  font-family: var(--font-accent);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-shell-drawer-actions,
+body.manager-dossier-shell .manager-dossier-rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.manager-dossier-shell .manager-dossier-rail-nav {
+  padding-top: 10px;
+  border-top: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .manager-shell-drawer-admin,
+body.manager-dossier-shell .manager-shell-drawer-switch,
+body.manager-dossier-shell .manager-shell-drawer-add-item,
+body.manager-dossier-shell .manager-shell-drawer-return {
+  width: 100%;
+}
+
+body.manager-dossier-shell .settings-rail-btn {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+  text-align: left;
+  font-family: var(--font-accent);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+body.manager-dossier-shell .settings-rail-btn:hover,
+body.manager-dossier-shell .settings-rail-btn.active {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .rail-btn-icon {
+  font-size: 11px;
+}
+
+body.manager-dossier-shell .settings-section,
+body.manager-dossier-shell .manager-shell-overview-card {
+  padding: 26px 22px;
+}
+
+body.manager-dossier-shell #manager-overview-section {
+  display: grid;
+  gap: 18px;
+}
+
+body.manager-dossier-shell #manager-overview-section .manager-shell-section-header {
+  margin-bottom: 0;
+}
+
+body.manager-dossier-shell #manager-overview-section,
+body.manager-dossier-shell #manager-items-section,
+body.manager-dossier-shell #manager-pricing-section,
+body.manager-dossier-shell #manager-description-section,
+body.manager-dossier-shell #manager-categories-section,
+body.manager-dossier-shell #manager-database-section {
+  scroll-margin-top: 92px;
+}
+
+body.manager-dossier-shell .manager-shell-section-header,
+body.manager-dossier-shell .manager-shell-card-head,
+body.manager-dossier-shell .manager-shell-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 6px;
+}
+
+body.manager-dossier-shell .manager-shell-section-header h2,
+body.manager-dossier-shell .manager-shell-card-head h3,
+body.manager-dossier-shell .manager-shell-footer h3 {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+body.manager-dossier-shell .manager-shell-section-header h2 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+body.manager-dossier-shell .manager-shell-card-head h3 {
+  font-size: clamp(1.15rem, 2vw, 1.5rem);
+}
+
+body.manager-dossier-shell .manager-shell-footer h3 {
+  font-size: clamp(1.4rem, 3.4vw, 2.2rem);
+}
+
+body.manager-dossier-shell .manager-shell-section-actions {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+}
+
+body.manager-dossier-shell .manager-shell-stats-grid,
+body.manager-dossier-shell .manager-shell-overview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+body.manager-dossier-shell .manager-shell-footer-copy,
+body.manager-dossier-shell .manager-shell-footer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+body.manager-dossier-shell .manager-shell-footer {
+  margin-top: 18px;
+  padding: 26px 22px;
+  background: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-footer-meta,
+body.manager-dossier-shell .manager-shell-footer-pills {
+  align-items: flex-start;
+}
+
+body.manager-dossier-shell #manager-action-bar[hidden] {
+  display: none;
+}
+
+body.manager-dossier-shell .manager-shell-actionbar {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 56;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--manager-dossier-panel);
+  border: 1px solid var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-groups,
+body.manager-dossier-shell .manager-shell-actionbar-primary,
+body.manager-dossier-shell .manager-shell-actionbar-featured {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-shell-actionbar .btn-row,
+body.manager-dossier-shell #manager-primary-action-group {
+  margin-top: 0;
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-primary .save-btn,
+body.manager-dossier-shell .manager-shell-actionbar-primary .send-btn,
+body.manager-dossier-shell .manager-shell-actionbar-primary .btn-small,
+body.manager-dossier-shell .manager-shell-actionbar-featured .btn-small {
+  width: auto;
+  min-width: 0;
+  min-height: 42px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  color: var(--manager-dossier-muted);
+  font-size: 11px;
+}
+
+body.manager-dossier-shell #sync-status {
+  min-width: 0;
+  color: inherit;
+}
+
+body.manager-dossier-shell .manager-dossier-panel-head,
+body.manager-dossier-shell .manager-shell-card-head {
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell .manager-dossier-panel-note,
+body.manager-dossier-shell .manager-shell-stat-meta,
+body.manager-dossier-shell .manager-shell-card-copy,
+body.manager-dossier-shell .workspace-actions-sub,
+body.manager-dossier-shell .manager-shell-footer-note,
+body.manager-dossier-shell .manager-category-note {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.95fr);
+  gap: 28px;
+  padding: 28px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-kicker {
+  margin: 0;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero h3 {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 3.2vw, 2.3rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-text {
+  margin: 0;
+  max-width: 40rem;
+  color: var(--manager-dossier-muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+body.manager-dossier-shell .manager-shell-overview-hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-chip {
+  min-height: 44px;
+}
+
+body.manager-dossier-shell .manager-shell-stats-grid {
+  gap: 1px;
+  padding: 1px;
+  background: var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell .manager-shell-stat-card {
+  min-height: 142px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 10px;
+  padding: 24px 24px 22px;
+  border: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-shell-stat-value {
+  margin: 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.85rem, 4vw, 2.5rem);
+  line-height: 0.9;
+}
+
+body.manager-dossier-shell .manager-shell-stat-card--warn {
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .manager-shell-overview-grid {
+  gap: 24px;
+}
+
+body.manager-dossier-shell .manager-dossier-record-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell #featured-mgr-wrap,
+body.manager-dossier-shell #recent-changes-wrap {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+body.manager-dossier-shell .manager-shell-overview-link {
+  margin: 0 24px 24px !important;
+  align-self: flex-start;
+}
+
+body.manager-dossier-shell .item-swipeable {
+  position: relative;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .swipe-action {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 108px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+body.manager-dossier-shell .swipe-action--86 {
+  right: 0;
+  background: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .swipe-action--restore {
+  left: 0;
+  background: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .swipe-action-label {
+  color: var(--manager-dossier-panel);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: scale(0.92);
+  transition: transform 0.12s ease;
+}
+
+body.manager-dossier-shell .item-swipeable.swiping .swipe-action {
+  opacity: 1;
+}
+
+body.manager-dossier-shell .item-swipeable.swipe-triggered .swipe-action-label {
+  transform: scale(1.08);
+}
+
+body.manager-dossier-shell .item-swipeable .items-row {
+  position: relative;
+  z-index: 1;
+  touch-action: pan-y;
+}
+
+body.manager-dossier-shell .item-swipeable .items-row.swipe-animating {
+  transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body.manager-dossier-shell .featured-specials-editor {
+  gap: 12px;
+}
+
+body.manager-dossier-shell .featured-specials-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+body.manager-dossier-shell .featured-specials-head h4 {
+  margin: 4px 0 0;
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.45rem, 3vw, 2rem);
+  line-height: 1;
+}
+
+body.manager-dossier-shell .featured-specials-copy {
+  margin: 8px 0 0;
+  color: var(--manager-dossier-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+body.manager-dossier-shell .featured-count,
+body.manager-dossier-shell .featured-special-tag,
+body.manager-dossier-shell .featured-special-upcharge,
+body.manager-dossier-shell .upcharge-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .featured-special-tag--danger {
+  color: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell .featured-special-upcharge strong,
+body.manager-dossier-shell .upcharge-chip strong {
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell .featured-specials-composer,
+body.manager-dossier-shell .featured-special-row,
+body.manager-dossier-shell .history-entry,
+body.manager-dossier-shell .history-archive {
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  box-shadow: none;
+}
+
+body.manager-dossier-shell .history-entry,
+body.manager-dossier-shell .history-archive {
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .history-header,
+body.manager-dossier-shell .history-archive-summary {
+  padding: 12px 14px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .history-header:hover,
+body.manager-dossier-shell .history-archive-summary:hover {
+  background: var(--manager-dossier-olive-soft);
+}
+
+body.manager-dossier-shell .history-detail,
+body.manager-dossier-shell .history-archive-body {
+  padding: 0 14px 14px;
+  background: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .history-archive-body {
+  display: grid;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .cat-card {
+  margin-bottom: 12px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell .cat-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell .current-section {
+  padding: 14px 16px 16px;
+}
+
+body.manager-dossier-shell .current-label {
+  margin-bottom: 10px;
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #manager-items-section .current-items,
+body.manager-dossier-shell #manager-pricing-section .current-items,
+body.manager-dossier-shell #manager-description-section .current-items {
+  gap: 10px;
+}
+
+body.manager-dossier-shell .item-state-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+body.manager-dossier-shell .item-state-badge--active,
+body.manager-dossier-shell .item-state-badge--new,
+body.manager-dossier-shell .item-state-badge--draft,
+body.manager-dossier-shell .item-state-badge--unsent {
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .item-state-badge--off {
+  background: transparent;
+  color: var(--manager-dossier-muted);
+  border-style: dashed;
+}
+
+body.manager-dossier-shell .item-state-badge--86 {
+  background: var(--manager-dossier-red-soft);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row,
+body.manager-dossier-shell #manager-pricing-section .pricing-row,
+body.manager-dossier-shell #manager-description-section .description-editor-card {
+  position: relative;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  box-shadow: none;
+  overflow: hidden;
+}
+
+body.manager-dossier-shell #manager-items-section .items-row::before,
+body.manager-dossier-shell #manager-pricing-section .pricing-row::before,
+body.manager-dossier-shell #manager-description-section .description-editor-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-eighty-sixed,
+body.manager-dossier-shell #manager-pricing-section .pricing-row.is-eighty-sixed,
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-eighty-sixed,
+body.manager-dossier-shell .manager-shell-disclosure--danger {
+  background: var(--manager-dossier-red-soft);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-eighty-sixed::before,
+body.manager-dossier-shell #manager-pricing-section .pricing-row.is-eighty-sixed::before,
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-eighty-sixed::before {
+  background: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-off-menu {
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row.is-off-menu::before {
+  background: var(--manager-dossier-accent);
+}
+
+body.manager-dossier-shell #manager-items-section .items-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+}
+
+body.manager-dossier-shell #manager-items-section .item-row-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 48px auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+}
+
+body.manager-dossier-shell #manager-items-section .item-drag-handle {
+  width: 48px;
+  min-height: 58px;
+  border: 0;
+  border-right: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  color: var(--manager-dossier-muted);
+}
+
+body.manager-dossier-shell #manager-items-section .item-name {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+body.manager-dossier-shell #manager-items-section .item-name input {
+  min-height: 58px;
+  padding: 0 14px;
+  border: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--manager-dossier-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+body.manager-dossier-shell #manager-items-section .item-name input:focus,
+body.manager-dossier-shell #manager-pricing-section .price-input:focus,
+body.manager-dossier-shell #manager-pricing-section .upcharge-label-input:focus,
+body.manager-dossier-shell #manager-pricing-section .upcharge-price-input:focus,
+body.manager-dossier-shell #manager-description-section .desc-input:focus,
+body.manager-dossier-shell #manager-description-section .add-ingredient-input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-items-section .item-actions-compact {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0;
+  margin-left: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .eighty-six-btn,
+body.manager-dossier-shell .del-item,
+body.manager-dossier-shell #manager-main-content .db-filter-btn,
+body.manager-dossier-shell #manager-main-content .btn-small,
+body.manager-dossier-shell #manager-action-bar .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small {
+  border-radius: 0;
+}
+
+body.manager-dossier-shell .eighty-six-btn,
+body.manager-dossier-shell .del-item {
+  min-width: 50px;
+  min-height: 58px;
+  border: 0;
+  border-left: 1px solid var(--manager-dossier-border);
+  background: transparent;
+  color: var(--manager-dossier-muted);
+  opacity: 1;
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .eighty-six-btn:hover {
+  background: var(--manager-dossier-red-soft);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .eighty-six-btn.restore {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .eighty-six-btn.restore:hover {
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .del-item:hover {
+  background: var(--manager-dossier-red-soft);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-main {
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-meta {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-row-controls {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0;
+  align-items: stretch;
+  border-left: 1px solid var(--manager-dossier-border);
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-pricing-section .pricing-inline-field {
+  min-width: 116px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell #manager-pricing-section .price-input,
+body.manager-dossier-shell #manager-pricing-section .upcharge-label-input,
+body.manager-dossier-shell #manager-pricing-section .upcharge-price-input,
+body.manager-dossier-shell #manager-description-section .add-ingredient-input,
+body.manager-dossier-shell #manager-description-section .desc-input,
+body.manager-dossier-shell .featured-sell-note-input {
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell #manager-pricing-section .price-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn,
+body.manager-dossier-shell #manager-description-section .desc-visibility-toggle,
+body.manager-dossier-shell #manager-description-section .add-ingredient-btn,
+body.manager-dossier-shell .recipe-field-block .add-ingredient-btn {
+  min-height: 40px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn[aria-expanded="true"],
+body.manager-dossier-shell #manager-pricing-section .upcharge-toggle-btn:hover,
+body.manager-dossier-shell #manager-description-section .add-ingredient-btn:hover,
+body.manager-dossier-shell .recipe-field-block .add-ingredient-btn:hover {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-count {
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+  color: var(--manager-dossier-ink);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-summary,
+body.manager-dossier-shell #manager-pricing-section .upcharges-panel {
+  margin-top: 0;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-top: 0;
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-summary {
+  padding: 12px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharges-panel {
+  padding: 12px 16px 16px;
+}
+
+body.manager-dossier-shell #manager-pricing-section .upcharge-row,
+body.manager-dossier-shell #manager-pricing-section .upcharge-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open {
+  border-color: var(--manager-dossier-border-strong);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  padding: 14px 16px 14px 22px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  text-align: left;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open .desc-row-header {
+  border-bottom-color: var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-title .item-name-static,
+body.manager-dossier-shell #manager-pricing-section .pricing-row-title .item-name-static,
+body.manager-dossier-shell .featured-special-name .item-name-static {
+  color: var(--manager-dossier-ink);
+  font-family: var(--font-heading);
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  line-height: 1;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-row-meta {
+  color: var(--manager-dossier-olive);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-status-indicators {
+  gap: 6px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator {
+  padding: 6px 8px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  color: var(--manager-dossier-muted);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator.has-content {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-indicator.is-hidden {
+  background: transparent;
+  border-style: dashed;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-chevron {
+  color: var(--manager-dossier-olive);
+  font-size: 22px;
+}
+
+body.manager-dossier-shell #manager-description-section .description-editor-card.is-open .desc-chevron {
+  transform: rotate(90deg);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-edit-body {
+  padding: 16px 16px 16px 22px;
+  border: 0;
+  background: var(--manager-dossier-panel-strong);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-field-block,
+body.manager-dossier-shell #manager-description-section .recipe-field-block {
+  margin-bottom: 0;
+  padding: 14px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 0;
+  background: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-field-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+body.manager-dossier-shell #manager-description-section .desc-visibility-toggle input {
+  accent-color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell #manager-description-section .desc-input {
+  min-height: 120px;
+  padding: 12px 14px;
+}
+
+body.manager-dossier-shell #manager-description-section .recipe-field-block .recipe-ingredient-list {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+body.manager-dossier-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+body.manager-dossier-shell .ingredient-row {
+  border-radius: 0;
+  background: var(--manager-dossier-panel-strong);
+  border: 1px solid var(--manager-dossier-border);
+}
+
+body.manager-dossier-shell .del-ingredient:hover {
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .field-saved {
+  border-color: var(--manager-dossier-olive) !important;
+  box-shadow: inset 0 0 0 1px var(--manager-dossier-olive-soft);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-copy,
+body.manager-dossier-shell .manager-shell-actionbar-status,
+body.manager-dossier-shell .manager-shell-footer-pill,
+body.manager-dossier-shell .manager-shell-header-badge--muted {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar-copy .workspace-actions-title,
+body.manager-dossier-shell .manager-shell-actionbar-copy .workspace-actions-sub {
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar .save-btn,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-shell-actionbar .save-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .btn-small:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .btn-small:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-btn:hover,
+body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-btn:hover {
+  background: var(--manager-dossier-olive);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn,
+body.manager-dossier-shell .btn-danger,
+body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+  background: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell .manager-shell-topbar-actions .send-btn:hover,
+body.manager-dossier-shell .manager-shell-actionbar .send-btn:hover,
+body.manager-dossier-shell .btn-danger:hover {
+  background: var(--manager-dossier-red);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-panel);
+}
+
+body.manager-dossier-shell #sync-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--manager-dossier-olive);
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell #sync-status:empty {
+  display: none;
+}
+
+body.manager-dossier-shell #sync-status.sync-error {
+  background: var(--manager-dossier-red-soft);
+  border-color: var(--manager-dossier-red);
+  color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell #sync-status.sync-poll-error {
+  background: var(--manager-dossier-olive-soft);
+  border-color: var(--manager-dossier-olive);
+  color: var(--manager-dossier-olive);
+  opacity: 1;
+}
+
+body.manager-dossier-shell.add-item-modal-open {
+  overflow: hidden;
+}
+
+body.manager-dossier-shell.add-item-modal-open #app-shell > header.manager-shell-topbar,
+body.manager-dossier-shell.add-item-modal-open .manager-shell-actionbar,
+body.manager-dossier-shell.add-item-modal-open .manager-shell-rail,
+body.manager-dossier-shell.add-item-modal-open .manager-shell-backdrop,
+body.manager-dossier-shell.add-item-modal-open .manager-shell-mobile-drawer-trigger {
+  opacity: 0;
+  pointer-events: none;
+}
+
+body.manager-dossier-shell .manager-shell-mobile-drawer-trigger {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 10px;
+  z-index: 66;
+  display: inline-flex;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+body.manager-dossier-shell.manager-mobile-drawer-trigger-visible .manager-shell-mobile-drawer-trigger {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-trigger {
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  body.manager-dossier-shell .manager-shell-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 780px) {
+  body.manager-dossier-shell .manager-shell-overview-grid {
+    grid-template-columns: minmax(0, 1.18fr) minmax(300px, 0.82fr);
+    align-items: start;
+  }
+}
+
+@media (max-width: 860px) {
+  body.manager-dossier-shell .manager-shell-overview-hero {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 22px;
+  }
+
+  body.manager-dossier-shell .manager-shell-overview-hero-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 921px) {
+  body.manager-dossier-shell {
+    padding-bottom: calc(118px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-dossier-shell #app-shell > header.manager-shell-topbar {
+    padding: calc(18px + env(safe-area-inset-top)) 18px 0 6px;
+  }
+
+  body.manager-dossier-shell .manager-shell-topbar-inner {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 12px;
+    padding: 0;
+  }
+
+  body.manager-dossier-shell .manager-dossier-header-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.manager-dossier-shell .manager-shell-layout {
+    width: min(1480px, calc(100% - 40px));
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 28px;
+    padding-top: 24px;
+  }
+
+  body.manager-dossier-shell .manager-shell-rail {
+    position: sticky;
+    top: calc(16px + env(safe-area-inset-top));
+    width: auto;
+    height: fit-content;
+    max-height: calc(100vh - 32px - env(safe-area-inset-top));
+    transform: none;
+    opacity: 1;
+    padding: 12px;
+    border-right-width: 1px;
+    box-shadow: 8px 8px 0 var(--manager-dossier-shadow);
+    z-index: 10;
+  }
+
+  body.manager-dossier-shell .manager-shell-rail-close,
+  body.manager-dossier-shell .manager-shell-backdrop,
+  body.manager-dossier-shell .manager-shell-menu-toggle,
+  body.manager-dossier-shell .manager-shell-mobile-drawer-trigger {
+    display: none;
+  }
+
+  body.manager-dossier-shell .manager-shell-section-header {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  body.manager-dossier-shell .manager-shell-card-head {
+    gap: 6px;
+  }
+
+  body.manager-dossier-shell .manager-shell-section-actions {
+    width: auto;
+    grid-template-columns: minmax(280px, 1fr) auto;
+    align-items: start;
+  }
+
+  body.manager-dossier-shell .manager-shell-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar {
+    left: clamp(302px, 24vw, 364px);
+    right: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "copy groups"
+      "status groups";
+    align-items: center;
+    gap: 6px 14px;
+    padding: 10px 14px;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-copy {
+    grid-area: copy;
+    max-width: 18rem;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-groups {
+    grid-area: groups;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-primary,
+  body.manager-dossier-shell .manager-shell-actionbar-featured {
+    align-items: center;
+    gap: 8px;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-status {
+    grid-area: status;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-primary .save-btn,
+  body.manager-dossier-shell .manager-shell-actionbar-primary .send-btn,
+  body.manager-dossier-shell .manager-shell-actionbar-primary .btn-small,
+  body.manager-dossier-shell .manager-shell-actionbar-featured .btn-small {
+    width: auto;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  body.manager-dossier-shell {
+    padding-bottom: calc(156px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-dossier-shell .manager-shell-topbar-inner {
+    padding: 0;
+  }
+
+  body.manager-dossier-shell .manager-shell-topbar-title {
+    font-size: 1.35rem;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 10px;
+  }
+
+  body.manager-dossier-shell .manager-shell-actionbar-primary,
+  body.manager-dossier-shell .manager-shell-actionbar-featured {
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  body.manager-dossier-shell .settings-section,
+  body.manager-dossier-shell .manager-shell-overview-card,
+  body.manager-dossier-shell .manager-shell-footer {
+    padding: 22px 18px;
+  }
+
+  body.manager-dossier-shell #manager-overview-section {
+    gap: 14px;
+  }
+
+  body.manager-dossier-shell .manager-shell-overview-hero-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-items-section .items-row,
+  body.manager-dossier-shell #manager-pricing-section .pricing-row {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-items-section .item-row-main {
+    grid-template-columns: 44px auto minmax(0, 1fr);
+  }
+
+  body.manager-dossier-shell #manager-items-section .item-actions-compact,
+  body.manager-dossier-shell #manager-pricing-section .pricing-row-controls {
+    grid-auto-flow: row;
+    grid-template-columns: 1fr;
+    border-left: 0;
+    border-top: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell .eighty-six-btn,
+  body.manager-dossier-shell .del-item {
+    min-width: 100%;
+    min-height: 46px;
+    border-left: 0;
+    border-top: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell #manager-pricing-section .pricing-inline-field {
+    border-right: 0;
+    border-bottom: 1px solid var(--manager-dossier-border);
+  }
+
+  body.manager-dossier-shell #manager-pricing-section .upcharge-row,
+  body.manager-dossier-shell #manager-pricing-section .upcharge-add-row,
+  body.manager-dossier-shell #manager-description-section .recipe-field-block .add-ingredient-area {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-row-header {
+    grid-template-columns: 1fr;
+  }
+
+  body.manager-dossier-shell #manager-description-section .desc-status-indicators {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
 /* ─── REDUCED MOTION ─────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -6104,6 +8130,7 @@ body.admin-console-page textarea:focus-visible,
 body.admin-console-page select:focus-visible,
 body.admin-console-page summary:focus-visible,
 body.admin-console-page .user-chip:focus-visible,
+body.admin-console-page .admin-userchip-trigger:focus-visible,
 body.admin-console-page .settings-rail-btn:focus-visible {
   outline: 2px solid var(--admin-accent);
   outline-offset: 2px;

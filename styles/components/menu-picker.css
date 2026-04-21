@@ -14,17 +14,21 @@
 .picker-loading, .picker-empty { color: var(--muted); font-size: 13px; padding: 12px 0; }
 
 body.manager-stitch-shell .modal-bg,
-body.manager-stitch-shell #menu-picker-overlay {
+body.manager-stitch-shell #menu-picker-overlay,
+body.manager-dossier-shell .modal-bg,
+body.manager-dossier-shell #menu-picker-overlay {
   overscroll-behavior: contain;
 }
 
 /* Menu picker — match manager shell */
-body.manager-stitch-shell .picker-box {
-  background: var(--manager-shell-surface);
-  border-color: var(--manager-shell-border);
+body.manager-stitch-shell .picker-box,
+body.manager-dossier-shell .picker-box {
+  background: var(--manager-shell-surface, var(--manager-dossier-panel, var(--card)));
+  border-color: var(--manager-shell-border, var(--manager-dossier-border, var(--border)));
 }
 
-body.manager-stitch-shell .picker-title {
+body.manager-stitch-shell .picker-title,
+body.manager-dossier-shell .picker-title {
   font-family: 'Noto Serif', serif;
-  color: var(--manager-shell-primary);
+  color: var(--manager-shell-primary, var(--manager-dossier-ink, var(--text)));
 }

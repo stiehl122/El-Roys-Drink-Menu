@@ -100,21 +100,16 @@
             <button class="manager-btn" id="action-btn" onclick="onActionBtnClick()" style="display:none">Manager</button>
             <button class="manager-btn admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin</button>
           </div>
-          <div class="user-chip admin-console-userchip" id="user-chip" style="display:none"
-               onclick="toggleUserDropdown()"
-               onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUserDropdown()}"
-               tabindex="0"
-               role="button"
-               aria-haspopup="true"
-               aria-expanded="false"
-               aria-label="User menu">
-            <span id="user-initials">?</span>
-            <span>▾</span>
-            <div class="user-dropdown" id="user-dropdown">
-              <div class="user-dropdown-name" id="user-dropdown-name"></div>
-              <div class="user-dropdown-role" id="user-dropdown-role"></div>
+          <div class="admin-userchip" data-user-chip data-user-chip-variant="topbar" data-user-chip-theme="admin" style="display:none">
+            <button class="admin-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
+              <span data-user-chip-initials>?</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            <div class="user-dropdown admin-userchip-panel" data-user-chip-panel onclick="event.stopPropagation()">
+              <div class="user-dropdown-name" data-user-chip-name></div>
+              <div class="user-dropdown-role" data-user-chip-role></div>
               <div class="user-dropdown-divider"></div>
-              <button class="user-dropdown-signout" onclick="signOut()">Sign Out</button>
+              <button class="user-dropdown-signout" onclick="event.stopPropagation(); signOut()">Sign Out</button>
             </div>
           </div>
         </div>
