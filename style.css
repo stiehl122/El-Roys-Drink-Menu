@@ -2475,6 +2475,7 @@ body.manager-stitch-shell .manager-userchip {
 }
 
 body.manager-stitch-shell .manager-userchip-trigger {
+  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -6540,6 +6541,10 @@ body.manager-dossier-shell .manager-shell-actionbar .manager-btn {
 }
 
 body.manager-dossier-shell .manager-userchip {
+  width: 100%;
+}
+
+body.manager-dossier-shell .manager-userchip-trigger {
   width: 100%;
 }
 
