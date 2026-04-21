@@ -146,6 +146,11 @@ body.route-restaurant.route-restaurant--elroy {
     calc(1.5rem + var(--erc-safe-left));
 }
 
+#restaurant-site-wrapper .erc-brand-heading {
+  margin: 0;
+  min-width: 0;
+}
+
 #restaurant-site-wrapper .erc-brand-group {
   display: flex;
   align-items: center;
