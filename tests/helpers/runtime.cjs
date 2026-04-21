@@ -26,6 +26,11 @@ const DEFAULT_RUNTIME_SCRIPTS = [
   'core/session/menu-session.js',
   'core/data/menu-state-loader.js',
   'core/session/poll-scheduler.js',
+  'core/landing/model.js',
+  'core/landing/store.js',
+  'core/landing/data-service.js',
+  'core/landing/admin-workspace.js',
+  'core/landing/root-renderer.js',
   'routes/shared/public-route-core.js',
   'app.js',
 ];

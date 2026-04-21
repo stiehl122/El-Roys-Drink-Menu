@@ -14,6 +14,10 @@ test('resolveRuntimeScriptPath resolves repo-relative script paths', () => {
 
 test('loadSandboxWithScripts evaluates runtime files in explicit order', () => {
   const sandbox = loadSandboxWithScripts([
+    'core/landing/model.js',
+    'core/landing/store.js',
+    'core/landing/data-service.js',
+    'core/landing/root-renderer.js',
     'app.js',
     'routes/shared/public-route-core.js',
     'leroyslounge/app.js',
