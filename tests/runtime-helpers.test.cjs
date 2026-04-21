@@ -17,6 +17,7 @@ test('loadSandboxWithScripts evaluates runtime files in explicit order', () => {
     'core/landing/model.js',
     'core/landing/store.js',
     'core/landing/data-service.js',
+    'core/landing/admin-workspace.js',
     'core/landing/root-renderer.js',
     'app.js',
     'routes/shared/public-route-core.js',
