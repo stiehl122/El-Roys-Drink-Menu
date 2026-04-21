@@ -12,72 +12,109 @@ struct PublicMenuScreen: View {
   }
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        header
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 22) {
+        heroCard
+          .appEntryReveal()
 
         if let notice = model.notice {
           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
+            .appEntryReveal(delay: 0.05)
         }
 
         if let payload = model.currentPublicMenu {
+          summaryStrip(payload: payload)
+            .appEntryReveal(delay: 0.08)
+
           if !payload.featuredGroups.isEmpty {
-            FeaturedGroupsSection(groups: payload.featuredGroups)
+            FeaturedGroupsSection(groups: payload.featuredGroups, accent: accent)
+              .appEntryReveal(delay: 0.12)
           }
 
-          ForEach(payload.cats) { category in
-            VStack(alignment: .leading, spacing: 10) {
-              Text(category.label)
-                .font(.title3.weight(.bold))
-              if !category.sub.isEmpty {
-                Text(category.sub)
-                  .font(.subheadline)
-                  .foregroundStyle(.secondary)
-              }
-              ForEach(category.items) { item in
-                PublicMenuItemRow(item: item)
-              }
-            }
-            .appGlassCard(tint: AppPalette.accent)
+          ForEach(Array(payload.cats.enumerated()), id: \.element.id) { index, category in
+            PublicMenuCategoryCard(category: category, accent: accent)
+              .appEntryReveal(delay: 0.16 + (Double(index) * 0.04))
           }
         } else {
-          ProgressView("Loading menu...")
-            .frame(maxWidth: .infinity)
-            .padding()
+          loadingCard
+            .appEntryReveal(delay: 0.10)
         }
+
+        Color.clear.frame(height: 28)
       }
-      .padding(24)
+      .padding(.horizontal, 24)
+      .padding(.top, 24)
+      .padding(.bottom, 24)
     }
     .navigationTitle(restaurant.name)
     .navigationBarTitleDisplayMode(.inline)
-    .task {
+    .task(id: selectedType) {
       await reload()
-    }
-    .onChange(of: selectedType) { _, _ in
-      Task { await reload() }
     }
   }
 
-  private var header: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Public Menu")
-        .font(.system(size: 30, weight: .bold, design: .rounded))
-      Picker("Menu", selection: $selectedType) {
-        Text("Drinks").tag("drinks")
-        Text("Food").tag("food")
+  private var accent: Color {
+    selectedType == "food" ? AppPalette.jade : AppPalette.bloodOrange
+  }
+
+  private var heroCard: some View {
+    VStack(alignment: .leading, spacing: 18) {
+      HStack(alignment: .top) {
+        AppSectionHeader(
+          eyebrow: "Public menu preview",
+          title: restaurant.name,
+          subtitle: selectedType == "food"
+            ? "Review the guest-facing food presentation with the same editorial spacing and hierarchy customers will see."
+            : "Review the guest-facing drinks presentation with premium card rhythm, featured highlights, and live menu structure.",
+          tint: accent
+        )
+        Spacer(minLength: 16)
       }
-      .pickerStyle(.segmented)
+
+      AppSegmentedControl(
+        options: ["drinks", "food"],
+        selection: $selectedType,
+        accent: accent,
+        title: { $0.capitalized }
+      )
 
       if let menu = selectedMenu {
         NavigationLink(value: AppDestination.routePreview(menu)) {
-          Label("Open Exact Route Preview", systemImage: "safari")
-            .font(.headline)
-            .frame(maxWidth: .infinity)
+          AppIslandButtonLabel(
+            title: "Open exact route preview",
+            subtitle: "Verify the deployed path before publishing or sharing.",
+            systemImage: "arrow.up.right"
+          )
         }
-        .buttonStyle(SecondaryGlassButtonStyle())
+        .buttonStyle(.plain)
+        .appPillChrome(accent: accent, filled: true)
       }
     }
-    .appGlassCard(tint: AppPalette.brand)
+    .appGlassCard(tint: accent, cornerRadius: 38)
+  }
+
+  private func summaryStrip(payload: PublicMenuPayload) -> some View {
+    let itemCount = payload.cats.reduce(into: 0) { partialResult, category in
+      partialResult += category.items.filter(\.onMenu).count
+    }
+
+    return HStack(spacing: 10) {
+      metricPill(title: "sections", value: "\(payload.cats.count)")
+      metricPill(title: "items", value: "\(itemCount)")
+      metricPill(title: "featured", value: "\(payload.featuredGroups.reduce(0) { $0 + $1.slots.count })")
+    }
+  }
+
+  private func metricPill(title: String, value: String) -> some View {
+    AppMetricPill(title: title, value: value, accent: accent)
+  }
+
+  private var loadingCard: some View {
+    AppLoadingCard(
+      title: "Loading public menu",
+      subtitle: "Pulling the live guest-facing sections, featured groups, and pricing.",
+      tint: accent
+    )
   }
 
   private var selectedMenu: MenuRecord? {
@@ -93,74 +130,138 @@ struct PublicMenuScreen: View {
 
 private struct FeaturedGroupsSection: View {
   let groups: [FeaturedGroup]
+  let accent: Color
 
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
-      Text("Featured")
-        .font(.title3.weight(.bold))
+      HStack {
+        AppSectionHeader(
+          eyebrow: "Featured",
+          title: "Spotlight groups",
+          tint: accent
+        )
+        Spacer(minLength: 16)
+      }
+
       ForEach(groups) { group in
-        VStack(alignment: .leading, spacing: 10) {
-          Text(group.name)
-            .font(.headline)
+        VStack(alignment: .leading, spacing: 12) {
+          HStack {
+            Text(group.name)
+              .font(AppTypography.body(18, weight: .bold))
+              .foregroundStyle(AppPalette.espresso)
+            Spacer()
+            Text("\(group.slots.count) items")
+              .font(AppTypography.micro(9, weight: .bold))
+              .tracking(1.4)
+              .padding(.vertical, 7)
+              .padding(.horizontal, 10)
+              .background(accent.opacity(0.10), in: Capsule(style: .continuous))
+              .foregroundStyle(accent)
+          }
+
           ForEach(group.slots) { slot in
             HStack(alignment: .top, spacing: 12) {
-              VStack(alignment: .leading, spacing: 4) {
+              VStack(alignment: .leading, spacing: 5) {
                 Text(slot.item?.name ?? "Featured Item")
-                  .font(.subheadline.weight(.semibold))
+                  .font(AppTypography.body(16, weight: .bold))
+                  .foregroundStyle(AppPalette.ink)
                 if !slot.sellNote.isEmpty {
                   Text(slot.sellNote)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(AppTypography.body(13, weight: .medium))
+                    .foregroundStyle(AppPalette.espresso.opacity(0.70))
+                    .fixedSize(horizontal: false, vertical: true)
                 }
               }
-              Spacer()
-              Text(slot.item?.price ?? "")
-                .font(.subheadline.monospacedDigit())
+              Spacer(minLength: 12)
+              if let price = slot.item?.price.nilIfBlank {
+                Text(price)
+                  .font(AppTypography.body(13, weight: .bold))
+                  .foregroundStyle(accent)
+                  .padding(.vertical, 7)
+                  .padding(.horizontal, 10)
+                  .background(accent.opacity(0.10), in: Capsule(style: .continuous))
+              }
             }
+            .padding(14)
+            .appFieldChrome(tint: accent, cornerRadius: 20)
           }
         }
+        .appGlassCard(tint: accent, cornerRadius: 30)
       }
     }
-    .appGlassCard(tint: AppPalette.warning)
+  }
+}
+
+private struct PublicMenuCategoryCard: View {
+  let category: MenuCategoryPayload
+  let accent: Color
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      VStack(alignment: .leading, spacing: 6) {
+        AppEyebrow(title: category.label, tint: accent)
+        if !category.sub.isEmpty {
+          Text(category.sub)
+            .font(AppTypography.body(14, weight: .medium))
+            .foregroundStyle(AppPalette.espresso.opacity(0.72))
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+
+      ForEach(category.items.filter(\.onMenu)) { item in
+        PublicMenuItemRow(item: item, accent: accent)
+      }
+    }
+    .appGlassCard(tint: accent, cornerRadius: 34)
   }
 }
 
 private struct PublicMenuItemRow: View {
   let item: MenuItemPayload
+  let accent: Color
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack(alignment: .top) {
-        VStack(alignment: .leading, spacing: 4) {
-          Text(item.name)
-            .font(.headline)
-            .strikethrough(item.isEightySixed)
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: 5) {
+          HStack(spacing: 8) {
+            Text(item.name)
+              .font(AppTypography.body(16, weight: .bold))
+              .foregroundStyle(AppPalette.ink)
+              .strikethrough(item.isEightySixed)
+            if item.isEightySixed {
+              Text("86'D")
+                .font(AppTypography.micro(9, weight: .bold))
+                .tracking(1.4)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .background(AppPalette.danger.opacity(0.10), in: Capsule(style: .continuous))
+                .foregroundStyle(AppPalette.danger)
+            }
+          }
           if item.showDescription, !item.desc.isEmpty {
             Text(item.desc)
-              .font(.subheadline)
-              .foregroundStyle(.secondary)
+              .font(AppTypography.body(13, weight: .medium))
+              .foregroundStyle(AppPalette.espresso.opacity(0.70))
+              .fixedSize(horizontal: false, vertical: true)
           }
         }
-        Spacer()
-        Text(item.price)
-          .font(.headline.monospacedDigit())
+        Spacer(minLength: 12)
+        Text(item.price.isEmpty ? "—" : item.price)
+          .font(AppTypography.body(13, weight: .bold))
+          .foregroundStyle(accent)
+          .padding(.vertical, 7)
+          .padding(.horizontal, 10)
+          .background(accent.opacity(0.10), in: Capsule(style: .continuous))
       }
 
       if item.showRecipe, !item.recipe.isEmpty {
         Text(item.recipe.joined(separator: " • "))
-          .font(.footnote)
-          .foregroundStyle(.secondary)
-      }
-
-      if item.isEightySixed {
-        Text("86'D")
-          .font(.caption2.weight(.bold))
-          .padding(.vertical, 4)
-          .padding(.horizontal, 8)
-          .background(AppPalette.danger.opacity(0.16), in: Capsule())
-          .foregroundStyle(AppPalette.danger)
+          .font(AppTypography.body(12, weight: .semibold))
+          .foregroundStyle(accent.opacity(0.86))
       }
     }
-    .padding(.vertical, 6)
+    .padding(15)
+    .appFieldChrome(tint: accent, cornerRadius: 22)
   }
 }

@@ -5,6 +5,7 @@ enum AppDestination: Hashable {
   case publicMenu(RestaurantRecord, initialType: String)
   case editor(MenuRecord)
   case restaurantTools(RestaurantRecord)
+  case categoryTools(MenuRecord)
   case routePreview(MenuRecord)
 }
 
@@ -15,9 +16,7 @@ struct ElRoysManagerApp: App {
   var body: some Scene {
     WindowGroup {
       RootView(model: model)
-        .task {
-          await model.start()
-        }
+        .task { await model.start() }
     }
   }
 }
@@ -30,21 +29,8 @@ private struct RootView: View {
       AppBackground()
 
       if model.isLaunching {
-        VStack(spacing: 18) {
-          Text("El Roy's Manager")
-            .font(.system(size: 34, weight: .bold, design: .rounded))
-            .foregroundStyle(AppPalette.ink)
-          Text("Native SwiftUI manager for Leroy's Lounge and El Roy's Cantina.")
-            .font(.title3)
-            .multilineTextAlignment(.center)
-            .foregroundStyle(.secondary)
-          ProgressView()
-            .controlSize(.large)
-          EnvironmentBadge(environment: model.environment)
-        }
-        .padding(28)
-        .appGlassCard(tint: AppPalette.brand)
-        .padding(24)
+        LaunchDeck(environment: model.environment)
+          .padding(24)
       } else if model.isAuthenticated {
         NavigationStack {
           RestaurantChooserView(model: model)
@@ -58,14 +44,76 @@ private struct RootView: View {
                 MenuEditorScreen(model: model, menu: menu)
               case .restaurantTools(let restaurant):
                 RestaurantToolsScreen(model: model, restaurant: restaurant)
+              case .categoryTools(let menu):
+                RestaurantCategoryManagementScreen(model: model, menu: menu)
               case .routePreview(let menu):
-                RoutePreviewScreen(model: model, menu: menu)
+                RoutePreviewScreen(menu: menu, url: model.exactRoutePreviewURL(for: menu))
               }
             }
         }
+        .tint(AppPalette.brand)
       } else {
         AuthGateView(model: model)
       }
     }
+  }
+}
+
+private struct LaunchDeck: View {
+  let environment: AppEnvironment
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 22) {
+      HStack(alignment: .top) {
+        AppSectionHeader(
+          eyebrow: "Native manager",
+          title: "El Roy's\nManager",
+          subtitle: "Editorial chrome, native performance, and the same live workspace pipeline used by the production manager.",
+          tint: AppPalette.brass
+        )
+        Spacer(minLength: 16)
+        VStack(alignment: .trailing, spacing: 10) {
+          EnvironmentBadge(environment: environment)
+          ProgressView()
+            .controlSize(.large)
+            .tint(AppPalette.brand)
+        }
+      }
+
+      Group {
+        if #available(iOS 26.0, *) {
+          GlassEffectContainer(spacing: 10) {
+            HStack(spacing: 10) {
+              capsule(title: "Staff sign-in", tint: AppPalette.sage)
+              capsule(title: "Live menu tools", tint: AppPalette.cobalt)
+              capsule(title: "Preview routes", tint: AppPalette.brand)
+            }
+          }
+        } else {
+          HStack(spacing: 10) {
+            capsule(title: "Staff sign-in", tint: AppPalette.sage)
+            capsule(title: "Live menu tools", tint: AppPalette.cobalt)
+            capsule(title: "Preview routes", tint: AppPalette.brand)
+          }
+        }
+      }
+    }
+    .appGlassCard(tint: AppPalette.brand, cornerRadius: 38)
+    .frame(maxWidth: 620)
+    .appEntryReveal()
+  }
+
+  private func capsule(title: String, tint: Color) -> some View {
+    Text(title.uppercased())
+      .font(AppTypography.micro(9, weight: .bold))
+      .tracking(1.6)
+      .padding(.vertical, 8)
+      .padding(.horizontal, 10)
+      .background(tint.opacity(0.12), in: Capsule(style: .continuous))
+      .overlay {
+        Capsule(style: .continuous)
+          .stroke(tint.opacity(0.24), lineWidth: 0.7)
+      }
+      .foregroundStyle(tint)
   }
 }

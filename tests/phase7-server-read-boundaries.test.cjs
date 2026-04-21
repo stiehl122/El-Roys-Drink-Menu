@@ -15,6 +15,15 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave1=${Date.now()}-${Math.random()}`);
 }
 
+function createJsonResponse(body, ok = true) {
+  return {
+    ok,
+    async json() {
+      return body;
+    },
+  };
+}
+
 test('consolidated read routes delegate through shared menu-read helpers', () => {
   const workspaceSource = read('api/manager.js');
   const publicSource = read('api/public.js');
@@ -108,7 +117,10 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
     },
   });
 
-  assert.deepEqual(payload.cats, bundle.cats);
+  assert.deepEqual(payload.cats, bundle.cats.map(category => ({
+    ...category,
+    untappd_enabled: false,
+  })));
   assert.equal(payload.meta.last_updated_ts, 1712705100000);
   assert.deepEqual(payload.meta.draft_state, bundle.meta.draft_state);
   assert.equal(payload.workspace.actor.role, 'manager');
@@ -174,6 +186,105 @@ test('workspace payload projects server-owned Live | Unsent queue state from sta
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
 });
 
+test('readMenuStateBundle canonicalizes workspace category and item ordering', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const menu = helper.getKnownMenus()[0];
+  assert.ok(menu?.id, 'expected a known menu id for readMenuStateBundle coverage');
+
+  const originalFetch = global.fetch;
+  const originalSupabaseUrl = process.env.SUPABASE_URL;
+  const originalSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+  global.fetch = async url => {
+    const requestUrl = String(url);
+
+    if (requestUrl.includes('/rest/v1/menus?')) {
+      return createJsonResponse([{
+        id: menu.id,
+        slug: menu.slug,
+        name: menu.name,
+        type: menu.type,
+        restaurant_id: menu.restaurantId,
+        archived: false,
+      }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/categories?')) {
+      return createJsonResponse([
+        {
+          id: 'cat-b',
+          menu_id: menu.id,
+          key: 'wine',
+          label: 'Wine',
+          display_order: 0,
+          items: [
+            { id: 'wine-b', name: 'Bordeaux', display_order: 1, on_menu: true, visibility: 'public' },
+            { id: 'wine-a', name: 'Albarino', display_order: 1, on_menu: true, visibility: 'public' },
+            { id: 'wine-c', name: 'Chianti', display_order: 0, on_menu: true, visibility: 'public' },
+          ],
+        },
+        {
+          id: 'cat-u',
+          menu_id: menu.id,
+          key: '__uncategorized__',
+          label: 'Uncategorized',
+          display_order: 0,
+          items: [
+            { id: 'uncat-a', name: 'Hidden', display_order: 0, on_menu: false, visibility: 'off_menu' },
+          ],
+        },
+        {
+          id: 'cat-a',
+          menu_id: menu.id,
+          key: 'beer',
+          label: 'Beer',
+          display_order: 0,
+          items: [
+            { id: 'beer-b', name: 'Z Lager', display_order: 1, on_menu: true, visibility: 'public' },
+            { id: 'beer-a', name: 'A Lager', display_order: 1, on_menu: true, visibility: 'public' },
+          ],
+        },
+      ]);
+    }
+
+    if (requestUrl.includes('/rest/v1/menu_meta?')) {
+      return createJsonResponse([{ last_updated_ts: 1712705100000 }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/restaurants?')) {
+      return createJsonResponse([{
+        id: menu.restaurantId,
+        name: 'Restaurant',
+        slug: 'restaurant',
+        design: {},
+        use_custom_design: false,
+      }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/featured_groups?')) {
+      return createJsonResponse([]);
+    }
+
+    if (requestUrl.includes('/rest/v1/featured_slots?')) {
+      return createJsonResponse([]);
+    }
+
+    throw new Error(`Unexpected fetch in test: ${requestUrl}`);
+  };
+
+  try {
+    const bundle = await helper.readMenuStateBundle(menu.id);
+    assert.deepEqual(bundle.cats.map(category => category.key), ['beer', 'wine', '__uncategorized__']);
+    assert.deepEqual(bundle.cats[0].items.map(item => item.id), ['beer-a', 'beer-b']);
+    assert.deepEqual(bundle.cats[1].items.map(item => item.id), ['wine-c', 'wine-a', 'wine-b']);
+  } finally {
+    global.fetch = originalFetch;
+    process.env.SUPABASE_URL = originalSupabaseUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = originalSupabaseServiceKey;
+  }
+});
+
 test('public payload strips staff-only menu metadata and filters non-public items', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createPublicMenuPayload({
@@ -225,6 +336,71 @@ test('public payload strips staff-only menu metadata and filters non-public item
   assert.deepEqual(payload.meta.last_sent_featured, ['featured-1']);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'draft_state'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'bot_id'), false);
+});
+
+test('createPublicMenuPayload canonicalizes category and item ordering', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createPublicMenuPayload({
+    menu: {
+      id: 'menu-1',
+      slug: 'drinks',
+      name: 'Drinks',
+      type: 'drinks',
+      restaurantId: 'rest-1',
+    },
+    cats: [
+      {
+        id: 'cat-c',
+        menu_id: 'menu-1',
+        key: 'amaro',
+        label: 'Amaro',
+        display_order: 0,
+        items: [
+          { id: 'amaro-1', name: 'Averna', display_order: 2, on_menu: true, visibility: 'public' },
+        ],
+      },
+      {
+        id: 'cat-z',
+        menu_id: 'menu-1',
+        key: 'wine',
+        label: 'Wine',
+        display_order: 2,
+        items: [
+          { id: 'item-b', name: 'Bordeaux', display_order: 1, on_menu: true, visibility: 'public' },
+          { id: 'item-a', name: 'Albarino', display_order: 1, on_menu: true, visibility: 'public' },
+          { id: 'item-c', name: 'Chianti', display_order: 0, on_menu: true, visibility: 'public' },
+        ],
+      },
+      {
+        id: 'cat-u',
+        menu_id: 'menu-1',
+        key: '__uncategorized__',
+        label: 'Uncategorized',
+        display_order: 0,
+        items: [
+          { id: 'hidden-1', name: 'Hidden', display_order: 0, on_menu: false, visibility: 'off_menu' },
+        ],
+      },
+      {
+        id: 'cat-a',
+        menu_id: 'menu-1',
+        key: 'beer',
+        label: 'Beer',
+        display_order: 0,
+        items: [
+          { id: 'beer-2', name: 'Z Lager', display_order: 1, on_menu: true, visibility: 'public' },
+          { id: 'beer-1', name: 'A Lager', display_order: 1, on_menu: true, visibility: 'public' },
+        ],
+      },
+    ],
+    meta: {},
+    restaurant: null,
+  });
+
+  assert.deepEqual(payload.cats.map(category => category.key), ['amaro', 'beer', 'wine']);
+  assert.equal(payload.cats[0].id, 'cat-c');
+  assert.deepEqual(payload.cats[1].items.map(item => item.id), ['beer-1', 'beer-2']);
+  assert.deepEqual(payload.cats[2].items.map(item => item.id), ['item-c', 'item-a', 'item-b']);
 });
 
 test('session bootstrap payload exposes actor capabilities against the fixed menu registry', async () => {

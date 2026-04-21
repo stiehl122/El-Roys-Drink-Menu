@@ -10,43 +10,78 @@ struct AppPalette {
   static let warning = Color(red: 0.74, green: 0.50, blue: 0.18)
   static let danger = Color(red: 0.71, green: 0.24, blue: 0.22)
 
-  // Cinematic additions — consumed by the Home surface, safe to reuse elsewhere.
-  static let brass      = Color(red: 0.757, green: 0.604, blue: 0.286)
-  static let ember      = Color(red: 0.910, green: 0.381, blue: 0.164)
-  static let oxblood    = Color(red: 0.478, green: 0.114, blue: 0.133)
-  static let charcoal   = Color(red: 0.051, green: 0.043, blue: 0.043)
-  static let ivory      = Color(red: 0.949, green: 0.913, blue: 0.847)
-  static let cobalt     = Color(red: 0.118, green: 0.302, blue: 0.549)
-  static let marigold   = Color(red: 0.910, green: 0.639, blue: 0.090)
-  static let jade       = Color(red: 0.122, green: 0.373, blue: 0.227)
+  // Brand texture palette
+  static let brass = Color(red: 0.757, green: 0.604, blue: 0.286)
+  static let ember = Color(red: 0.910, green: 0.381, blue: 0.164)
+  static let oxblood = Color(red: 0.478, green: 0.114, blue: 0.133)
+  static let charcoal = Color(red: 0.051, green: 0.043, blue: 0.043)
+  static let ivory = Color(red: 0.949, green: 0.913, blue: 0.847)
+  static let cobalt = Color(red: 0.118, green: 0.302, blue: 0.549)
+  static let marigold = Color(red: 0.910, green: 0.639, blue: 0.090)
+  static let jade = Color(red: 0.122, green: 0.373, blue: 0.227)
   static let terracotta = Color(red: 0.788, green: 0.416, blue: 0.231)
   static let bloodOrange = Color(red: 0.780, green: 0.243, blue: 0.114)
+  static let sage = Color(red: 0.478, green: 0.545, blue: 0.431)
+  static let espresso = Color(red: 0.188, green: 0.137, blue: 0.110)
+  static let parchment = Color(red: 0.992, green: 0.972, blue: 0.936)
+  static let alabaster = Color(red: 0.978, green: 0.957, blue: 0.918)
+  static let linen = Color(red: 0.956, green: 0.921, blue: 0.862)
+}
+
+enum AppMotion {
+  static let reveal = Animation.timingCurve(0.32, 0.72, 0.0, 1.0, duration: 0.82)
+  static let settle = Animation.timingCurve(0.22, 0.86, 0.18, 1.0, duration: 0.62)
+  static let snap = Animation.timingCurve(0.32, 0.72, 0.0, 1.0, duration: 0.38)
+  static let press = Animation.interpolatingSpring(stiffness: 290, damping: 25)
+}
+
+enum AppTypography {
+  static func display(_ size: CGFloat, weight: Font.Weight = .bold) -> Font {
+    .system(size: size, weight: weight, design: .rounded)
+  }
+
+  static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+    .system(size: size, weight: weight, design: .rounded)
+  }
+
+  static func micro(_ size: CGFloat, weight: Font.Weight = .semibold) -> Font {
+    .system(size: size, weight: weight, design: .monospaced)
+  }
 }
 
 struct AppBackground: View {
   var body: some View {
-    LinearGradient(
-      colors: [
-        AppPalette.canvasTop,
-        Color.white.opacity(0.95),
-        AppPalette.canvasBottom,
-      ],
-      startPoint: .topLeading,
-      endPoint: .bottomTrailing
-    )
-    .overlay(alignment: .topTrailing) {
+    ZStack {
+      LinearGradient(
+        colors: [
+          AppPalette.parchment,
+          AppPalette.alabaster,
+          AppPalette.canvasBottom,
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+
       Circle()
-        .fill(AppPalette.brand.opacity(0.10))
-        .frame(width: 240, height: 240)
-        .blur(radius: 8)
-        .offset(x: 80, y: -60)
-    }
-    .overlay(alignment: .bottomLeading) {
+        .fill(AppPalette.brand.opacity(0.12))
+        .frame(width: 320, height: 320)
+        .blur(radius: 24)
+        .offset(x: 128, y: -180)
+
       Circle()
-        .fill(AppPalette.accent.opacity(0.10))
-        .frame(width: 300, height: 300)
-        .blur(radius: 12)
-        .offset(x: -90, y: 100)
+        .fill(AppPalette.sage.opacity(0.10))
+        .frame(width: 360, height: 360)
+        .blur(radius: 34)
+        .offset(x: -160, y: 190)
+
+      Circle()
+        .fill(AppPalette.brass.opacity(0.10))
+        .frame(width: 260, height: 260)
+        .blur(radius: 22)
+        .offset(x: -120, y: -240)
+
+      FilmGrain(intensity: 0.055, seed: 117)
+        .opacity(0.26)
     }
     .ignoresSafeArea()
   }
@@ -57,77 +92,448 @@ struct GlassCardModifier: ViewModifier {
   var cornerRadius: CGFloat
 
   func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content
-        .padding(18)
-        .glassEffect(.regular.tint(tint.opacity(0.18)), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay {
+    let innerRadius = max(18, cornerRadius - 7)
+
+    content
+      .padding(22)
+      .background {
+        ZStack {
+          if #available(iOS 26.0, *) {
+            Color.clear
+              .glassEffect(
+                .regular.tint(tint.opacity(0.12)),
+                in: .rect(cornerRadius: cornerRadius)
+              )
+          }
+
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(tint.opacity(0.20), lineWidth: 1)
-        }
-        .shadow(color: tint.opacity(0.14), radius: 18, y: 8)
-    } else {
-      content
-        .padding(18)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay {
+            .fill(tint.opacity(0.07))
+
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(tint.opacity(0.18), lineWidth: 1)
+            .fill(.white.opacity(0.18))
+            .padding(0.75)
+
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(tint.opacity(0.18), lineWidth: 0.9)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .fill(
+              LinearGradient(
+                colors: [
+                  AppPalette.parchment.opacity(0.98),
+                  AppPalette.linen.opacity(0.94),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(6)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .stroke(.white.opacity(0.78), lineWidth: 0.75)
+            .padding(6)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .stroke(tint.opacity(0.14), lineWidth: 0.9)
+            .padding(6)
         }
-        .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
-    }
+        .shadow(color: AppPalette.espresso.opacity(0.10), radius: 22, y: 14)
+        .shadow(color: tint.opacity(0.08), radius: 26, y: 16)
+      }
+  }
+}
+
+struct FieldChromeModifier: ViewModifier {
+  var tint: Color
+  var cornerRadius: CGFloat
+
+  func body(content: Content) -> some View {
+    let innerRadius = max(14, cornerRadius - 6)
+
+    content
+      .background {
+        ZStack {
+          if #available(iOS 26.0, *) {
+            Color.clear
+              .glassEffect(
+                .regular.tint(tint.opacity(0.08)),
+                in: .rect(cornerRadius: cornerRadius)
+              )
+          }
+
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(tint.opacity(0.08))
+
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .stroke(tint.opacity(0.18), lineWidth: 0.9)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .fill(
+              LinearGradient(
+                colors: [
+                  .white.opacity(0.88),
+                  AppPalette.parchment.opacity(0.92),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(5)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .stroke(.white.opacity(0.66), lineWidth: 0.7)
+            .padding(5)
+        }
+      }
+  }
+}
+
+struct AppPillChromeModifier: ViewModifier {
+  var accent: Color
+  var filled: Bool
+
+  func body(content: Content) -> some View {
+    content
+      .background {
+        let shell = Capsule()
+        let inner = Capsule()
+
+        ZStack {
+          shell
+            .fill(filled ? accent.opacity(0.16) : accent.opacity(0.08))
+          shell
+            .stroke(accent.opacity(filled ? 0.22 : 0.18), lineWidth: 0.9)
+          inner
+            .fill(
+              LinearGradient(
+                colors: filled
+                  ? [accent.opacity(0.72), accent.opacity(0.48)]
+                  : [.white.opacity(0.82), AppPalette.parchment.opacity(0.90)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+            .padding(5)
+          inner
+            .stroke(filled ? .white.opacity(0.24) : .white.opacity(0.64), lineWidth: 0.7)
+            .padding(5)
+        }
+        .shadow(color: accent.opacity(filled ? 0.18 : 0.08), radius: 18, y: 10)
+      }
   }
 }
 
 extension View {
-  func appGlassCard(tint: Color = AppPalette.brand, cornerRadius: CGFloat = 28) -> some View {
+  func appGlassCard(tint: Color = AppPalette.brand, cornerRadius: CGFloat = 30) -> some View {
     modifier(GlassCardModifier(tint: tint, cornerRadius: cornerRadius))
+  }
+
+  func appFieldChrome(tint: Color = AppPalette.brass, cornerRadius: CGFloat = 22) -> some View {
+    modifier(FieldChromeModifier(tint: tint, cornerRadius: cornerRadius))
+  }
+
+  func appPillChrome(accent: Color = AppPalette.brand, filled: Bool = false) -> some View {
+    modifier(AppPillChromeModifier(accent: accent, filled: filled))
   }
 }
 
 struct PrimaryGlassButtonStyle: ButtonStyle {
+  var accent: Color = AppPalette.brand
+
   func makeBody(configuration: Configuration) -> some View {
-    if #available(iOS 26.0, *) {
-      configuration.label
-        .buttonStyle(.glassProminent)
-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
-        .animation(.snappy(duration: 0.14), value: configuration.isPressed)
-    } else {
-      configuration.label
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .background(AppPalette.brand, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .foregroundStyle(.white)
-        .opacity(configuration.isPressed ? 0.84 : 1)
-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
-        .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-    }
+    configuration.label
+      .foregroundStyle(.white)
+      .scaleEffect(configuration.isPressed ? 0.985 : 1)
+      .opacity(configuration.isPressed ? 0.94 : 1)
+      .animation(AppMotion.press, value: configuration.isPressed)
+      .appPillChrome(accent: accent, filled: true)
   }
 }
 
 struct SecondaryGlassButtonStyle: ButtonStyle {
+  var accent: Color = AppPalette.brass
+
   func makeBody(configuration: Configuration) -> some View {
-    if #available(iOS 26.0, *) {
-      configuration.label
-        .buttonStyle(.glass)
-        .scaleEffect(configuration.isPressed ? 0.97 : 1)
-        .animation(.snappy(duration: 0.14), value: configuration.isPressed)
-    } else {
-      configuration.label
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-          RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .stroke(AppPalette.ink.opacity(0.12), lineWidth: 1)
+    configuration.label
+      .foregroundStyle(AppPalette.ink)
+      .scaleEffect(configuration.isPressed ? 0.988 : 1)
+      .opacity(configuration.isPressed ? 0.9 : 1)
+      .animation(AppMotion.press, value: configuration.isPressed)
+      .appPillChrome(accent: accent, filled: false)
+  }
+}
+
+struct AppEyebrow: View {
+  let title: String
+  var tint: Color = AppPalette.brass
+
+  var body: some View {
+    Text(title.uppercased())
+      .font(AppTypography.micro(10, weight: .bold))
+      .tracking(2.2)
+      .padding(.vertical, 8)
+      .padding(.horizontal, 12)
+      .background(tint.opacity(0.12), in: Capsule())
+      .overlay {
+        Capsule()
+          .stroke(tint.opacity(0.24), lineWidth: 0.8)
+      }
+      .foregroundStyle(tint)
+  }
+}
+
+struct AppIslandButtonLabel: View {
+  let title: String
+  var subtitle: String? = nil
+  let systemImage: String
+
+  var body: some View {
+    HStack(spacing: 14) {
+      VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 5) {
+        Text(title)
+          .font(AppTypography.body(16, weight: .bold))
+          .foregroundStyle(.white)
+        if let subtitle, !subtitle.isEmpty {
+          Text(subtitle)
+            .font(AppTypography.body(12, weight: .medium))
+            .foregroundStyle(.white.opacity(0.82))
+            .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(AppPalette.ink)
-        .opacity(configuration.isPressed ? 0.84 : 1)
-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
-        .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+      }
+
+      Spacer(minLength: 12)
+
+      ZStack {
+        Circle()
+          .fill(.white.opacity(0.16))
+        Circle()
+          .stroke(.white.opacity(0.30), lineWidth: 0.8)
+        Image(systemName: systemImage)
+          .font(.system(size: 14, weight: .semibold))
+          .foregroundStyle(.white)
+      }
+      .frame(width: 36, height: 36)
     }
+    .padding(.horizontal, 18)
+    .padding(.vertical, 15)
+    .frame(maxWidth: .infinity)
+  }
+}
+
+struct AppIslandActionButton: View {
+  let title: String
+  var subtitle: String? = nil
+  let systemImage: String
+  var accent: Color = AppPalette.brand
+  var isEnabled: Bool = true
+  let action: () -> Void
+
+  var body: some View {
+    Group {
+      if #available(iOS 26.0, *) {
+        Button(action: action) {
+          AppIslandButtonLabel(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage
+          )
+        }
+        .buttonStyle(.glassProminent)
+        .tint(accent)
+      } else {
+        Button(action: action) {
+          AppIslandButtonLabel(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage
+          )
+        }
+        .buttonStyle(.plain)
+        .appPillChrome(accent: accent, filled: true)
+      }
+    }
+    .disabled(!isEnabled)
+    .opacity(isEnabled ? 1 : 0.55)
+    .scaleEffect(isEnabled ? 1 : 0.992)
+    .animation(AppMotion.snap, value: isEnabled)
+  }
+}
+
+struct AppSectionHeader: View {
+  let eyebrow: String
+  let title: String
+  var subtitle: String? = nil
+  var tint: Color = AppPalette.brand
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      AppEyebrow(title: eyebrow, tint: tint)
+      Text(title)
+        .font(AppTypography.display(28, weight: .bold))
+        .foregroundStyle(AppPalette.espresso)
+      if let subtitle, !subtitle.isEmpty {
+        Text(subtitle)
+          .font(AppTypography.body(15, weight: .medium))
+          .foregroundStyle(AppPalette.espresso.opacity(0.72))
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
+}
+
+struct AppMetricPill: View {
+  let title: String
+  let value: String
+  var accent: Color = AppPalette.brand
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 5) {
+      Text(title.uppercased())
+        .font(AppTypography.micro(9, weight: .bold))
+        .tracking(1.6)
+        .foregroundStyle(accent)
+      Text(value)
+        .font(AppTypography.display(18, weight: .bold))
+        .foregroundStyle(AppPalette.espresso)
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .appFieldChrome(tint: accent, cornerRadius: 20)
+  }
+}
+
+struct AppLoadingCard: View {
+  let title: String
+  var subtitle: String? = nil
+  var tint: Color = AppPalette.brand
+  var titleColor: Color = AppPalette.espresso
+  var subtitleColor: Color = AppPalette.espresso.opacity(0.68)
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      HStack(spacing: 12) {
+        AppSkeletonBlock(width: 42, height: 42, cornerRadius: 14, tint: tint)
+        VStack(alignment: .leading, spacing: 8) {
+          Text(title)
+            .font(AppTypography.body(16, weight: .bold))
+            .foregroundStyle(titleColor)
+          if let subtitle, !subtitle.isEmpty {
+            Text(subtitle)
+              .font(AppTypography.body(13, weight: .medium))
+              .foregroundStyle(subtitleColor)
+          }
+        }
+      }
+
+      VStack(alignment: .leading, spacing: 10) {
+        AppSkeletonBlock(width: nil, height: 14, cornerRadius: 8, tint: tint.opacity(0.7))
+        AppSkeletonBlock(width: nil, height: 14, cornerRadius: 8, tint: tint.opacity(0.52))
+        AppSkeletonBlock(width: 180, height: 14, cornerRadius: 8, tint: tint.opacity(0.40))
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .appGlassCard(tint: tint, cornerRadius: 32)
+  }
+}
+
+struct AppSkeletonBlock: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  var width: CGFloat?
+  var height: CGFloat
+  var cornerRadius: CGFloat
+  var tint: Color
+
+  var body: some View {
+    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+      .fill(
+        LinearGradient(
+          colors: [
+            tint.opacity(0.20),
+            .white.opacity(0.82),
+            tint.opacity(0.16),
+          ],
+          startPoint: .leading,
+          endPoint: .trailing
+        )
+      )
+      .frame(maxWidth: width == nil ? .infinity : width, minHeight: height, maxHeight: height)
+      .opacity(reduceMotion ? 0.82 : 1)
+      .overlay {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+          .stroke(.white.opacity(0.45), lineWidth: 0.7)
+      }
+  }
+}
+
+struct AppSegmentedControl<Selection: Hashable>: View {
+  let options: [Selection]
+  @Binding var selection: Selection
+  var accent: Color = AppPalette.brand
+  var title: (Selection) -> String
+  @Namespace private var namespace
+
+  var body: some View {
+    HStack(spacing: 8) {
+      ForEach(options, id: \.self) { option in
+        let isSelected = option == selection
+        Button {
+          withAnimation(AppMotion.settle) {
+            selection = option
+          }
+        } label: {
+          Text(title(option).uppercased())
+            .font(AppTypography.micro(10, weight: .bold))
+            .tracking(1.7)
+            .foregroundStyle(isSelected ? AppPalette.ink : AppPalette.espresso.opacity(0.72))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background {
+              if isSelected {
+                Capsule()
+                  .fill(.white.opacity(0.74))
+                  .matchedGeometryEffect(id: "app-segmented-selection", in: namespace)
+                  .padding(3)
+              }
+            }
+        }
+        .buttonStyle(.plain)
+      }
+    }
+    .padding(4)
+    .background {
+      Capsule()
+        .fill(accent.opacity(0.10))
+      Capsule()
+        .stroke(accent.opacity(0.18), lineWidth: 0.9)
+      Capsule()
+        .stroke(.white.opacity(0.52), lineWidth: 0.6)
+        .padding(3)
+    }
+  }
+}
+
+struct AppEntryRevealModifier: ViewModifier {
+  let delay: Double
+  @State private var isVisible = false
+
+  func body(content: Content) -> some View {
+    content
+      .opacity(isVisible ? 1 : 0)
+      .offset(y: isVisible ? 0 : 18)
+      .scaleEffect(isVisible ? 1 : 0.985)
+      .onAppear {
+        guard !isVisible else { return }
+        withAnimation(AppMotion.reveal.delay(delay)) {
+          isVisible = true
+        }
+      }
+  }
+}
+
+extension View {
+  func appEntryReveal(delay: Double = 0) -> some View {
+    modifier(AppEntryRevealModifier(delay: delay))
   }
 }
 
@@ -135,13 +541,19 @@ struct EnvironmentBadge: View {
   let environment: AppEnvironment
 
   var body: some View {
-    Text(environment.isProduction ? "PRODUCTION" : environment.displayName.uppercased())
-      .font(.caption2.weight(.semibold))
-      .tracking(0.8)
-      .padding(.vertical, 6)
-      .padding(.horizontal, 10)
-      .background(environment.isProduction ? AppPalette.success.opacity(0.16) : AppPalette.warning.opacity(0.18), in: Capsule())
-      .foregroundStyle(environment.isProduction ? AppPalette.success : AppPalette.warning)
+    let tint = environment.isProduction ? AppPalette.success : AppPalette.warning
+
+    return Text(environment.isProduction ? "PRODUCTION" : environment.displayName.uppercased())
+      .font(AppTypography.micro(10, weight: .bold))
+      .tracking(1.8)
+      .padding(.vertical, 8)
+      .padding(.horizontal, 12)
+      .background(tint.opacity(0.12), in: Capsule())
+      .overlay {
+        Capsule()
+          .stroke(tint.opacity(0.24), lineWidth: 0.8)
+      }
+      .foregroundStyle(tint)
   }
 }
 
@@ -360,6 +772,19 @@ struct StatusBanner: View {
         return AppPalette.danger
       }
     }
+
+    var symbol: String {
+      switch self {
+      case .neutral:
+        return "bell.badge"
+      case .success:
+        return "checkmark.circle.fill"
+      case .warning:
+        return "exclamationmark.triangle.fill"
+      case .danger:
+        return "xmark.octagon.fill"
+      }
+    }
   }
 
   let tone: Tone
@@ -367,12 +792,22 @@ struct StatusBanner: View {
   let message: String
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text(title)
-        .font(.headline)
-      Text(message)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
+    HStack(alignment: .top, spacing: 12) {
+      Image(systemName: tone.symbol)
+        .font(.system(size: 15, weight: .bold))
+        .foregroundStyle(tone.color)
+        .frame(width: 34, height: 34)
+        .background(tone.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+      VStack(alignment: .leading, spacing: 5) {
+        Text(title)
+          .font(AppTypography.body(15, weight: .bold))
+          .foregroundStyle(AppPalette.espresso)
+        Text(message)
+          .font(AppTypography.body(13, weight: .medium))
+          .foregroundStyle(AppPalette.espresso.opacity(0.72))
+          .fixedSize(horizontal: false, vertical: true)
+      }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .appGlassCard(tint: tone.color, cornerRadius: 24)

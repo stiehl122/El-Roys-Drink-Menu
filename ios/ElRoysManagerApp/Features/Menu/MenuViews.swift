@@ -11,12 +11,8 @@ struct MenuEditorScreen: View {
   @Environment(\.scenePhase) private var scenePhase
   @Bindable var model: AppModel
   let menu: MenuRecord
-  @State private var addCategoryName = ""
-  @State private var showingAddCategory = false
   @State private var editingDraft = EditableItemDraft()
   @State private var activeSheet: MenuEditorSheet?
-  @State private var renameTarget: MenuCategoryPayload?
-  @State private var renameText = ""
   @State private var showingDiscardDraftConfirm = false
   @State private var reorderingCategoryKey: String?
 
@@ -26,10 +22,6 @@ struct MenuEditorScreen: View {
 
   private var menuAccent: Color {
     menu.isFoodMenu ? theme.foodAccent : theme.drinkAccent
-  }
-
-  private var canEditCategories: Bool {
-    model.canEditCategories
   }
 
   var body: some View {
@@ -65,10 +57,7 @@ struct MenuEditorScreen: View {
 
           if let document = model.currentEditorDocument {
             MenuEditorCategoriesHeader(
-              theme: theme,
-              menuAccent: menuAccent,
-              canEditCategories: canEditCategories,
-              onAddCategory: { showingAddCategory = true }
+              theme: theme
             )
             ForEach(document.visibleCategories) { category in
               MenuEditorCategoryCard(
@@ -76,14 +65,6 @@ struct MenuEditorScreen: View {
                 category: category,
                 theme: theme,
                 menuAccent: menuAccent,
-                canEditCategories: canEditCategories,
-                onRename: {
-                  renameTarget = category
-                  renameText = category.label
-                },
-                onDelete: {
-                  model.deleteCategory(key: category.key)
-                },
                 onSelectItem: { item in
                   reorderingCategoryKey = nil
                   editingDraft = EditableItemDraft(item: item, categoryKey: category.key, isFoodMenu: menu.isFoodMenu)
@@ -169,8 +150,6 @@ struct MenuEditorScreen: View {
     .onChange(of: model.editorRefreshRequirement != nil) { _, required in
       guard required else { return }
       activeSheet = nil
-      showingAddCategory = false
-      renameTarget = nil
       reorderingCategoryKey = nil
     }
     .sheet(item: Binding(
@@ -195,28 +174,6 @@ struct MenuEditorScreen: View {
         }
       }
     }
-    .alert("Add Category", isPresented: $showingAddCategory) {
-      TextField("Category name", text: $addCategoryName)
-      Button("Add") {
-        model.addCategory(label: addCategoryName)
-        addCategoryName = ""
-      }
-      Button("Cancel", role: .cancel) {
-        addCategoryName = ""
-      }
-    }
-    .alert("Rename Category", isPresented: Binding(
-      get: { renameTarget != nil },
-      set: { if !$0 { renameTarget = nil } }
-    )) {
-      TextField("Category name", text: $renameText)
-      Button("Save") {
-        if let target = renameTarget {
-          model.renameCategory(key: target.key, label: renameText)
-        }
-      }
-      Button("Cancel", role: .cancel) {}
-    }
     .alert("Discard Local Draft?", isPresented: $showingDiscardDraftConfirm) {
       Button("Discard Draft", role: .destructive) {
         model.discardLocalDraft()
@@ -235,7 +192,7 @@ struct MenuEditorScreen: View {
       model.notice = AppNotice(
         tone: .warning,
         title: "Add A Category First",
-        message: "Create at least one category before adding menu items."
+        message: "Create at least one category in Restaurant Tools before adding menu items."
       )
     }
   }
@@ -365,6 +322,8 @@ private struct PublishPreviewSheet: View {
   }
 
   var body: some View {
+    let currentSummary = summary
+
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 18) {
@@ -402,26 +361,26 @@ private struct PublishPreviewSheet: View {
             .menuEditorSurface(colors: [theme.previewTop, theme.previewBottom], border: theme.previewBorder)
           }
 
-          if !summary.selectedNotificationChanges.isEmpty {
+          if !currentSummary.selectedNotificationChanges.isEmpty {
             PublishPreviewSummaryCard(
               title: "Changes To Send In Notification",
-              items: summary.selectedNotificationChanges.map(\.displayText),
+              items: currentSummary.selectedNotificationChanges.map(\.displayText),
               theme: theme
             )
           }
 
-          if !summary.clearedNotificationChanges.isEmpty {
+          if !currentSummary.clearedNotificationChanges.isEmpty {
             PublishPreviewSummaryCard(
               title: "Changes To Clear",
-              items: summary.clearedNotificationChanges.map(\.displayText),
+              items: currentSummary.clearedNotificationChanges.map(\.displayText),
               theme: theme
             )
           }
 
-          if !summary.saveOnlyChanges.isEmpty {
+          if !currentSummary.saveOnlyChanges.isEmpty {
             PublishPreviewSummaryCard(
               title: "Save Only Changes",
-              items: summary.saveOnlyChanges.map { $0.label.nilIfBlank ?? $0.message },
+              items: currentSummary.saveOnlyChanges.map { $0.label.nilIfBlank ?? $0.message },
               theme: theme
             )
           }
@@ -517,60 +476,74 @@ private struct PublishPreviewActionButton: View {
   let action: () -> Void
 
   var body: some View {
-    Button(action: action) {
-      HStack(spacing: 14) {
-        VStack(alignment: .leading, spacing: 5) {
-          Text(title)
-            .font(EditorTypography.body(16, weight: .bold))
-            .foregroundStyle(theme.titleText)
-          Text(subtitle)
-            .font(EditorTypography.body(12, weight: .medium))
-            .foregroundStyle(theme.subtleText)
+    Group {
+      if #available(iOS 26.0, *) {
+        Button(action: action) {
+          label
         }
-
-        Spacer()
-
-        Image(systemName: icon)
-          .font(.system(size: 18, weight: .bold))
-          .foregroundStyle(theme.titleText)
-          .frame(width: 46, height: 46)
-          .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-          .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-              .stroke(.white.opacity(0.22), lineWidth: 1)
-          }
+        .buttonStyle(.glassProminent)
+        .tint(accent)
+      } else {
+        Button(action: action) {
+          label
+        }
+        .buttonStyle(.plain)
+        .background {
+          let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+          shape
+            .fill(.thinMaterial)
+            .overlay {
+              LinearGradient(
+                colors: [
+                  accent.opacity(0.42),
+                  accent.opacity(0.22),
+                  accent.opacity(0.12)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+              .clipShape(shape)
+            }
+        }
+        .overlay {
+          RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .stroke(accent.opacity(0.36), lineWidth: 1)
+        }
+        .shadow(color: accent.opacity(0.2), radius: 18, y: 10)
       }
-      .padding(.horizontal, 18)
-      .padding(.vertical, 16)
-      .frame(maxWidth: .infinity)
-      .background {
-        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
-        shape
-          .fill(.thinMaterial)
-          .overlay {
-            LinearGradient(
-              colors: [
-                accent.opacity(0.42),
-                accent.opacity(0.22),
-                accent.opacity(0.12)
-              ],
-              startPoint: .topLeading,
-              endPoint: .bottomTrailing
-            )
-            .clipShape(shape)
-          }
-      }
-      .overlay {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-          .stroke(accent.opacity(0.36), lineWidth: 1)
-      }
-      .shadow(color: accent.opacity(0.2), radius: 18, y: 10)
     }
-    .buttonStyle(.plain)
     .disabled(!enabled)
     .opacity(enabled ? 1 : 0.5)
     .scaleEffect(enabled ? 1 : 0.98)
-    .animation(.easeOut(duration: 0.16), value: enabled)
+    .animation(AppMotion.snap, value: enabled)
+  }
+
+  private var label: some View {
+    HStack(spacing: 14) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(title)
+          .font(EditorTypography.body(16, weight: .bold))
+          .foregroundStyle(theme.titleText)
+        Text(subtitle)
+          .font(EditorTypography.body(12, weight: .medium))
+          .foregroundStyle(theme.subtleText)
+      }
+
+      Spacer()
+
+      Image(systemName: icon)
+        .font(.system(size: 18, weight: .bold))
+        .foregroundStyle(theme.titleText)
+        .frame(width: 46, height: 46)
+        .background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+          RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .stroke(.white.opacity(0.22), lineWidth: 1)
+        }
+    }
+    .padding(.horizontal, 18)
+    .padding(.vertical, 16)
+    .frame(maxWidth: .infinity)
   }
 }
 
@@ -723,27 +696,15 @@ private struct MenuEditorActionPanel: View {
 
 private struct MenuEditorCategoriesHeader: View {
   let theme: MenuEditorTheme
-  let menuAccent: Color
-  let canEditCategories: Bool
-  let onAddCategory: () -> Void
 
   var body: some View {
-    HStack(alignment: .center) {
-      Text("Categories")
+    VStack(alignment: .leading, spacing: 4) {
+      Text("Menu Items")
         .font(EditorTypography.display(20, weight: .bold))
         .foregroundStyle(theme.titleText)
-      Spacer()
-      if canEditCategories {
-        Button(action: onAddCategory) {
-          Label("Add Category", systemImage: "square.split.1x2.fill")
-        }
-        .buttonStyle(SecondaryGlassButtonStyle())
-        .tint(menuAccent)
-      } else {
-        Text("Admin managed")
-          .font(EditorTypography.body(12, weight: .semibold))
-          .foregroundStyle(theme.subtleText)
-      }
+      Text("Categories are managed from Restaurant Tools.")
+        .font(EditorTypography.body(12, weight: .medium))
+        .foregroundStyle(theme.subtleText)
     }
   }
 }
@@ -782,9 +743,6 @@ private struct MenuEditorCategoryCard: View {
   let category: MenuCategoryPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
-  let canEditCategories: Bool
-  let onRename: () -> Void
-  let onDelete: () -> Void
   let onSelectItem: (MenuItemPayload) -> Void
   let onToggleEightySix: (MenuItemPayload) -> Void
   let isReordering: Bool
@@ -797,7 +755,7 @@ private struct MenuEditorCategoryCard: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .top) {
+      HStack(alignment: .top, spacing: 12) {
         VStack(alignment: .leading, spacing: 4) {
           Text(category.label)
             .font(EditorTypography.display(22, weight: .bold))
@@ -815,19 +773,14 @@ private struct MenuEditorCategoryCard: View {
           .padding(.horizontal, 8)
           .background(menuAccent.opacity(0.15), in: Capsule())
           .foregroundStyle(menuAccent)
-        if canEditCategories || visibleItems.count > 1 || isReordering {
-          Menu {
-            Button(isReordering ? "Done Reordering" : "Reorder Items", action: onToggleReorder)
-              .disabled(visibleItems.count < 2 && !isReordering)
-            if canEditCategories {
-              Button("Rename", action: onRename)
-              Button("Delete Category", role: .destructive, action: onDelete)
-            }
-          } label: {
-            Image(systemName: "ellipsis.circle.fill")
-              .font(.system(size: 20))
-              .foregroundStyle(theme.subtleText)
+        if visibleItems.count > 1 || isReordering {
+          Button(action: onToggleReorder) {
+            Label(
+              isReordering ? "Done Reordering" : "Reorder",
+              systemImage: isReordering ? "checkmark.circle.fill" : "arrow.up.arrow.down.circle.fill"
+            )
           }
+          .buttonStyle(SecondaryGlassButtonStyle(accent: menuAccent))
         }
       }
 
@@ -865,16 +818,16 @@ private struct MenuEditorSwipeList: View {
     List {
       ForEach(items, id: \.id) { item in
         row(for: item)
-        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
-        .listRowBackground(Color.clear)
-        .listRowSeparator(.hidden)
-        .background {
-          GeometryReader { proxy in
-            Color.clear
-              .preference(key: MenuEditorRowHeightPreferenceKey.self, value: [item.id: proxy.size.height])
+          .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+          .listRowBackground(Color.clear)
+          .listRowSeparator(.hidden)
+          .background {
+            GeometryReader { proxy in
+              Color.clear
+                .preference(key: MenuEditorRowHeightPreferenceKey.self, value: [item.id: proxy.size.height])
+            }
           }
-        }
-        .moveDisabled(!isReordering || items.count < 2)
+          .moveDisabled(!isReordering || items.count < 2)
       }
       .onMove(perform: onMoveVisibleItems)
     }
@@ -994,14 +947,13 @@ private struct MenuEditorLoadingCard: View {
   let theme: MenuEditorTheme
 
   var body: some View {
-    VStack(spacing: 12) {
-      ProgressView()
-      Text("Loading editor…")
-        .font(EditorTypography.body(15, weight: .medium))
-        .foregroundStyle(theme.subtleText)
-    }
-    .frame(maxWidth: .infinity)
-    .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
+    AppLoadingCard(
+      title: "Loading editor",
+      subtitle: "Preparing the live workspace, local draft state, and publish queue.",
+      tint: theme.neutralAccent,
+      titleColor: theme.titleText,
+      subtitleColor: theme.subtleText
+    )
   }
 }
 
@@ -1210,32 +1162,23 @@ private enum EditorTypography {
     case medium
     case semibold
     case bold
+
+    var fontWeight: Font.Weight {
+      switch self {
+      case .regular: return .regular
+      case .medium: return .medium
+      case .semibold: return .semibold
+      case .bold: return .bold
+      }
+    }
   }
 
   static func display(_ size: CGFloat, weight: Weight = .semibold) -> Font {
-    switch weight {
-    case .regular:
-      return .custom("AvenirNextCondensed-Regular", size: size)
-    case .medium:
-      return .custom("AvenirNextCondensed-Medium", size: size)
-    case .semibold:
-      return .custom("AvenirNextCondensed-DemiBold", size: size)
-    case .bold:
-      return .custom("AvenirNextCondensed-Bold", size: size)
-    }
+    AppTypography.display(size, weight: weight.fontWeight)
   }
 
   static func body(_ size: CGFloat, weight: Weight = .regular) -> Font {
-    switch weight {
-    case .regular:
-      return .custom("AvenirNext-Regular", size: size)
-    case .medium:
-      return .custom("AvenirNext-Medium", size: size)
-    case .semibold:
-      return .custom("AvenirNext-DemiBold", size: size)
-    case .bold:
-      return .custom("AvenirNext-Bold", size: size)
-    }
+    AppTypography.body(size, weight: weight.fontWeight)
   }
 }
 
@@ -1245,17 +1188,30 @@ private struct MenuEditorSurfaceModifier: ViewModifier {
   let radius: CGFloat
 
   func body(content: Content) -> some View {
+    let innerRadius = max(18, radius - 7)
+
     content
       .padding(18)
-      .background(
-        LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing),
-        in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-      )
-      .overlay {
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
-          .stroke(border, lineWidth: 1)
+      .background {
+        ZStack {
+          RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(border.opacity(0.08))
+
+          RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .stroke(border.opacity(0.20), lineWidth: 0.9)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .fill(
+              LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
+            .padding(6)
+
+          RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
+            .stroke(.white.opacity(0.64), lineWidth: 0.7)
+            .padding(6)
+        }
+        .shadow(color: border.opacity(0.12), radius: 22, y: 14)
       }
-      .shadow(color: border.opacity(0.16), radius: 18, y: 8)
   }
 }
 

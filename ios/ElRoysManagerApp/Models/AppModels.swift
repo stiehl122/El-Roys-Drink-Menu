@@ -565,6 +565,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
   var upcharges: [ItemUpcharge]
   var showDescription: Bool
   var showRecipe: Bool
+  fileprivate var canonicalServerDisplayOrder: Int?
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -608,6 +609,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     self.upcharges = upcharges
     self.showDescription = showDescription
     self.showRecipe = showRecipe
+    self.canonicalServerDisplayOrder = displayOrder
   }
 
   init(from decoder: Decoder) throws {
@@ -624,12 +626,14 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     self.recipe = try container.decodeLossyStringArray(forKey: .recipe)
     self.price = try container.decodeIfPresent(String.self, forKey: .price) ?? ""
     self.isEightySixed = serverIsEightySixed ?? compactIsEightySixed ?? false
-    self.displayOrder = try container.decodeIfPresent(Int.self, forKey: .displayOrder) ?? 0
+    let decodedDisplayOrder = try? container.decodeIfPresent(Int.self, forKey: .displayOrder)
+    self.displayOrder = decodedDisplayOrder ?? 0
     self.onMenu = explicitOnMenu ?? (visibility != "off_menu")
     self.visibility = visibility
     self.upcharges = (try? container.decode([ItemUpcharge].self, forKey: .upcharges)) ?? []
     self.showDescription = try container.decodeIfPresent(Bool.self, forKey: .showDescription) ?? true
     self.showRecipe = try container.decodeIfPresent(Bool.self, forKey: .showRecipe) ?? false
+    self.canonicalServerDisplayOrder = decodedDisplayOrder
   }
 
   func encode(to encoder: Encoder) throws {
@@ -658,6 +662,36 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     guard let uuid = UUID(uuidString: suffix) else { return }
     id = uuid.uuidString.lowercased()
   }
+
+  static func == (lhs: MenuItemPayload, rhs: MenuItemPayload) -> Bool {
+    lhs.id == rhs.id
+      && lhs.name == rhs.name
+      && lhs.desc == rhs.desc
+      && lhs.recipe == rhs.recipe
+      && lhs.price == rhs.price
+      && lhs.isEightySixed == rhs.isEightySixed
+      && lhs.displayOrder == rhs.displayOrder
+      && lhs.onMenu == rhs.onMenu
+      && lhs.visibility == rhs.visibility
+      && lhs.upcharges == rhs.upcharges
+      && lhs.showDescription == rhs.showDescription
+      && lhs.showRecipe == rhs.showRecipe
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+    hasher.combine(name)
+    hasher.combine(desc)
+    hasher.combine(recipe)
+    hasher.combine(price)
+    hasher.combine(isEightySixed)
+    hasher.combine(displayOrder)
+    hasher.combine(onMenu)
+    hasher.combine(visibility)
+    hasher.combine(upcharges)
+    hasher.combine(showDescription)
+    hasher.combine(showRecipe)
+  }
 }
 
 struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
@@ -672,6 +706,7 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
   var displayOrder: Int
   var untappdEnabled: Bool
   var items: [MenuItemPayload]
+  fileprivate var canonicalServerDisplayOrder: Int?
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -712,6 +747,7 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     self.displayOrder = displayOrder
     self.untappdEnabled = untappdEnabled
     self.items = items
+    self.canonicalServerDisplayOrder = displayOrder
   }
 
   init(from decoder: Decoder) throws {
@@ -724,11 +760,13 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     self.color = try container.decodeString(forKey: .color)
     self.sub = try container.decodeString(forKey: .sub)
     self.placeholder = try container.decodeString(forKey: .placeholder)
-    self.displayOrder = try container.decodeInt(forKey: .displayOrder)
+    let decodedDisplayOrder = try? container.decodeIfPresent(Int.self, forKey: .displayOrder)
+    self.displayOrder = decodedDisplayOrder ?? 0
     self.untappdEnabled = try container.decodeIfPresent(Bool.self, forKey: .untappdEnabled)
       ?? container.decodeIfPresent(Bool.self, forKey: .untappd_enabled)
       ?? false
     self.items = (try? container.decode([MenuItemPayload].self, forKey: .items)) ?? []
+    self.canonicalServerDisplayOrder = decodedDisplayOrder
   }
 
   func encode(to encoder: Encoder) throws {
@@ -744,6 +782,67 @@ struct MenuCategoryPayload: Codable, Equatable, Hashable, Identifiable {
     try container.encode(displayOrder, forKey: .displayOrder)
     try container.encode(untappdEnabled, forKey: .untappdEnabled)
     try container.encode(items, forKey: .items)
+  }
+
+  static func == (lhs: MenuCategoryPayload, rhs: MenuCategoryPayload) -> Bool {
+    lhs.id == rhs.id
+      && lhs.menuId == rhs.menuId
+      && lhs.key == rhs.key
+      && lhs.label == rhs.label
+      && lhs.icon == rhs.icon
+      && lhs.color == rhs.color
+      && lhs.sub == rhs.sub
+      && lhs.placeholder == rhs.placeholder
+      && lhs.displayOrder == rhs.displayOrder
+      && lhs.untappdEnabled == rhs.untappdEnabled
+      && lhs.items == rhs.items
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(id)
+    hasher.combine(menuId)
+    hasher.combine(key)
+    hasher.combine(label)
+    hasher.combine(icon)
+    hasher.combine(color)
+    hasher.combine(sub)
+    hasher.combine(placeholder)
+    hasher.combine(displayOrder)
+    hasher.combine(untappdEnabled)
+    hasher.combine(items)
+  }
+}
+
+private enum MenuOrdering {
+  static func canonicalize(items: [MenuItemPayload]) -> [MenuItemPayload] {
+    items.sorted { lhs, rhs in
+      canonicalItemKey(for: lhs) < canonicalItemKey(for: rhs)
+    }
+  }
+
+  static func canonicalize(categories: [MenuCategoryPayload]) -> [MenuCategoryPayload] {
+    categories
+      .map { category in
+        var next = category
+        next.items = canonicalize(items: category.items)
+        return next
+      }
+      .sorted { lhs, rhs in
+        canonicalCategoryKey(for: lhs) < canonicalCategoryKey(for: rhs)
+      }
+  }
+
+  private static func canonicalCategoryKey(for category: MenuCategoryPayload) -> (Int, Int, String, String) {
+    (
+      category.key == EditableMenuDocument.uncategorizedKey ? 1 : 0,
+      category.canonicalServerDisplayOrder ?? Int.max,
+      category.key,
+      category.id
+    )
+  }
+
+  private static func canonicalItemKey(for item: MenuItemPayload) -> (Int, String, String) {
+    (item.canonicalServerDisplayOrder ?? Int.max, item.id, item.name)
   }
 }
 
@@ -1016,6 +1115,29 @@ struct PublicMenuPayload: Codable, Equatable {
   var featuredGroups: [FeaturedGroup]
   var context: MenuContext
   var capabilities: PublicMenuCapabilities
+}
+
+extension PublicMenuPayload {
+  enum CodingKeys: String, CodingKey {
+    case cats
+    case meta
+    case restaurant
+    case featuredGroups
+    case context
+    case capabilities
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.cats = MenuOrdering.canonicalize(
+      categories: try container.decode([MenuCategoryPayload].self, forKey: .cats)
+    )
+    self.meta = try container.decode(MenuMetaPayload.self, forKey: .meta)
+    self.restaurant = try container.decodeIfPresent(RestaurantRecord.self, forKey: .restaurant)
+    self.featuredGroups = try container.decode([FeaturedGroup].self, forKey: .featuredGroups)
+    self.context = try container.decode(MenuContext.self, forKey: .context)
+    self.capabilities = try container.decode(PublicMenuCapabilities.self, forKey: .capabilities)
+  }
 }
 
 struct HistoryContext: Codable, Equatable {
@@ -1548,7 +1670,7 @@ struct EditableMenuDocument: Codable, Equatable {
       menuType: workspace.context.menu?.type ?? "drinks"
     )
     cats = Self.normalizeIdentifiers(
-      in: workspace.cats.sorted { $0.displayOrder < $1.displayOrder },
+      in: MenuOrdering.canonicalize(categories: workspace.cats),
       menuId: workspace.context.menu?.id ?? ""
     )
     meta = workspace.meta
