@@ -192,3 +192,13 @@ test("el roy's cantina route owns both the route chip and the fallback chip", ()
   assert.match(css, /\.erc-userchip-trigger/);
   assert.match(css, /\.erc-userdropdown/);
 });
+
+test('shared css keeps only behavior primitives and no longer hard-codes global user-chip placement', () => {
+  const css = read('style.css');
+
+  assert.match(css, /\[data-user-chip\] \[data-user-chip-panel\]/);
+  assert.match(css, /\.public-fallback-userchip-trigger/);
+  assert.doesNotMatch(css, /\.user-chip\s*\{[\s\S]*?position:\s*absolute;/);
+  assert.doesNotMatch(css, /\.user-chip\s*\{[\s\S]*?top:\s*14px;/);
+  assert.doesNotMatch(css, /\.user-chip\s*\{[\s\S]*?right:\s*14px;/);
+});

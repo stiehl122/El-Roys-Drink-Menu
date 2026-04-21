@@ -526,13 +526,64 @@
   .admin-btn.active { background: #2b4d74; border-color: #4a90d9; }
   .header-signin-btn { position: absolute; top: 18px; right: 14px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 8px; color: var(--cream); font-family: var(--font-body); font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 7px 11px; cursor: pointer; transition: all 0.15s; backdrop-filter: blur(4px); }
   .header-signin-btn:hover { background: rgba(253,244,236,0.27); }
-  /* Avatar chip */
-  .user-chip { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 5px; background: rgba(253,244,236,0.15); border: 1px solid rgba(253,244,236,0.38); border-radius: 20px; padding: 5px 10px; cursor: pointer; color: var(--cream); font-size: 12px; user-select: none; }
-  .user-chip:hover { background: rgba(253,244,236,0.27); }
-  #user-initials { font-weight: 700; font-size: 13px; }
+  /* Shared user-chip behavior primitives */
+  [data-user-chip] {
+    position: relative;
+  }
+  [data-user-chip-trigger] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  [data-user-chip-panel],
+  .user-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-width: 140px;
+    z-index: 50;
+    text-align: left;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  [data-user-chip] [data-user-chip-panel] {
+    right: 0;
+  }
+  [data-user-chip].open [data-user-chip-panel],
+  .user-chip.open .user-dropdown {
+    display: block;
+  }
+  .public-fallback-userchip {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+  }
+  .public-fallback-userchip-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(253,244,236,0.15);
+    border: 1px solid rgba(253,244,236,0.38);
+    border-radius: 20px;
+    padding: 5px 10px;
+    color: var(--cream);
+    font-size: 12px;
+    user-select: none;
+  }
+  .public-fallback-userchip-trigger:hover {
+    background: rgba(253,244,236,0.27);
+  }
+  #user-initials,
+  [data-user-chip-initials] {
+    font-weight: 700;
+    font-size: 13px;
+  }
   /* Dropdown */
-  .user-dropdown { display: none; position: absolute; top: calc(100% + 8px); right: 0; background: var(--cream); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; min-width: 140px; z-index: 50; text-align: left; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
-  .user-chip.open .user-dropdown { display: block; }
   .user-dropdown-name { font-weight: 600; font-size: 14px; color: var(--charcoal); }
   .user-dropdown-role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
   .user-dropdown-divider { height: 1px; background: var(--border); margin: 10px 0; }
@@ -2081,14 +2132,14 @@ body.admin-console-page .picker-box {
     letter-spacing: 0.08em;
   }
   .header-signin-btn,
-  .user-chip {
+  .public-fallback-userchip {
     top: 12px;
     right: 12px;
   }
-  .user-chip {
+  .public-fallback-userchip-trigger {
     max-width: calc(100% - 24px);
   }
-  .user-dropdown {
+  .public-fallback-userchip .public-fallback-userchip-panel {
     right: -2px;
     max-width: min(18rem, calc(100vw - 24px));
   }
