@@ -51,20 +51,25 @@ test('app createMenuSessionLifecycle delegates through session module boundary',
   assert.equal(result.type, 'lifecycle');
   assert.equal(calls.length, 1);
   assert.equal(typeof calls[0][1]?.createPublishService, 'function');
+  assert.equal('createPublishFacade' in (calls[0][1] || {}), false);
 });
 
 test('app createMenuSessionLifecycle delegates publish creation through shared session modules', () => {
+  const createPublishServiceCalls = [];
   const sandbox = loadSandboxWithScripts(['app.js'], {
     __HF_SESSION_MODULES__: {
       createMenuSessionLifecycle: (ports, runtime = {}) => {
         return runtime.createPublishService(ports, {});
       },
-      createMenuPublishService: () => ({
+      createMenuPublishService: (...args) => {
+        createPublishServiceCalls.push(args);
+        return {
         delegated: true,
         prepare: async () => ({ ok: true }),
         publishUpdate: async () => ({ ok: true }),
         saveDraft: async () => ({ ok: true }),
-      }),
+        };
+      },
     },
   });
 
@@ -80,6 +85,8 @@ test('app createMenuSessionLifecycle delegates publish creation through shared s
   });
 
   assert.equal(lifecycle.delegated, true);
+  assert.equal(createPublishServiceCalls.length, 1);
+  assert.equal(typeof createPublishServiceCalls[0][2]?.fallback, 'function');
 });
 
 test('app createMenuStateLoaderService delegates through session module boundary', () => {
