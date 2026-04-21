@@ -9303,15 +9303,31 @@ function _setDisplayBySelectorFiltered(selector, display, predicate) {
 }
 
 function getUserChipRoots() {
-  const dataContractRoots = Array.from(document.querySelectorAll('[data-user-chip]'));
-  if (dataContractRoots.length) return dataContractRoots;
-  return Array.from(document.querySelectorAll('.user-chip, [data-route-user-chip]'));
+  return Array.from(new Set(
+    Array.from(document.querySelectorAll('[data-user-chip], .user-chip, [data-route-user-chip]')),
+  ));
+}
+
+function getLegacyUserChipFallbackRoot() {
+  const activeRoot = document.activeElement?.closest?.('[data-user-chip], .user-chip, [data-route-user-chip]') || null;
+  if (activeRoot) return activeRoot;
+
+  const roots = getUserChipRoots();
+  if (!roots.length) return null;
+
+  const classicRoot = roots.find(root => root.id === 'user-chip');
+  if (classicRoot) return classicRoot;
+
+  const legacyRoot = roots.find(root => root.classList?.contains('user-chip'));
+  if (legacyRoot) return legacyRoot;
+
+  return roots[0];
 }
 
 function getUserChipRoot(targetOrId = null) {
   let resolvedTarget = targetOrId;
   if (!resolvedTarget) {
-    resolvedTarget = window.event?.currentTarget || window.event?.target || null;
+    return getLegacyUserChipFallbackRoot();
   }
   if (!resolvedTarget) return null;
   if (typeof resolvedTarget === 'string') {
