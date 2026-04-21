@@ -40,6 +40,15 @@ const DEFAULT_EXECUTE_REQUEST = {
   expectedDraftRevision: DEFAULT_REVISIONS.draftRevision,
   expectedNotificationRevision: DEFAULT_REVISIONS.notificationRevision,
 };
+const DEFAULT_LAST_SENT_STATE = {
+  beer: [{
+    id: 'item-1',
+    name: 'Lager',
+    eightySixed: false,
+    onMenu: true,
+    visibility: 'public',
+  }],
+};
 
 async function importWorkflow() {
   const fileUrl = pathToFileURL(path.join(ROOT, 'core/session/menu-publish-workflow.js')).href;
@@ -83,6 +92,7 @@ function createPorts(overrides = {}) {
             last_sent_featured: [],
           },
           currentFeaturedIds: ['featured-1'],
+          siblingMenuIds: ['menu-sibling'],
         };
       },
       async saveLiveMenu() {},
@@ -107,7 +117,10 @@ function createPorts(overrides = {}) {
           diff: [{ id: 'beer', label: 'Beer', icon: '🍺', added: ['Lager'], removed: [], eightySixed: [], restored: [] }],
           mode: 'save-and-send',
           truncated: false,
-          metadata: { currentFeaturedIds: ['featured-1'] },
+          metadata: {
+            currentFeaturedIds: ['featured-1'],
+            lastSentState: DEFAULT_LAST_SENT_STATE,
+          },
         };
       },
       resolveSelection() {
@@ -158,6 +171,8 @@ test('workflow preview returns canonical preview plus current revisions', async 
 test('workflow execute advances queue baseline after successful send', async () => {
   const saveCalls = [];
   const patchCalls = [];
+  const siblingCalls = [];
+  const auditCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();
   const workflow = createMenuPublishWorkflow({
     ports: createPorts({
@@ -165,6 +180,13 @@ test('workflow execute advances queue baseline after successful send', async () 
         ...createPorts().menus,
         async saveLiveMenu(input) { saveCalls.push(input); },
         async patchMeta(input) { patchCalls.push(input); return { downgradedFields: [] }; },
+        async patchSiblingFeatured(input) { siblingCalls.push(input); return []; },
+      },
+      audit: {
+        async append(input) {
+          auditCalls.push(input);
+          return { downgradedFields: [] };
+        },
       },
     }),
   });
@@ -177,12 +199,28 @@ test('workflow execute advances queue baseline after successful send', async () 
   assert.equal(result.notification.delivered, true);
   assert.equal(saveCalls.length, 1);
   assert.ok(patchCalls.some(call => call.patch.last_sent_ts === 1000));
+  assert.deepEqual(patchCalls[0].patch.last_sent_state, DEFAULT_LAST_SENT_STATE);
+  assert.deepEqual(siblingCalls, [{
+    menuIds: ['menu-sibling'],
+    featuredIds: ['featured-1'],
+  }]);
+  assert.deepEqual(result.queue.featuredSiblingMenusSynced, ['menu-sibling']);
+  assert.ok(auditCalls.some(call => call.eventType === 'send_notification'));
+  assert.ok(result.audit.loggedEvents.includes('send_notification'));
 });
 
 test('workflow preserves queue when notification delivery is partial', async () => {
+  const patchCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();
   const workflow = createMenuPublishWorkflow({
     ports: createPorts({
+      menus: {
+        ...createPorts().menus,
+        async patchMeta(input) {
+          patchCalls.push(input);
+          return { downgradedFields: [] };
+        },
+      },
       notifications: {
         async deliver() {
           return {
@@ -206,6 +244,14 @@ test('workflow preserves queue when notification delivery is partial', async () 
   assert.equal(result.notification.partial, true);
   assert.equal(result.queue.baselineAdvanced, false);
   assert.ok(result.userOutcome.warnings.some(message => message.includes('failed')));
+  assert.deepEqual(patchCalls[0].patch, {
+    last_updated_ts: 1000,
+    draft_state: {},
+    draft_saved_ts: null,
+    draft_saved_by_user_id: null,
+    draft_saved_by_name: '',
+    draft_saved_source: '',
+  });
 });
 
 test('workflow rejects unsupported intent before mutating state', async () => {
@@ -256,4 +302,36 @@ test('workflow send without selected sections does not claim it sent notificatio
   assert.equal(result.ok, true);
   assert.equal(result.notification.attempted, false);
   assert.equal(result.userOutcome.successMessage, '✅ Main Menu send skipped.');
+});
+
+test('workflow logs clear-without-send when unchecked queue lines are dropped', async () => {
+  const auditCalls = [];
+  const { createMenuPublishWorkflow } = await importWorkflow();
+  const workflow = createMenuPublishWorkflow({
+    ports: createPorts({
+      preview: {
+        ...createPorts().preview,
+        resolveSelection() {
+          return {
+            selectedChangeIds: [],
+            selectedSections: [],
+            clearedChangeIds: ['beer::added::lager'],
+            clearedSections: [DEFAULT_SELECTED_SECTION],
+          };
+        },
+      },
+      audit: {
+        async append(input) {
+          auditCalls.push(input);
+          return { downgradedFields: [] };
+        },
+      },
+    }),
+  });
+
+  const result = await workflow.execute(createExecuteInput({ intent: 'send' }));
+
+  assert.equal(result.ok, true);
+  assert.ok(auditCalls.some(call => call.eventType === 'clear_without_send'));
+  assert.ok(result.audit.loggedEvents.includes('clear_without_send'));
 });

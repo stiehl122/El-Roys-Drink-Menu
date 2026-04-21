@@ -458,7 +458,9 @@ function createServerMenuPublishPorts() {
         }
         const meta = await readMenuMeta(menuId);
         const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(knownMenu.restaurantId);
-        return { knownMenu, meta, currentFeaturedIds };
+        const siblingMenuIds = (getRestaurantSpecialConfig(knownMenu.restaurantId)?.menuIds || [])
+          .filter(candidateId => candidateId && candidateId !== menuId);
+        return { knownMenu, meta, currentFeaturedIds, siblingMenuIds };
       },
       async saveLiveMenu(input) {
         return saveLiveMenuForMenu(input);
