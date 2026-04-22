@@ -41,14 +41,30 @@ test('deriveFeaturedItems returns enabled items in category order only', async (
   const module = await importFeaturedSpecials();
   const items = module.deriveFeaturedItems([
     {
-      key: 'featured_specials',
+      id: 'featured_specials',
       items: [
         { id: 'item-a', name: 'Happy Hour Marg', featured_enabled: true, on_menu: true, visibility: 'public' },
         { id: 'item-b', name: 'Weekend Taco Plate', featured_enabled: false, on_menu: true, visibility: 'public' },
+        { id: 'item-off', name: 'Off Menu Deal', featured_enabled: true, on_menu: true, visibility: 'off_menu' },
         { id: 'item-c', name: 'Late Night Deal', featured_enabled: true, on_menu: true, visibility: 'public' },
       ],
     },
   ]);
 
   assert.deepEqual(items.map(item => item.id), ['item-a', 'item-c']);
+});
+
+test('deriveFeaturedItems recognizes legacy special categories and excludes non-public items', async () => {
+  const module = await importFeaturedSpecials();
+  const items = module.deriveFeaturedItems([
+    {
+      key: 'special',
+      items: [
+        { id: 'item-a', name: 'Happy Hour Marg', featured_enabled: true, onMenu: true, visibility: 'public' },
+        { id: 'item-b', name: 'Back Bar Pour', featured_enabled: true, onMenu: true, visibility: 'off_menu' },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(items.map(item => item.id), ['item-a']);
 });

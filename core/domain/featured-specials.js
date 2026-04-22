@@ -67,17 +67,22 @@
     }, ...next];
   }
 
+  function isPublicFeaturedSpecialItem(item = {}) {
+    return item?.onMenu !== false && item?.visibility !== 'off_menu';
+  }
+
   function deriveFeaturedItems(categories = []) {
     const category = (Array.isArray(categories) ? categories : [])
-      .find(candidate => String(candidate?.key || '').trim() === FEATURED_SPECIALS_CATEGORY_ID);
+      .find(candidate => isFeaturedSpecialsCategory(candidate));
     return (Array.isArray(category?.items) ? category.items : [])
       .map(normalizeFeaturedSpecialItem)
-      .filter(item => item.featured_enabled === true && item?.on_menu !== false && item?.onMenu !== false);
+      .filter(item => item.featured_enabled === true && isPublicFeaturedSpecialItem(item));
   }
 
   const api = Object.freeze({
     FEATURED_SPECIALS_CATEGORY_ID,
     isFeaturedSpecialsCategory,
+    isPublicFeaturedSpecialItem,
     normalizeFeaturedEnabled,
     normalizeFeaturedSpecialItem,
     createFeaturedSpecialsCategory,
@@ -90,6 +95,7 @@
   if (typeof exports !== 'undefined') {
     exports.FEATURED_SPECIALS_CATEGORY_ID = FEATURED_SPECIALS_CATEGORY_ID;
     exports.isFeaturedSpecialsCategory = isFeaturedSpecialsCategory;
+    exports.isPublicFeaturedSpecialItem = isPublicFeaturedSpecialItem;
     exports.normalizeFeaturedEnabled = normalizeFeaturedEnabled;
     exports.normalizeFeaturedSpecialItem = normalizeFeaturedSpecialItem;
     exports.createFeaturedSpecialsCategory = createFeaturedSpecialsCategory;
