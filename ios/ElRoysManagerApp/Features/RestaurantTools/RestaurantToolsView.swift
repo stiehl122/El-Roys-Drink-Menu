@@ -128,9 +128,15 @@ struct RestaurantToolsScreen: View {
           .foregroundStyle(AppPalette.ink)
           .padding(14)
           .appFieldChrome(tint: accent, cornerRadius: 22)
+      } else if liveItems.isEmpty {
+        Text("No featured-special items are currently live on this menu.")
+          .font(AppTypography.body(14, weight: .semibold))
+          .foregroundStyle(AppPalette.ink)
+          .padding(14)
+          .appFieldChrome(tint: accent, cornerRadius: 22)
       } else {
         VStack(alignment: .leading, spacing: 12) {
-          ForEach(featuredItems) { item in
+          ForEach(liveItems) { item in
             HStack(alignment: .top, spacing: 12) {
               VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
