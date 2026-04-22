@@ -1,7 +1,7 @@
 # Current Architecture Flow Chart
 
-This map reflects the current tracked repo state on 2026-04-17 at `HEAD`
-`8f757d6`.
+This map reflects the current tracked repo state on 2026-04-22 at `HEAD`
+`129594a`.
 
 ## Boundary Policy
 
@@ -43,7 +43,7 @@ flowchart LR
 
   subgraph IOS["iOS Client"]
     IOSApp["ElRoysManagerApp.swift<br/>RootView + AppModel.swift"]
-    IOSClients["BackendClients.swift<br/>auth/bootstrap/public/workspace/history<br/>draft/live/publish/specials/product lookup"]
+    IOSClients["BackendClients.swift<br/>auth/bootstrap/public/workspace/history<br/>draft/live/publish/product lookup"]
     IOSLocal["Keychain + offline drafts"]
     IOSPreview["RoutePreviewView<br/>WKWebView public route preview"]
     Phone --> IOSApp
@@ -56,7 +56,7 @@ flowchart LR
     Vercel["Static hosting + rewrites<br/>vercel.json"]
     AuthAPI["/api/auth<br/>bootstrap/profile/auth actions"]
     PublicAPI["/api/public<br/>public menu, landing, menu index, fonts"]
-    ManagerAPI["/api/manager<br/>workspace/history/draft/live/publish<br/>specials/notifications/product lookup"]
+    ManagerAPI["/api/manager<br/>workspace/history/draft/live/publish<br/>notifications/product lookup"]
     AdminAPI["/api/admin<br/>catalog/settings/users/readiness<br/>landing/imports"]
     Helpers["server/_*.js helpers"]
     Vercel --> AuthAPI
@@ -103,8 +103,15 @@ flowchart LR
 - Root, manager, admin, and route-specific font loading now points to
   `/api/public?action=font_css...`, with the server proxying Google Fonts.
 - iOS bootstrap, auth, public menu, workspace, history, draft, live save,
-  publish, specials, and barcode lookup all go through same-origin API paths in
+  publish, and barcode lookup all go through same-origin API paths in
   `ios/ElRoysManagerApp/Clients/BackendClients.swift`.
+- Public featured strips on web routes and iOS public readers come from the
+  server's `featuredItems` projection, which `server/_menu-read.js` derives
+  from each menu's hidden `featured_specials` category instead of a
+  restaurant-level specials transport.
+- Restaurant Tools remains on the compliant client -> server -> service path,
+  but it now acts as menu-scoped guidance into category and item editors rather
+  than transporting or mutating separate featured-slot state.
 
 ## Direct Client-To-Service Violations Found
 
@@ -133,6 +140,11 @@ The current tracked client boundary is:
   creation into `core/session/menu-session.js`, but compatibility fallbacks and
   other global shims still exist in parts of `core/session/*`, `core/data/*`,
   and the auth overlay template.
+- `server/_menu-read.js` still contains legacy featured-group fallback reads
+  against `featured_groups` and `featured_slots` for migration safety, but the
+  tracked public and workspace contracts now center on menu-owned categories,
+  `featuredItems`, and menu publish metadata instead of a live restaurant-tools
+  specials transport.
 - Google Fonts is still an external dependency, but the browser does not talk
   to it directly anymore. The server proxy in `server/_font-proxy.js` owns that
   boundary.
@@ -146,6 +158,9 @@ The current tracked client boundary is:
   - `server/_auth-proxy.js`
 - Web public/menu/admin boundary:
   - `app.js`
+  - `leroyslounge/app.js`
+  - `elroyscantina/app.js`
+  - `server/_menu-read.js`
   - `api/public.js`
   - `api/manager.js`
   - `api/admin.js`
@@ -165,6 +180,8 @@ The current tracked client boundary is:
   - `ios/ElRoysManagerApp/Clients/BackendClients.swift`
   - `ios/ElRoysManagerApp/App/AppModel.swift`
   - `ios/ElRoysManagerApp/Models/AppModels.swift`
+  - `ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift`
+  - `ios/ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift`
 
 ## Remaining Cleanup
 

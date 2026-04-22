@@ -303,6 +303,22 @@ test('public payload featuredItems still render through the shared featured sect
   setState(sandbox, {
     RESTAURANT_ID: 'restaurant-main',
     currentUser: null,
+    menuState: {
+      featured_specials: {
+        items: [{
+          id: 'special-1',
+          name: 'Happy Hour Marg',
+          desc: 'Citrus and salt.',
+          price: '$10',
+          on_menu: true,
+          visibility: 'public',
+          show_description: true,
+          show_recipe: false,
+          featured_enabled: true,
+        }],
+        lastSent: [],
+      },
+    },
   });
 
   const applied = sandbox.applyWorkspaceRestaurantTools({
@@ -315,12 +331,13 @@ test('public payload featuredItems still render through the shared featured sect
       visibility: 'public',
       show_description: true,
       show_recipe: false,
+      featured_enabled: true,
     }],
   });
 
   assert.equal(applied, true);
   sandbox.renderFeaturedPublicSection();
   assert.equal(featuredEl.style.display, '');
-  assert.match(featuredEl.innerHTML, /Featured Specials/);
+  assert.match(featuredEl.innerHTML, /Specials/);
   assert.match(featuredEl.innerHTML, /Happy Hour Marg/);
 });

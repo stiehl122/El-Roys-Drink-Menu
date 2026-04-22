@@ -53,8 +53,8 @@ Use it to answer three questions:
   - Drinks
   - Food
 - Web currently covers public browsing, manager editing, and admin workflows.
-- iOS currently covers staff auth, menu editing, public-menu reading, featured
-  tools, and exact route preview.
+- iOS currently covers staff auth, menu editing, public-menu reading,
+  restaurant-tools guidance, and exact route preview.
 
 ## Auth And Access
 
@@ -79,7 +79,7 @@ Use it to answer three questions:
 | In-restaurant Food/Drinks switching | Full | Full | Public clients | Web does it in route-owned pages; iOS does it in the native public-menu screen. |
 | Cross-restaurant navigation | Full | Partial | Public clients | Web supports route-to-route switching in public chrome; iOS switches restaurants from the authenticated home hub, not a public landing page. |
 | Unauthenticated public access | Full | None | Public clients | Web public routes are customer-facing; iOS public menu reading is staff-gated inside the native app. |
-| Public featured lineup | Full | Full | Public clients | Featured items can surface across both menus for a restaurant. |
+| Public featured lineup | Full | Full | Public clients | Both clients surface each menu's featured strip from that menu's hidden `Featured Specials` category and item-level featured toggles. |
 | Public footer metadata and staff footer actions | Full | None | Public clients | Web shows `APP_VERSION`, last updated, preview badge, and staff actions; iOS native public reader does not. |
 | Exact route preview of the real public page | Full | Full | Staff editor clients | Web is the route itself; iOS opens the exact route in a `WKWebView`. |
 
@@ -117,12 +117,10 @@ Use it to answer three questions:
 
 | Capability | Web | iOS | Future-Client Target | Notes |
 | --- | --- | --- | --- | --- |
-| Restaurant-level featured lineup | Full | Full | Staff editor clients | Both clients treat featured items as restaurant-wide rather than per-menu only. |
-| Add featured items from eligible catalog | Full | Full | Staff editor clients | Both can search/select items to add to featured slots. |
-| Reorder featured slots | Full | Full | Staff editor clients | Both clients support slot ordering changes. |
-| Edit featured sell notes | Full | Full | Staff editor clients | Present in both clients. |
-| Remove featured slots | Full | Full | Staff editor clients | Present in both clients. |
-| Confirm featured lineup | Full | Full | Staff editor clients | Both clients expose a final confirmation action for featured state. |
+| Per-menu `Featured Specials` category | Full | Full | Staff editor clients | Each menu now owns a hidden `Featured Specials` category that stores reusable deals and limited items. |
+| Toggle item into the public featured strip | Full | Full | Staff editor clients | Staff turn on item-level `Show in featured strip` / `featuredEnabled` state inside that menu's `Featured Specials` category. |
+| Restaurant Tools featured guidance | Full | Full | Staff editor clients | Restaurant Tools is now read-only guidance that points staff into menu/category editors instead of managing featured slots directly. |
+| Featured strip preview from current menu | Full | Full | Staff editor clients | Both clients preview the first five enabled featured-special items for the selected menu. |
 
 ## Admin And Operations
 
