@@ -26,3 +26,13 @@ test('loadSandboxWithScripts evaluates runtime files in explicit order', () => {
   const restaurantId = getState(sandbox, 'window.__publicRouteRenderer?.restaurantId || ""');
   assert.equal(restaurantId, '00000000-0000-0000-0000-000000000010');
 });
+
+test('loadSandboxWithScripts preloads landing runtime before app.js when needed', () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  const record = getState(sandbox, 'createDefaultLandingPageRecord()');
+
+  assert.equal(typeof sandbox.__HF_LANDING_MODULES__, 'object');
+  assert.equal(typeof sandbox.__HF_LANDING_MODULES__.createLandingModel, 'function');
+  assert.equal(record.id, 'root');
+  assert.equal(Array.isArray(record.draftContent.news.items), true);
+});

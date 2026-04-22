@@ -21,44 +21,71 @@
       throw new Error('Landing store requires a landing model.');
     }
 
-    const defaultFilters = options.defaultFilters && typeof options.defaultFilters === 'object'
-      ? cloneJsonCompatible(options.defaultFilters, {})
-      : {};
+    const normalizeFilters = typeof model.normalizeFilters === 'function'
+      ? rawFilters => model.normalizeFilters(rawFilters)
+      : (rawFilters => cloneJsonCompatible(rawFilters, {}));
+    const defaultFilters = normalizeFilters(
+      options.defaultFilters && typeof options.defaultFilters === 'object'
+        ? options.defaultFilters
+        : (typeof model.getDefaultFilters === 'function' ? model.getDefaultFilters() : {})
+    );
     let state = {
       record: model.createDefaultRecord(),
       dirty: false,
-      hasLoaded: false,
+      loadScope: 'none',
       loadPromise: null,
+      loadPromiseScope: 'none',
       loadError: '',
       activePanel: options.defaultActivePanel ? String(options.defaultActivePanel) : 'landing-admin-panel-overview',
       filters: defaultFilters,
       reviewCarouselIndex: 0,
     };
 
+    function resolveLoadScope(settings = {}) {
+      if (settings && typeof settings.loadScope === 'string') return settings.loadScope;
+      if (settings && settings.loaded === false) return 'none';
+      return null;
+    }
+
+    function canServeScope(actualScope = 'none', requestedScope = 'live') {
+      if (requestedScope === 'draft') return actualScope === 'draft';
+      return actualScope === 'live' || actualScope === 'draft';
+    }
+
     function syncRecord(record, settings = {}) {
       state.record = model.normalizeRecord(record || model.createDefaultRecord());
       if (typeof settings.dirty === 'boolean') state.dirty = settings.dirty;
-      if (typeof settings.loaded === 'boolean') {
-        state.hasLoaded = settings.loaded;
-      } else if (record) {
-        state.hasLoaded = true;
+      const loadScope = resolveLoadScope(settings);
+      if (loadScope) {
+        state.loadScope = loadScope;
+      } else if (record && state.loadScope === 'none') {
+        state.loadScope = 'live';
       }
-      return state.record;
+      return cloneJsonCompatible(state.record, model.createDefaultRecord());
     }
 
     return {
       getRecord() {
-        return state.record;
+        return cloneJsonCompatible(state.record, model.createDefaultRecord());
       },
       setRecord(record, settings = {}) {
         return syncRecord(record, settings);
       },
-      hasLoaded() {
-        return state.hasLoaded;
+      updateRecord(mutator = () => {}, settings = {}) {
+        const nextRecord = cloneJsonCompatible(state.record, model.createDefaultRecord());
+        if (typeof mutator === 'function') mutator(nextRecord);
+        return syncRecord(nextRecord, settings);
       },
-      setLoaded(value) {
-        state.hasLoaded = !!value;
-        return state.hasLoaded;
+      hasLoaded(options = {}) {
+        const requestedScope = options.includeDraft === true ? 'draft' : 'live';
+        return canServeScope(state.loadScope, requestedScope);
+      },
+      setLoaded(value, settings = {}) {
+        state.loadScope = value ? (resolveLoadScope(settings) || 'live') : 'none';
+        return this.hasLoaded(settings);
+      },
+      getLoadScope() {
+        return state.loadScope;
       },
       isDirty() {
         return state.dirty;
@@ -67,11 +94,17 @@
         state.dirty = !!value;
         return state.dirty;
       },
-      getLoadPromise() {
-        return state.loadPromise;
+      getLoadPromise(options = {}) {
+        const requestedScope = options.includeDraft === true ? 'draft' : 'live';
+        return state.loadPromise && canServeScope(state.loadPromiseScope, requestedScope)
+          ? state.loadPromise
+          : null;
       },
-      setLoadPromise(promise) {
+      setLoadPromise(promise, options = {}) {
         state.loadPromise = promise || null;
+        state.loadPromiseScope = promise
+          ? (options.includeDraft === true ? 'draft' : 'live')
+          : 'none';
         return state.loadPromise;
       },
       getLoadError() {
@@ -93,10 +126,10 @@
       },
       setFilters(nextFilters = {}) {
         const incoming = nextFilters && typeof nextFilters === 'object' ? nextFilters : {};
-        state.filters = cloneJsonCompatible({
+        state.filters = normalizeFilters({
           ...state.filters,
           ...incoming,
-        }, defaultFilters);
+        });
         return this.getFilters();
       },
       getReviewCarouselIndex() {

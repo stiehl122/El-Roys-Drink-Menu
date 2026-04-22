@@ -28,25 +28,29 @@
     return {
       ensureLoaded(options = {}) {
         const force = options.force === true;
-        if (!force && store.hasLoaded()) return store.getRecord();
-        if (!force && store.getLoadPromise()) return store.getLoadPromise();
+        if (!force && store.hasLoaded(options)) return store.getRecord();
+        if (!force && store.getLoadPromise(options)) return store.getLoadPromise(options);
 
         const loadPromise = (async () => {
           try {
             const record = await fetchRecord(options);
             store.setLoadError('');
-            store.setRecord(record, { dirty: false, loaded: true });
+            store.setRecord(record, {
+              dirty: false,
+              loaded: true,
+              loadScope: options.includeDraft === true ? 'draft' : 'live',
+            });
             store.setDirty(false);
             return store.getRecord();
           } catch (error) {
             store.setLoadError(error && error.message ? error.message : 'Landing page state could not be loaded.');
             throw error;
           } finally {
-            store.setLoadPromise(null);
+            store.setLoadPromise(null, options);
           }
         })();
 
-        store.setLoadPromise(loadPromise);
+        store.setLoadPromise(loadPromise, options);
         return loadPromise;
       },
 
@@ -59,7 +63,7 @@
           draft_saved_ts: savedAt,
           live_published_ts: normalized.livePublishedTs ? Number(normalized.livePublishedTs) : null,
         }, 'save_landing_page_draft');
-        store.setRecord(persistedRecord, { dirty: false, loaded: true });
+        store.setRecord(persistedRecord, { dirty: false, loaded: true, loadScope: 'draft' });
         store.setDirty(false);
         store.setLoadError('');
         return store.getRecord();
@@ -79,7 +83,7 @@
           ...persistedRecord,
           liveContent: publishedRecord.liveContent,
           livePublishedTs: String(publishedAt),
-        }, { dirty: false, loaded: true });
+        }, { dirty: false, loaded: true, loadScope: 'draft' });
         store.setDirty(false);
         store.setLoadError('');
         return store.getRecord();

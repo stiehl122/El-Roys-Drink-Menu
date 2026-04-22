@@ -47,6 +47,11 @@
     const landingImportStatusImported = 'imported';
     const landingImportStatusPartial = 'partial';
     const landingImportStatusFailed = 'failed';
+    const landingItemStatusLive = 'Live';
+    const landingItemStatusDraft = 'Draft';
+    const landingItemStatusMissing = 'Missing Fields';
+    const landingItemStatusArchived = 'ARCHIVED';
+    const landingFilterStorageKey = 'hf_landing_admin_filters';
 
     function uid() {
       return `hf-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -163,6 +168,14 @@
       };
     }
 
+    function getDefaultFilters() {
+      return {
+        events: { showArchived: false },
+        news: { showArchived: false },
+        reviews: { showArchived: false },
+      };
+    }
+
     function createDefaultRecord() {
       const content = createDefaultContent();
       return {
@@ -249,6 +262,16 @@
         lastSuccessTs: normalizeTimestamp(meta.lastSuccessTs),
         status,
         messages: rawMessages.map(message => String(message || '')).filter(Boolean),
+      };
+    }
+
+    function normalizeFilters(rawFilters) {
+      const filters = rawFilters && typeof rawFilters === 'object' ? rawFilters : {};
+      const defaults = getDefaultFilters();
+      return {
+        events: { ...defaults.events, showArchived: !!(filters.events && filters.events.showArchived) },
+        news: { ...defaults.news, showArchived: !!(filters.news && filters.news.showArchived) },
+        reviews: { ...defaults.reviews, showArchived: !!(filters.reviews && filters.reviews.showArchived) },
       };
     }
 
@@ -544,6 +567,44 @@
         liveContent[sectionId] = cloneJsonCompatible(draftContent[sectionId], {});
       });
       nextRecord.liveContent = normalizeContent(liveContent);
+      return nextRecord;
+    }
+
+    function applyHoursFieldDraft(record, fieldStates) {
+      const nextRecord = normalizeRecord(record || createDefaultRecord());
+      if (!Array.isArray(fieldStates) || !fieldStates.length) return nextRecord;
+
+      const groupedDays = new Map();
+
+      fieldStates.forEach(fieldState => {
+        const restaurantId = fieldState && fieldState.restaurantId ? String(fieldState.restaurantId) : '';
+        const dayKey = fieldState && fieldState.dayKey ? String(fieldState.dayKey) : '';
+        const field = fieldState && fieldState.field ? String(fieldState.field) : '';
+        if (!restaurantId || !landingDayOrder.includes(dayKey) || !['closed', 'open', 'close'].includes(field)) return;
+
+        const key = `${restaurantId}:${dayKey}`;
+        const entry = groupedDays.get(key) || { restaurantId: restaurantId, dayKey: dayKey };
+        if (field === 'closed') {
+          entry.closed = !!fieldState.value;
+        } else {
+          entry[field] = normalizeTimeValue(fieldState.value);
+        }
+        groupedDays.set(key, entry);
+      });
+
+      groupedDays.forEach(({ restaurantId, dayKey, open, close, closed }) => {
+        if (!nextRecord.draftContent.hours.restaurants[restaurantId]) {
+          nextRecord.draftContent.hours.restaurants[restaurantId] = createDefaultHoursRestaurant();
+        }
+        const currentDay = nextRecord.draftContent.hours.restaurants[restaurantId].days[dayKey] || createDefaultLandingDay();
+        nextRecord.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeDay({
+          ...currentDay,
+          closed: !!closed,
+          open: closed ? '' : (typeof open === 'string' ? open : currentDay.open),
+          close: closed ? '' : (typeof close === 'string' ? close : currentDay.close),
+        });
+      });
+
       return nextRecord;
     }
 
@@ -889,6 +950,13 @@
         RESTAURANT_TIME_ZONE: restaurantTimeZone,
         LANDING_PAGE_STATE_ID: landingPageStateId,
         LANDING_PAGE_SECTION_ORDER: landingSectionOrder.slice(),
+        LANDING_PAGE_SECTION_LABELS: {
+          overview: 'Overview',
+          hours: 'Hours',
+          events: 'Events',
+          news: 'News',
+          reviews: 'Reviews',
+        },
         LANDING_DAY_ORDER: landingDayOrder.slice(),
         LANDING_DAY_LABELS: cloneJsonCompatible(landingDayLabels, landingDayLabels),
         LANDING_TARGET_BOTH: landingTargetBoth,
@@ -896,6 +964,11 @@
         LANDING_IMPORT_STATUS_IMPORTED: landingImportStatusImported,
         LANDING_IMPORT_STATUS_PARTIAL: landingImportStatusPartial,
         LANDING_IMPORT_STATUS_FAILED: landingImportStatusFailed,
+        LANDING_ITEM_STATUS_LIVE: landingItemStatusLive,
+        LANDING_ITEM_STATUS_DRAFT: landingItemStatusDraft,
+        LANDING_ITEM_STATUS_MISSING: landingItemStatusMissing,
+        LANDING_ITEM_STATUS_ARCHIVED: landingItemStatusArchived,
+        LANDING_FILTER_STORAGE_KEY: landingFilterStorageKey,
       };
     }
 
@@ -909,6 +982,7 @@
       createDefaultReviewItem: createDefaultReviewItem,
       createDefaultContent: createDefaultContent,
       createDefaultRecord: createDefaultRecord,
+      getDefaultFilters: getDefaultFilters,
       normalizeDay: normalizeDay,
       normalizeHoursRestaurant: normalizeHoursRestaurant,
       normalizeEventItem: normalizeEventItem,
@@ -916,6 +990,7 @@
       normalizeReviewItem: normalizeReviewItem,
       normalizeContent: normalizeContent,
       normalizeRecord: normalizeRecord,
+      normalizeFilters: normalizeFilters,
       normalizeTarget: normalizeTarget,
       normalizeImportMeta: normalizeImportMeta,
       normalizeTimeValue: normalizeTimeValue,
@@ -939,6 +1014,8 @@
       formatHoursRange: formatHoursRange,
       getHoursForRestaurant: getHoursForRestaurant,
       buildWeekRows: buildWeekRows,
+      getDayOffsetKey: getDayOffsetKey,
+      getRestaurantLocalParts: getRestaurantLocalParts,
       validateEventItem: validateEventItem,
       validateNewsItem: validateNewsItem,
       validateReviewItem: validateReviewItem,
@@ -950,6 +1027,7 @@
       getDraftDiffSectionIds: getDraftDiffSectionIds,
       landingSectionHasDiff: landingSectionHasDiff,
       applySectionPublish: applySectionPublish,
+      applyHoursFieldDraft: applyHoursFieldDraft,
       computeRestaurantStatus: computeRestaurantStatus,
       getRenderableEvents: getRenderableEvents,
       getRenderableNews: getRenderableNews,

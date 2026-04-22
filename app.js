@@ -86,6 +86,7 @@ let _landingPageLoadPromise = null;
 let _landingPageLoadError = '';
 let _activeLandingAdminPanel = 'landing-admin-panel-overview';
 let _landingAdminFilters = null;
+let _landingAdminFiltersLoaded = false;
 let _landingReviewCarouselIndex = 0;
 let _previewAuditAvailability = { manager: null, admin: null };
 let _previewAuditAvailabilityPromise = { manager: null, admin: null };
@@ -227,7 +228,7 @@ function syncLandingLegacyStateFromStore() {
   _landingPageLoadPromise = LANDING_STORE.getLoadPromise();
   _landingPageLoadError = LANDING_STORE.getLoadError();
   _activeLandingAdminPanel = LANDING_STORE.getActivePanel();
-  _landingAdminFilters = LANDING_STORE.getFilters();
+  if (_landingAdminFiltersLoaded) _landingAdminFilters = LANDING_STORE.getFilters();
   _landingReviewCarouselIndex = LANDING_STORE.getReviewCarouselIndex();
   return _landingPageState;
 }
@@ -432,51 +433,26 @@ function getLandingActiveItems(items = []) {
 function getLandingVisibleItems(items = [], showArchived = false) {
   return LANDING_MODEL.getVisibleItems(items, showArchived);
 }
+function getLandingRenderableNews(section = {}) {
+  return LANDING_MODEL.getRenderableNews(section);
+}
+function buildLandingReviewPairs(section = {}) {
+  return LANDING_MODEL.buildReviewPairs(section);
+}
 function getLandingDefaultFilters() {
-  return {
-    events: { showArchived: false },
-    news: { showArchived: false },
-    reviews: { showArchived: false },
-  };
+  return LANDING_MODEL.getDefaultFilters();
 }
 function normalizeLandingFilters(raw = {}) {
-  const defaults = getLandingDefaultFilters();
-  return {
-    events: { ...defaults.events, showArchived: !!raw?.events?.showArchived },
-    news: { ...defaults.news, showArchived: !!raw?.news?.showArchived },
-    reviews: { ...defaults.reviews, showArchived: !!raw?.reviews?.showArchived },
-  };
+  return LANDING_MODEL.normalizeFilters(raw);
 }
 function formatLandingHoursRange(day = {}) {
   return LANDING_MODEL.formatHoursRange(day);
 }
 function getLandingDayOffsetKey(dayKey, offset = 0) {
-  const index = LANDING_DAY_ORDER.indexOf(dayKey);
-  if (index < 0) return LANDING_DAY_ORDER[0];
-  return LANDING_DAY_ORDER[(index + offset + LANDING_DAY_ORDER.length) % LANDING_DAY_ORDER.length];
+  return LANDING_MODEL.getDayOffsetKey(dayKey, offset);
 }
 function getRestaurantLocalParts(now = Date.now(), timeZone = RESTAURANT_TIME_ZONE) {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    weekday: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(new Date(now));
-  const lookup = Object.create(null);
-  parts.forEach(part => {
-    lookup[part.type] = part.value;
-  });
-  const weekday = String(lookup.weekday || '').slice(0, 3).toLowerCase();
-  const dayKeyMap = { mon: 'mon', tue: 'tue', wed: 'wed', thu: 'thu', fri: 'fri', sat: 'sat', sun: 'sun' };
-  const dayKey = dayKeyMap[weekday] || 'mon';
-  const hour = Number(lookup.hour || 0);
-  const minute = Number(lookup.minute || 0);
-  return {
-    dayKey,
-    minutes: (Number.isFinite(hour) ? hour : 0) * 60 + (Number.isFinite(minute) ? minute : 0),
-  };
+  return LANDING_MODEL.getRestaurantLocalParts(now, timeZone);
 }
 function getLandingHoursForRestaurant(section = {}, restaurantId = '') {
   return LANDING_MODEL.getHoursForRestaurant(section, restaurantId);
@@ -485,13 +461,17 @@ function buildLandingWeekRows(section = {}, restaurantId = '', todayKey = 'mon')
   return LANDING_MODEL.buildWeekRows(section, restaurantId, todayKey);
 }
 function loadLandingFilters() {
-  if (_landingAdminFilters) return _landingAdminFilters;
+  if (_landingAdminFiltersLoaded) {
+    if (!_landingAdminFilters) _landingAdminFilters = LANDING_STORE.getFilters();
+    return _landingAdminFilters;
+  }
   try {
     LANDING_STORE.setFilters(normalizeLandingFilters(JSON.parse(sessionStorage.getItem(LANDING_FILTER_STORAGE_KEY) || '{}')));
   } catch (_) {
     LANDING_STORE.setFilters(getLandingDefaultFilters());
   }
-  syncLandingLegacyStateFromStore();
+  _landingAdminFiltersLoaded = true;
+  _landingAdminFilters = LANDING_STORE.getFilters();
   return _landingAdminFilters;
 }
 function getLandingSectionFilter(sectionId = '') {
@@ -508,6 +488,7 @@ function setLandingSectionFilter(sectionId = '', key = '', value = false) {
   if (!filters[sectionId]) filters[sectionId] = { showArchived: false };
   filters[sectionId][key] = !!value;
   LANDING_STORE.setFilters(filters);
+  _landingAdminFiltersLoaded = true;
   syncLandingLegacyStateFromStore();
   saveLandingFilters();
 }
@@ -530,11 +511,7 @@ function validateLandingReviewsSection(section = {}) {
   return LANDING_MODEL.validateReviewsSection(section);
 }
 function getLandingSectionValidation(sectionId = '', record = _landingPageState) {
-  if (sectionId === 'hours') {
-    const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-    return validateLandingHoursSection(normalized.draftContent.hours);
-  }
-  return LANDING_MODEL.getSectionValidation(sectionId, record || createDefaultLandingPageRecord());
+  return LANDING_MODEL.getSectionValidation(sectionId, getLandingValidationRecord(record));
 }
 function findLandingItemById(items = [], itemId = '') {
   return Array.isArray(items) ? items.find(item => item?.id === itemId) || null : null;
@@ -3910,9 +3887,7 @@ function formatLandingTimestampLabel(value) {
 function getLandingSectionStatus(sectionId, record = _landingPageState) {
   const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
   const hasDraftDiff = landingSectionHasDiff(sectionId, normalized);
-  const validation = sectionId === 'hours'
-    ? validateLandingHoursSection(getLandingHoursSectionForValidation(normalized))
-    : getLandingSectionValidation(sectionId, normalized);
+  const validation = getLandingSectionValidation(sectionId, normalized);
   return {
     sectionId,
     label: LANDING_PAGE_SECTION_LABELS[sectionId] || sectionId,
@@ -4129,228 +4104,103 @@ function renderLandingReviewCardHtml(item = {}, restaurantId = '', liveItems = [
       </div>
     </article>`;
 }
+let _landingAdminWorkspaceService = null;
+function getLandingAdminWorkspaceService() {
+  if (_landingAdminWorkspaceService) return _landingAdminWorkspaceService;
+  _landingAdminWorkspaceService = globalThis.__HF_LANDING_MODULES__.createLandingAdminWorkspaceService({
+    model: LANDING_MODEL,
+    store: LANDING_STORE,
+    dataService: LANDING_DATA_SERVICE,
+    document,
+    escHtml,
+    escAttrJs,
+    showToast,
+    hasAdminShell: () => hasLandingAdminShell(),
+    hasRootShell: () => hasLandingRootShell(),
+    focusAdminPanel: panelId => focusLandingAdminPanel(panelId),
+    syncLegacyStateFromStore: () => syncLandingLegacyStateFromStore(),
+    getSectionFilter: sectionId => getLandingSectionFilter(sectionId),
+    getVisibleItems: (items, showArchived) => getLandingVisibleItems(items, showArchived),
+    sortEvents: items => sortLandingEvents(items),
+    sortNews: items => sortLandingNews(items),
+    sortReviews: items => sortLandingReviews(items),
+    renderEventCardHtml: (item, liveSection) => renderLandingEventCardHtml(item, liveSection),
+    renderNewsCardHtml: (item, liveSection) => renderLandingNewsCardHtml(item, liveSection),
+    renderReviewCardHtml: (item, restaurantId, liveItems) => renderLandingReviewCardHtml(item, restaurantId, liveItems),
+    renderHoursRowsHtml: (section, restaurantId, restaurantLabel) => renderLandingHoursRowsHtml(section, restaurantId, restaurantLabel),
+    knownRestaurants: () => knownLandingRestaurants(),
+    restaurants: RESTAURANTS,
+    getTargetAccentClass: target => getLandingTargetAccentClass(target),
+    getSectionStatus: (sectionId, record) => getLandingSectionStatus(sectionId, record),
+    getDraftDiffSectionIds: record => getLandingDraftDiffSectionIds(record),
+    formatTimestampLabel: value => formatLandingTimestampLabel(value),
+    computeStatusForRestaurant: (section, restaurantId) => computeLandingStatusForRestaurant(section, restaurantId),
+    syncHoursDraftFromDom: record => syncLandingHoursDraftFromDom(record),
+    renderRootPage: record => renderLandingRootPage(record),
+    createDefaultRecord: () => createDefaultLandingPageRecord(),
+    normalizeRecord: record => normalizeLandingPageRecord(record),
+    validateEventsSection: section => validateLandingEventsSection(section),
+    validateNewsSection: section => validateLandingNewsSection(section),
+    validateReviewsSection: section => validateLandingReviewsSection(section),
+    getHoursSectionValidation: record => getLandingSectionValidation('hours', record),
+    sectionOrder: LANDING_PAGE_SECTION_ORDER,
+    setPanelBadge: (sectionId, validation) => setLandingPanelBadge(sectionId, validation),
+    landingTargetBoth: LANDING_TARGET_BOTH,
+    renderTargetOptionsHtml: (selectedTarget, options = {}) => renderLandingTargetOptionsHtml(selectedTarget, options),
+    createDefaultHoursRestaurant: () => createDefaultLandingHoursRestaurant(),
+    createDefaultDay: () => createDefaultLandingDay(),
+    normalizeDay: day => normalizeLandingDay(day),
+    landingImportStatusImported: LANDING_IMPORT_STATUS_IMPORTED,
+    landingImportStatusPartial: LANDING_IMPORT_STATUS_PARTIAL,
+    landingImportStatusFailed: LANDING_IMPORT_STATUS_FAILED,
+    setSectionFilter: (sectionId, key, value) => setLandingSectionFilter(sectionId, key, value),
+    setTimeout,
+    postApiJson: (url, body, options = {}) => postApiJson(url, body, options),
+    getAuthorizedApiHeaders: () => getAuthorizedApiHeaders(),
+    getCurrentUser: () => currentUser,
+  });
+  return _landingAdminWorkspaceService;
+}
+
 function renderLandingEventsPanel(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const bodyEl = document.getElementById('landing-events-panel-body');
-  const issuesEl = document.getElementById('landing-events-issues');
-  const validation = validateLandingEventsSection(normalized.draftContent.events);
-  const filter = getLandingSectionFilter('events');
-  const visibleItems = getLandingVisibleItems(sortLandingEvents(normalized.draftContent.events.items), filter.showArchived);
-  if (bodyEl) {
-    bodyEl.innerHTML = `
-      <div class="landing-admin-toolbar-row">
-        <button type="button" class="btn-small admin-console-primary-btn" onclick="addLandingEventDraft()">Add Event</button>
-        <label class="landing-admin-toggle">
-          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('events', this.checked)">
-          Show archived
-        </label>
-      </div>
-      ${visibleItems.length ? `<div class="landing-admin-editor-list">${visibleItems.map(item => renderLandingEventCardHtml(item, normalized.liveContent.events)).join('')}</div>` : `
-        <article class="landing-admin-note">
-          <strong>No ${filter.showArchived ? '' : 'active '}events yet.</strong>
-          <p>Manual event cards live here. Add a night, tag the room, and publish the full section when it is ready.</p>
-        </article>`}
-    `;
-  }
-  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  setLandingPanelBadge('events', validation);
+  return getLandingAdminWorkspaceService().renderEventsPanel(record);
 }
 function renderLandingNewsPanel(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const bodyEl = document.getElementById('landing-news-panel-body');
-  const issuesEl = document.getElementById('landing-news-issues');
-  const validation = validateLandingNewsSection(normalized.draftContent.news);
-  const filter = getLandingSectionFilter('news');
-  const visibleItems = getLandingVisibleItems(sortLandingNews(normalized.draftContent.news.items), filter.showArchived);
-  if (bodyEl) {
-    bodyEl.innerHTML = `
-      <div class="landing-admin-toolbar-row landing-admin-toolbar-row--stack">
-        <div class="landing-admin-import-row">
-          <select id="landing-news-import-target" class="landing-admin-input">
-            ${renderLandingTargetOptionsHtml(LANDING_TARGET_BOTH, { includeBoth: true })}
-          </select>
-          <input id="landing-news-import-url" class="landing-admin-input landing-admin-input--grow" type="url" placeholder="Paste article URL to import" onpaste="handleLandingNewsImportPaste()">
-          <button type="button" class="btn-small admin-console-primary-btn" onclick="importLandingNewsDraft()">Import Story</button>
-        </div>
-        <label class="landing-admin-toggle">
-          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('news', this.checked)">
-          Show archived
-        </label>
-      </div>
-      ${visibleItems.length ? `<div class="landing-admin-editor-list">${visibleItems.map(item => renderLandingNewsCardHtml(item, normalized.liveContent.news)).join('')}</div>` : `
-        <article class="landing-admin-note">
-          <strong>No ${filter.showArchived ? '' : 'active '}stories yet.</strong>
-          <p>Paste an article URL to create or refresh a draft news card. Missing fields stay editable in draft until the section is ready.</p>
-        </article>`}
-    `;
-  }
-  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  setLandingPanelBadge('news', validation);
+  return getLandingAdminWorkspaceService().renderNewsPanel(record);
 }
 function renderLandingReviewsPanel(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const bodyEl = document.getElementById('landing-reviews-panel-body');
-  const issuesEl = document.getElementById('landing-reviews-issues');
-  const validation = validateLandingReviewsSection(normalized.draftContent.reviews);
-  const filter = getLandingSectionFilter('reviews');
-  if (bodyEl) {
-    bodyEl.innerHTML = `
-      <div class="landing-admin-toolbar-row">
-        <label class="landing-admin-toggle">
-          <input type="checkbox" ${filter.showArchived ? 'checked' : ''} onchange="toggleLandingSectionArchivedFilter('reviews', this.checked)">
-          Show archived
-        </label>
-      </div>
-      <div class="landing-admin-review-lanes">
-        ${knownLandingRestaurants().map(restaurant => {
-          const items = getLandingVisibleItems(sortLandingReviews(normalized.draftContent.reviews.restaurants[restaurant.id]), filter.showArchived);
-          return `
-            <section class="landing-admin-review-lane">
-              <div class="landing-admin-review-lane-head">
-                <div>
-                  <p class="settings-section-kicker">${escHtml(restaurant.name)}</p>
-                  <h5>${escHtml(restaurant.name)}</h5>
-                </div>
-                <span class="landing-tag ${getLandingTargetAccentClass(restaurant.id)}">${escHtml(items.length)} draft</span>
-              </div>
-              <div class="landing-admin-import-row">
-                <input id="landing-review-import-url-${escHtml(restaurant.id)}" class="landing-admin-input landing-admin-input--grow" type="url" placeholder="Paste Google review URL" onpaste="handleLandingReviewImportPaste(${escAttrJs(restaurant.id)})">
-                <button type="button" class="btn-small admin-console-primary-btn" onclick="importLandingReviewDraft(${escAttrJs(restaurant.id)})">Import Review</button>
-              </div>
-              ${items.length ? `<div class="landing-admin-editor-list">${items.map(item => renderLandingReviewCardHtml(item, restaurant.id, normalized.liveContent.reviews.restaurants[restaurant.id])).join('')}</div>` : `
-                <article class="landing-admin-note">
-                  <strong>No ${filter.showArchived ? '' : 'active '}reviews yet.</strong>
-                  <p>Imported Google reviews stay frozen as draft snapshots until you explicitly refresh and republish them.</p>
-                </article>`}
-            </section>`;
-        }).join('')}
-      </div>
-    `;
-  }
-  if (issuesEl) issuesEl.innerHTML = validation.valid ? '' : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  setLandingPanelBadge('reviews', validation);
+  return getLandingAdminWorkspaceService().renderReviewsPanel(record);
 }
 
 function renderLandingOverview(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const diffSectionIds = getLandingDraftDiffSectionIds(normalized);
-  const sectionValidations = ['hours', 'events', 'news', 'reviews'].map(sectionId => ({
-    sectionId,
-    validation: getLandingSectionValidation(sectionId, normalized),
-  }));
-  const blockingIssues = sectionValidations.flatMap(entry => entry.validation.issues);
-  const allValid = sectionValidations.every(entry => entry.validation.valid);
-  const rootStatusEl = document.getElementById('landing-overview-root-status');
-  const rootCopyEl = document.getElementById('landing-overview-root-copy');
-  const draftSavedEl = document.getElementById('landing-overview-draft-saved');
-  const draftCopyEl = document.getElementById('landing-overview-draft-copy');
-  const livePublishedEl = document.getElementById('landing-overview-live-published');
-  const liveCopyEl = document.getElementById('landing-overview-live-copy');
-  const heroLinesEl = document.getElementById('landing-overview-hero-lines');
-  const heroCopyEl = document.getElementById('landing-overview-hero-copy');
-  const listEl = document.getElementById('landing-overview-section-list');
-  const issuesEl = document.getElementById('landing-overview-issues');
-  const healthBadgeEl = document.getElementById('landing-overview-health-badge');
-  const leroysStatus = computeLandingStatusForRestaurant(normalized.liveContent.hours, RESTAURANTS.LEROYS.id);
-  const elroysStatus = computeLandingStatusForRestaurant(normalized.liveContent.hours, RESTAURANTS.ELROYS.id);
-
-  if (rootStatusEl) rootStatusEl.textContent = _landingPageLoadError ? 'Fallback ready' : 'Live shell ready';
-  if (rootCopyEl) rootCopyEl.textContent = _landingPageLoadError
-    ? 'The public root can fall back to the simple chooser if landing data fails.'
-    : 'The richer root shell can render from the published landing-page snapshot.';
-  if (draftSavedEl) draftSavedEl.textContent = formatLandingTimestampLabel(normalized.draftSavedTs);
-  if (draftCopyEl) draftCopyEl.textContent = diffSectionIds.length
-    ? `${diffSectionIds.length} subsection draft${diffSectionIds.length === 1 ? '' : 's'} differ from live.`
-    : 'Draft and live are currently aligned.';
-  if (livePublishedEl) livePublishedEl.textContent = formatLandingTimestampLabel(normalized.livePublishedTs);
-  if (liveCopyEl) liveCopyEl.textContent = normalized.livePublishedTs
-    ? 'Publish promotes only the sections you select.'
-    : 'No landing-page sections have been published live yet.';
-  if (heroLinesEl) heroLinesEl.textContent = `${leroysStatus.label} / ${elroysStatus.label}`;
-  if (heroCopyEl) heroCopyEl.textContent = 'These public hero lines are generated from the live recurring-hours schedules.';
-  if (healthBadgeEl) {
-    healthBadgeEl.textContent = allValid ? 'Healthy' : 'Needs attention';
-    healthBadgeEl.className = `landing-admin-section-badge ${allValid ? 'is-ready' : 'is-blocked'}`;
-  }
-  if (listEl) {
-    listEl.innerHTML = LANDING_PAGE_SECTION_ORDER.map(sectionId => {
-      const status = getLandingSectionStatus(sectionId, normalized);
-      const badgeClass = status.isValid ? 'is-ready' : 'is-blocked';
-      const badgeText = !status.isValid ? 'Blocked' : (status.hasDraftDiff ? 'Drafting' : 'Live');
-      const description = status.hasDraftDiff
-        ? 'Draft differs from the currently published snapshot.'
-        : 'Draft and live match right now.';
-      return `
-        <article class="landing-overview-section-item">
-          <div>
-            <strong>${escHtml(status.label)}</strong>
-            <span>${escHtml(description)}</span>
-          </div>
-          <span class="landing-admin-section-badge ${badgeClass}">${escHtml(badgeText)}</span>
-        </article>`;
-    }).join('');
-  }
-  if (issuesEl) {
-    issuesEl.innerHTML = allValid
-      ? ''
-      : blockingIssues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  }
+  return getLandingAdminWorkspaceService().renderOverview(record);
 }
 
-function syncLandingHoursDraftFromDom() {
-  if (!hasLandingAdminShell()) return _landingPageState || createDefaultLandingPageRecord();
-  const fields = Array.from(document.querySelectorAll('[data-landing-hours-field]'));
-  if (!fields.length) return _landingPageState || createDefaultLandingPageRecord();
+function syncLandingHoursDraftFromDom(baseRecord = _landingPageState || createDefaultLandingPageRecord()) {
+  const sourceRecord = normalizeLandingPageRecord(baseRecord || createDefaultLandingPageRecord());
+  if (!hasLandingAdminShell()) return sourceRecord;
+  const fieldStates = Array.from(document.querySelectorAll('[data-landing-hours-field]'))
+    .map(fieldEl => {
+      const field = fieldEl.getAttribute('data-landing-hours-field') || '';
+      return {
+        restaurantId: fieldEl.getAttribute('data-landing-hours-restaurant') || '',
+        dayKey: fieldEl.getAttribute('data-landing-hours-day') || '',
+        field,
+        value: field === 'closed' ? !!fieldEl.checked : fieldEl.value,
+      };
+    })
+    .filter(fieldState => fieldState.restaurantId && fieldState.dayKey && fieldState.field);
+  if (!fieldStates.length) return sourceRecord;
 
-  const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: _landingPageDirty });
-  const groupedDays = new Map();
+  return LANDING_MODEL.applyHoursFieldDraft(sourceRecord, fieldStates);
+}
 
-  fields.forEach(fieldEl => {
-    const restaurantId = fieldEl.getAttribute('data-landing-hours-restaurant') || '';
-    const dayKey = fieldEl.getAttribute('data-landing-hours-day') || '';
-    const field = fieldEl.getAttribute('data-landing-hours-field') || '';
-    if (!restaurantId || !dayKey || !field) return;
-    const key = `${restaurantId}:${dayKey}`;
-    const entry = groupedDays.get(key) || { restaurantId, dayKey };
-    if (field === 'closed') {
-      entry.closed = !!fieldEl.checked;
-    } else if (field === 'open' || field === 'close') {
-      entry[field] = normalizeLandingTimeValue(fieldEl.value);
-    }
-    groupedDays.set(key, entry);
-  });
-
-  groupedDays.forEach(({ restaurantId, dayKey, open, close, closed }) => {
-    if (!record.draftContent.hours.restaurants[restaurantId]) {
-      record.draftContent.hours.restaurants[restaurantId] = createDefaultLandingHoursRestaurant();
-    }
-    const currentDay = record.draftContent.hours.restaurants[restaurantId].days[dayKey] || createDefaultLandingDay();
-    record.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeLandingDay({
-      ...currentDay,
-      closed: !!closed,
-      open: closed ? '' : (typeof open === 'string' ? open : currentDay.open),
-      close: closed ? '' : (typeof close === 'string' ? close : currentDay.close),
-    });
-  });
-
-  return record;
+function getLandingValidationRecord(record = _landingPageState) {
+  return syncLandingHoursDraftFromDom(record || createDefaultLandingPageRecord());
 }
 
 function renderLandingHoursValidationState(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const issuesEl = document.getElementById('landing-hours-issues');
-  const badgeEl = document.getElementById('landing-hours-panel-badge');
-  const validation = validateLandingHoursSection(getLandingHoursSectionForValidation(normalized));
-
-  if (issuesEl) {
-    issuesEl.innerHTML = validation.valid
-      ? ''
-      : validation.issues.map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`).join('');
-  }
-  if (badgeEl) {
-    badgeEl.textContent = validation.valid ? 'Ready' : 'Blocked';
-    badgeEl.className = `landing-admin-section-badge ${validation.valid ? 'is-ready' : 'is-blocked'}`;
-  }
+  return getLandingAdminWorkspaceService().renderHoursValidationState(record);
 }
 
 function refreshLandingHoursAdminState(record = _landingPageState) {
@@ -4362,255 +4212,58 @@ function refreshLandingHoursAdminState(record = _landingPageState) {
 }
 
 function updateLandingAdminToolbar(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const diffSectionIds = getLandingDraftDiffSectionIds(normalized);
-  const draftButton = document.getElementById('landing-save-draft-btn');
-  const publishButton = document.getElementById('landing-publish-btn');
-  const livePill = document.getElementById('landing-admin-live-pill');
-  const draftPill = document.getElementById('landing-admin-draft-pill');
-  const noteEl = document.getElementById('landing-admin-toolbar-note');
-
-  if (draftButton) draftButton.disabled = !_landingPageDirty;
-  if (publishButton) publishButton.disabled = diffSectionIds.length === 0;
-
-  if (livePill) {
-    livePill.textContent = normalized.livePublishedTs
-      ? `Live ${formatLandingTimestampLabel(normalized.livePublishedTs)}`
-      : 'Live shell pending';
-    livePill.className = `landing-admin-status-pill ${normalized.livePublishedTs ? 'is-live' : ''}`;
-  }
-  if (draftPill) {
-    const draftText = _landingPageDirty
-      ? 'Unsaved draft changes'
-      : (diffSectionIds.length ? `${diffSectionIds.length} draft sections ready` : 'No draft changes');
-    draftPill.textContent = draftText;
-    draftPill.className = `landing-admin-status-pill ${_landingPageDirty || diffSectionIds.length ? 'is-draft' : ''}`;
-  }
-  if (noteEl) {
-    noteEl.textContent = _landingPageLoadError
-      ? _landingPageLoadError
-      : (_landingPageDirty
-          ? 'Save Draft stores the shared landing snapshot without changing the public root.'
-          : (diffSectionIds.length
-              ? 'Publish Live promotes only the subsections you select.'
-              : 'Landing-page draft and live snapshots are currently aligned.'));
-  }
+  return getLandingAdminWorkspaceService().updateToolbar(record);
 }
 
 function renderLandingHoursPanel(record = _landingPageState) {
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  const gridEl = document.getElementById('landing-admin-hours-grid');
-  if (gridEl) {
-    gridEl.innerHTML = knownLandingRestaurants().map(restaurant => (
-      renderLandingHoursRowsHtml(normalized.draftContent.hours, restaurant.id, restaurant.name)
-    )).join('');
-  }
-  renderLandingHoursValidationState(normalized);
+  return getLandingAdminWorkspaceService().renderHoursPanel(record);
 }
 
 function renderLandingAdminWorkspace(options = {}) {
-  if (!hasLandingAdminShell()) return;
-  const { forceReload = false } = options;
-  const render = (record) => {
-    const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-    setLandingPageState(normalized, { dirty: _landingPageDirty });
-    renderLandingOverview(normalized);
-    renderLandingHoursPanel(normalized);
-    renderLandingEventsPanel(normalized);
-    renderLandingNewsPanel(normalized);
-    renderLandingReviewsPanel(normalized);
-    updateLandingAdminToolbar(normalized);
-    focusLandingAdminPanel(_activeLandingAdminPanel);
-  };
-
-  if (_landingPageState && !forceReload) {
-    render(_landingPageState);
-    return;
-  }
-
-  updateLandingAdminToolbar(createDefaultLandingPageRecord());
-  ensureLandingPageStateLoaded({ force: forceReload })
-    .then(render)
-    .catch(() => {
-      const fallbackRecord = _landingPageState || createDefaultLandingPageRecord();
-      setLandingPageState(fallbackRecord, { dirty: false });
-      render(fallbackRecord);
-    });
+  return getLandingAdminWorkspaceService().renderWorkspace(options);
 }
 
+let _landingRootRendererService = null;
+function getLandingRootRendererService() {
+  if (_landingRootRendererService) return _landingRootRendererService;
+  _landingRootRendererService = globalThis.__HF_LANDING_MODULES__.createLandingRootRendererService({
+    model: LANDING_MODEL,
+    store: LANDING_STORE,
+    document,
+    escHtml,
+    restaurants: RESTAURANTS,
+    setReviewCarouselHandlerName: 'setLandingReviewCarouselIndex',
+    hasRootShell: () => hasLandingRootShell(),
+    syncLegacyStateFromStore: () => syncLandingLegacyStateFromStore(),
+  });
+  return _landingRootRendererService;
+}
 function setLandingRootSectionVisible(sectionId = '', visible = true) {
-  const sectionEl = document.getElementById(sectionId);
-  if (sectionEl) sectionEl.hidden = !visible;
-  const dotEl = document.querySelector(`[data-landing-dot="${sectionId}"]`);
-  if (dotEl) dotEl.hidden = !visible;
-}
-function getLandingRenderableEvents(section = {}) {
-  return LANDING_MODEL.getRenderableEvents(section);
-}
-function getLandingRenderableNews(section = {}) {
-  return LANDING_MODEL.getRenderableNews(section);
-}
-function getLandingRenderableReviews(section = {}, restaurantId = '') {
-  return LANDING_MODEL.getRenderableReviews(section, restaurantId);
-}
-function buildLandingReviewPairs(section = {}) {
-  return LANDING_MODEL.buildReviewPairs(section);
+  return getLandingRootRendererService().setSectionVisible(sectionId, visible);
 }
 function renderLandingRootEvents(section = {}) {
-  const listEl = document.getElementById('landing-events-list');
-  const emptyEl = document.getElementById('landing-events-empty');
-  if (!listEl || !emptyEl) return;
-  const items = getLandingRenderableEvents(section);
-  setLandingRootSectionVisible('events', true);
-  if (!items.length) {
-    listEl.innerHTML = '';
-    emptyEl.hidden = false;
-    return;
-  }
-  emptyEl.hidden = true;
-  listEl.innerHTML = items.map(item => `
-    <article class="landing-story-card landing-story-card--event">
-      <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
-      <h3>${escHtml(item.title || 'Upcoming event')}</h3>
-      <p>${escHtml(item.body || '')}</p>
-      <p class="landing-card-kicker">${escHtml(formatLandingEventScheduleLine(item))}</p>
-    </article>
-  `).join('');
+  return getLandingRootRendererService().renderRootEvents(section);
 }
 function renderLandingRootNews(section = {}) {
-  const listEl = document.getElementById('landing-news-list');
-  const emptyEl = document.getElementById('landing-news-empty');
-  const items = getLandingRenderableNews(section);
-  if (!listEl || !emptyEl) return;
-  setLandingRootSectionVisible('news', items.length > 0);
-  if (!items.length) {
-    listEl.innerHTML = '';
-    emptyEl.hidden = true;
-    return;
-  }
-  emptyEl.hidden = true;
-  listEl.innerHTML = items.map(item => `
-    <a class="landing-story-card landing-story-card--news ${item.imageUrl ? 'has-image' : 'is-text-only'}" href="${escHtml(item.href)}" target="_blank" rel="noreferrer">
-      ${item.imageUrl ? `<img class="landing-story-image" src="${escHtml(item.imageUrl)}" alt="${escHtml(item.title || item.source || 'News image')}">` : ''}
-      <div class="landing-story-copy">
-        <p class="landing-card-kicker">
-          <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
-          <span>${escHtml([item.source, formatLandingDateLabel(item.publishedDate, { short: true, year: false })].filter(Boolean).join(' · '))}</span>
-        </p>
-        <h3>${escHtml(item.title || 'Imported story')}</h3>
-        ${item.body ? `<p>${escHtml(item.body)}</p>` : ''}
-        <span class="landing-story-link">Read Story ↗</span>
-      </div>
-    </a>
-  `).join('');
+  return getLandingRootRendererService().renderRootNews(section);
 }
 function renderLandingRootReviews(section = {}) {
-  const sectionEl = document.getElementById('reviews');
-  const listEl = document.getElementById('landing-reviews-list');
-  const emptyEl = document.getElementById('landing-reviews-empty');
-  const controlsEl = document.getElementById('landing-reviews-controls');
-  const dotsEl = document.getElementById('landing-reviews-dots');
-  if (!sectionEl || !listEl || !emptyEl || !controlsEl || !dotsEl) return;
-  const pairs = buildLandingReviewPairs(section);
-  const visible = pairs.length > 0;
-  setLandingRootSectionVisible('reviews', visible);
-  if (!visible) {
-    listEl.innerHTML = '';
-    emptyEl.hidden = true;
-    controlsEl.hidden = true;
-    LANDING_STORE.setReviewCarouselIndex(0);
-    syncLandingLegacyStateFromStore();
-    return;
-  }
-  emptyEl.hidden = true;
-  controlsEl.hidden = pairs.length <= 1;
-  LANDING_STORE.setReviewCarouselIndex(Math.max(0, Math.min(_landingReviewCarouselIndex, pairs.length - 1)));
-  syncLandingLegacyStateFromStore();
-  listEl.innerHTML = pairs.map((pair, index) => `
-    <article class="landing-review-pair ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" data-landing-review-pair="${index}">
-      <article class="landing-review-card landing-review-card--leroys">
-        <p class="landing-card-kicker">${escHtml(RESTAURANTS.LEROYS.name)}</p>
-        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.leroys.rating) || 5)))}</h3>
-        <p>${escHtml(pair.leroys.quote || '')}</p>
-        <p class="landing-card-kicker">${escHtml(pair.leroys.author || '')}${pair.leroys.source ? ` · ${escHtml(pair.leroys.source)}` : ''}</p>
-      </article>
-      <article class="landing-review-card landing-review-card--elroys">
-        <p class="landing-card-kicker">${escHtml(RESTAURANTS.ELROYS.name)}</p>
-        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.elroys.rating) || 5)))}</h3>
-        <p>${escHtml(pair.elroys.quote || '')}</p>
-        <p class="landing-card-kicker">${escHtml(pair.elroys.author || '')}${pair.elroys.source ? ` · ${escHtml(pair.elroys.source)}` : ''}</p>
-      </article>
-    </article>
-  `).join('');
-  dotsEl.innerHTML = pairs.map((pair, index) => (
-    `<button type="button" class="landing-review-dot ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" aria-label="Review pair ${index + 1}" onclick="setLandingReviewCarouselIndex(${index})"></button>`
-  )).join('');
+  return getLandingRootRendererService().renderRootReviews(section);
 }
 function setLandingReviewCarouselIndex(nextIndex = 0) {
-  const pairEls = Array.from(document.querySelectorAll('[data-landing-review-pair]'));
-  if (!pairEls.length) return;
-  LANDING_STORE.setReviewCarouselIndex(Math.max(0, Math.min(Number(nextIndex) || 0, pairEls.length - 1)));
-  syncLandingLegacyStateFromStore();
-  pairEls.forEach((pairEl, index) => {
-    pairEl.classList.toggle('is-active', index === _landingReviewCarouselIndex);
-  });
-  document.querySelectorAll('.landing-review-dot').forEach((dotEl, index) => {
-    dotEl.classList.toggle('is-active', index === _landingReviewCarouselIndex);
-  });
+  return getLandingRootRendererService().setReviewCarouselIndex(nextIndex);
 }
 function stepLandingReviewCarousel(direction = 1) {
-  const pairCount = document.querySelectorAll('[data-landing-review-pair]').length;
-  if (!pairCount) return;
-  const nextIndex = (_landingReviewCarouselIndex + direction + pairCount) % pairCount;
-  setLandingReviewCarouselIndex(nextIndex);
+  return getLandingRootRendererService().stepReviewCarousel(direction);
 }
-
 function renderLandingRootHours(section = {}) {
-  const restaurantPairs = [
-    { restaurant: RESTAURANTS.LEROYS, heroId: 'landing-hero-status-leroys', todayId: 'landing-hours-today-leroys', listId: 'landing-hours-list-leroys' },
-    { restaurant: RESTAURANTS.ELROYS, heroId: 'landing-hero-status-elroys', todayId: 'landing-hours-today-elroys', listId: 'landing-hours-list-elroys' },
-  ];
-  restaurantPairs.forEach(({ restaurant, heroId, todayId, listId }) => {
-    const status = computeLandingStatusForRestaurant(section, restaurant.id);
-    const heroEl = document.getElementById(heroId);
-    const todayEl = document.getElementById(todayId);
-    const listEl = document.getElementById(listId);
-    if (heroEl) {
-      heroEl.textContent = status.label;
-      heroEl.classList.toggle('is-open', !!status.isOpen);
-      heroEl.classList.toggle('is-closed', !status.isOpen);
-    }
-    if (todayEl) {
-      todayEl.innerHTML = `<span>Today</span><strong>${escHtml(status.todayRangeLabel)}</strong>`;
-    }
-    if (listEl) {
-      listEl.innerHTML = status.weekRows.map(row => (
-        `<div class="landing-hours-row">
-          <dt>${escHtml(row.label)}${row.isToday ? ' · Today' : ''}</dt>
-          <dd>${escHtml(row.rangeLabel)}</dd>
-        </div>`
-      )).join('');
-    }
-  });
+  return getLandingRootRendererService().renderRootHours(section);
 }
-
 function setLandingRootFallbackVisible(visible) {
-  const shellEl = document.getElementById('landing-root-shell');
-  const fallbackEl = document.getElementById('landing-root-fallback');
-  const dotNavEl = document.querySelector('.landing-dot-nav');
-  if (shellEl) shellEl.hidden = !!visible;
-  if (fallbackEl) fallbackEl.hidden = !visible;
-  if (dotNavEl) dotNavEl.hidden = !!visible;
+  return getLandingRootRendererService().setFallbackVisible(visible);
 }
-
 function renderLandingRootPage(record = _landingPageState) {
-  if (!hasLandingRootShell()) return;
-  const normalized = normalizeLandingPageRecord(record || createDefaultLandingPageRecord());
-  renderLandingRootHours(normalized.liveContent.hours);
-  renderLandingRootEvents(normalized.liveContent.events);
-  renderLandingRootNews(normalized.liveContent.news);
-  renderLandingRootReviews(normalized.liveContent.reviews);
-  setLandingRootFallbackVisible(false);
+  return getLandingRootRendererService().renderRootPage(record);
 }
 
 async function initLandingRootPage() {
@@ -4640,372 +4293,73 @@ function focusLandingAdminPanel(panelId = 'landing-admin-panel-overview', trigge
 }
 
 function setLandingHoursField(restaurantId, dayKey, field, value) {
-  const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: true });
-  if (!record.draftContent.hours.restaurants[restaurantId]) {
-    record.draftContent.hours.restaurants[restaurantId] = createDefaultLandingHoursRestaurant();
-  }
-  const targetDay = record.draftContent.hours.restaurants[restaurantId].days[dayKey] || createDefaultLandingDay();
-  if (field === 'closed') {
-    targetDay.closed = !!value;
-    if (targetDay.closed) {
-      targetDay.open = '';
-      targetDay.close = '';
-    }
-  } else if (field === 'open' || field === 'close') {
-    targetDay[field] = normalizeLandingTimeValue(value);
-    if (targetDay[field]) targetDay.closed = false;
-  }
-  record.draftContent.hours.restaurants[restaurantId].days[dayKey] = normalizeLandingDay(targetDay);
-  syncLandingDirtyFlag(true);
-  if (field === 'closed') {
-    renderLandingAdminWorkspace();
-    return;
-  }
-  refreshLandingHoursAdminState(record);
+  return getLandingAdminWorkspaceService().setHoursField(restaurantId, dayKey, field, value);
 }
 
 function updateLandingDraftRecord(mutator = () => {}, options = {}) {
-  const { rerender = true } = options;
-  const record = setLandingPageState(_landingPageState || createDefaultLandingPageRecord(), { dirty: true });
-  mutator(record);
-  syncLandingDirtyFlag(true);
-  if (rerender) renderLandingAdminWorkspace();
-  return record;
-}
-function markLandingItemUpdated(item = {}) {
-  item.updatedAt = String(Date.now());
-  return item;
-}
-function findLandingNewsItemByUrl(items = [], url = '') {
-  const candidate = String(url || '').trim();
-  if (!candidate) return null;
-  return items.find(item => (
-    item?.href === candidate || item?.importMeta?.sourceUrl === candidate
-  )) || null;
-}
-function findLandingReviewItemByUrl(items = [], url = '') {
-  const candidate = String(url || '').trim();
-  if (!candidate) return null;
-  return items.find(item => (
-    item?.href === candidate || item?.importMeta?.sourceUrl === candidate
-  )) || null;
-}
-async function requestLandingImport(kind = 'import_news', payload = {}) {
-  if (!currentUser?.accessToken) throw new Error('Sign in as an admin to import landing-page content.');
-  const result = await postApiJson('/api/admin', {
-    action: kind,
-    ...payload,
-  }, {
-    headers: getAuthorizedApiHeaders(),
-  });
-  if (!result.ok) throw new Error(result.payload?.error || result.payload?.message || 'Import failed.');
-  return result.payload || {};
-}
-function applyLandingImportMeta(currentMeta = {}, result = {}) {
-  const attemptedAt = result?.attemptedAt ? String(result.attemptedAt) : String(Date.now());
-  const nextStatus = result?.status || LANDING_IMPORT_STATUS_FAILED;
-  const wasSuccessful = nextStatus === LANDING_IMPORT_STATUS_IMPORTED || nextStatus === LANDING_IMPORT_STATUS_PARTIAL;
-  return normalizeLandingImportMeta({
-    ...currentMeta,
-    sourceUrl: result?.sourceUrl || result?.href || currentMeta?.sourceUrl || '',
-    lastAttemptTs: attemptedAt,
-    lastSuccessTs: wasSuccessful ? attemptedAt : currentMeta?.lastSuccessTs,
-    status: nextStatus,
-    messages: Array.isArray(result?.messages) ? result.messages : currentMeta?.messages,
-  });
-}
-function upsertLandingNewsDraftFromImport(target = LANDING_TARGET_BOTH, result = {}) {
-  const sourceUrl = String(result?.sourceUrl || result?.href || '').trim();
-  updateLandingDraftRecord(record => {
-    const items = record.draftContent.news.items;
-    const existing = findLandingNewsItemByUrl(items, sourceUrl);
-    const base = existing || createDefaultLandingNewsItem();
-    const nextItem = normalizeLandingNewsItem({
-      ...base,
-      target: existing?.target || normalizeLandingTarget(target, { allowBoth: true }),
-      title: result?.title || base.title,
-      body: result?.body || base.body,
-      href: result?.href || sourceUrl || base.href,
-      source: result?.source || base.source,
-      publishedDate: result?.publishedDate || base.publishedDate,
-      imageUrl: result?.imageUrl || base.imageUrl,
-      importMeta: applyLandingImportMeta(base.importMeta, result),
-      updatedAt: String(Date.now()),
-    });
-    if (existing) {
-      const index = items.findIndex(item => item.id === existing.id);
-      if (index >= 0) items[index] = nextItem;
-    } else {
-      items.unshift(nextItem);
-    }
-  });
-}
-function upsertLandingReviewDraftFromImport(restaurantId = '', result = {}) {
-  updateLandingDraftRecord(record => {
-    if (!record.draftContent.reviews.restaurants[restaurantId]) {
-      record.draftContent.reviews.restaurants[restaurantId] = [];
-    }
-    const items = record.draftContent.reviews.restaurants[restaurantId];
-    const sourceUrl = String(result?.sourceUrl || result?.href || '').trim();
-    const existing = findLandingReviewItemByUrl(items, sourceUrl);
-    const base = existing || createDefaultLandingReviewItem();
-    const nextItem = normalizeLandingReviewItem({
-      ...base,
-      href: result?.href || sourceUrl || base.href,
-      author: result?.author || base.author,
-      quote: result?.quote || base.quote,
-      source: result?.source || base.source || 'Google Review',
-      rating: result?.rating || base.rating,
-      importMeta: applyLandingImportMeta(base.importMeta, result),
-      updatedAt: String(Date.now()),
-    });
-    if (existing) {
-      const index = items.findIndex(item => item.id === existing.id);
-      if (index >= 0) items[index] = nextItem;
-    } else {
-      items.unshift(nextItem);
-    }
-  });
+  return getLandingAdminWorkspaceService().updateDraftRecord(mutator, options);
 }
 function addLandingEventDraft() {
-  updateLandingDraftRecord(record => {
-    record.draftContent.events.items.unshift(normalizeLandingEventItem({
-      ...createDefaultLandingEventItem(),
-      updatedAt: String(Date.now()),
-    }));
-  });
+  return getLandingAdminWorkspaceService().addEventDraft();
 }
 function updateLandingEventField(itemId = '', field = '', value = '') {
-  updateLandingDraftRecord(record => {
-    const item = findLandingItemById(record.draftContent.events.items, itemId);
-    if (!item) return;
-    if (field === 'target') item.target = normalizeLandingTarget(value, { allowBoth: true });
-    else if (field === 'eventDate') item.eventDate = String(value || '');
-    else if (field === 'startTime' || field === 'endTime') item[field] = normalizeLandingTimeValue(value);
-    else item[field] = typeof value === 'string' ? value : '';
-    if (field === 'endTime' && item.endTime) item.timingNote = '';
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().updateEventField(itemId, field, value);
 }
 function toggleLandingEventArchived(itemId = '', archived = false) {
-  updateLandingDraftRecord(record => {
-    const item = findLandingItemById(record.draftContent.events.items, itemId);
-    if (!item) return;
-    item.archived = !!archived;
-    item.archivedAt = archived ? String(Date.now()) : '';
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().toggleEventArchived(itemId, archived);
 }
 function updateLandingNewsField(itemId = '', field = '', value = '') {
-  updateLandingDraftRecord(record => {
-    const item = findLandingItemById(record.draftContent.news.items, itemId);
-    if (!item) return;
-    if (field === 'target') item.target = normalizeLandingTarget(value, { allowBoth: true });
-    else item[field] = typeof value === 'string' ? value : '';
-    if (field === 'href' && !item.importMeta?.sourceUrl) {
-      item.importMeta = normalizeLandingImportMeta({ ...item.importMeta, sourceUrl: item.href });
-    }
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().updateNewsField(itemId, field, value);
 }
 function toggleLandingNewsArchived(itemId = '', archived = false) {
-  updateLandingDraftRecord(record => {
-    const item = findLandingItemById(record.draftContent.news.items, itemId);
-    if (!item) return;
-    item.archived = !!archived;
-    item.archivedAt = archived ? String(Date.now()) : '';
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().toggleNewsArchived(itemId, archived);
 }
 function updateLandingReviewField(restaurantId = '', itemId = '', field = '', value = '') {
-  updateLandingDraftRecord(record => {
-    const items = record.draftContent.reviews.restaurants[restaurantId] || [];
-    const item = findLandingItemById(items, itemId);
-    if (!item) return;
-    if (field === 'rating') item.rating = value ? String(Number(value)) : '';
-    else item[field] = typeof value === 'string' ? value : '';
-    if (field === 'href' && !item.importMeta?.sourceUrl) {
-      item.importMeta = normalizeLandingImportMeta({ ...item.importMeta, sourceUrl: item.href });
-    }
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().updateReviewField(restaurantId, itemId, field, value);
 }
 function toggleLandingReviewArchived(restaurantId = '', itemId = '', archived = false) {
-  updateLandingDraftRecord(record => {
-    const items = record.draftContent.reviews.restaurants[restaurantId] || [];
-    const item = findLandingItemById(items, itemId);
-    if (!item) return;
-    item.archived = !!archived;
-    item.archivedAt = archived ? String(Date.now()) : '';
-    markLandingItemUpdated(item);
-  });
+  return getLandingAdminWorkspaceService().toggleReviewArchived(restaurantId, itemId, archived);
 }
 function toggleLandingSectionArchivedFilter(sectionId = '', checked = false) {
-  setLandingSectionFilter(sectionId, 'showArchived', checked);
-  renderLandingAdminWorkspace();
+  return getLandingAdminWorkspaceService().toggleSectionArchivedFilter(sectionId, checked);
 }
 function handleLandingNewsImportPaste() {
-  setTimeout(() => {
-    importLandingNewsDraft();
-  }, 0);
+  return getLandingAdminWorkspaceService().handleNewsImportPaste();
 }
 function handleLandingReviewImportPaste(restaurantId = '') {
-  setTimeout(() => {
-    importLandingReviewDraft(restaurantId);
-  }, 0);
+  return getLandingAdminWorkspaceService().handleReviewImportPaste(restaurantId);
 }
 async function importLandingNewsDraft() {
-  const targetSelect = document.getElementById('landing-news-import-target');
-  const urlInput = document.getElementById('landing-news-import-url');
-  const target = targetSelect?.value || LANDING_TARGET_BOTH;
-  const url = String(urlInput?.value || '').trim();
-  if (!url) return;
-  try {
-    const result = await requestLandingImport('import_news', { url, target });
-    upsertLandingNewsDraftFromImport(target, result);
-    if (urlInput) urlInput.value = '';
-    showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} news draft.`, 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'News import failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().importNewsDraft();
 }
 async function refreshLandingNewsItem(itemId = '') {
-  const record = normalizeLandingPageRecord(_landingPageState || createDefaultLandingPageRecord());
-  const item = findLandingItemById(record.draftContent.news.items, itemId);
-  const sourceUrl = String(item?.importMeta?.sourceUrl || item?.href || '').trim();
-  if (!item || !sourceUrl) {
-    showToast('⚠️ Add an article URL before refreshing this story.', 'error');
-    return;
-  }
-  try {
-    const result = await requestLandingImport('import_news', { url: sourceUrl, target: item.target });
-    upsertLandingNewsDraftFromImport(item.target, result);
-    showToast('✅ News draft refreshed.', 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'News refresh failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().refreshNewsItem(itemId);
 }
 async function importLandingReviewDraft(restaurantId = '') {
-  const urlInput = document.getElementById(`landing-review-import-url-${restaurantId}`);
-  const url = String(urlInput?.value || '').trim();
-  if (!url) return;
-  try {
-    const result = await requestLandingImport('import_review', { url, restaurantId });
-    upsertLandingReviewDraftFromImport(restaurantId, result);
-    if (urlInput) urlInput.value = '';
-    showToast(`✅ ${result?.status === LANDING_IMPORT_STATUS_IMPORTED ? 'Imported' : 'Imported with repairs needed'} review draft.`, 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'Review import failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().importReviewDraft(restaurantId);
 }
 async function refreshLandingReviewItem(restaurantId = '', itemId = '') {
-  const record = normalizeLandingPageRecord(_landingPageState || createDefaultLandingPageRecord());
-  const item = findLandingItemById(record.draftContent.reviews.restaurants[restaurantId] || [], itemId);
-  const sourceUrl = String(item?.importMeta?.sourceUrl || item?.href || '').trim();
-  if (!item || !sourceUrl) {
-    showToast('⚠️ Add a review URL before refreshing this review.', 'error');
-    return;
-  }
-  try {
-    const result = await requestLandingImport('import_review', { url: sourceUrl, restaurantId });
-    upsertLandingReviewDraftFromImport(restaurantId, result);
-    showToast('✅ Review draft refreshed.', 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'Review refresh failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().refreshReviewItem(restaurantId, itemId);
 }
 
 async function saveLandingPageDraft() {
-  try {
-    const record = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
-    const timestamp = Date.now();
-    await LANDING_DATA_SERVICE.saveDraft(record, timestamp);
-    syncLandingLegacyStateFromStore();
-    renderLandingAdminWorkspace();
-    showToast('✅ Landing page draft saved.', 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'Landing page draft save failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().saveDraft();
 }
 
 function renderLandingPublishModal() {
-  const modalEl = document.getElementById('landing-publish-modal');
-  const listEl = document.getElementById('landing-publish-list');
-  const issuesEl = document.getElementById('landing-publish-issues');
-  const confirmButton = document.getElementById('landing-publish-confirm-btn');
-  if (!modalEl || !listEl || !issuesEl || !confirmButton) return;
-  const record = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || _landingPageState || createDefaultLandingPageRecord());
-  const statuses = LANDING_PAGE_SECTION_ORDER.map(sectionId => getLandingSectionStatus(sectionId, record));
-  const publishableCount = statuses.filter(status => status.hasDraftDiff && status.isValid).length;
-  listEl.innerHTML = statuses.map(status => {
-    const disabled = !status.hasDraftDiff || !status.isValid;
-    const badgeClass = status.isValid ? 'is-ready' : 'is-blocked';
-    const badgeText = !status.isValid ? 'Blocked' : (status.hasDraftDiff ? 'Ready' : 'Live');
-    const helpText = !status.hasDraftDiff
-      ? 'Draft and live match right now.'
-      : (status.isValid ? 'Draft is ready to promote.' : 'Fix the validation issue before publishing.');
-    return `
-      <label class="landing-publish-option">
-        <input type="checkbox" data-landing-publish-section="${escHtml(status.sectionId)}" ${disabled ? 'disabled' : 'checked'}>
-        <div>
-          <strong>${escHtml(status.label)}</strong>
-          <p>${escHtml(helpText)}</p>
-        </div>
-        <span class="landing-admin-section-badge ${badgeClass}">${escHtml(badgeText)}</span>
-      </label>`;
-  }).join('');
-  issuesEl.innerHTML = statuses
-    .filter(status => !status.isValid)
-    .flatMap(status => status.issues)
-    .map(issue => `<div class="landing-admin-issue">${escHtml(issue)}</div>`)
-    .join('');
-  confirmButton.disabled = publishableCount === 0;
+  return getLandingAdminWorkspaceService().renderPublishModal();
 }
 
 function openLandingPublishModal() {
-  if (!hasLandingAdminShell()) return;
-  renderLandingPublishModal();
-  const modalEl = document.getElementById('landing-publish-modal');
-  if (!modalEl) return;
-  modalEl.classList.add('is-open');
-  modalEl.setAttribute('aria-hidden', 'false');
+  return getLandingAdminWorkspaceService().openPublishModal();
 }
 
 function closeLandingPublishModal() {
-  const modalEl = document.getElementById('landing-publish-modal');
-  if (!modalEl) return;
-  modalEl.classList.remove('is-open');
-  modalEl.setAttribute('aria-hidden', 'true');
+  return getLandingAdminWorkspaceService().closePublishModal();
 }
 
 async function publishLandingPageSections() {
-  const selectedSectionIds = Array.from(document.querySelectorAll('[data-landing-publish-section]:checked'))
-    .map(input => input.getAttribute('data-landing-publish-section'))
-    .filter(Boolean);
-  if (!selectedSectionIds.length) {
-    showToast('Select at least one landing-page subsection to publish.', 'info');
-    return;
-  }
-  try {
-    const currentRecord = normalizeLandingPageRecord(syncLandingHoursDraftFromDom() || await ensureLandingPageStateLoaded());
-    const blockedSection = selectedSectionIds
-      .map(sectionId => getLandingSectionStatus(sectionId, currentRecord))
-      .find(status => !status.isValid);
-    if (blockedSection) {
-      renderLandingPublishModal();
-      showToast(`⚠️ Fix ${blockedSection.label.toLowerCase()} before publishing it live.`, 'error');
-      return;
-    }
-    const timestamp = Date.now();
-    await LANDING_DATA_SERVICE.publishSections(currentRecord, selectedSectionIds, timestamp);
-    syncLandingLegacyStateFromStore();
-    renderLandingAdminWorkspace();
-    if (hasLandingRootShell()) renderLandingRootPage(_landingPageState);
-    closeLandingPublishModal();
-    showToast(`✅ Published ${selectedSectionIds.length} landing-page section${selectedSectionIds.length === 1 ? '' : 's'} live.`, 'success');
-  } catch (error) {
-    showToast(`⚠️ ${error?.message || 'Landing page publish failed.'}`, 'error');
-  }
+  return getLandingAdminWorkspaceService().publishSections();
 }
 
 // Resolve which menu to load based on ?menu={slug}, localStorage cache, or
