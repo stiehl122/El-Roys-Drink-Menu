@@ -53,8 +53,9 @@ test('app runtime prefers consolidated publish server boundaries', () => {
   assert.match(source, /\/api\/manager/);
   assert.match(source, /action: 'preview_publish'/);
   assert.match(source, /selected_change_ids/);
-  assert.match(source, /await fetch\('\/api\/manager'/);
-  assert.match(source, /async request\(action,\s*payload = \{\}\)/);
+  assert.match(source, /postApiJson\('\/api\/manager'/);
+  assert.doesNotMatch(source, /action:\s*'specials'/);
+  assert.doesNotMatch(source, /specials_action/);
 });
 
 test('manager route no longer exposes specials mutation transport', () => {

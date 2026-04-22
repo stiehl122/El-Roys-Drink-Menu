@@ -64,6 +64,24 @@ function getRestaurantMenuIds(restaurantId) {
     .filter(menuId => getKnownMenuById(menuId)?.restaurantId === restaurantId);
 }
 
+function getLegacyRestaurantSpecialName(restaurant = null) {
+  const restaurantId = String(restaurant?.id || '');
+  const restaurantSlug = String(restaurant?.slug || '');
+  if (
+    restaurantId === RESTAURANTS.LEROYS?.id ||
+    restaurantSlug === 'leroys-lounge'
+  ) {
+    return "Leroy's Specials";
+  }
+  if (
+    restaurantId === RESTAURANTS.ELROYS?.id ||
+    restaurantSlug === 'el-roys-cantina'
+  ) {
+    return "El Roy's Specials";
+  }
+  return `${String(restaurant?.name || '').trim()} Specials`;
+}
+
 function getSupabaseServerConfig() {
   const sbUrl = process.env.SUPABASE_URL;
   const sbService = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -152,7 +170,7 @@ export function getRestaurantSpecialConfig(restaurantId) {
   const canonicalSlug = String(restaurant.slug || '').replace(/[^a-z0-9]/gi, '');
   return {
     canonicalId: canonicalSlug ? `${canonicalSlug}-specials` : '',
-    name: `${String(restaurant.name || '').trim()} Specials`,
+    name: getLegacyRestaurantSpecialName(restaurant),
     menuIds,
   };
 }

@@ -6319,14 +6319,9 @@ function createRestaurantSpecialsService() {
         return _featuredGroups;
       }
 
-      if (currentUserCanEditRestaurantSpecials(restaurantId) && currentUser?.accessToken) {
-        const workspace = await readMenuWorkspaceThroughApi({
-          menuId: MENU_ID,
-          includeRestaurantTools: true,
-        });
-        if (workspace && applyWorkspaceRestaurantTools(workspace)) {
-          return _featuredGroups;
-        }
+      if (currentUser?.accessToken) {
+        const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID });
+        if (workspace && applyWorkspaceRestaurantTools(workspace)) return _featuredGroups;
       } else {
         this.resetCatalog();
       }
@@ -6345,98 +6340,6 @@ function createRestaurantSpecialsService() {
       if (groupId) return _featuredGroups.find(group => group.id === groupId) || null;
       return _featuredGroups[0] || null;
     },
-
-    getMatches(groupId, query) {
-      const q = query.trim().toLowerCase();
-      if (!q) return [];
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      const existingItemIds = new Set((group?.slots || []).map(slot => slot.itemId));
-      return this.getCatalog()
-        .filter(item =>
-          item.onMenu !== false &&
-          !existingItemIds.has(item.id) &&
-          String(item.name || '').toLowerCase().includes(q)
-        )
-        .slice(0, 8);
-    },
-
-    async request(action, payload = {}) {
-      const response = await fetch('/api/manager', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
-        },
-        body: JSON.stringify({
-          action: 'specials',
-          specials_action: action,
-          restaurantId: RESTAURANT_ID,
-          ...payload,
-        }),
-      });
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (_) {
-        data = {};
-      }
-      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-      return data;
-    },
-
-    async addSlot({ groupId = '', itemId }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      const slotCount = group?.slots?.length || 0;
-      if (slotCount >= 5) return { ok: false, userMessage: 'Max 5 specials per restaurant.', userHandled: true };
-      if ((group?.slots || []).some(slot => slot.itemId === itemId)) {
-        return { ok: false, userMessage: 'That item is already in specials.', userHandled: true };
-      }
-      if (_dirty || _deletedItemIds.size) {
-        const persisted = await persistState();
-        if (persisted === false) return { ok: false, userHandled: true };
-      }
-      await this.request('add', { itemId });
-      await this.refreshForActiveMenu();
-      invalidateDiff();
-      updateDraftIndicator();
-      return { ok: true, successMessage: 'Special added!' };
-    },
-
-    async removeSlot({ slotId }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('remove', { slotId });
-      await this.refreshForActiveMenu();
-      invalidateDiff();
-      updateDraftIndicator();
-      return { ok: true, successMessage: 'Special removed.' };
-    },
-
-    async saveNote({ slotId, note }) {
-      if (!currentUserCanEditRestaurantSpecials()) return { ok: false, userHandled: true };
-      await this.request('note', { slotId, note });
-      return { ok: true };
-    },
-
-    async moveSlot({ groupId = '', slotId, direction }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      if (!group) return { ok: false, userHandled: true };
-      const idx = group.slots.findIndex(slot => slot.id === slotId);
-      if (idx < 0) return { ok: false, userHandled: true };
-      const newIdx = idx + direction;
-      if (newIdx < 0 || newIdx >= group.slots.length) return { ok: false, userHandled: true };
-      await this.request('move', { slotId, direction });
-      await this.refreshForActiveMenu();
-      return { ok: true };
-    },
-
   };
 }
 
@@ -12877,42 +12780,34 @@ function renderFeaturedTab() {
   const wrap = document.getElementById('featured-mgr-wrap');
   const action = document.getElementById('manager-featured-action');
   if (!wrap) return;
-  if (!currentUserCanEditRestaurantSpecials()) {
-    const accessNote = getRestaurantSpecialAccessNote();
-    wrap.innerHTML = `<div class="featured-specials-access-note" role="note" aria-live="polite">
-      <p class="featured-specials-access-kicker">Limited access</p>
-      <h4>${escHtml(accessNote.title)}</h4>
-      <p class="featured-specials-access-copy">${escHtml(accessNote.summary)}</p>
-      <p class="featured-specials-access-detail">${escHtml(accessNote.detail)}</p>
-    </div>`;
-    if (action) {
-      action.textContent = 'Needs both menus';
-      action.disabled = true;
-      action.setAttribute('aria-disabled', 'true');
-      action.title = accessNote.detail;
-    }
-    return;
-  }
+  const featuredItems = getCurrentMenuFeaturedItems();
+  const previewItems = featuredItems.slice(0, 5);
+  const totalCount = featuredItems.length;
+  const currentMenu = getMenuById(MENU_ID);
+  const menuLabel = formatMenuDisplayName(
+    _activeMenuName || currentMenu?.name || 'Current Menu',
+    MENU_TYPE,
+    RESTAURANT_ID
+  );
   if (action) {
-    action.textContent = 'Edit Featured';
-    action.disabled = false;
-    action.removeAttribute('aria-disabled');
-    action.removeAttribute('title');
+    action.textContent = 'Open Category';
+    action.disabled = !currentUserCanManageMenu();
+    action.setAttribute('aria-disabled', action.disabled ? 'true' : 'false');
+    action.title = currentUserCanManageMenu()
+      ? 'Jump to the Featured Specials category in Edit Menu.'
+      : 'Open the current menu to manage Featured Specials.';
+    if (!action.disabled) action.removeAttribute('aria-disabled');
   }
-  const group = getActiveRestaurantSpecialGroup();
-  const groupId = group?.id || '';
-  const slotCount = group?.slots?.length || 0;
-  const restaurantName = getRestaurantById(RESTAURANT_ID)?.name || 'this restaurant';
-  const slotsHtml = slotCount
-    ? group.slots.map((slot, idx) => {
-        const description = isItemDescriptionPublic(slot.item) ? String(slot.item?.desc || '').trim() : '';
-        const recipeText = isItemRecipePublic(slot.item) ? recipeArray(slot.item?.recipe).join(', ') : '';
-        const upcharges = itemUpchargeArray(slot.item?.upcharges);
+  const itemsHtml = previewItems.length
+    ? previewItems.map((item, idx) => {
+        const description = isItemDescriptionPublic(item) ? String(item?.desc || '').trim() : '';
+        const recipeText = isItemRecipePublic(item) ? recipeArray(item?.recipe).join(', ') : '';
+        const upcharges = itemUpchargeArray(item?.upcharges);
         const badges = [
-          slot.item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
-          slot.item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
+          item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
+          item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
         ].filter(Boolean).join('');
-        const priceHtml = slot.item?.price ? `<span class="featured-special-price">${escHtml(slot.item.price)}</span>` : '';
+        const priceHtml = item?.price ? `<span class="featured-special-price">${escHtml(item.price)}</span>` : '';
         const copyHtml = [
           description ? `<p class="featured-special-copy">${escHtml(description)}</p>` : '',
           recipeText ? `<p class="featured-special-copy featured-special-copy--muted">Recipe: ${escHtml(recipeText)}</p>` : '',
@@ -12920,165 +12815,62 @@ function renderFeaturedTab() {
         const upchargesHtml = upcharges.length
           ? `<div class="featured-special-upcharges">${upcharges.map(upcharge => `<span class="featured-special-upcharge">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
           : '';
-        return `<article class="featured-special-row" data-slot-id="${escHtml(slot.id)}">
+        return `<article class="featured-special-row">
           <div class="featured-special-row-head">
-            <div class="featured-special-order">Slot ${idx + 1}</div>
-            <div class="featured-special-actions">
-              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} up">&#8593;</button>
-              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} down">&#8595;</button>
-              <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(groupId)})" aria-label="Remove ${escHtml(slot.item?.name || 'special')} from specials">&#215;</button>
-            </div>
+            <div class="featured-special-order">Preview ${idx + 1}</div>
           </div>
           <div class="featured-special-name">
-            <span class="item-name-static">${escHtml(slot.item?.name || '(deleted)')}</span>
+            <span class="item-name-static">${escHtml(item?.name || '(untitled item)')}</span>
             ${priceHtml}
             ${badges}
           </div>
           ${copyHtml}
           ${upchargesHtml}
-          <label class="featured-sell-note-field">
-            <span class="desc-field-label">Sell note</span>
-            <input class="featured-sell-note-input" type="text" placeholder="Sell note for staff…"
-              aria-label="Sell note for ${escHtml(slot.item?.name || 'special')}"
-              value="${escHtml(slot.sellNote)}"
-              onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-          </label>
         </article>`;
       }).join('')
-    : `<div class="empty-state"><span class="empty-state-icon">+</span><span>No specials yet. Add up to five items for ${escHtml(restaurantName)}.</span></div>`;
-
-  const inputKey = groupId || 'pending';
-  wrap.innerHTML = `<div class="featured-specials-editor">
+    : `<div class="empty-state"><span class="empty-state-icon">⭐</span><span>No items are currently set to show in the featured strip for ${escHtml(menuLabel || 'this menu')}.</span></div>`;
+  const capNote = totalCount > previewItems.length
+    ? `<p class="featured-specials-access-detail">The public featured strip shows the first five featured items. ${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} stay in the category.</p>`
+    : '';
+  wrap.innerHTML = `<div class="featured-specials-editor featured-specials-editor--readonly">
+    <div class="featured-specials-access-note" role="note" aria-live="polite">
+      <p class="featured-specials-access-kicker">Category-owned flow</p>
+      <h4>Manage featured items from Edit Menu</h4>
+      <p class="featured-specials-access-copy">Use the <strong>Featured Specials</strong> category and its <strong>Show in featured strip</strong> toggles to control this menu’s featured items.</p>
+      <p class="featured-specials-access-detail">This overview is read-only now that featured specials are owned by the menu itself instead of a separate restaurant-wide transport.</p>
+      ${capNote}
+    </div>
     <div class="featured-specials-head">
       <div>
-        <h4>${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</h4>
+        <h4>Featured Strip Preview</h4>
+        <p class="featured-specials-access-detail">${escHtml(menuLabel || 'Current Menu')}</p>
       </div>
-      <span class="featured-count">${slotCount} / 5 live</span>
+      <span class="featured-count">${previewItems.length} / 5 previewed</span>
     </div>
-    ${slotCount < 5 ? `
-      <div class="featured-specials-composer">
-        <div class="add-item-wrap featured-special-add">
-          <div class="add-item-area">
-            <input type="text" class="add-item-input featured-add-input" id="featured-add-${escHtml(inputKey)}"
-              placeholder="Search items to add to featured…"
-              oninput="filterFeaturedPicker(${escAttrJs(groupId)},this.value)"
-              onblur="setTimeout(()=>filterFeaturedPicker(${escAttrJs(groupId)},''),150)"
-              onkeydown="handleFeaturedAddKeydown(event,${escAttrJs(groupId)})"/>
-            <button class="add-item-btn" onclick="addFeaturedSlotFromInput(${escAttrJs(groupId)})" aria-label="Add item to ${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}">+</button>
-          </div>
-          <div class="featured-picker-list" id="featured-picker-${escHtml(inputKey)}"></div>
-        </div>
-      </div>` : ''}
-    <div class="featured-specials-list">${slotsHtml}</div>
+    <div class="featured-specials-list">${itemsHtml}</div>
   </div>`;
 }
 
-function getFeatureableMatches(groupId, query) {
-  return getRestaurantSpecialsService().getMatches(groupId, query);
-}
-
-function filterFeaturedPicker(groupId, query) {
-  const listId = 'featured-picker-' + (groupId || 'pending');
-  const list = document.getElementById(listId);
-  if (!list) return;
-  if (!currentUserCanEditRestaurantSpecials()) {
-    list.innerHTML = '';
-    return;
-  }
-  const matches = getFeatureableMatches(groupId, query);
-  if (!query.trim()) { list.innerHTML = ''; return; }
-  list.innerHTML = matches.map(m =>
-    `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
-      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(`${m.menuLabel} · ${m.cat}`)}</span>
-      ${m.visibility === 'off_menu' ? '<span class="featured-picker-offmenu">off-menu</span>' : ''}
-    </div>`
-  ).join('') || '<div class="featured-picker-empty">No matches</div>';
-}
-
-function handleFeaturedAddKeydown(event, groupId) {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    addFeaturedSlotFromInput(groupId);
-    return;
-  }
-  if (event.key === 'Escape') filterFeaturedPicker(groupId, '');
-}
-
-async function addFeaturedSlotFromInput(groupId) {
-  const inputId = 'featured-add-' + (groupId || 'pending');
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  const query = input.value.trim();
-  if (!query) return;
-  const matches = getFeatureableMatches(groupId, query);
-  if (!matches.length) {
-    showToast('No matching items found for specials.', 'info');
-    return;
-  }
-  const exactMatch = matches.find(match => match.name.trim().toLowerCase() === query.toLowerCase());
-  await addFeaturedSlot(groupId, (exactMatch || matches[0]).id);
-}
-
-async function addFeaturedSlot(groupId, itemId) {
-  try {
-    const result = await getRestaurantSpecialsService().addSlot({ groupId, itemId });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-    const input = document.getElementById('featured-add-' + (groupId || 'pending'));
-    if (input) input.value = '';
-    filterFeaturedPicker(groupId, '');
-    showToast(result.successMessage || 'Special added!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to add special.', 'error'); }
-}
-
-async function removeFeaturedSlot(slotId, groupId) {
-  try {
-    const result = await getRestaurantSpecialsService().removeSlot({ slotId, groupId });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-    showToast(result.successMessage || 'Special removed.', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to remove.', 'error'); }
-}
-
-async function saveFeaturedSellNote(slotId, note) {
-  try {
-    await getRestaurantSpecialsService().saveNote({ slotId, note });
-  } catch (error) {
-    showToast(error?.message || 'Failed to save note.', 'error');
-  }
-}
-
-async function moveFeaturedSlot(groupId, slotId, direction) {
-  try {
-    const result = await getRestaurantSpecialsService().moveSlot({ groupId, slotId, direction });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-  } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
+function focusFeaturedCategoryCard() {
+  const featuredCard = document.getElementById('mgr-card-' + FEATURED_SPECIALS_CATEGORY_ID);
+  if (!featuredCard) return false;
+  if (featuredCard.classList.contains('collapsed')) toggleManagerCategory(FEATURED_SPECIALS_CATEGORY_ID);
+  featuredCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const focusTarget = featuredCard.querySelector('.collapsible-header') || featuredCard;
+  if (typeof focusTarget?.focus === 'function') focusTarget.focus();
+  return true;
 }
 
 function focusFeaturedManagerCard() {
-  if (!currentUserCanEditRestaurantSpecials()) return;
-  const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
-  focusSettingsSection('manager-overview-section', overviewTrigger || null);
+  if (!currentUserCanManageMenu()) return;
+  const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-items-section"]');
+  renderManagerCategories();
+  _activeManagerSection = 'manager-items-section';
+  focusSettingsSection('manager-items-section', overviewTrigger || null);
   requestAnimationFrame(() => {
-    const featuredCard = document.getElementById('manager-featured-overview-card');
-    if (!featuredCard) return;
-    featuredCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => {
-      document.querySelector('#featured-mgr-wrap .featured-add-input')?.focus();
-    }, 180);
+    if (focusFeaturedCategoryCard()) return;
+    const itemsSection = document.getElementById('manager-items-section');
+    if (itemsSection) itemsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 
