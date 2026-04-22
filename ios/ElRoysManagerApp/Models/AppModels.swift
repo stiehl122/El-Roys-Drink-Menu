@@ -1766,26 +1766,33 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   mutating func ensureFeaturedSpecialsCategory() {
-    guard !cats.contains(where: { $0.key == Self.featuredSpecialsKey }) else { return }
-    cats.insert(
-      MenuCategoryPayload(
-        id: "local-\(UUID().uuidString.lowercased())",
-        menuId: menuId,
-        key: Self.featuredSpecialsKey,
-        label: "Featured Specials",
-        icon: "star.fill",
-        color: "",
-        sub: isFoodMenu
-          ? "Limited dishes and deal items for this menu"
-          : "Limited pours, specials, and deal items for this menu",
-        placeholder: isFoodMenu
-          ? "e.g. Taco Tuesday Plate..."
-          : "e.g. Happy Hour Margarita...",
-        displayOrder: 0,
-        items: []
-      ),
-      at: 0
-    )
+    var mergedFeatured = fixedFeaturedSpecialsCategory()
+    var regularCategories: [MenuCategoryPayload] = []
+    var uncategorized: MenuCategoryPayload?
+
+    for category in cats {
+      let normalizedKey = Self.normalizedCategoryKey(category.key)
+      if normalizedKey == Self.uncategorizedKey {
+        uncategorized = category
+        continue
+      }
+      if Self.isFeaturedSpecialsCategory(category) || Self.isLegacySpecialCategory(category) {
+        var migratedItems = category.items
+        if Self.isLegacySpecialCategory(category) {
+          migratedItems = migratedItems.map { item in
+            var next = item
+            next.featuredEnabled = true
+            return next
+          }
+        }
+        mergedFeatured.items.append(contentsOf: migratedItems)
+        continue
+      }
+      regularCategories.append(category)
+    }
+
+    mergedFeatured.items = MenuOrdering.canonicalize(items: mergedFeatured.items)
+    cats = [mergedFeatured] + regularCategories + (uncategorized.map { [$0] } ?? [])
     renumberCategories()
   }
 
@@ -2079,6 +2086,37 @@ struct EditableMenuDocument: Codable, Equatable {
     }
     used.insert(candidate)
     return candidate
+  }
+
+  private func fixedFeaturedSpecialsCategory() -> MenuCategoryPayload {
+    MenuCategoryPayload(
+      id: "featured_specials",
+      menuId: menuId,
+      key: Self.featuredSpecialsKey,
+      label: "Featured Specials",
+      icon: "star.fill",
+      color: "",
+      sub: isFoodMenu
+        ? "Limited dishes and deal items for this menu"
+        : "Limited pours, specials, and deal items for this menu",
+      placeholder: isFoodMenu
+        ? "e.g. Taco Tuesday Plate..."
+        : "e.g. Happy Hour Margarita...",
+      displayOrder: 0,
+      items: []
+    )
+  }
+
+  private static func normalizedCategoryKey(_ key: String) -> String {
+    key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private static func isFeaturedSpecialsCategory(_ category: MenuCategoryPayload) -> Bool {
+    normalizedCategoryKey(category.key) == featuredSpecialsKey
+  }
+
+  private static func isLegacySpecialCategory(_ category: MenuCategoryPayload) -> Bool {
+    normalizedCategoryKey(category.key) == "special"
   }
 }
 
