@@ -26,6 +26,7 @@
             eightySixed: !!(item?.is_eighty_sixed ?? item?.eightySixed),
             onMenu: item?.on_menu !== false && item?.onMenu !== false,
             visibility: String(item?.visibility || 'public'),
+            featuredEnabled: item?.featured_enabled === true || item?.featuredEnabled === true,
           })),
         ];
       })
@@ -55,7 +56,6 @@
         snapshot: command.snapshot || {},
         knownMenu: context.knownMenu,
         meta: context.meta,
-        currentFeaturedIds: context.currentFeaturedIds,
       });
       return { context, revisions, preview };
     }
@@ -85,14 +85,9 @@
         const baselineAdvancedIntent = command.intent === 'send' || command.intent === 'save-and-send';
         let baselineAdvanced = false;
         const menuName = context.knownMenu?.name || 'Menu';
-        const siblingMenuIds = Array.isArray(context.siblingMenuIds) ? context.siblingMenuIds : [];
-        const featuredIds = Array.isArray(preview.metadata?.currentFeaturedIds)
-          ? preview.metadata.currentFeaturedIds
-          : (Array.isArray(context.currentFeaturedIds) ? context.currentFeaturedIds : []);
         const lastSentState = preview.metadata?.lastSentState && typeof preview.metadata.lastSentState === 'object'
           ? preview.metadata.lastSentState
           : buildLastSentStateFromSnapshot(command.snapshot || {});
-        let featuredSiblingMenusSynced = [];
 
         if (command.intent !== 'send') {
           await ports.menus.saveLiveMenu({
@@ -171,22 +166,14 @@
               last_sent_ts: baselineAdvanced ? ts : (context.meta?.last_sent_ts || null),
               last_sent_state: baselineAdvanced ? lastSentState : (context.meta?.last_sent_state || {}),
               last_sent_categories: baselineAdvanced ? (preview.diff || []).map(section => section.id) : (context.meta?.last_sent_categories || []),
-              last_sent_featured: baselineAdvanced ? featuredIds : (context.meta?.last_sent_featured || []),
               draft_state: livePersisted ? {} : (context.meta?.draft_state || {}),
               draft_saved_ts: livePersisted ? null : (context.meta?.draft_saved_ts || null),
               draft_saved_by_user_id: livePersisted ? null : (context.meta?.draft_saved_by_user_id ?? undefined),
               draft_saved_by_name: livePersisted ? '' : (context.meta?.draft_saved_by_name ?? undefined),
               draft_saved_source: livePersisted ? '' : (context.meta?.draft_saved_source ?? undefined),
             },
-            optionalFields: ['last_sent_featured', 'draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
+            optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
           }));
-          if (baselineAdvanced && siblingMenuIds.length && typeof ports.menus.patchSiblingFeatured === 'function') {
-            await ports.menus.patchSiblingFeatured({
-              menuIds: siblingMenuIds,
-              featuredIds,
-            });
-            featuredSiblingMenusSynced = siblingMenuIds.slice();
-          }
           if (selection.selectedSections.length && notification.attempted && notification.delivered) {
             auditResults.push(await ports.audit.append({
               menuId: command.menuId,
@@ -238,7 +225,7 @@
             baselineAdvanced,
             selectedChangeIds: selection.selectedChangeIds,
             clearedChangeIds: selection.clearedChangeIds,
-            featuredSiblingMenusSynced,
+            featuredSiblingMenusSynced: [],
           },
           audit: {
             loggedEvents: auditEventTypes,

@@ -47,6 +47,7 @@ const DEFAULT_LAST_SENT_STATE = {
     eightySixed: false,
     onMenu: true,
     visibility: 'public',
+    featuredEnabled: false,
   }],
 };
 
@@ -89,15 +90,11 @@ function createPorts(overrides = {}) {
             last_sent_ts: 9,
             notifications: { menu_url: 'https://example.com/menu' },
             last_sent_state: {},
-            last_sent_featured: [],
           },
-          currentFeaturedIds: ['featured-1'],
-          siblingMenuIds: ['menu-sibling'],
         };
       },
       async saveLiveMenu() {},
       async patchMeta() { return { downgradedFields: [] }; },
-      async patchSiblingFeatured() { return []; },
     },
     governance: {
       async assertCategoryGovernanceAllowed() {},
@@ -118,7 +115,6 @@ function createPorts(overrides = {}) {
           mode: 'save-and-send',
           truncated: false,
           metadata: {
-            currentFeaturedIds: ['featured-1'],
             lastSentState: DEFAULT_LAST_SENT_STATE,
           },
         };
@@ -171,7 +167,6 @@ test('workflow preview returns canonical preview plus current revisions', async 
 test('workflow execute advances queue baseline after successful send', async () => {
   const saveCalls = [];
   const patchCalls = [];
-  const siblingCalls = [];
   const auditCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();
   const workflow = createMenuPublishWorkflow({
@@ -180,7 +175,6 @@ test('workflow execute advances queue baseline after successful send', async () 
         ...createPorts().menus,
         async saveLiveMenu(input) { saveCalls.push(input); },
         async patchMeta(input) { patchCalls.push(input); return { downgradedFields: [] }; },
-        async patchSiblingFeatured(input) { siblingCalls.push(input); return []; },
       },
       audit: {
         async append(input) {
@@ -200,11 +194,8 @@ test('workflow execute advances queue baseline after successful send', async () 
   assert.equal(saveCalls.length, 1);
   assert.ok(patchCalls.some(call => call.patch.last_sent_ts === 1000));
   assert.deepEqual(patchCalls[0].patch.last_sent_state, DEFAULT_LAST_SENT_STATE);
-  assert.deepEqual(siblingCalls, [{
-    menuIds: ['menu-sibling'],
-    featuredIds: ['featured-1'],
-  }]);
-  assert.deepEqual(result.queue.featuredSiblingMenusSynced, ['menu-sibling']);
+  assert.equal(Object.prototype.hasOwnProperty.call(patchCalls[0].patch, 'last_sent_featured'), false);
+  assert.deepEqual(result.queue.featuredSiblingMenusSynced, []);
   assert.ok(auditCalls.some(call => call.eventType === 'send_notification'));
   assert.ok(result.audit.loggedEvents.includes('send_notification'));
 });

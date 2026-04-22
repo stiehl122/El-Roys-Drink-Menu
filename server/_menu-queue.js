@@ -1,4 +1,12 @@
+import '../core/domain/featured-specials.js';
+
 const UNCATEGORIZED_KEY = '__uncategorized__';
+const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const isFeaturedSpecialsCategory = typeof featuredSpecials.isFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.isFeaturedSpecialsCategory
+  : (categoryOrKey => String(categoryOrKey?.key || categoryOrKey || '').trim() === 'featured_specials');
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -39,6 +47,7 @@ function toNormalizedQueueItem(item = {}, {
     nameKey: name.toLowerCase(),
     visible: isVisibleItem(item),
     eightySixed: isEightySixed(item),
+    featuredEnabled: item?.featured_enabled === true || item?.featuredEnabled === true,
   };
 }
 
@@ -309,6 +318,61 @@ function buildCategoryGroupChanges(section, currentItems = [], previousItems = [
   };
 }
 
+function buildFeaturedSpecialGroupChanges(section, currentItems = [], previousItems = []) {
+  const currentById = new Map(currentItems.map(item => [item.id, item]));
+  const previousById = new Map(previousItems.map(item => [item.id, item]));
+  const orderedIds = Array.from(new Set([
+    ...currentItems.map(item => item.id),
+    ...previousItems.map(item => item.id),
+  ]));
+  const groups = [];
+  const unsentCurrentItemIds = new Set();
+
+  orderedIds.forEach(itemId => {
+    const current = currentById.get(itemId) || null;
+    const previous = previousById.get(itemId) || null;
+    const currentEnabled = current?.featuredEnabled === true && current?.visible;
+    const previousEnabled = previous?.featuredEnabled === true && previous?.visible;
+
+    if (!previousEnabled && currentEnabled) {
+      const groupId = createGroupId(section.id, 'added', itemId);
+      groups.push({
+        id: groupId,
+        kind: 'added',
+        selectable: true,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+        displayOrder: section.displayOrder,
+        itemId: String(itemId || ''),
+        lines: [createChangeLine(groupId, section, { kind: 'added', name: current?.name, itemId })],
+      });
+      unsentCurrentItemIds.add(itemId);
+      return;
+    }
+
+    if (previousEnabled && !currentEnabled) {
+      const groupId = createGroupId(section.id, 'removed', itemId);
+      groups.push({
+        id: groupId,
+        kind: 'removed',
+        selectable: true,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+        displayOrder: section.displayOrder,
+        itemId: String(itemId || ''),
+        lines: [createChangeLine(groupId, section, { kind: 'removed', name: previous?.name, itemId })],
+      });
+    }
+  });
+
+  return {
+    groups,
+    unsentCurrentItemIds: Array.from(unsentCurrentItemIds),
+  };
+}
+
 export function buildCategoryQueueState({
   snapshot = {},
   lastSentState = {},
@@ -335,7 +399,9 @@ export function buildCategoryQueueState({
     const section = createSectionState(category, Number.MAX_SAFE_INTEGER - 1000 + sectionIndex);
     const currentItems = normalizeCurrentCategoryItems(category);
     const previousItems = normalizeBaselineCategoryItems(lastSentState, sectionKey);
-    const result = buildCategoryGroupChanges(section, currentItems, previousItems);
+    const result = isFeaturedSpecialsCategory(section)
+      ? buildFeaturedSpecialGroupChanges(section, currentItems, previousItems)
+      : buildCategoryGroupChanges(section, currentItems, previousItems);
     result.groups.forEach(group => groups.push(group));
     result.unsentCurrentItemIds.forEach(itemId => {
       if (itemId) unsentItemIds.add(String(itemId));

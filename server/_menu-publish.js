@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import '../core/session/menu-publish-workflow.js';
 
-import { getRestaurantSpecialConfig } from './_auth.js';
 import {
   MAX_NOTIFICATION_TEXT_LENGTH,
   truncateNotificationText,
@@ -13,19 +12,11 @@ import {
   inferAuditSource,
   insertUpdateLog,
   normalizePersistentItemId,
-  patchMenuMetaForMenu,
   patchMenuMetaForMenuWithCompatibility,
   readMenuMeta,
   saveLiveMenuForMenu,
 } from './_menu-write.js';
-import {
-  getSupabaseServerConfig,
-  serviceHeaders,
-} from './_supabase.js';
-import {
-  getKnownMenuById,
-  readCurrentFeaturedIdsForRestaurant,
-} from './_menu-read.js';
+import { getKnownMenuById } from './_menu-read.js';
 import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 import {
   buildCategoryQueueState,
@@ -59,6 +50,7 @@ function snapshotLastSentState(snapshot = {}) {
       eightySixed: !!item.is_eighty_sixed,
       onMenu: item.on_menu !== false,
       visibility: item.visibility || 'public',
+      featuredEnabled: item.featured_enabled === true || item.featuredEnabled === true,
     })),
   ]));
 }
@@ -143,124 +135,6 @@ function buildPatchMessage(sections = [], { menuName = '', menuLink = '', now = 
 
   if (menuLink) lines.push(`📋 Full menu: ${menuLink}`);
   return lines.join('\n').trim();
-}
-
-async function readItemNamesByIds(itemIds = []) {
-  const uniqueIds = Array.from(new Set((itemIds || []).filter(Boolean)));
-  if (!uniqueIds.length) return new Map();
-
-  const { sbUrl } = getSupabaseServerConfig();
-  const params = new URLSearchParams();
-  params.set('select', 'id,name');
-  params.set('id', `in.(${uniqueIds.map(id => `"${String(id).replace(/"/g, '')}"`).join(',')})`);
-  const response = await fetch(`${sbUrl}/rest/v1/items?${params.toString()}`, { headers: serviceHeaders() });
-  if (!response.ok) return new Map();
-  const rows = await response.json();
-  return new Map((Array.isArray(rows) ? rows : []).map(row => [row.id, normalizeName(row?.name)]));
-}
-
-function createFeaturedChangeLine(groupId, section, kind, itemId, name) {
-  const normalizedName = normalizeName(name);
-  const text = kind === 'added'
-    ? `Added ${normalizedName}`
-    : `Removed ${normalizedName}`;
-  return {
-    id: `${groupId}::${kind}::${encodeURIComponent(normalizedName.toLowerCase())}`,
-    groupId,
-    kind,
-    text,
-    name: normalizedName,
-    itemId: String(itemId || ''),
-    sectionId: section.id,
-    sectionLabel: section.label,
-    icon: section.icon,
-    displayOrder: Number.isFinite(Number(section?.displayOrder))
-      ? Number(section.displayOrder)
-      : Number.MAX_SAFE_INTEGER,
-  };
-}
-
-async function buildFeaturedQueueState(knownMenu = null, meta = {}) {
-  const restaurantId = knownMenu?.restaurantId || '';
-  if (!restaurantId) {
-    return {
-      currentFeaturedIds: [],
-      groups: [],
-      sections: [],
-      notificationChanges: [],
-      diff: [],
-      unsentItemIds: [],
-    };
-  }
-
-  const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(restaurantId);
-  const lastSentFeaturedIds = Array.isArray(meta?.last_sent_featured)
-    ? meta.last_sent_featured.filter(Boolean)
-    : [];
-  const currentSet = new Set(currentFeaturedIds);
-  const lastSet = new Set(lastSentFeaturedIds);
-  const addedIds = currentFeaturedIds.filter(id => !lastSet.has(id));
-  const removedIds = lastSentFeaturedIds.filter(id => !currentSet.has(id));
-  if (!addedIds.length && !removedIds.length) {
-    return {
-      currentFeaturedIds,
-      groups: [],
-      sections: [],
-      notificationChanges: [],
-      diff: [],
-      unsentItemIds: [],
-    };
-  }
-
-  const config = getRestaurantSpecialConfig(restaurantId);
-  const namesById = await readItemNamesByIds([...addedIds, ...removedIds]);
-  const section = {
-    id: '__featured__',
-    icon: '⭐',
-    label: String(config?.name || 'Featured'),
-    displayOrder: Number.MAX_SAFE_INTEGER - 500,
-  };
-  const groups = [];
-
-  addedIds.forEach(itemId => {
-    const groupId = `${section.id}::added::${encodeURIComponent(String(itemId || '').trim())}`;
-    groups.push({
-      id: groupId,
-      kind: 'added',
-      selectable: true,
-      sectionId: section.id,
-      sectionLabel: section.label,
-      icon: section.icon,
-      itemId: String(itemId || ''),
-      lines: [createFeaturedChangeLine(groupId, section, 'added', itemId, namesById.get(itemId) || '(featured item)')],
-    });
-  });
-  removedIds.forEach(itemId => {
-    const groupId = `${section.id}::removed::${encodeURIComponent(String(itemId || '').trim())}`;
-    groups.push({
-      id: groupId,
-      kind: 'removed',
-      selectable: true,
-      sectionId: section.id,
-      sectionLabel: section.label,
-      icon: section.icon,
-      itemId: String(itemId || ''),
-      lines: [createFeaturedChangeLine(groupId, section, 'removed', itemId, namesById.get(itemId) || '(removed featured item)')],
-    });
-  });
-
-  const notificationChanges = groups.flatMap(group => group.lines);
-  const sections = groupNotificationChangesBySection(notificationChanges);
-  const diff = serializeNotificationSectionsForLog(sections);
-
-  return {
-    currentFeaturedIds,
-    groups,
-    sections,
-    notificationChanges,
-    diff,
-    unsentItemIds: [...addedIds],
-  };
 }
 
 function mapLegacySelectionToLineIds(legacySections = [], notificationChanges = []) {
@@ -352,28 +226,6 @@ function resolveSelection(preview, selectedChangeIds = null, legacySelectedSecti
   };
 }
 
-function mergeQueueStates(categoryState = {}, featuredState = {}) {
-  const changeGroups = [
-    ...(Array.isArray(categoryState?.groups) ? categoryState.groups : []),
-    ...(Array.isArray(featuredState?.groups) ? featuredState.groups : []),
-  ];
-  const notificationChanges = changeGroups.flatMap(group => group.lines || []);
-  const sections = groupNotificationChangesBySection(notificationChanges);
-  const diff = serializeNotificationSectionsForLog(sections);
-  const unsentItemIds = Array.from(new Set([
-    ...(Array.isArray(categoryState?.unsentItemIds) ? categoryState.unsentItemIds : []),
-    ...(Array.isArray(featuredState?.unsentItemIds) ? featuredState.unsentItemIds : []),
-  ]));
-
-  return {
-    changeGroups,
-    notificationChanges,
-    sections,
-    diff,
-    unsentItemIds,
-  };
-}
-
 async function buildCanonicalPreviewForMenu({
   snapshot = {},
   meta = {},
@@ -386,8 +238,13 @@ async function buildCanonicalPreviewForMenu({
     snapshot,
     lastSentState,
   });
-  const featuredState = await buildFeaturedQueueState(knownMenu, meta);
-  const queueState = mergeQueueStates(categoryState, featuredState);
+  const queueState = {
+    changeGroups: Array.isArray(categoryState?.groups) ? categoryState.groups : [],
+    notificationChanges: Array.isArray(categoryState?.notificationChanges) ? categoryState.notificationChanges : [],
+    sections: Array.isArray(categoryState?.sections) ? categoryState.sections : [],
+    diff: Array.isArray(categoryState?.diff) ? categoryState.diff : [],
+    unsentItemIds: Array.isArray(categoryState?.unsentItemIds) ? categoryState.unsentItemIds : [],
+  };
   const previewContext = readSnapshotPreviewContext(snapshot);
   const hasNotificationChanges = queueState.changeGroups.length > 0;
   const hasSaveOnlyChanges = previewContext.saveOnlyChanges.length > 0;
@@ -423,7 +280,6 @@ async function buildCanonicalPreviewForMenu({
     metadata: {
       serverOwned: true,
       contract: PREVIEW_CONTRACT,
-      currentFeaturedIds: featuredState.currentFeaturedIds,
       unsentItemIds: queueState.unsentItemIds,
       lastSentState: snapshotLastSentState(snapshot),
     },
@@ -457,23 +313,13 @@ function createServerMenuPublishPorts() {
           throw createMenuPublishError(400, 'Unsupported menu_id', { menuId });
         }
         const meta = await readMenuMeta(menuId);
-        const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(knownMenu.restaurantId);
-        const siblingMenuIds = (getRestaurantSpecialConfig(knownMenu.restaurantId)?.menuIds || [])
-          .filter(candidateId => candidateId && candidateId !== menuId);
-        return { knownMenu, meta, currentFeaturedIds, siblingMenuIds };
+        return { knownMenu, meta };
       },
       async saveLiveMenu(input) {
         return saveLiveMenuForMenu(input);
       },
       async patchMeta({ menuId, patch, optionalFields = [] }) {
         return patchMenuMetaForMenuWithCompatibility(menuId, patch, { optionalFields });
-      },
-      async patchSiblingFeatured({ menuIds, featuredIds }) {
-        return Promise.all(
-          (Array.isArray(menuIds) ? menuIds : []).map(menuId => patchMenuMetaForMenu(menuId, {
-            last_sent_featured: featuredIds,
-          })),
-        );
       },
     },
     governance: {

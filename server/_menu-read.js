@@ -1,4 +1,5 @@
 import '../core/domain/constants.js';
+import '../core/domain/featured-specials.js';
 
 import {
   getRestaurantSpecialConfig,
@@ -20,6 +21,15 @@ const MENUS = domainConstants.MENUS || {};
 const KNOWN_MENU_ORDER = Array.isArray(domainConstants.KNOWN_MENU_ORDER) ? domainConstants.KNOWN_MENU_ORDER.slice() : [];
 const KNOWN_RESTAURANT_ORDER = Array.isArray(domainConstants.KNOWN_RESTAURANT_ORDER) ? domainConstants.KNOWN_RESTAURANT_ORDER.slice() : [];
 const APP_VERSION = domainConstants.APP_VERSION || 'unknown';
+const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const ensureFeaturedSpecialsCategory = typeof featuredSpecials.ensureFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.ensureFeaturedSpecialsCategory
+  : (cats => cats);
+const deriveFeaturedItems = typeof featuredSpecials.deriveFeaturedItems === 'function'
+  ? featuredSpecials.deriveFeaturedItems
+  : (() => []);
 
 function sortByKnownOrder(values = [], knownOrder = [], key = 'id') {
   return values.slice().sort((a, b) => knownOrder.indexOf(a[key]) - knownOrder.indexOf(b[key]));
@@ -174,8 +184,6 @@ export async function readMenuStateBundle(menuId) {
     `${sbUrl}/rest/v1/restaurants?id=eq.${menuRow.restaurant_id}&select=id,name,slug,design,use_custom_design&limit=1`,
     'Failed to load restaurant'
   );
-  const featuredCurrentIds = await readCurrentFeaturedIdsForRestaurant(menuRow.restaurant_id || '');
-
   return {
     menu: {
       id: menuRow.id,
@@ -190,7 +198,6 @@ export async function readMenuStateBundle(menuId) {
     })),
     meta: metaRows?.[0] || {},
     restaurant: restaurantRows?.[0] || null,
-    featuredCurrentIds,
   };
 }
 
@@ -299,7 +306,6 @@ function sanitizePublicMeta(meta = {}) {
     last_updated_ts: meta?.last_updated_ts || null,
     last_sent_ts: meta?.last_sent_ts || null,
     last_sent_categories: Array.isArray(meta?.last_sent_categories) ? meta.last_sent_categories : [],
-    last_sent_featured: Array.isArray(meta?.last_sent_featured) ? meta.last_sent_featured : [],
     last_sent_state: lastSentState,
   };
 }
@@ -342,23 +348,8 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
     snapshot: { cats: normalizedCats },
     lastSentState,
   });
-  const currentFeaturedIds = Array.isArray(bundle?.featuredCurrentIds)
-    ? bundle.featuredCurrentIds.filter(Boolean)
-    : [];
-  const baselineFeaturedIds = Array.isArray(draftMeta?.last_sent_featured)
-    ? draftMeta.last_sent_featured.filter(Boolean)
-    : [];
-  const currentFeaturedSet = new Set(currentFeaturedIds);
-  const baselineFeaturedSet = new Set(baselineFeaturedIds);
-  const unsentFeaturedIds = Array.from(new Set([
-    ...currentFeaturedIds.filter(itemId => !baselineFeaturedSet.has(itemId)),
-    ...baselineFeaturedIds.filter(itemId => !currentFeaturedSet.has(itemId)),
-  ]));
-  const unsentItemIds = Array.from(new Set([
-    ...queueState.unsentItemIds,
-    ...unsentFeaturedIds,
-  ]));
-  const hasUnsentChanges = queueState.hasNotificationChanges || unsentFeaturedIds.length > 0;
+  const unsentItemIds = Array.from(new Set(queueState.unsentItemIds));
+  const hasUnsentChanges = queueState.hasNotificationChanges;
   const publishStatus = hasUnsentChanges ? 'live_unsent' : 'live';
   const liveRevision = bundle?.meta?.last_updated_ts || null;
   const draftRevision = bundle?.meta?.draft_saved_ts || null;
@@ -400,7 +391,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
         queue: {
           contract: 'menu-queue.v1',
           unsentItemIds,
-          unsentFeaturedIds,
+          unsentFeaturedIds: [],
           sections: queueState.diff,
           selectableGroupIds: queueState.groups.map(group => group.id),
         },
@@ -431,15 +422,19 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
   };
 }
 
-export function createPublicMenuPayload(bundle, { featuredGroups = [], featuredCompatibility = null } = {}) {
+export function createPublicMenuPayload(bundle) {
+  const normalizedCats = ensureFeaturedSpecialsCategory(bundle?.cats || [], {
+    menuId: bundle?.menu?.id || '',
+    menuType: bundle?.menu?.type || 'drinks',
+  });
   return {
-    cats: sortCategories(bundle?.cats || [])
+    cats: sortCategories(normalizedCats)
       .map(sanitizePublicCategory)
-      .filter(category => category.key !== '__uncategorized__')
+      .filter(category => category.key !== '__uncategorized__' && category.key !== 'featured_specials')
       .filter(category => Array.isArray(category.items) ? category.items.length > 0 : true),
+    featuredItems: deriveFeaturedItems(normalizedCats).map(sanitizePublicItem),
     meta: sanitizePublicMeta(bundle?.meta || {}),
     restaurant: sanitizePublicRestaurant(bundle?.restaurant || null),
-    featuredGroups: Array.isArray(featuredGroups) ? featuredGroups : [],
     context: {
       kind: 'menu-public',
       menu: bundle?.menu || null,
@@ -451,11 +446,11 @@ export function createPublicMenuPayload(bundle, { featuredGroups = [], featuredC
       includesNotificationConfig: false,
     },
     compatibility: {
-      contract: 'menu-public.v2',
+      contract: 'menu-public.v3',
       projection: 'guest-safe',
       categoryShape: 'public-category.v1',
       itemShape: 'public-item.v1',
-      featuredSource: featuredCompatibility?.featuredSource || 'none',
+      featuredSource: 'menu-category',
     },
   };
 }

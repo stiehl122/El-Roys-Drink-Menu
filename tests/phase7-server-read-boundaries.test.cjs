@@ -316,7 +316,6 @@ test('public payload strips staff-only menu metadata and filters non-public item
       last_updated_ts: 1712705100000,
       last_sent_ts: 1712705150000,
       last_sent_categories: ['beer'],
-      last_sent_featured: ['featured-1'],
     },
     restaurant: {
       id: '00000000-0000-0000-0000-000000000010',
@@ -333,9 +332,9 @@ test('public payload strips staff-only menu metadata and filters non-public item
   assert.equal(payload.meta.last_updated_ts, 1712705100000);
   assert.equal(payload.meta.last_sent_ts, 1712705150000);
   assert.deepEqual(payload.meta.last_sent_categories, ['beer']);
-  assert.deepEqual(payload.meta.last_sent_featured, ['featured-1']);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'draft_state'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'bot_id'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'last_sent_featured'), false);
 });
 
 test('createPublicMenuPayload canonicalizes category and item ordering', async () => {
@@ -401,6 +400,35 @@ test('createPublicMenuPayload canonicalizes category and item ordering', async (
   assert.equal(payload.cats[0].id, 'cat-c');
   assert.deepEqual(payload.cats[1].items.map(item => item.id), ['beer-1', 'beer-2']);
   assert.deepEqual(payload.cats[2].items.map(item => item.id), ['item-c', 'item-a', 'item-b']);
+});
+
+test('public payload hides featured_specials category and emits featuredItems instead', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createPublicMenuPayload({
+    menu: { id: 'menu-main', restaurantId: 'restaurant-main', type: 'drinks' },
+    cats: [
+      {
+        key: 'featured_specials',
+        label: 'Featured Specials',
+        display_order: 0,
+        items: [
+          { id: 'special-1', name: 'Happy Hour Marg', featured_enabled: true, on_menu: true, visibility: 'public' },
+          { id: 'special-2', name: 'Old Seasonal', featured_enabled: false, on_menu: true, visibility: 'public' },
+        ],
+      },
+      {
+        key: 'cocktails',
+        label: 'Cocktails',
+        display_order: 1,
+        items: [{ id: 'cocktail-1', name: 'Paloma', on_menu: true, visibility: 'public' }],
+      },
+    ],
+    meta: {},
+    restaurant: null,
+  });
+
+  assert.deepEqual(payload.cats.map(category => category.key), ['cocktails']);
+  assert.deepEqual(payload.featuredItems.map(item => item.id), ['special-1']);
 });
 
 test('session bootstrap payload exposes actor capabilities against the fixed menu registry', async () => {

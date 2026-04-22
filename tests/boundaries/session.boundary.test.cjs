@@ -284,3 +284,15 @@ test('menu state loader boundary aligns stored drafts after workspace restaurant
   assert.equal(clearCalls, 1);
   assert.equal(refreshCalls, 0);
 });
+
+test('draft snapshot comparison no longer depends on top-level featured_groups', () => {
+  const sandbox = loadAppSandbox();
+  const left = {
+    cats: [{ key: 'featured_specials', items: [{ id: 'special-1', name: 'Happy Hour Marg', featured_enabled: false }] }],
+  };
+  const right = {
+    cats: [{ key: 'featured_specials', items: [{ id: 'special-1', name: 'Happy Hour Marg', featured_enabled: true }] }],
+  };
+
+  assert.equal(sandbox.areDraftDocumentsEqual(left, right), false);
+});

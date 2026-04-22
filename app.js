@@ -213,17 +213,18 @@ function colorAt(palette, index) {
 
 function buildDefaultCategoryDefs(palette) {
   return [
+    { id: 'featured_specials', icon: '⭐', color: colorAt(palette, 3), title: 'Featured Specials', sub: 'Limited pours, specials, and deal items', placeholder: 'e.g. Happy Hour Margarita...', untappdEnabled: false },
     { id: 'beer', icon: '🍺', color: colorAt(palette, 0), title: 'Beers on Tap', sub: 'Current draft offerings', placeholder: 'e.g. Modelo Especial...', untappdEnabled: false },
     { id: 'canned', icon: '🍻', color: colorAt(palette, 4), title: 'Canned & Bottled', sub: 'Canned & bottled offerings', placeholder: 'e.g. Modelo Especial (can), Topo Chico...', untappdEnabled: false },
     { id: 'cocktails', icon: '🍹', color: colorAt(palette, 5), title: 'Cocktails', sub: 'Craft cocktail offerings', placeholder: 'e.g. Paloma, Spicy Margarita...', untappdEnabled: false },
     { id: 'tequila', icon: '🌶️', color: colorAt(palette, 1), title: 'Infused Tequila', sub: 'Rotating infused marg tequila', placeholder: 'e.g. Jalapeño-Pineapple Blanco...', untappdEnabled: false },
     { id: 'frozen', icon: '🧊', color: colorAt(palette, 2), title: 'Frozen Marg', sub: 'Current frozen margarita flavor', placeholder: 'e.g. Strawberry Basil...', untappdEnabled: false },
-    { id: 'special', icon: '⭐', color: colorAt(palette, 3), title: 'Monthly Specials', sub: 'Featured cocktails & promos', placeholder: 'e.g. The Valentina — raspberry, grapefruit...', untappdEnabled: false },
   ];
 }
 
 function buildDefaultFoodCategoryDefs(palette) {
   return [
+    { key: 'featured_specials', label: '⭐ Featured Specials', icon: '⭐', color: colorAt(palette, 3), sub: 'Limited dishes and deal items', placeholder: 'e.g. Taco Tuesday Plate...', untappdEnabled: false },
     { key: 'starters', label: '🥗 Starters', icon: '🥗', color: colorAt(palette, 4), sub: '', placeholder: 'e.g. Chips & Salsa...', untappdEnabled: false },
     { key: 'tacos', label: '🌮 Tacos', icon: '🌮', color: colorAt(palette, 0), sub: '', placeholder: 'e.g. Al Pastor...', untappdEnabled: false },
     { key: 'entrees', label: '🍽 Entrees', icon: '🍽', color: colorAt(palette, 1), sub: '', placeholder: 'e.g. Enchiladas...', untappdEnabled: false },
@@ -1188,18 +1189,11 @@ function alignDraftDocumentSnapshotWithLiveSnapshot(snapshot = null, liveSnapsho
   if (!nextSnapshot) return null;
 
   const normalizedLiveSnapshot = normalizeDraftDocumentSnapshot(liveSnapshot);
-  const liveFeaturedGroups = Array.isArray(normalizedLiveSnapshot.featured_groups)
-    ? cloneJsonCompatible(normalizedLiveSnapshot.featured_groups, [])
-    : [];
   const liveSaveOnlyChanges = Array.isArray(normalizedLiveSnapshot.save_only_changes)
     ? cloneJsonCompatible(normalizedLiveSnapshot.save_only_changes, [])
     : [];
-  const hasFeaturedGroups = Array.isArray(nextSnapshot.featured_groups);
   const hasSaveOnlyChanges = Array.isArray(nextSnapshot.save_only_changes) || Array.isArray(nextSnapshot.saveOnlyChanges);
 
-  if (!hasFeaturedGroups || (!nextSnapshot.featured_groups.length && liveFeaturedGroups.length)) {
-    nextSnapshot.featured_groups = liveFeaturedGroups;
-  }
   if (!hasSaveOnlyChanges) {
     nextSnapshot.save_only_changes = liveSaveOnlyChanges;
   }
@@ -3215,33 +3209,16 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
       if (mode === 'save-and-send' || mode === 'send') {
         const ts = liveSaveTs || sessionPorts.now();
         const lastSentState = sessionPorts.snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
-        const restaurantId = sessionPorts.getRestaurantId();
-        const restaurantMenuIds = sessionPorts.canEditRestaurantSpecials(restaurantId)
-          ? sessionPorts.getRestaurantMenuIds(restaurantId)
-          : [];
-        const patchResults = await Promise.all([
-          sessionPorts.patchMenuMeta({
-            last_updated_ts: ts,
-            last_sent_ts: ts,
-            last_sent_state: lastSentState,
-            last_sent_categories: preview.diff.map(section => section.id),
-            last_sent_featured: currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== sessionPorts.getMenuId())
-            .map(menuId => sessionPorts.patchMenuMetaForMenu(menuId, {
-              last_sent_featured: currentFeaturedIds,
-            })),
-        ]);
-        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
-          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
-        }
+        await sessionPorts.patchMenuMeta({
+          last_updated_ts: ts,
+          last_sent_ts: ts,
+          last_sent_state: lastSentState,
+          last_sent_categories: preview.diff.map(section => section.id),
+        });
 
         sessionPorts.commitPublished({
           diff: preview.diff,
           ts,
-          featuredIds: currentFeaturedIds,
         });
 
         const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
@@ -6004,6 +5981,7 @@ function hydrateMenuItem(record, overrides = {}) {
     upcharges:   itemUpchargeArray(record.upcharges),
     showDescription: record.showDescription ?? record.show_description ?? true,
     showRecipe:  record.showRecipe ?? record.show_recipe ?? false,
+    featuredEnabled: record.featuredEnabled === true || record.featured_enabled === true,
   };
 }
 
@@ -6711,6 +6689,7 @@ function buildMenuCacheSnapshot() {
       upcharges: itemUpchargeArray(item.upcharges),
       show_description: isItemDescriptionPublic(item),
       show_recipe: isItemRecipePublic(item),
+      featured_enabled: item.featuredEnabled === true,
       display_order: itemIndex,
     })),
   }));
@@ -6738,6 +6717,7 @@ function buildMenuCacheSnapshot() {
         upcharges: itemUpchargeArray(item.upcharges),
         show_description: isItemDescriptionPublic(item),
         show_recipe: isItemRecipePublic(item),
+        featured_enabled: item.featuredEnabled === true,
         display_order: itemIndex,
       })),
     });
@@ -6751,9 +6731,6 @@ function buildMenuCacheSnapshot() {
     last_sent_state: snapshotLastSentState(),
     last_sent_categories: menuState._meta?.lastSentCategories || [],
   };
-  if (_menuMetaSupportsLastSentFeatured !== false) {
-    meta.last_sent_featured = Array.from(_lastSentFeaturedIds);
-  }
   const restaurant = isValidRestaurant(RESTAURANT_ID)
     ? {
         id: RESTAURANT_ID,
@@ -6767,7 +6744,6 @@ function buildMenuCacheSnapshot() {
     cats,
     meta,
     restaurant,
-    featured_groups: buildFeaturedGroupsSnapshotValue(),
     save_only_changes: getDraftSaveOnlyChanges(),
   };
 }
@@ -6790,7 +6766,6 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
     cats: Array.isArray(normalized.cats) ? normalized.cats : [],
     meta: normalized.meta && typeof normalized.meta === 'object' ? normalized.meta : {},
     restaurant: normalized.restaurant && typeof normalized.restaurant === 'object' ? normalized.restaurant : null,
-    featured_groups: Array.isArray(normalized.featured_groups) ? normalized.featured_groups : [],
     save_only_changes: Array.isArray(normalized.save_only_changes)
       ? normalized.save_only_changes
       : (Array.isArray(normalized.saveOnlyChanges) ? normalized.saveOnlyChanges : []),
@@ -6801,7 +6776,6 @@ function stripDraftDocumentForComparison(snapshot = {}) {
   const normalized = normalizeDraftDocumentSnapshot(snapshot);
   return {
     cats: normalized.cats,
-    featured_groups: normalized.featured_groups,
     save_only_changes: normalized.save_only_changes,
   };
 }
@@ -6870,12 +6844,9 @@ function buildSnapshotDelta(baseSnapshot = null, updatedSnapshot = null) {
     categoryChanges.set(key, updatedCategory);
   });
 
-  const baseFeatured = normalizeDraftDocumentSnapshot(baseSnapshot).featured_groups;
-  const updatedFeatured = normalizeDraftDocumentSnapshot(updatedSnapshot).featured_groups;
   return {
     itemChanges,
     categoryChanges,
-    featuredGroupsChanged: JSON.stringify(baseFeatured) !== JSON.stringify(updatedFeatured),
   };
 }
 
@@ -6905,10 +6876,6 @@ function buildLocalDraftOverlapSummary(baseSnapshot = null, localSnapshot = null
     labels.add(`Category: ${categoryLabel}`);
   });
 
-  if (localDelta.featuredGroupsChanged && remoteDelta.featuredGroupsChanged) {
-    labels.add('Featured items');
-  }
-
   return {
     labels: Array.from(labels).sort(),
     usedFallback: false,
@@ -6922,18 +6889,6 @@ function sortDraftDocumentInPlace(snapshot = {}) {
     items: sortCanonicalItems(category.items).map((item, itemIndex) => ({
       ...item,
       display_order: itemIndex,
-    })),
-  }));
-  snapshot.featured_groups = (Array.isArray(snapshot.featured_groups) ? snapshot.featured_groups : []).sort((left, right) => (
-    Number(left?.display_order || 0) - Number(right?.display_order || 0)
-  )).map((group, groupIndex) => ({
-    ...group,
-    display_order: groupIndex,
-    slots: (Array.isArray(group?.slots) ? group.slots : []).sort((left, right) => (
-      Number(left?.display_order || 0) - Number(right?.display_order || 0)
-    )).map((slot, slotIndex) => ({
-      ...slot,
-      display_order: slotIndex,
     })),
   }));
   return snapshot;
@@ -6999,10 +6954,6 @@ function mergeLocalDraftSnapshots({
       if (strategy === 'update-local' && (hasRemoteItemConflict || hasRemoteCategoryConflict)) return;
       applyItemChangeToDraftDocument(merged, itemId, change);
     });
-
-  if (localDelta.featuredGroupsChanged && !(strategy === 'update-local' && remoteDelta.featuredGroupsChanged)) {
-    merged.featured_groups = cloneJsonCompatible(localDocument.featured_groups, []);
-  }
 
   merged.context = remoteDocument.context;
   merged.meta = remoteDocument.meta;
