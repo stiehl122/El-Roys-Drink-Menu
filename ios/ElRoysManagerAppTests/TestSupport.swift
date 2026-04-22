@@ -198,10 +198,13 @@ func routeStateMakeServices(
   workspaceClient: WorkspaceClienting = RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
   publicMenuClient: PublicMenuClienting = RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
   historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
-  liveSaveClient: LiveSaveClienting? = nil
+  liveSaveClient: LiveSaveClienting? = nil,
+  featuredToolsClient: FeaturedToolsClienting? = nil
 ) -> AppServices {
   let resolvedLiveSaveClient = liveSaveClient
     ?? RouteStateStubLiveSaveClient(workspaceClient: workspaceClient as? RouteStateStubWorkspaceClient)
+  let resolvedFeaturedToolsClient = featuredToolsClient
+    ?? RouteStateStubFeaturedToolsClient()
   return AppServices(
     bootstrap: RouteStateStubBootstrapClient(),
     auth: RouteStateStubAuthClient(),
@@ -211,7 +214,7 @@ func routeStateMakeServices(
     liveSave: resolvedLiveSaveClient,
     publish: RouteStateStubPublishClient(),
     history: historyClient,
-    featuredTools: RouteStateStubFeaturedToolsClient(),
+    featuredTools: resolvedFeaturedToolsClient,
     preview: RouteStateStubPreviewClient(),
     productLookup: RouteStateStubProductLookupClient()
   )
@@ -354,6 +357,22 @@ final class RouteStateStubWorkspaceClient: WorkspaceClienting {
     }
     payloadsByMenuID[menuId] = payload
   }
+
+  func applyFeaturedGroups(restaurantId: String, groups: [FeaturedGroup]) {
+    let menuIDs = payloadsByMenuID.keys.sorted()
+    for menuID in menuIDs {
+      guard var payload = payloadsByMenuID[menuID] else { continue }
+      guard payload.restaurant?.id == restaurantId else { continue }
+      let existingTools = payload.restaurantTools
+      payload.restaurantTools = RestaurantToolsPayload(
+        restaurantId: restaurantId,
+        featuredGroups: groups,
+        siblingCatalog: existingTools?.siblingCatalog ?? [],
+        compatibility: existingTools?.compatibility
+      )
+      payloadsByMenuID[menuID] = payload
+    }
+  }
 }
 
 final class RouteStateStubPublicMenuClient: PublicMenuClienting {
@@ -427,7 +446,13 @@ final class RouteStateStubHistoryClient: HistoryClienting {
 }
 
 final class RouteStateStubFeaturedToolsClient: FeaturedToolsClienting {
+  var mutateHandler: ((String, String, String?, String?, String?, Int?) -> Void)?
+
   func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
+    if let mutateHandler {
+      mutateHandler(action, restaurantId, itemId, slotId, note, direction)
+      return
+    }
     throw RouteStateTestError.message("Unused in this test")
   }
 }

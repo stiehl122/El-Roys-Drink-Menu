@@ -552,6 +552,15 @@ struct ItemUpcharge: Codable, Equatable, Hashable, Identifiable {
     self.label = try container.decodeString(forKey: .label)
     self.price = try container.decodeString(forKey: .price)
   }
+
+  static func == (lhs: ItemUpcharge, rhs: ItemUpcharge) -> Bool {
+    lhs.label == rhs.label && lhs.price == rhs.price
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(label)
+    hasher.combine(price)
+  }
 }
 
 struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {

@@ -69,6 +69,36 @@ final class RouteStateIsolationTests: XCTestCase {
 
 @MainActor
 final class UpchargeEditorTests: XCTestCase {
+  func testDecodedUpchargesCompareEqualAcrossReloads() throws {
+    let data = Data("""
+    {
+      "id": "item-1",
+      "name": "Bloody Mary",
+      "desc": "",
+      "recipe": [],
+      "price": "$12",
+      "isEightySixed": false,
+      "displayOrder": 0,
+      "onMenu": true,
+      "visibility": "public",
+      "upcharges": [
+        {
+          "label": "Tallboy",
+          "price": "+$2"
+        }
+      ],
+      "showDescription": true,
+      "showRecipe": false
+    }
+    """.utf8)
+
+    let firstDecode = try JSONDecoder.backend.decode(MenuItemPayload.self, from: data)
+    let secondDecode = try JSONDecoder.backend.decode(MenuItemPayload.self, from: data)
+
+    XCTAssertNotEqual(firstDecode.upcharges.first?.id, secondDecode.upcharges.first?.id)
+    XCTAssertEqual(firstDecode, secondDecode)
+  }
+
   func testEditingItemPreservesExistingUpcharges() async throws {
     let preservedUpcharge = ItemUpcharge(label: "Tallboy", price: "+$2")
     let category = routeStateMakeCategory(
@@ -137,6 +167,137 @@ final class UpchargeEditorTests: XCTestCase {
 
 @MainActor
 final class RestaurantToolsInventoryTests: XCTestCase {
+  func testFeaturedActionsRefreshSharedHomeRestaurantToolsCache() async throws {
+    let initialFeaturedItem = routeStateMakeItem(id: "item-initial", name: "Old Fashioned")
+    let updatedFeaturedItem = routeStateMakeItem(id: "item-updated", name: "Paper Plane")
+    let initialGroups = [
+      FeaturedGroup(
+        id: "group-1",
+        name: "Cocktails",
+        displayOrder: 0,
+        slots: [
+          FeaturedSlot(
+            id: "slot-1",
+            itemId: initialFeaturedItem.id,
+            sellNote: "",
+            displayOrder: 0,
+            confirmedAt: nil,
+            confirmedBy: nil,
+            item: initialFeaturedItem
+          )
+        ]
+      )
+    ]
+    let updatedGroups = [
+      FeaturedGroup(
+        id: "group-1",
+        name: "Cocktails",
+        displayOrder: 0,
+        slots: [
+          FeaturedSlot(
+            id: "slot-1",
+            itemId: updatedFeaturedItem.id,
+            sellNote: "",
+            displayOrder: 0,
+            confirmedAt: nil,
+            confirmedBy: nil,
+            item: updatedFeaturedItem
+          )
+        ]
+      )
+    ]
+    let workspaceClient = RouteStateStubWorkspaceClient(
+      payloads: [
+        routeStateMakeWorkspace(
+          menuId: "menu-drinks",
+          type: "drinks",
+          restaurantTools: RestaurantToolsPayload(
+            restaurantId: "leroys-lounge",
+            featuredGroups: initialGroups,
+            siblingCatalog: [],
+            compatibility: nil
+          ),
+          permissions: WorkspacePermissions(
+            canManage: true,
+            canAdmin: true,
+            canEditRestaurantSpecials: true,
+            canReadRestaurantTools: true
+          ),
+          capabilities: WorkspaceCapabilities(
+            canSaveDraft: true,
+            canSaveLiveMenu: true,
+            canPublishUpdates: true,
+            canManageRestaurantSpecials: true,
+            canReadRestaurantTools: true,
+            canManageAdminSettings: false,
+            includesDraftAuthorship: true,
+            includesRestaurantTools: true
+          )
+        ),
+        routeStateMakeWorkspace(
+          menuId: "menu-food",
+          type: "food",
+          restaurantTools: RestaurantToolsPayload(
+            restaurantId: "leroys-lounge",
+            featuredGroups: [],
+            siblingCatalog: [],
+            compatibility: nil
+          ),
+          permissions: WorkspacePermissions(
+            canManage: true,
+            canAdmin: true,
+            canEditRestaurantSpecials: true,
+            canReadRestaurantTools: true
+          ),
+          capabilities: WorkspaceCapabilities(
+            canSaveDraft: true,
+            canSaveLiveMenu: true,
+            canPublishUpdates: true,
+            canManageRestaurantSpecials: true,
+            canReadRestaurantTools: true,
+            canManageAdminSettings: false,
+            includesDraftAuthorship: true,
+            includesRestaurantTools: true
+          )
+        )
+      ]
+    )
+    let featuredToolsClient = RouteStateStubFeaturedToolsClient()
+    featuredToolsClient.mutateHandler = { _, restaurantId, _, _, _, _ in
+      workspaceClient.applyFeaturedGroups(restaurantId: restaurantId, groups: updatedGroups)
+    }
+    let services = routeStateMakeServices(
+      workspaceClient: workspaceClient,
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
+      featuredToolsClient: featuredToolsClient
+    )
+    let appModel = AppModel(
+      services: services,
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+    appModel.authSession = routeStateMakeAuthSession()
+    appModel.bootstrap = try await services.bootstrap.fetch(accessToken: nil)
+
+    let restaurant = routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+    await appModel.loadRestaurantTools(for: restaurant.id)
+    let baselineVersion = appModel.homeDataVersion
+    XCTAssertEqual(
+      appModel.currentToolsMenus["menu-drinks"]?.restaurantTools?.featuredGroups.first?.slots.first?.item?.name,
+      "Old Fashioned"
+    )
+
+    let session = appModel.restaurantToolsSession(for: restaurant)
+    await session.load()
+    await session.saveFeaturedAction(action: "confirm")
+
+    XCTAssertEqual(
+      appModel.currentToolsMenus["menu-drinks"]?.restaurantTools?.featuredGroups.first?.slots.first?.item?.name,
+      "Paper Plane"
+    )
+    XCTAssertGreaterThan(appModel.homeDataVersion, baselineVersion)
+  }
+
   func testInventoryListsOnMenuAndOffMenuItemsAcrossBothMenus() async throws {
     let drinksWorkspace = routeStateMakeWorkspace(
       menuId: "menu-drinks",
@@ -279,5 +440,93 @@ final class RestaurantToolsInventoryTests: XCTestCase {
     )
 
     XCTAssertFalse(session.inventoryRows.contains(where: { $0.id == offMenuItem.id }))
+  }
+
+  func testPruneStopsWhenSessionCannotSaveLiveMenu() async throws {
+    let offMenuCategory = routeStateMakeCategory(
+      id: "cat-off-menu",
+      menuId: "menu-food",
+      key: EditableMenuDocument.uncategorizedKey,
+      label: "Off Menu",
+      items: [
+        routeStateMakeItem(
+          id: "item-food-1",
+          name: "Secret Taco",
+          onMenu: false,
+          visibility: "off_menu"
+        )
+      ]
+    )
+    let services = routeStateMakeServices(
+      workspaceClient: RouteStateStubWorkspaceClient(
+        payloads: [
+          routeStateMakeWorkspace(
+            menuId: "menu-drinks",
+            type: "drinks",
+            categories: [routeStateMakeCategory(id: "cat-drinks", menuId: "menu-drinks", key: "beer", label: "Beer", items: [])],
+            permissions: WorkspacePermissions(
+              canManage: true,
+              canAdmin: false,
+              canEditRestaurantSpecials: false,
+              canReadRestaurantTools: true
+            ),
+            capabilities: WorkspaceCapabilities(
+              canSaveDraft: true,
+              canSaveLiveMenu: false,
+              canPublishUpdates: false,
+              canManageRestaurantSpecials: false,
+              canReadRestaurantTools: true,
+              canManageAdminSettings: false,
+              includesDraftAuthorship: true,
+              includesRestaurantTools: true
+            )
+          ),
+          routeStateMakeWorkspace(
+            menuId: "menu-food",
+            type: "food",
+            categories: [offMenuCategory],
+            permissions: WorkspacePermissions(
+              canManage: true,
+              canAdmin: false,
+              canEditRestaurantSpecials: false,
+              canReadRestaurantTools: true
+            ),
+            capabilities: WorkspaceCapabilities(
+              canSaveDraft: true,
+              canSaveLiveMenu: false,
+              canPublishUpdates: false,
+              canManageRestaurantSpecials: false,
+              canReadRestaurantTools: true,
+              canManageAdminSettings: false,
+              includesDraftAuthorship: true,
+              includesRestaurantTools: true
+            )
+          )
+        ]
+      ),
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
+    )
+    let appModel = AppModel(
+      services: services,
+      sessionStore: RouteStateTestSessionStore(),
+      offlineDraftStore: RouteStateTestOfflineDraftStore()
+    )
+    appModel.authSession = routeStateMakeAuthSession()
+    appModel.bootstrap = try await services.bootstrap.fetch(accessToken: nil)
+
+    let restaurant = routeStateMakeRestaurantRecord(id: "leroys-lounge", slug: "leroyslounge")
+    let session = appModel.restaurantToolsSession(for: restaurant)
+
+    await session.load()
+    let offMenuItem = try XCTUnwrap(session.inventoryRows.first(where: { !$0.onMenu }))
+
+    await session.prune(
+      itemID: offMenuItem.id,
+      fromMenuID: offMenuItem.menuID,
+      categoryKey: offMenuItem.categoryKey
+    )
+
+    XCTAssertEqual(session.notice?.tone, .warning)
+    XCTAssertTrue(session.inventoryRows.contains(where: { $0.id == offMenuItem.id }))
   }
 }

@@ -487,13 +487,7 @@ final class AppModel {
     guard !menuIds.isEmpty else { return }
     await run("Loading Restaurant Tools") { model in
       let payloads = try await model.loadRestaurantToolsPayloads(for: restaurantId)
-      for (menuId, workspace) in payloads.menus {
-        model.currentToolsMenus[menuId] = workspace
-      }
-      for (menuId, history) in payloads.histories {
-        model.currentToolsHistories[menuId] = history
-      }
-      model.homeDataVersion += 1
+      model.syncHomeRestaurantToolsCache(menus: payloads.menus, histories: payloads.histories)
       if model.currentMenuId == nil || !menuIds.contains(model.currentMenuId ?? "") {
         model.currentMenuId = menuIds.first
       }
@@ -828,6 +822,19 @@ final class AppModel {
       direction: direction,
       accessToken: accessToken
     )
+  }
+
+  func syncHomeRestaurantToolsCache(
+    menus: [String: MenuWorkspacePayload],
+    histories: [String: HistoryPayload]
+  ) {
+    for (menuId, workspace) in menus {
+      currentToolsMenus[menuId] = workspace
+    }
+    for (menuId, history) in histories {
+      currentToolsHistories[menuId] = history
+    }
+    homeDataVersion += 1
   }
 
   func saveFeaturedAction(action: String, restaurantId: String, itemId: String? = nil, slotId: String? = nil, note: String? = nil, direction: Int? = nil) async {

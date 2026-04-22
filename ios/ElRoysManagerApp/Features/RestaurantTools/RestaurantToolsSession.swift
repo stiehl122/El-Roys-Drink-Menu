@@ -66,8 +66,7 @@ final class RestaurantToolsSession {
     do {
       notice = nil
       let payloads = try await appModel.loadRestaurantToolsPayloads(for: restaurant.id)
-      toolsMenus = payloads.menus
-      toolsHistories = payloads.histories
+      applyPayloads(payloads)
     } catch {
       notice = FeatureNotice(
         tone: .danger,
@@ -107,6 +106,14 @@ final class RestaurantToolsSession {
       notice = editorSession.notice
       return
     }
+    guard editorSession.workspace?.workspace.capabilities.canSaveLiveMenu == true else {
+      notice = FeatureNotice(
+        tone: .warning,
+        title: "Unavailable",
+        message: "This staff session can review inventory but cannot prune items from the live menu."
+      )
+      return
+    }
 
     editorSession.deleteItem(itemID: itemID, categoryKey: categoryKey)
     await editorSession.saveLiveMenu()
@@ -117,8 +124,7 @@ final class RestaurantToolsSession {
 
     do {
       let payloads = try await appModel.loadRestaurantToolsPayloads(for: restaurant.id)
-      toolsMenus = payloads.menus
-      toolsHistories = payloads.histories
+      applyPayloads(payloads, syncHomeCache: true)
       notice = FeatureNotice.success("Item Pruned", "The off-menu item was removed from the restaurant inventory.")
     } catch {
       notice = FeatureNotice(
@@ -151,8 +157,7 @@ final class RestaurantToolsSession {
       )
       let payloads = try await appModel.loadRestaurantToolsPayloads(for: restaurant.id)
       notice = nil
-      toolsMenus = payloads.menus
-      toolsHistories = payloads.histories
+      applyPayloads(payloads, syncHomeCache: true)
     } catch {
       notice = FeatureNotice(
         tone: .danger,
@@ -164,5 +169,16 @@ final class RestaurantToolsSession {
 
   private func accessibleMenu(for menuID: String) -> MenuRecord? {
     appModel.accessibleMenus.first(where: { $0.id == menuID })
+  }
+
+  private func applyPayloads(
+    _ payloads: (menus: [String: MenuWorkspacePayload], histories: [String: HistoryPayload]),
+    syncHomeCache: Bool = false
+  ) {
+    toolsMenus = payloads.menus
+    toolsHistories = payloads.histories
+    if syncHomeCache {
+      appModel.syncHomeRestaurantToolsCache(menus: payloads.menus, histories: payloads.histories)
+    }
   }
 }
