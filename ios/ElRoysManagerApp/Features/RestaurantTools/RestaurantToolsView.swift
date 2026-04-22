@@ -97,7 +97,7 @@ struct RestaurantToolsScreen: View {
   private func featuredGuidanceCard(workspace: MenuWorkspacePayload) -> some View {
     let featuredCategory = workspace.cats.first(where: { $0.key == EditableMenuDocument.featuredSpecialsKey })
     let featuredItems = featuredCategory?.items ?? []
-    let enabledItems = featuredItems.filter(\.featuredEnabled)
+    let liveItems = featuredItems.filter(\.isPubliclyVisibleFeaturedSpecial)
 
     return VStack(alignment: .leading, spacing: 16) {
       HStack(alignment: .center) {
@@ -108,7 +108,7 @@ struct RestaurantToolsScreen: View {
             .foregroundStyle(AppPalette.espresso)
         }
         Spacer(minLength: 16)
-        Text("\(enabledItems.count) live items")
+        Text("\(liveItems.count) live items")
           .font(AppTypography.micro(9, weight: .bold))
           .tracking(1.6)
           .padding(.vertical, 8)
@@ -139,7 +139,7 @@ struct RestaurantToolsScreen: View {
                     .foregroundStyle(AppPalette.ink)
                     .strikethrough(item.isEightySixed)
 
-                  if item.featuredEnabled {
+                  if item.isPubliclyVisibleFeaturedSpecial {
                     Text("LIVE")
                       .font(AppTypography.micro(8, weight: .bold))
                       .tracking(1.4)

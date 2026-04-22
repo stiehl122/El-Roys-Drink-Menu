@@ -568,6 +568,10 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
   var featuredEnabled: Bool
   fileprivate var canonicalServerDisplayOrder: Int?
 
+  var isPubliclyVisibleFeaturedSpecial: Bool {
+    featuredEnabled && onMenu && visibility != "off_menu"
+  }
+
   enum CodingKeys: String, CodingKey {
     case id
     case name
@@ -1710,7 +1714,7 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   var featuredSpecialItems: [MenuItemPayload] {
-    cats.first(where: { $0.key == Self.featuredSpecialsKey })?.items.filter(\.featuredEnabled) ?? []
+    cats.first(where: { $0.key == Self.featuredSpecialsKey })?.items.filter(\.isPubliclyVisibleFeaturedSpecial) ?? []
   }
 
   var visibleCategories: [MenuCategoryPayload] {

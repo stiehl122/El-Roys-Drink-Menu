@@ -160,7 +160,7 @@ struct RestaurantChooserView: View {
       .flatMap { workspace in
         workspace.cats.first(where: { $0.key == EditableMenuDocument.featuredSpecialsKey })?.items ?? []
       }
-      .filter(\.featuredEnabled)
+      .filter(\.isPubliclyVisibleFeaturedSpecial)
       .compactMap { $0.name.nilIfBlank }
     return names.isEmpty ? nil : names
   }

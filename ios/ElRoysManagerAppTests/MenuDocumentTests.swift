@@ -25,7 +25,7 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(document.featuredSpecialItems.isEmpty)
   }
 
-  func testFeaturedSpecialItemsOnlyIncludeEnabledItemsFromFeaturedCategory() {
+  func testFeaturedSpecialItemsOnlyIncludePubliclyVisibleEnabledItemsFromFeaturedCategory() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
         id: "featured",
@@ -39,7 +39,21 @@ final class MenuDocumentTests: XCTestCase {
         displayOrder: 0,
         items: [
           makeItem(id: "special-1", name: "Happy Hour Marg", featuredEnabled: true),
-          makeItem(id: "special-2", name: "Old Seasonal", featuredEnabled: false)
+          makeItem(id: "special-2", name: "Old Seasonal", featuredEnabled: false),
+          makeItem(
+            id: "special-3",
+            name: "Hidden Old Fashioned",
+            onMenu: false,
+            visibility: "off_menu",
+            featuredEnabled: true
+          ),
+          makeItem(
+            id: "special-4",
+            name: "Draft-only Daiquiri",
+            onMenu: false,
+            visibility: "public",
+            featuredEnabled: true
+          )
         ]
       ),
       MenuCategoryPayload(
