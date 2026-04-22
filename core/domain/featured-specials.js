@@ -68,7 +68,7 @@
   }
 
   function isPublicFeaturedSpecialItem(item = {}) {
-    return item?.onMenu !== false && item?.visibility !== 'off_menu';
+    return item?.onMenu !== false && item?.on_menu !== false && item?.visibility !== 'off_menu';
   }
 
   function deriveFeaturedItems(categories = []) {

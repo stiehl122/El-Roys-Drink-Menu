@@ -62,6 +62,7 @@ test('deriveFeaturedItems recognizes legacy special categories and excludes non-
       items: [
         { id: 'item-a', name: 'Happy Hour Marg', featured_enabled: true, onMenu: true, visibility: 'public' },
         { id: 'item-b', name: 'Back Bar Pour', featured_enabled: true, onMenu: true, visibility: 'off_menu' },
+        { id: 'item-c', name: 'Server Hidden Pour', featured_enabled: true, on_menu: false, visibility: 'public' },
       ],
     },
   ]);
