@@ -597,6 +597,54 @@ function getLandingTargetAccentClass(target = '') {
   if (target === RESTAURANTS.ELROYS.id) return 'landing-tag--elroys';
   return 'landing-tag--both';
 }
+const LANDING_EVENT_STATIC_MEDIA = [
+  '/assets/root-landing/event-record.png',
+  '/assets/root-landing/event-old-fashioned.png',
+  '/assets/root-landing/event-guitar.png',
+  '/assets/root-landing/event-tacos.png',
+];
+const LANDING_NEWS_STATIC_MEDIA = [
+  '/assets/root-landing/news-cocktail.png',
+  '/assets/root-landing/news-carnitas.png',
+  '/assets/root-landing/news-vinyl.png',
+];
+function getLandingTargetTone(target = '') {
+  if (target === RESTAURANTS.LEROYS.id) return 'leroys';
+  if (target === RESTAURANTS.ELROYS.id) return 'elroys';
+  return 'both';
+}
+function getLandingStaticMediaPath(kind = '', index = 0, target = '') {
+  if (kind === 'review') {
+    return target === RESTAURANTS.ELROYS.id
+      ? '/assets/root-landing/review-elroys.png'
+      : '/assets/root-landing/review-leroys.png';
+  }
+  const library = kind === 'news' ? LANDING_NEWS_STATIC_MEDIA : LANDING_EVENT_STATIC_MEDIA;
+  if (!library.length) return '';
+  const normalizedIndex = Math.abs(Number(index) || 0) % library.length;
+  return library[normalizedIndex];
+}
+function getLandingDateBadgeParts(value = '') {
+  if (!isLandingIsoDate(value)) {
+    return { month: 'SOON', day: 'TBD' };
+  }
+  const formatted = formatLandingDateLabel(value, { short: true, year: false });
+  const [month, day] = formatted.split(' ');
+  return {
+    month: (month || 'SOON').replace('.', '').toUpperCase(),
+    day: day || 'TBD',
+  };
+}
+function formatLandingEventTimeBadge(item = {}) {
+  const start = parseLandingTimeToMinutes(item.startTime);
+  const end = parseLandingTimeToMinutes(item.endTime);
+  if (start !== null && end !== null) {
+    return `${formatLandingMinutes(start)} - ${formatLandingMinutes(end)}`;
+  }
+  if (start !== null) return formatLandingMinutes(start);
+  if (item.timingNote) return String(item.timingNote);
+  return 'All night';
+}
 function formatLandingImportStatusLabel(status = '') {
   if (status === LANDING_IMPORT_STATUS_IMPORTED) return 'Imported';
   if (status === LANDING_IMPORT_STATUS_PARTIAL) return 'Partial';
@@ -4940,14 +4988,27 @@ function renderLandingRootEvents(section = {}) {
     return;
   }
   emptyEl.hidden = true;
-  listEl.innerHTML = items.map(item => `
-    <article class="landing-story-card landing-story-card--event">
-      <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
-      <h3>${escHtml(item.title || 'Upcoming event')}</h3>
-      <p>${escHtml(item.body || '')}</p>
-      <p class="landing-card-kicker">${escHtml(formatLandingEventScheduleLine(item))}</p>
-    </article>
-  `).join('');
+  listEl.innerHTML = items.map((item, index) => {
+    const tone = getLandingTargetTone(item.target);
+    const badge = getLandingDateBadgeParts(item.eventDate);
+    const mediaPath = getLandingStaticMediaPath('event', index, item.target);
+    return `
+      <article class="landing-story-card landing-story-card--event landing-story-card--${tone}">
+        <img class="landing-story-thumb" src="${escHtml(mediaPath)}" alt="">
+        <div class="landing-story-calendar">
+          <span>${escHtml(badge.month)}</span>
+          <strong>${escHtml(badge.day)}</strong>
+          <small>${escHtml(formatLandingEventTimeBadge(item))}</small>
+        </div>
+        <div class="landing-story-body">
+          <p class="landing-card-kicker"><span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span></p>
+          <h3>${escHtml(item.title || 'Upcoming event')}</h3>
+          <p>${escHtml(item.body || '')}</p>
+          <p class="landing-story-meta">${escHtml(formatLandingEventScheduleLine(item))}</p>
+        </div>
+      </article>
+    `;
+  }).join('');
 }
 function renderLandingRootNews(section = {}) {
   const listEl = document.getElementById('landing-news-list');
@@ -4961,20 +5022,24 @@ function renderLandingRootNews(section = {}) {
     return;
   }
   emptyEl.hidden = true;
-  listEl.innerHTML = items.map(item => `
-    <a class="landing-story-card landing-story-card--news ${item.imageUrl ? 'has-image' : 'is-text-only'}" href="${escHtml(item.href)}" target="_blank" rel="noreferrer">
-      ${item.imageUrl ? `<img class="landing-story-image" src="${escHtml(item.imageUrl)}" alt="${escHtml(item.title || item.source || 'News image')}">` : ''}
-      <div class="landing-story-copy">
-        <p class="landing-card-kicker">
-          <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
-          <span>${escHtml([item.source, formatLandingDateLabel(item.publishedDate, { short: true, year: false })].filter(Boolean).join(' · '))}</span>
-        </p>
-        <h3>${escHtml(item.title || 'Imported story')}</h3>
-        ${item.body ? `<p>${escHtml(item.body)}</p>` : ''}
-        <span class="landing-story-link">Read Story ↗</span>
-      </div>
-    </a>
-  `).join('');
+  listEl.innerHTML = items.map((item, index) => {
+    const tone = getLandingTargetTone(item.target);
+    const mediaPath = item.imageUrl || getLandingStaticMediaPath('news', index, item.target);
+    return `
+      <a class="landing-story-card landing-story-card--news landing-story-card--${tone}" href="${escHtml(item.href)}" target="_blank" rel="noreferrer">
+        <img class="landing-story-image" src="${escHtml(mediaPath)}" alt="${escHtml(item.title || item.source || 'News image')}">
+        <div class="landing-story-copy">
+          <p class="landing-card-kicker">
+            <span class="landing-tag ${getLandingTargetAccentClass(item.target)}">${escHtml(getLandingTargetLabel(item.target))}</span>
+            <span>${escHtml([item.source, formatLandingDateLabel(item.publishedDate, { short: true, year: false })].filter(Boolean).join(' · '))}</span>
+          </p>
+          <h3>${escHtml(item.title || 'Imported story')}</h3>
+          ${item.body ? `<p>${escHtml(item.body)}</p>` : ''}
+          <span class="landing-story-link">Read story</span>
+        </div>
+      </a>
+    `;
+  }).join('');
 }
 function renderLandingRootReviews(section = {}) {
   const sectionEl = document.getElementById('reviews');
@@ -4999,16 +5064,32 @@ function renderLandingRootReviews(section = {}) {
   listEl.innerHTML = pairs.map((pair, index) => `
     <article class="landing-review-pair ${index === _landingReviewCarouselIndex ? 'is-active' : ''}" data-landing-review-pair="${index}">
       <article class="landing-review-card landing-review-card--leroys">
-        <p class="landing-card-kicker">${escHtml(RESTAURANTS.LEROYS.name)}</p>
-        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.leroys.rating) || 5)))}</h3>
-        <p>${escHtml(pair.leroys.quote || '')}</p>
-        <p class="landing-card-kicker">${escHtml(pair.leroys.author || '')}${pair.leroys.source ? ` · ${escHtml(pair.leroys.source)}` : ''}</p>
+        <div class="landing-review-copy">
+          <p class="landing-card-kicker">${escHtml(RESTAURANTS.LEROYS.name)}</p>
+          <p class="landing-review-stars">${'★'.repeat(Math.max(1, Math.min(5, Number(pair.leroys.rating) || 5)))}</p>
+          <blockquote>${escHtml(pair.leroys.quote || '')}</blockquote>
+          <p class="landing-review-attribution">${escHtml(pair.leroys.author || '')}${pair.leroys.source ? ` · ${escHtml(pair.leroys.source)}` : ''}</p>
+          ${pair.leroys.href
+            ? `<a class="landing-review-link" href="${escHtml(pair.leroys.href)}" target="_blank" rel="noreferrer">View more reviews</a>`
+            : '<span class="landing-review-link">View more reviews</span>'}
+        </div>
+        <div class="landing-review-media">
+          <img src="${escHtml(getLandingStaticMediaPath('review', index, RESTAURANTS.LEROYS.id))}" alt="">
+        </div>
       </article>
       <article class="landing-review-card landing-review-card--elroys">
-        <p class="landing-card-kicker">${escHtml(RESTAURANTS.ELROYS.name)}</p>
-        <h3>${'★'.repeat(Math.max(1, Math.min(5, Number(pair.elroys.rating) || 5)))}</h3>
-        <p>${escHtml(pair.elroys.quote || '')}</p>
-        <p class="landing-card-kicker">${escHtml(pair.elroys.author || '')}${pair.elroys.source ? ` · ${escHtml(pair.elroys.source)}` : ''}</p>
+        <div class="landing-review-copy">
+          <p class="landing-card-kicker">${escHtml(RESTAURANTS.ELROYS.name)}</p>
+          <p class="landing-review-stars">${'★'.repeat(Math.max(1, Math.min(5, Number(pair.elroys.rating) || 5)))}</p>
+          <blockquote>${escHtml(pair.elroys.quote || '')}</blockquote>
+          <p class="landing-review-attribution">${escHtml(pair.elroys.author || '')}${pair.elroys.source ? ` · ${escHtml(pair.elroys.source)}` : ''}</p>
+          ${pair.elroys.href
+            ? `<a class="landing-review-link" href="${escHtml(pair.elroys.href)}" target="_blank" rel="noreferrer">View more reviews</a>`
+            : '<span class="landing-review-link">View more reviews</span>'}
+        </div>
+        <div class="landing-review-media">
+          <img src="${escHtml(getLandingStaticMediaPath('review', index, RESTAURANTS.ELROYS.id))}" alt="">
+        </div>
       </article>
     </article>
   `).join('');
@@ -5036,18 +5117,22 @@ function stepLandingReviewCarousel(direction = 1) {
 
 function renderLandingRootHours(section = {}) {
   const restaurantPairs = [
-    { restaurant: RESTAURANTS.LEROYS, heroId: 'landing-hero-status-leroys', todayId: 'landing-hours-today-leroys', listId: 'landing-hours-list-leroys' },
-    { restaurant: RESTAURANTS.ELROYS, heroId: 'landing-hero-status-elroys', todayId: 'landing-hours-today-elroys', listId: 'landing-hours-list-elroys' },
+    { restaurant: RESTAURANTS.LEROYS, heroId: 'landing-hero-status-leroys', heroMetaId: 'landing-hero-meta-leroys', todayId: 'landing-hours-today-leroys', listId: 'landing-hours-list-leroys' },
+    { restaurant: RESTAURANTS.ELROYS, heroId: 'landing-hero-status-elroys', heroMetaId: 'landing-hero-meta-elroys', todayId: 'landing-hours-today-elroys', listId: 'landing-hours-list-elroys' },
   ];
-  restaurantPairs.forEach(({ restaurant, heroId, todayId, listId }) => {
+  restaurantPairs.forEach(({ restaurant, heroId, heroMetaId, todayId, listId }) => {
     const status = computeLandingStatusForRestaurant(section, restaurant.id);
     const heroEl = document.getElementById(heroId);
+    const heroMetaEl = document.getElementById(heroMetaId);
     const todayEl = document.getElementById(todayId);
     const listEl = document.getElementById(listId);
     if (heroEl) {
       heroEl.textContent = status.label;
       heroEl.classList.toggle('is-open', !!status.isOpen);
       heroEl.classList.toggle('is-closed', !status.isOpen);
+    }
+    if (heroMetaEl) {
+      heroMetaEl.textContent = `Today · ${status.todayRangeLabel}`;
     }
     if (todayEl) {
       todayEl.innerHTML = `<span>Today</span><strong>${escHtml(status.todayRangeLabel)}</strong>`;
