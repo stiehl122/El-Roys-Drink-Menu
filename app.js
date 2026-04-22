@@ -5758,19 +5758,7 @@ function scheduleSessionRefreshRetry(delayMs = 60_000) {
 function canReadRestaurantToolsFromWorkspace(workspace = {}) {
   const permissions = workspace?.permissions && typeof workspace.permissions === 'object' ? workspace.permissions : {};
   const capabilities = workspace?.capabilities && typeof workspace.capabilities === 'object' ? workspace.capabilities : {};
-  return !!(permissions.canReadRestaurantTools || capabilities.canReadRestaurantTools || capabilities.includesRestaurantTools);
-}
-
-function normalizeWorkspaceSiblingCatalog(catalog = []) {
-  return (Array.isArray(catalog) ? catalog : []).map(item => ({
-    id: item?.id || '',
-    name: item?.name || '',
-    cat: item?.cat || item?.category || '',
-    menuId: item?.menuId || item?.menu_id || '',
-    menuLabel: item?.menuLabel || item?.menu_label || '',
-    onMenu: item?.onMenu !== false && item?.on_menu !== false,
-    visibility: item?.visibility || 'public',
-  })).filter(item => item.id && item.name);
+  return !!(permissions.canReadRestaurantTools || capabilities.canReadRestaurantTools);
 }
 
 function normalizeWorkspaceFeaturedGroups(groups = []) {
@@ -5870,29 +5858,15 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const workspace = workspacePayload?.workspace && typeof workspacePayload.workspace === 'object'
     ? workspacePayload.workspace
     : {};
-  const tools = workspacePayload?.restaurantTools && typeof workspacePayload.restaurantTools === 'object'
-    ? workspacePayload.restaurantTools
-    : null;
-  const featuredGroups = tools && Array.isArray(tools.featuredGroups)
-    ? tools.featuredGroups
-    : (Array.isArray(workspacePayload?.featuredGroups) ? workspacePayload.featuredGroups : null);
   const featuredItems = Array.isArray(workspacePayload?.featuredItems)
     ? workspacePayload.featuredItems
     : null;
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
-  if (!featuredGroups && !featuredItems && !tools) return false;
+  if (!featuredItems) return false;
 
-  if (Array.isArray(featuredGroups)) {
-    _featuredGroups = normalizeWorkspaceFeaturedGroups(featuredGroups);
-  } else if (Array.isArray(featuredItems)) {
-    _featuredGroups = adaptPublicFeaturedItemsToGroups(featuredItems);
-  }
-  if (Array.isArray(tools?.siblingCatalog)) {
-    _restaurantSpecialsSiblingCatalog = normalizeWorkspaceSiblingCatalog(tools.siblingCatalog);
-  } else if (!tools) {
-    _restaurantSpecialsSiblingCatalog = [];
-  }
+  _featuredGroups = adaptPublicFeaturedItemsToGroups(featuredItems);
+  _restaurantSpecialsSiblingCatalog = [];
   return true;
 }
 

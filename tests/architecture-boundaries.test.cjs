@@ -2267,6 +2267,10 @@ test('runtime workspace and history boundaries avoid deleted restaurant-tools in
 
   assert.match(appSource, /action: 'workspace', menu_id: menuId/);
   assert.doesNotMatch(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.doesNotMatch(appSource, /workspacePayload\?\.restaurantTools/);
+  assert.doesNotMatch(appSource, /tools\.featuredGroups/);
+  assert.doesNotMatch(appSource, /tools\.siblingCatalog/);
+  assert.doesNotMatch(appSource, /capabilities\.includesRestaurantTools/);
   assert.match(appSource, /scope: canReadRestaurantTools \? 'restaurant' : 'menu'/);
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });
