@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
@@ -11,6 +12,10 @@ const {
 } = require('./helpers/runtime.cjs');
 
 const ROOT = path.join(__dirname, '..');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
 
 async function importApiModule(relativePath) {
   const fileUrl = pathToFileURL(path.join(ROOT, relativePath)).href;
@@ -426,4 +431,10 @@ test('canceling the add-category form resets the Untappd toggle to its default s
   assert.equal(addForm.style.display, 'none');
   assert.equal(addButton.textContent, '+ Add Category');
   assert.equal(untappdCheckbox.checked, false);
+});
+
+test('category governance blocks rename, move, and delete for featured_specials', () => {
+  const source = read('app.js');
+  assert.match(source, /function isProtectedSystemCategory\(/);
+  assert.match(source, /catId === FEATURED_SPECIALS_CATEGORY_ID/);
 });

@@ -393,6 +393,12 @@ function installPublishFacadeStub(sandbox, overrides = {}) {
   };
 }
 
+test('route rendering uses sharedState.featuredItems and omits the hidden category from normal sections', () => {
+  const source = read('leroyslounge/app.js');
+  assert.match(source, /sharedState\.featuredItems/);
+  assert.doesNotMatch(source, /restaurantSpecials\?\.slots/);
+});
+
 test('menu session lifecycle handles redirect and fallback-aware open results', async () => {
   const sandbox = loadAppSandbox();
   const restored = [];
@@ -1836,6 +1842,18 @@ test('public route contract and route renderers register and hydrate both restau
   for (const routeCase of routeCases) {
     const sandbox = loadAppSandbox();
     const { page, settingsWrapper } = setupRouteDom(sandbox, routeCase.prefix);
+    const featuredItems = Array.from({ length: 5 }, (_, index) => ({
+      id: `special-${index + 1}`,
+      name: `House Margarita ${index + 1}`,
+      price: '$12',
+      visibility: 'public',
+      eightySixed: false,
+      desc: 'Citrus and salt',
+      recipe: ['tequila', 'lime'],
+      upcharges: [],
+      showDescription: true,
+      showRecipe: true,
+    }));
     setState(sandbox, {
       _siteRestaurant: { id: routeCase.restaurantId, name: routeCase.restaurantName },
       RESTAURANT_ID: routeCase.restaurantId,
@@ -1847,22 +1865,11 @@ test('public route contract and route renderers register and hydrate both restau
         {
           id: 'group-1',
           name: 'Specials',
-          slots: Array.from({ length: 5 }, (_, index) => ({
+          slots: featuredItems.map((item, index) => ({
             id: `slot-${index + 1}`,
-            itemId: `special-${index + 1}`,
+            itemId: item.id,
             sellNote: '',
-            item: {
-              id: `special-${index + 1}`,
-              name: `House Margarita ${index + 1}`,
-              price: '$12',
-              visibility: 'public',
-              eightySixed: false,
-              desc: 'Citrus and salt',
-              recipe: ['tequila', 'lime'],
-              upcharges: [],
-              showDescription: true,
-              showRecipe: true,
-            },
+            item,
           })),
         },
       ],
@@ -1888,7 +1895,7 @@ test('public route contract and route renderers register and hydrate both restau
         canEditRestaurantSpecials: true,
         categoryDefs: [{ id: 'beer', title: 'Beers on Tap', icon: '🍺' }],
         currentUser: getState(sandbox, 'currentUser'),
-        featuredGroups: getState(sandbox, '_featuredGroups'),
+        featuredItems,
         isPreview: true,
         knownMenus: [{ id: routeCase.menuId, restaurantId: routeCase.restaurantId, type: 'drinks', name: routeCase.menuName, slug: 'test-slug' }],
         lastUpdatedTs: '1712705100000',
@@ -1896,7 +1903,6 @@ test('public route contract and route renderers register and hydrate both restau
         menuState: getState(sandbox, 'menuState'),
         menuType: 'drinks',
         restaurantId: routeCase.restaurantId,
-        restaurantSpecials: getState(sandbox, '_featuredGroups')[0],
         siteRestaurant: getState(sandbox, '_siteRestaurant'),
       },
       helpers: {
@@ -2088,7 +2094,7 @@ test('fallback defaults reset category definitions by menu type', () => {
 
   assert.equal(result.source, 'default');
   const categoryIds = getState(sandbox, 'CATEGORY_DEFS.map(cat => cat.id)');
-  assert.equal(Array.from(categoryIds).slice(0, 3).join(','), 'starters,tacos,entrees');
+  assert.equal(Array.from(categoryIds).slice(0, 3).join(','), 'featured_specials,starters,tacos');
 });
 
 test('menu link resolver uses per-menu configuration with canonical route fallback', () => {

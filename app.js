@@ -233,6 +233,8 @@ function buildDefaultFoodCategoryDefs(palette) {
   ];
 }
 
+const FEATURED_SPECIALS_CATEGORY_ID = (globalThis.__HF_FEATURED_SPECIALS__ || {}).FEATURED_SPECIALS_CATEGORY_ID || 'featured_specials';
+
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
 
@@ -1453,6 +1455,15 @@ function isLegacySpecialCategory(catOrId) {
   return id === 'special';
 }
 
+function isProtectedSystemCategory(catId = '') {
+  return catId === FEATURED_SPECIALS_CATEGORY_ID || catId === UNCATEGORIZED_ID;
+}
+
+function isHiddenPublicCategory(catOrId) {
+  const id = typeof catOrId === 'string' ? catOrId : catOrId?.id;
+  return isProtectedSystemCategory(id) || isLegacySpecialCategory(id);
+}
+
 function getManagedCategoryDefs() {
   return CATEGORY_DEFS.map(cat => (
     isLegacySpecialCategory(cat)
@@ -1470,13 +1481,13 @@ function shouldShowCategoryUntappdControl(category = null) {
   const categoryId = typeof category === 'string' ? category : category?.id;
   return currentUserCanEditCategories() &&
     MENU_TYPE !== 'food' &&
-    categoryId !== UNCATEGORIZED_ID &&
+    !isProtectedSystemCategory(categoryId) &&
     !isLegacySpecialCategory(categoryId);
 }
 
 function categorySupportsUntappdImport(category = null) {
   const categoryId = typeof category === 'string' ? category : category?.id;
-  if (!categoryId || categoryId === UNCATEGORIZED_ID || MENU_TYPE === 'food') return false;
+  if (!categoryId || isProtectedSystemCategory(categoryId) || MENU_TYPE === 'food') return false;
   const categoryDef = typeof category === 'string'
     ? CATEGORY_DEFS.find(candidate => candidate.id === category)
     : category;
@@ -1506,6 +1517,28 @@ function getAddItemModalCategoryDefs() {
     ...getManagedCategoryDefs().filter(cat => !cat.readOnly && !cat.deprecated),
     getUncategorizedCategoryDef(),
   ];
+}
+
+function getPublicCategoryDefs() {
+  return getManagedCategoryDefs().filter(cat => !isHiddenPublicCategory(cat.id));
+}
+
+function getCurrentMenuFeaturedItems() {
+  const featuredSpecials = globalThis.__HF_FEATURED_SPECIALS__ || {};
+  const deriveFeaturedItems = typeof featuredSpecials.deriveFeaturedItems === 'function'
+    ? featuredSpecials.deriveFeaturedItems
+    : null;
+  const categoryDefs = getManagedCategoryDefs();
+  const hasFeaturedCategory = categoryDefs.some(cat => cat.id === FEATURED_SPECIALS_CATEGORY_ID || isLegacySpecialCategory(cat.id));
+  if (deriveFeaturedItems && hasFeaturedCategory) {
+    return deriveFeaturedItems(categoryDefs.map(category => ({
+      key: category.id,
+      items: menuState[category.id]?.items || [],
+    })));
+  }
+  return _featuredGroups
+    .flatMap(group => (group?.slots || []).map(slot => slot?.item))
+    .filter(Boolean);
 }
 
 function getAddItemModalDefaultCategoryId() {
@@ -7859,6 +7892,7 @@ function renderCategoriesTab() {
     card.id = 'catmgr-' + cat.id;
     const isFirst = idx === 0;
     const isLast  = idx === managedCategories.length - 1;
+    const canManageCategory = canEdit && !isProtectedSystemCategory(cat.id);
     const untappdRowHtml = shouldShowCategoryUntappdControl(cat)
       ? `
         <label class="catmgr-checkbox-row" for="ce-untappd-${escHtml(cat.id)}">
@@ -7873,16 +7907,16 @@ function renderCategoriesTab() {
           <div class="catmgr-title">${escHtml(cat.title)}</div>
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
-        ${canEdit
+        ${canManageCategory
           ? `<div class="catmgr-actions">
               <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
               <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
               <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
               <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
             </div>`
-          : '<div class="catmgr-readonly-pill">Admin-managed</div>'}
+          : `<div class="catmgr-readonly-pill">${canEdit ? 'Fixed category' : 'Admin-managed'}</div>`}
       </div>
-      ${canEdit
+      ${canManageCategory
         ? `<div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
             <div class="catmgr-field-row">
               <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
@@ -7912,14 +7946,14 @@ function renderCategoriesTab() {
 }
 
 function toggleCategoryEdit(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const el = document.getElementById('catmgr-edit-' + catId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 async function saveCategoryEdit(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const icon  = document.getElementById('ce-icon-'  + catId)?.value.trim() || cat.icon;
@@ -7950,7 +7984,7 @@ async function saveCategoryEdit(catId) {
 }
 
 async function moveCategoryUp(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
@@ -7967,7 +8001,7 @@ async function moveCategoryUp(catId) {
 }
 
 async function moveCategoryDown(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
@@ -7984,7 +8018,7 @@ async function moveCategoryDown(catId) {
 }
 
 async function deleteCategory(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const items = menuState[catId]?.items || [];
@@ -8239,18 +8273,13 @@ function buildPublicRouteRenderSnapshot(options = {}) {
   const siteRestaurant = options.siteRestaurantId
     ? (getRestaurantById(options.siteRestaurantId) || _siteRestaurant)
     : _siteRestaurant;
-  const featuredSnapshot = getFeaturedViewPolicy().buildSnapshot({
-    actor,
-    restaurantId: RESTAURANT_ID,
-    featuredGroups: _featuredGroups,
-  });
   return {
     activeMenuName: _activeMenuName,
     appVersion: APP_VERSION,
     canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, actor),
-    categoryDefs: getManagedCategoryDefs(),
+    categoryDefs: getPublicCategoryDefs(),
     currentUser: actor,
-    featuredGroups: featuredSnapshot.featuredGroups,
+    featuredItems: getCurrentMenuFeaturedItems(),
     isPreview: IS_PREVIEW,
     knownMenus: knownMenuList(),
     lastUpdatedTs: getLastUpdatedTs(),
@@ -8262,7 +8291,6 @@ function buildPublicRouteRenderSnapshot(options = {}) {
       restaurantId: RESTAURANT_ID,
     }),
     restaurantId: RESTAURANT_ID,
-    restaurantSpecials: featuredSnapshot.restaurantSpecials,
     siteRestaurant,
   };
 }
@@ -8890,56 +8918,42 @@ function syncPublicStaffFooterActions(state = buildPublicStaffFooterState()) {
 function renderFeaturedPublicSection() {
   const featuredEl = document.getElementById('featured-public-section');
   if (!featuredEl) return;
-  const featuredView = getFeaturedViewPolicy().buildSnapshot({
-    actor: currentUser,
-    restaurantId: RESTAURANT_ID,
-    featuredGroups: _featuredGroups,
-  });
-  const featuredGroups = featuredView.featuredGroups;
-  const hasSlots = featuredGroups.some(g => g.slots.length > 0);
-  if (!hasSlots) {
+  const featuredItems = getCurrentMenuFeaturedItems().slice(0, 5);
+  if (!featuredItems.length) {
     featuredEl.style.display = 'none';
     featuredEl.innerHTML = '';
     return;
   }
   featuredEl.style.display = '';
-  featuredEl.innerHTML = featuredGroups
-    .filter(g => g.slots.length)
-    .map(group => {
-      const slotsHtml = group.slots.map(slot => {
-        const is86 = slot.item?.eightySixed;
-        const showDescription = isItemDescriptionPublic(slot.item);
-        const showRecipe = isItemRecipePublic(slot.item);
-        const description = showDescription ? String(slot.item?.desc || '').trim() : '';
-        const recipeText = showRecipe ? recipeArray(slot.item?.recipe).join(', ') : '';
-        const upcharges = itemUpchargeArray(slot.item?.upcharges);
-        const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
-        const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
-        const descriptionHtml = description ? `<div class="featured-slot-desc">${escHtml(description)}</div>` : '';
-        const recipeHtml = recipeText ? `<div class="featured-slot-desc featured-slot-desc--secondary">Recipe: ${escHtml(recipeText)}</div>` : '';
-        const upchargesHtml = upcharges.length
-          ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
-          : '';
-        const sellNoteHtml = slot.sellNote
-          ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
-          : '';
-        return `<div class="${classes}">
-          <div class="featured-slot-main">
-            <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
-            ${priceHtml}
-            ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
-          </div>
-          ${descriptionHtml}
-          ${recipeHtml}
-          ${upchargesHtml}
-          ${sellNoteHtml}
-        </div>`;
-      }).join('');
-      return `<div class="featured-group">
-        <div class="featured-group-name">${escHtml(group.name)}</div>
-        ${slotsHtml}
-      </div>`;
-    }).join('');
+  const featuredItemsHtml = featuredItems.map(item => {
+    const is86 = item?.eightySixed;
+    const showDescription = isItemDescriptionPublic(item);
+    const showRecipe = isItemRecipePublic(item);
+    const description = showDescription ? String(item?.desc || '').trim() : '';
+    const recipeText = showRecipe ? recipeArray(item?.recipe).join(', ') : '';
+    const upcharges = itemUpchargeArray(item?.upcharges);
+    const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+    const priceHtml = item?.price ? `<span class="featured-price">${escHtml(item.price)}</span>` : '';
+    const descriptionHtml = description ? `<div class="featured-slot-desc">${escHtml(description)}</div>` : '';
+    const recipeHtml = recipeText ? `<div class="featured-slot-desc featured-slot-desc--secondary">Recipe: ${escHtml(recipeText)}</div>` : '';
+    const upchargesHtml = upcharges.length
+      ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+      : '';
+    return `<div class="${classes}">
+      <div class="featured-slot-main">
+        <span class="featured-slot-name">${escHtml(item?.name || '')}</span>
+        ${priceHtml}
+        ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+      </div>
+      ${descriptionHtml}
+      ${recipeHtml}
+      ${upchargesHtml}
+    </div>`;
+  }).join('');
+  featuredEl.innerHTML = `<div class="featured-group">
+    <div class="featured-group-name">${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</div>
+    ${featuredItemsHtml}
+  </div>`;
 }
 
 function buildPublicItemHtml(item) {
@@ -9075,7 +9089,7 @@ function _renderDefaultPublicView() {
   container.innerHTML = '';
   renderFeaturedPublicSection();
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
-  getManagedCategoryDefs().forEach(cat => {
+  getPublicCategoryDefs().forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
     const section = buildPublicCategorySection(cat, state, lastSentCats);
     if (section) container.appendChild(section);
@@ -11056,6 +11070,12 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
   const is86 = !!item.eightySixed;
   const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
   const badge = getItemStateBadge(item, catId, lastSentNames);
+  const featuredToggle = catId === FEATURED_SPECIALS_CATEGORY_ID
+    ? `<label class="item-featured-toggle">
+        <input type="checkbox" ${item.featuredEnabled ? 'checked' : ''} onchange="toggleFeaturedSpecialEnabled(${escAttrJs(catId)},${escAttrJs(item.id)},this.checked)"/>
+        <span>Show in featured strip</span>
+      </label>`
+    : '';
   return `<div class="current-item items-row ${stateClass}">
       <div class="item-row-main">
         <button class="item-drag-handle" type="button" draggable="true"
@@ -11069,6 +11089,7 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
           onblur="renameItem('${catId}','${item.id}',this.value)"
           onkeydown="if(event.key==='Enter')this.blur()"/></div>
       </div>
+      ${featuredToggle}
       <span class="item-actions-compact">
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
@@ -11592,6 +11613,20 @@ function toggle86(catId, itemId) {
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
   showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
+}
+
+function toggleFeaturedSpecialEnabled(catId, itemId, checked) {
+  const item = (menuState[catId]?.items || []).find(candidate => candidate.id === itemId);
+  if (!item) return;
+  const nextValue = checked === true;
+  if (item.featuredEnabled === nextValue) return;
+  item.featuredEnabled = nextValue;
+  invalidateDiff();
+  renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  renderFeaturedPublicSection();
 }
 
 // ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
@@ -12127,25 +12162,23 @@ function computeCategoryDiff(cat) {
 function computeFeaturedDiff() {
   const featuredByItemId = new Map();
   const currentFeaturedIds = new Set();
-  _featuredGroups.forEach(group => {
-    group.slots.forEach(slot => {
-      if (!slot.item) return;
-      currentFeaturedIds.add(slot.itemId);
-      featuredByItemId.set(slot.itemId, slot);
-    });
+  getCurrentMenuFeaturedItems().forEach(item => {
+    if (!item?.id) return;
+    currentFeaturedIds.add(item.id);
+    featuredByItemId.set(item.id, item);
   });
   const featuredAdded = [];
   const featuredRemoved = [];
   currentFeaturedIds.forEach(id => {
     if (!_lastSentFeaturedIds.has(id)) {
-      const slot = featuredByItemId.get(id);
-      if (slot?.item) featuredAdded.push(slot.item.name);
+      const item = featuredByItemId.get(id);
+      if (item?.name) featuredAdded.push(item.name);
     }
   });
   _lastSentFeaturedIds.forEach(id => {
     if (!currentFeaturedIds.has(id)) {
-      const slot = featuredByItemId.get(id);
-      featuredRemoved.push(slot?.item?.name || '(removed item)');
+      const item = featuredByItemId.get(id);
+      featuredRemoved.push(item?.name || '(removed item)');
     }
   });
   if (!featuredAdded.length && !featuredRemoved.length) return null;
@@ -12312,9 +12345,9 @@ function snapshotLastSentState() {
 }
 
 function getCurrentFeaturedIds() {
-  const ids = [];
-  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) ids.push(s.itemId); }));
-  return ids;
+  return getCurrentMenuFeaturedItems()
+    .map(item => item?.id)
+    .filter(Boolean);
 }
 
 function applySentState(diff, ts) {
