@@ -21,6 +21,11 @@ const SHARED_RUNTIME_SCRIPTS = [
   '/core/session/menu-session.js',
   '/core/data/menu-state-loader.js',
   '/core/session/poll-scheduler.js',
+  '/core/landing/model.js',
+  '/core/landing/store.js',
+  '/core/landing/data-service.js',
+  '/core/landing/admin-workspace.js',
+  '/core/landing/root-renderer.js',
 ];
 
 const EXPECTED_SCRIPT_ORDER = {
