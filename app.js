@@ -12018,8 +12018,8 @@ function restoreLabel(catId) {
   return 'Back in Stock';
 }
 
-function computeCategoryDiff(cat) {
-  const state = menuState[cat.id] || { items: [], lastSent: [] };
+function computeCategoryDiff(cat, stateOverride = null) {
+  const state = stateOverride || menuState[cat.id] || { items: [], lastSent: [] };
   const lastByName = new Map();
   const currentNames = [];
   const lastNames = [];
@@ -12061,38 +12061,26 @@ function computeCategoryDiff(cat) {
   return { id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored };
 }
 
+function isVisibleEnabledFeaturedItem(item = {}) {
+  const featuredEnabled = item?.featuredEnabled === true || item?.featured_enabled === true;
+  const onMenu = item?.onMenu !== false && item?.on_menu !== false;
+  return featuredEnabled && onMenu && item?.visibility !== 'off_menu';
+}
+
 function computeFeaturedDiff() {
-  const featuredByItemId = new Map();
-  const currentFeaturedIds = new Set();
-  getCurrentMenuFeaturedItems().forEach(item => {
-    if (!item?.id) return;
-    currentFeaturedIds.add(item.id);
-    featuredByItemId.set(item.id, item);
-  });
-  const featuredAdded = [];
-  const featuredRemoved = [];
-  currentFeaturedIds.forEach(id => {
-    if (!_lastSentFeaturedIds.has(id)) {
-      const item = featuredByItemId.get(id);
-      if (item?.name) featuredAdded.push(item.name);
-    }
-  });
-  _lastSentFeaturedIds.forEach(id => {
-    if (!currentFeaturedIds.has(id)) {
-      const item = featuredByItemId.get(id);
-      featuredRemoved.push(item?.name || '(removed item)');
-    }
-  });
-  if (!featuredAdded.length && !featuredRemoved.length) return null;
-  return {
+  const featuredCategory = CATEGORY_DEFS.find(cat => cat.id === FEATURED_SPECIALS_CATEGORY_ID);
+  if (!featuredCategory) return null;
+
+  const featuredState = menuState[FEATURED_SPECIALS_CATEGORY_ID] || { items: [], lastSent: [] };
+  return computeCategoryDiff({
     id: '__featured__',
-    icon: '⭐',
+    icon: featuredCategory.icon || '⭐',
     label: getRestaurantSpecialLabel(RESTAURANT_ID),
-    added: featuredAdded,
-    removed: featuredRemoved,
-    eightySixed: [],
-    restored: [],
-  };
+    title: getRestaurantSpecialLabel(RESTAURANT_ID),
+  }, {
+    items: (Array.isArray(featuredState.items) ? featuredState.items : []).filter(isVisibleEnabledFeaturedItem),
+    lastSent: (Array.isArray(featuredState.lastSent) ? featuredState.lastSent : []).filter(isVisibleEnabledFeaturedItem),
+  });
 }
 
 function computeDiff() {

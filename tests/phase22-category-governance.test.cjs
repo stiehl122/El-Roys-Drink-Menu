@@ -495,3 +495,117 @@ test('local diffing counts featured_specials through featured diff only once', (
   const diffIds = Array.from(getState(sandbox, 'computeDiff().map(section => section.id)'));
   assert.equal(diffIds.join(','), '__featured__');
 });
+
+test('local featured diff detects rename, add/remove, and 86/restore for enabled visible items', () => {
+  const sandbox = loadAppSandbox();
+  setState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'featured_specials',
+        title: 'Featured Specials',
+        label: 'Featured Specials',
+        icon: '⭐',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+      {
+        id: 'cocktails',
+        title: 'Cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+    ],
+    menuState: {
+      featured_specials: {
+        items: [
+          {
+            id: 'special-rename',
+            name: 'After Party Marg',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-86',
+            name: 'Back Bar Deal',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-restore',
+            name: 'Night Cap Shot',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-added',
+            name: 'Fresh Frozen Pour',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+        ],
+        lastSent: [
+          {
+            id: 'special-rename',
+            name: 'Before Party Marg',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-86',
+            name: 'Back Bar Deal',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-restore',
+            name: 'Night Cap Shot',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-removed',
+            name: 'Last Call Old Fashioned',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+        ],
+      },
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+      _meta: {},
+    },
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+    _lastSentFeaturedIds: new Set(['special-rename', 'special-86', 'special-restore', 'special-removed']),
+  });
+
+  const diff = getState(sandbox, 'JSON.parse(JSON.stringify(computeDiff()))');
+  assert.deepEqual(diff, [{
+    id: '__featured__',
+    icon: '⭐',
+    label: "Leroy's Specials",
+    added: ['After Party Marg', 'Fresh Frozen Pour'],
+    removed: ['Before Party Marg', 'Last Call Old Fashioned'],
+    eightySixed: ['Back Bar Deal'],
+    restored: ['Night Cap Shot'],
+  }]);
+});
