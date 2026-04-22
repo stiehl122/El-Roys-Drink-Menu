@@ -83,7 +83,7 @@ export function readSnapshotCategories(snapshot = {}) {
 
 function normalizeLegacyFeaturedEntry(entry = null) {
   if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-    const itemId = String(entry?.id || entry?.item_id || '').trim();
+    const itemId = String(entry?.item_id || entry?.id || '').trim();
     if (!itemId) return null;
     return {
       id: itemId,

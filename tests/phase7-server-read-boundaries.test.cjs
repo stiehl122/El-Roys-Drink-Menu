@@ -471,6 +471,38 @@ test('legacy last_sent_featured still surfaces a first-cutover featured_specials
   assert.deepEqual(queueState.unsentItemIds, []);
 });
 
+test('legacy featured objects prefer item_id over wrapper id during migration', async () => {
+  const queueHelper = await importApiModule('server/_menu-queue.js');
+  const snapshot = {
+    cats: [{
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      icon: '⭐',
+      items: [{ id: 'item-1', name: 'House Marg', featured_enabled: true, on_menu: true, visibility: 'public' }],
+    }],
+  };
+  const lastSentState = queueHelper.normalizeLegacyFeaturedBaseline({
+    snapshot,
+    lastSentState: {},
+    lastSentFeatured: [{
+      id: 'slot-1',
+      item_id: 'item-1',
+      name: 'House Marg',
+    }],
+  });
+  const queueState = queueHelper.buildCategoryQueueState({
+    snapshot,
+    lastSentState,
+  });
+
+  assert.equal(lastSentState.featured_specials.length, 1);
+  assert.deepEqual(lastSentState.featured_specials.map(item => item.id), ['item-1']);
+  assert.equal(lastSentState.featured_specials[0].name, 'House Marg');
+  assert.equal(queueState.hasNotificationChanges, false);
+  assert.deepEqual(queueState.diff, []);
+  assert.deepEqual(queueState.unsentItemIds, []);
+});
+
 test('workspace payload keeps rename, 86, and restore queue lines for enabled featured_specials items', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createMenuWorkspacePayload({
