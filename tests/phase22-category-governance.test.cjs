@@ -438,3 +438,55 @@ test('category governance blocks rename, move, and delete for featured_specials'
   assert.match(source, /function isProtectedSystemCategory\(/);
   assert.match(source, /catId === FEATURED_SPECIALS_CATEGORY_ID/);
 });
+
+test('local diffing counts featured_specials through featured diff only once', () => {
+  const sandbox = loadAppSandbox();
+  setState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'featured_specials',
+        title: 'Featured Specials',
+        label: 'Featured Specials',
+        icon: '⭐',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+      {
+        id: 'cocktails',
+        title: 'Cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+    ],
+    menuState: {
+      featured_specials: {
+        items: [{
+          id: 'special-1',
+          name: 'House Margarita',
+          desc: '',
+          recipe: [],
+          price: '$12',
+          eightySixed: false,
+          onMenu: true,
+          visibility: 'public',
+          upcharges: [],
+          showDescription: true,
+          showRecipe: false,
+          featuredEnabled: true,
+        }],
+        lastSent: [],
+      },
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+      _meta: {},
+    },
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+  });
+
+  const diffIds = Array.from(getState(sandbox, 'computeDiff().map(section => section.id)'));
+  assert.equal(diffIds.join(','), '__featured__');
+});

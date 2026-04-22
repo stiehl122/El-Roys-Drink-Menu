@@ -204,6 +204,20 @@ test('add item modal includes Featured Specials as a standard category option', 
   assert.equal(Array.from(options).slice(0, 2).join(','), 'featured_specials,cocktails');
 });
 
+test('add item modal defaults to the first normal category before Featured Specials', () => {
+  const sandbox = loadAppSandbox();
+  setState(sandbox, {
+    CATEGORY_DEFS: [
+      { id: 'featured_specials', title: 'Featured Specials', icon: '⭐', color: '', sub: '', placeholder: '', untappdEnabled: false },
+      { id: 'cocktails', title: 'Cocktails', icon: '🍹', color: '', sub: '', placeholder: '', untappdEnabled: false },
+      { id: 'beer', title: 'Beer', icon: '🍺', color: '', sub: '', placeholder: '', untappdEnabled: false },
+    ],
+    _lastAddItemCategoryId: '',
+  });
+
+  assert.equal(sandbox.getAddItemModalDefaultCategoryId(), 'cocktails');
+});
+
 test('add item modal takes over manager chrome while open and releases it on close', () => {
   const sandbox = loadAppSandbox();
   const { modalHost } = setupManagerAddItemDom(sandbox);

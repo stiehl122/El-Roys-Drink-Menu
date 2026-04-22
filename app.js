@@ -1545,7 +1545,10 @@ function getAddItemModalDefaultCategoryId() {
   const categoryDefs = getAddItemModalCategoryDefs();
   const validCategoryIds = new Set(categoryDefs.map(cat => cat.id));
   if (_lastAddItemCategoryId && validCategoryIds.has(_lastAddItemCategoryId)) return _lastAddItemCategoryId;
-  return categoryDefs[0]?.id || UNCATEGORIZED_ID;
+  const preferredCategory = categoryDefs.find(cat => !isHiddenPublicCategory(cat.id) && cat.id !== UNCATEGORIZED_ID);
+  if (preferredCategory?.id) return preferredCategory.id;
+  const fallbackCategory = categoryDefs.find(cat => cat.id !== UNCATEGORIZED_ID);
+  return fallbackCategory?.id || UNCATEGORIZED_ID;
 }
 
 function createAddItemModalFields(overrides = {}) {
@@ -12196,6 +12199,7 @@ function computeFeaturedDiff() {
 function computeDiff() {
   const results = [];
   getManagedCategoryDefs().forEach(cat => {
+    if (cat.id === FEATURED_SPECIALS_CATEGORY_ID || isLegacySpecialCategory(cat.id)) return;
     const diff = computeCategoryDiff(cat);
     if (diff) results.push(diff);
   });
