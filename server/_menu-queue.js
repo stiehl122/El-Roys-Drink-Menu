@@ -74,6 +74,58 @@ export function readSnapshotCategories(snapshot = {}) {
     .filter(category => category.key && category.key !== UNCATEGORIZED_KEY);
 }
 
+export function normalizeLegacyFeaturedBaseline({
+  snapshot = {},
+  lastSentState = {},
+  lastSentFeatured = [],
+} = {}) {
+  const normalizedState = lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState)
+    ? Object.fromEntries(Object.entries(lastSentState).map(([key, items]) => [key, asArray(items).map(item => ({ ...item }))]))
+    : {};
+  const legacyFeaturedIds = new Set(asArray(lastSentFeatured).map(value => String(value || '').trim()).filter(Boolean));
+  if (!legacyFeaturedIds.size) return normalizedState;
+
+  const snapshotCategories = readSnapshotCategories(snapshot);
+  const currentFeaturedCategory = snapshotCategories.find(category => isFeaturedSpecialsCategory(category));
+  const featuredKeys = Array.from(new Set([
+    ...Object.keys(normalizedState).filter(key => isFeaturedSpecialsCategory(key)),
+    ...(currentFeaturedCategory?.key ? [currentFeaturedCategory.key] : []),
+    'featured_specials',
+  ]));
+  const targetKey = currentFeaturedCategory?.key || featuredKeys[0] || 'featured_specials';
+  const mergedItems = [];
+  const itemIds = new Set();
+
+  featuredKeys.forEach(key => {
+    asArray(normalizedState[key]).forEach(item => {
+      const itemId = String(item?.id || '').trim();
+      const explicitFeatured = item?.featuredEnabled === true || item?.featured_enabled === true;
+      const nextItem = {
+        ...item,
+        featuredEnabled: explicitFeatured || legacyFeaturedIds.has(itemId),
+      };
+      mergedItems.push(nextItem);
+      if (itemId) itemIds.add(itemId);
+    });
+  });
+
+  asArray(currentFeaturedCategory?.items).forEach(item => {
+    const itemId = String(item?.id || '').trim();
+    if (!itemId || itemIds.has(itemId) || !legacyFeaturedIds.has(itemId)) return;
+    mergedItems.push({
+      ...item,
+      featuredEnabled: true,
+    });
+    itemIds.add(itemId);
+  });
+
+  featuredKeys.forEach(key => {
+    if (key !== targetKey) delete normalizedState[key];
+  });
+  normalizedState[targetKey] = mergedItems;
+  return normalizedState;
+}
+
 function createSectionState(category = {}, fallbackOrder = Number.MAX_SAFE_INTEGER) {
   return {
     id: category.key,

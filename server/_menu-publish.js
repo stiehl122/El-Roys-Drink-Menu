@@ -20,6 +20,7 @@ import { getKnownMenuById } from './_menu-read.js';
 import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 import {
   buildCategoryQueueState,
+  normalizeLegacyFeaturedBaseline,
   normalizeName,
 } from './_menu-queue.js';
 
@@ -231,9 +232,13 @@ async function buildCanonicalPreviewForMenu({
   meta = {},
   knownMenu = null,
 }) {
-  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
-    ? meta.last_sent_state
-    : {};
+  const lastSentState = normalizeLegacyFeaturedBaseline({
+    snapshot,
+    lastSentState: meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+      ? meta.last_sent_state
+      : {},
+    lastSentFeatured: Array.isArray(meta?.last_sent_featured) ? meta.last_sent_featured : [],
+  });
   const categoryState = buildCategoryQueueState({
     snapshot,
     lastSentState,

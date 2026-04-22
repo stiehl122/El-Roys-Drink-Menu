@@ -186,6 +186,41 @@ test('workspace payload projects server-owned Live | Unsent queue state from sta
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
 });
 
+test('workspace payload treats legacy last_sent_featured as the featured_specials baseline during migration', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createMenuWorkspacePayload({
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [{
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      icon: '⭐',
+      items: [{ id: 'special-1', name: 'Happy Hour Marg', featured_enabled: true, on_menu: true, visibility: 'public' }],
+    }],
+    meta: {
+      last_updated_ts: 1712705300000,
+      last_sent_ts: 1712705100000,
+      last_sent_state: {
+        featured_specials: [{ id: 'special-1', name: 'Happy Hour Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+      },
+      last_sent_featured: ['special-1'],
+    },
+    restaurant: null,
+  }, {
+    actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+  });
+
+  assert.equal(payload.workspace.publishState.status, 'live');
+  assert.equal(payload.workspace.publishState.hasUnsentChanges, false);
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
+  assert.deepEqual(payload.workspace.publishState.queue.sections, []);
+});
+
 test('readMenuStateBundle canonicalizes workspace category and item ordering', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const menu = helper.getKnownMenus()[0];
@@ -335,6 +370,40 @@ test('public payload strips staff-only menu metadata and filters non-public item
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'draft_state'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'bot_id'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(payload.meta, 'last_sent_featured'), false);
+});
+
+test('legacy last_sent_featured does not create false featured_specials queue lines', async () => {
+  const queueHelper = await importApiModule('server/_menu-queue.js');
+  const snapshot = {
+    cats: [{
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      icon: '⭐',
+      items: [{ id: 'special-1', name: 'Happy Hour Marg', featured_enabled: true, on_menu: true, visibility: 'public' }],
+    }],
+  };
+  const lastSentState = queueHelper.normalizeLegacyFeaturedBaseline({
+    snapshot,
+    lastSentState: {},
+    lastSentFeatured: ['special-1'],
+  });
+  const queueState = queueHelper.buildCategoryQueueState({
+    snapshot,
+    lastSentState,
+  });
+
+  assert.deepEqual(lastSentState.featured_specials, [{
+    id: 'special-1',
+    name: 'Happy Hour Marg',
+    featured_enabled: true,
+    on_menu: true,
+    visibility: 'public',
+    featuredEnabled: true,
+  }]);
+  assert.equal(queueState.hasNotificationChanges, false);
+  assert.deepEqual(queueState.groups, []);
+  assert.deepEqual(queueState.diff, []);
+  assert.deepEqual(queueState.unsentItemIds, []);
 });
 
 test('createPublicMenuPayload canonicalizes category and item ordering', async () => {

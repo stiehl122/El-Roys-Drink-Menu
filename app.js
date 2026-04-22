@@ -5762,6 +5762,32 @@ function normalizeWorkspaceFeaturedGroups(groups = []) {
   })).filter(group => group.id);
 }
 
+function normalizePublicFeaturedItems(items = []) {
+  return (Array.isArray(items) ? items : []).map(item => {
+    const hydratedItem = item && typeof item === 'object' ? hydrateMenuItem(item) : null;
+    return hydratedItem && hydratedItem.id ? hydratedItem : null;
+  }).filter(Boolean);
+}
+
+function adaptPublicFeaturedItemsToGroups(items = []) {
+  const featuredItems = normalizePublicFeaturedItems(items);
+  if (!featuredItems.length) return [];
+  return [{
+    id: 'public-featured-specials',
+    name: 'Featured Specials',
+    displayOrder: 0,
+    slots: featuredItems.map((item, index) => ({
+      id: `public-featured-slot-${item.id || index + 1}`,
+      itemId: item.id || `public-featured-item-${index + 1}`,
+      sellNote: '',
+      displayOrder: index,
+      confirmedAt: null,
+      confirmedBy: null,
+      item,
+    })),
+  }];
+}
+
 async function readPublicMenuIndexThroughApi() {
   const payload = await readApiJsonOrNull('/api/public?action=menu_index');
   if (!payload) return null;
@@ -5815,12 +5841,17 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const featuredGroups = tools && Array.isArray(tools.featuredGroups)
     ? tools.featuredGroups
     : (Array.isArray(workspacePayload?.featuredGroups) ? workspacePayload.featuredGroups : null);
+  const featuredItems = Array.isArray(workspacePayload?.featuredItems)
+    ? workspacePayload.featuredItems
+    : null;
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
-  if (!featuredGroups && !tools) return false;
+  if (!featuredGroups && !featuredItems && !tools) return false;
 
   if (Array.isArray(featuredGroups)) {
     _featuredGroups = normalizeWorkspaceFeaturedGroups(featuredGroups);
+  } else if (Array.isArray(featuredItems)) {
+    _featuredGroups = adaptPublicFeaturedItemsToGroups(featuredItems);
   }
   if (Array.isArray(tools?.siblingCatalog)) {
     _restaurantSpecialsSiblingCatalog = normalizeWorkspaceSiblingCatalog(tools.siblingCatalog);

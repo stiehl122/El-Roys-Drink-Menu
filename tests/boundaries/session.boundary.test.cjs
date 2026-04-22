@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadAppSandbox } = require('../helpers/runtime.cjs');
+const { loadAppSandbox, setState } = require('../helpers/runtime.cjs');
 
 function createMenuSessionPorts(overrides = {}) {
   return {
@@ -295,4 +295,32 @@ test('draft snapshot comparison no longer depends on top-level featured_groups',
   };
 
   assert.equal(sandbox.areDraftDocumentsEqual(left, right), false);
+});
+
+test('public payload featuredItems still render through the shared featured section', () => {
+  const sandbox = loadAppSandbox();
+  const featuredEl = sandbox.document.getElementById('featured-public-section');
+  setState(sandbox, {
+    RESTAURANT_ID: 'restaurant-main',
+    currentUser: null,
+  });
+
+  const applied = sandbox.applyWorkspaceRestaurantTools({
+    featuredItems: [{
+      id: 'special-1',
+      name: 'Happy Hour Marg',
+      desc: 'Citrus and salt.',
+      price: '$10',
+      on_menu: true,
+      visibility: 'public',
+      show_description: true,
+      show_recipe: false,
+    }],
+  });
+
+  assert.equal(applied, true);
+  sandbox.renderFeaturedPublicSection();
+  assert.equal(featuredEl.style.display, '');
+  assert.match(featuredEl.innerHTML, /Featured Specials/);
+  assert.match(featuredEl.innerHTML, /Happy Hour Marg/);
 });

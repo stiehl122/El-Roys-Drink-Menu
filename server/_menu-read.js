@@ -12,6 +12,7 @@ import {
   serviceHeaders,
 } from './_supabase.js';
 import { buildCategoryQueueState } from './_menu-queue.js';
+import { normalizeLegacyFeaturedBaseline } from './_menu-queue.js';
 
 const domainConstants = (globalThis.__HF_DOMAIN_CONSTANTS__ && typeof globalThis.__HF_DOMAIN_CONSTANTS__ === 'object')
   ? globalThis.__HF_DOMAIN_CONSTANTS__
@@ -341,9 +342,13 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
       : null,
     source: String(draftMeta?.draft_saved_source || '').trim(),
   };
-  const lastSentState = draftMeta?.last_sent_state && typeof draftMeta.last_sent_state === 'object'
-    ? draftMeta.last_sent_state
-    : {};
+  const lastSentState = normalizeLegacyFeaturedBaseline({
+    snapshot: { cats: normalizedCats },
+    lastSentState: draftMeta?.last_sent_state && typeof draftMeta.last_sent_state === 'object'
+      ? draftMeta.last_sent_state
+      : {},
+    lastSentFeatured: Array.isArray(draftMeta?.last_sent_featured) ? draftMeta.last_sent_featured : [],
+  });
   const queueState = buildCategoryQueueState({
     snapshot: { cats: normalizedCats },
     lastSentState,
