@@ -125,6 +125,9 @@ function normalizeItemRow(item, categoryId, displayOrder, { forceOffMenu = false
   const eightySixedRaw = Object.prototype.hasOwnProperty.call(row, 'eightySixed')
     ? row.eightySixed
     : row.is_eighty_sixed;
+  const featuredEnabledRaw = Object.prototype.hasOwnProperty.call(row, 'featuredEnabled')
+    ? row.featuredEnabled
+    : row.featured_enabled;
   const rawPrice = asString(row.price);
 
   return {
@@ -141,6 +144,7 @@ function normalizeItemRow(item, categoryId, displayOrder, { forceOffMenu = false
     upcharges: normalizeUpcharges(row.upcharges),
     show_description: showDescriptionRaw !== false,
     show_recipe: !!showRecipeRaw,
+    featured_enabled: featuredEnabledRaw === true,
     display_order: displayOrder,
   };
 }
@@ -162,7 +166,6 @@ function normalizeCategoryRows(menuId, categories = []) {
       sub: asString(row.sub),
       placeholder: asString(row.placeholder),
       untappd_enabled: row?.untappd_enabled === true || row?.untappdEnabled === true,
-      rawId: asString(row.id),
       items: asArray(row.items),
     });
   });
@@ -180,7 +183,6 @@ function normalizeCategoryRows(menuId, categories = []) {
     placeholder: category.placeholder,
     untappd_enabled: category.untappd_enabled === true,
     display_order: index,
-    id: category.rawId && !category.rawId.startsWith('local-') ? category.rawId : undefined,
   }));
 
   const uncategorizedRow = uncategorized
@@ -194,7 +196,6 @@ function normalizeCategoryRows(menuId, categories = []) {
         placeholder: uncategorized.placeholder,
         untappd_enabled: false,
         display_order: 9999,
-        id: uncategorized.rawId && !uncategorized.rawId.startsWith('local-') ? uncategorized.rawId : undefined,
       }
     : null;
 
@@ -255,7 +256,7 @@ async function upsertCategories(menuId, normalizedCategories, categoriesByKey) {
 
   const payload = rows.map(row => {
     const existing = categoriesByKey.get(row.key);
-    const resolvedId = row.id || existing?.id;
+    const resolvedId = existing?.id;
     return resolvedId ? { ...row, id: resolvedId } : row;
   });
 

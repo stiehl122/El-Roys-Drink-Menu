@@ -222,6 +222,114 @@ test('server live-save write path round-trips featured_enabled into persisted it
   assert.equal(payload[0].featured_enabled, true);
 });
 
+test('saveLiveMenuCommand resolves DB category ids and persists featured_enabled', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const module = await importApiModule('server/_menu-live.js');
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  const menuId = '00000000-0000-0000-0000-000000000020';
+
+  function ok(payload) {
+    return {
+      ok: true,
+      async json() {
+        return payload;
+      },
+    };
+  }
+
+  global.fetch = async (url, options = {}) => {
+    const href = String(url);
+    fetchCalls.push({ url: href, options });
+
+    if (href.includes('/auth/v1/user')) {
+      return ok({ id: 'user-1' });
+    }
+
+    if (href.includes('/rest/v1/profiles?id=eq.user-1&select=role,name')) {
+      return ok([{ role: 'admin', name: 'Admin Tester' }]);
+    }
+
+    if (href.includes(`/rest/v1/menu_meta?menu_id=eq.${menuId}&select=*&limit=1`)) {
+      return ok([{ last_updated_ts: 10, draft_saved_ts: null, last_sent_ts: null }]);
+    }
+
+    if (href.includes(`/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,archived&limit=1`)) {
+      return ok([{
+        id: menuId,
+        restaurant_id: '00000000-0000-0000-0000-000000000010',
+        archived: false,
+      }]);
+    }
+
+    if (href.includes(`/rest/v1/categories?menu_id=eq.${menuId}&select=id,key`)) {
+      return ok([
+        { id: 'category-uuid-1', key: 'featured_specials' },
+        { id: 'uncategorized-uuid-1', key: '__uncategorized__' },
+      ]);
+    }
+
+    if (href.includes('/categories?on_conflict=')) {
+      return ok([]);
+    }
+
+    if (href.endsWith('/rest/v1/items')) {
+      return ok([]);
+    }
+
+    if (href.includes('/menu_meta?on_conflict=menu_id')) {
+      return ok([]);
+    }
+
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    const result = await module.saveLiveMenuCommand({
+      headers: { authorization: 'Bearer test-token' },
+      body: {
+        menu_id: menuId,
+        snapshot: {
+          cats: [{
+            id: 'featured_specials',
+            key: 'featured_specials',
+            label: 'Featured Specials',
+            icon: '⭐',
+            items: [{
+              id: 'special-1',
+              name: 'Happy Hour Marg',
+              featuredEnabled: true,
+            }],
+          }],
+          meta: {},
+        },
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.status, 'live_saved');
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  const categoryPersistCall = fetchCalls.find(call => call.url.includes('/categories?on_conflict=menu_id,key'));
+  assert.ok(categoryPersistCall, 'expected category persistence request');
+  const categoryPayload = JSON.parse(categoryPersistCall.options.body);
+  assert.equal(categoryPayload.length, 2);
+  assert.equal(categoryPayload[0].key, 'featured_specials');
+  assert.equal(categoryPayload[0].id, 'category-uuid-1');
+  assert.notEqual(categoryPayload[0].id, 'featured_specials');
+
+  const itemPersistCall = fetchCalls.find(call => call.url.endsWith('/rest/v1/items'));
+  assert.ok(itemPersistCall, 'expected item persistence request');
+  const itemPayload = JSON.parse(itemPersistCall.options.body);
+  assert.equal(itemPayload.length, 1);
+  assert.equal(itemPayload[0].category_id, 'category-uuid-1');
+  assert.equal(itemPayload[0].featured_enabled, true);
+});
+
 test('publish service boundary prefers the server-owned publish command when provided', async () => {
   const sandbox = loadAppSandbox();
   let publishCalls = 0;
