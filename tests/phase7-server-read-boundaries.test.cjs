@@ -117,10 +117,24 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
     },
   });
 
-  assert.deepEqual(payload.cats, bundle.cats.map(category => ({
-    ...category,
+  assert.deepEqual(payload.cats, [{
+    id: 'featured-specials-00000000-0000-0000-0000-000000000020',
+    menu_id: '00000000-0000-0000-0000-000000000020',
+    key: 'featured_specials',
+    label: 'Featured Specials',
+    title: 'Featured Specials',
+    icon: '⭐',
+    color: 'rgba(190,67,48,0.12)',
+    sub: 'Limited pours, specials, and deal items for this menu',
+    placeholder: 'e.g. Happy Hour Margarita...',
     untappd_enabled: false,
-  })));
+    display_order: 0,
+    items: [],
+    fixed: true,
+  }, {
+    ...bundle.cats[0],
+    untappd_enabled: false,
+  }]);
   assert.equal(payload.meta.last_updated_ts, 1712705100000);
   assert.deepEqual(payload.meta.draft_state, bundle.meta.draft_state);
   assert.equal(payload.workspace.actor.role, 'manager');
@@ -404,6 +418,103 @@ test('legacy last_sent_featured does not create false featured_specials queue li
   assert.deepEqual(queueState.groups, []);
   assert.deepEqual(queueState.diff, []);
   assert.deepEqual(queueState.unsentItemIds, []);
+});
+
+test('workspace payload keeps rename, 86, and restore queue lines for enabled featured_specials items', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createMenuWorkspacePayload({
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [{
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      icon: '⭐',
+      items: [
+        { id: 'special-rename', name: 'After Party Marg', featured_enabled: true, on_menu: true, visibility: 'public' },
+        { id: 'special-86', name: 'Back Bar Deal', featured_enabled: true, on_menu: true, visibility: 'public', is_eighty_sixed: true },
+        { id: 'special-restore', name: 'Night Cap Shot', featured_enabled: true, on_menu: true, visibility: 'public', is_eighty_sixed: false },
+      ],
+    }],
+    meta: {
+      last_updated_ts: 1712705300000,
+      last_sent_ts: 1712705100000,
+      last_sent_state: {
+        featured_specials: [
+          { id: 'special-rename', name: 'Before Party Marg', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: false },
+          { id: 'special-86', name: 'Back Bar Deal', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: false },
+          { id: 'special-restore', name: 'Night Cap Shot', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: true },
+        ],
+      },
+      last_sent_featured: [],
+    },
+    restaurant: null,
+  }, {
+    actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+  });
+
+  assert.equal(payload.workspace.publishState.status, 'live_unsent');
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, [
+    'special-rename',
+    'special-86',
+    'special-restore',
+  ]);
+  assert.deepEqual(payload.workspace.publishState.queue.sections, [{
+    id: 'featured_specials',
+    icon: '⭐',
+    label: 'Featured Specials',
+    displayOrder: 0,
+    added: ['After Party Marg'],
+    removed: ['Before Party Marg'],
+    eightySixed: ['Back Bar Deal'],
+    restored: ['Night Cap Shot'],
+  }]);
+  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
+  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('eightySixed')));
+  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('restored')));
+});
+
+test('server readers normalize legacy special categories and last_sent_state into featured_specials', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createMenuWorkspacePayload({
+    menu: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      slug: 'leroys-lounge-drinks',
+      type: 'drinks',
+      name: "Leroy's Lounge Drinks",
+    },
+    cats: [{
+      key: 'special',
+      label: 'Monthly Specials',
+      icon: '⭐',
+      items: [{ id: 'legacy-special-1', name: 'Happy Hour Marg', on_menu: true, visibility: 'public' }],
+    }],
+    meta: {
+      last_updated_ts: 1712705300000,
+      last_sent_ts: 1712705100000,
+      last_sent_state: {
+        special: [{ id: 'legacy-special-1', name: 'Happy Hour Marg', onMenu: true, visibility: 'public' }],
+      },
+      last_sent_featured: [],
+    },
+    restaurant: null,
+  }, {
+    actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+  });
+
+  assert.deepEqual(payload.cats.map(category => category.key), ['featured_specials']);
+  assert.equal(payload.cats[0].items[0].featured_enabled, true);
+  assert.equal(payload.meta.last_sent_state.featured_specials[0].featured_enabled, true);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload.meta.last_sent_state, 'special'), false);
+  assert.equal(payload.workspace.publishState.status, 'live');
+  assert.equal(payload.workspace.publishState.hasUnsentChanges, false);
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
+  assert.deepEqual(payload.workspace.publishState.queue.sections, []);
 });
 
 test('createPublicMenuPayload canonicalizes category and item ordering', async () => {

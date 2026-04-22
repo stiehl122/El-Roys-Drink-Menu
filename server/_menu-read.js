@@ -28,6 +28,9 @@ const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalTh
 const ensureFeaturedSpecialsCategory = typeof featuredSpecials.ensureFeaturedSpecialsCategory === 'function'
   ? featuredSpecials.ensureFeaturedSpecialsCategory
   : (cats => cats);
+const normalizeFeaturedSpecialsLastSentState = typeof featuredSpecials.normalizeFeaturedSpecialsLastSentState === 'function'
+  ? featuredSpecials.normalizeFeaturedSpecialsLastSentState
+  : (lastSentState => lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState) ? { ...lastSentState } : {});
 const deriveFeaturedItems = typeof featuredSpecials.deriveFeaturedItems === 'function'
   ? featuredSpecials.deriveFeaturedItems
   : (() => []);
@@ -300,9 +303,11 @@ function sanitizePublicRestaurant(restaurant = null) {
 }
 
 function sanitizePublicMeta(meta = {}) {
-  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
-    ? meta.last_sent_state
-    : {};
+  const lastSentState = normalizeFeaturedSpecialsLastSentState(
+    meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+      ? meta.last_sent_state
+      : {}
+  );
   return {
     last_updated_ts: meta?.last_updated_ts || null,
     last_sent_ts: meta?.last_sent_ts || null,
@@ -312,9 +317,15 @@ function sanitizePublicMeta(meta = {}) {
 }
 
 export function createMenuWorkspacePayload(bundle, { actor = null, restaurantTools = null } = {}) {
-  const normalizedCats = Array.isArray(bundle?.cats)
-    ? bundle.cats.map(normalizeWorkspaceCategory)
-    : [];
+  const normalizedCats = ensureFeaturedSpecialsCategory(
+    Array.isArray(bundle?.cats)
+      ? bundle.cats.map(normalizeWorkspaceCategory)
+      : [],
+    {
+      menuId: bundle?.menu?.id || '',
+      menuType: bundle?.menu?.type || 'drinks',
+    }
+  );
   const accessibleMenuIds = getActorAccessibleMenuIds(actor);
   const menuId = bundle?.menu?.id || '';
   const restaurantId = bundle?.menu?.restaurantId || '';
@@ -353,6 +364,10 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
     snapshot: { cats: normalizedCats },
     lastSentState,
   });
+  const normalizedMeta = {
+    ...draftMeta,
+    last_sent_state: lastSentState,
+  };
   const unsentItemIds = Array.from(new Set(queueState.unsentItemIds));
   const hasUnsentChanges = queueState.hasNotificationChanges;
   const publishStatus = hasUnsentChanges ? 'live_unsent' : 'live';
@@ -373,7 +388,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
 
   return {
     cats: normalizedCats,
-    meta: bundle?.meta || {},
+    meta: normalizedMeta,
     restaurant: bundle?.restaurant || null,
     restaurantTools: restaurantTools || null,
     context: {

@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadAppSandbox, setState } = require('../helpers/runtime.cjs');
+const { getState, loadAppSandbox, setState } = require('../helpers/runtime.cjs');
 
 function createMenuSessionPorts(overrides = {}) {
   return {
@@ -295,6 +295,100 @@ test('draft snapshot comparison no longer depends on top-level featured_groups',
   };
 
   assert.equal(sandbox.areDraftDocumentsEqual(left, right), false);
+});
+
+test('hydrateState migrates legacy special categories and last sent baselines into featured_specials', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    CATEGORY_DEFS: [],
+    menuState: {},
+  });
+
+  getState(sandbox, `
+    hydrateState({
+      cats: [{
+        id: 'cat-special',
+        key: 'special',
+        label: 'Monthly Specials',
+        display_order: 2,
+        items: [
+          { id: 'legacy-special-1', name: 'Happy Hour Marg', on_menu: true, visibility: 'public' },
+        ],
+      }],
+      meta: {
+        last_sent_ts: 1712705100000,
+        last_sent_state: {
+          special: [
+            { id: 'legacy-special-1', name: 'Happy Hour Marg', onMenu: true, visibility: 'public' },
+          ],
+        },
+      },
+      restaurant: null,
+    })
+  `);
+
+  assert.deepEqual(
+    getState(sandbox, 'JSON.parse(JSON.stringify(CATEGORY_DEFS.map(cat => cat.id)))'),
+    ['featured_specials'],
+  );
+  assert.equal(getState(sandbox, 'menuState.featured_specials.items[0].featuredEnabled'), true);
+  assert.equal(getState(sandbox, 'menuState.featured_specials.lastSent[0].featuredEnabled'), true);
+});
+
+test('applyPersistedDraftState restores legacy special drafts into featured_specials', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    CATEGORY_DEFS: [{
+      id: 'featured_specials',
+      title: 'Featured Specials',
+      label: 'Featured Specials',
+      icon: '⭐',
+      color: '',
+      sub: '',
+      placeholder: '',
+      untappdEnabled: false,
+    }],
+    menuState: {
+      featured_specials: {
+        items: [],
+        lastSent: [{
+          id: 'legacy-special-1',
+          name: 'Happy Hour Marg',
+          onMenu: true,
+          visibility: 'public',
+          eightySixed: false,
+          featuredEnabled: true,
+        }],
+      },
+      _meta: {},
+    },
+  });
+
+  assert.equal(getState(sandbox, `
+    applyPersistedDraftState({
+      context: { menuType: 'drinks' },
+      cats: [{
+        id: 'cat-special',
+        key: 'special',
+        label: 'Monthly Specials',
+        display_order: 2,
+        items: [
+          { id: 'legacy-special-1', name: 'Happy Hour Marg', on_menu: true, visibility: 'public' },
+        ],
+      }],
+      meta: {},
+      restaurant: null,
+      save_only_changes: [],
+    })
+  `), true);
+  assert.deepEqual(
+    getState(sandbox, 'JSON.parse(JSON.stringify(CATEGORY_DEFS.map(cat => cat.id)))'),
+    ['featured_specials'],
+  );
+  assert.equal(getState(sandbox, 'menuState.featured_specials.items[0].featuredEnabled'), true);
+  assert.equal(getState(sandbox, 'menuState.featured_specials.lastSent[0].featuredEnabled'), true);
 });
 
 test('public payload featuredItems still render through the shared featured section', () => {

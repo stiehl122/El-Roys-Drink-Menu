@@ -124,8 +124,13 @@ test('workspace payload defaults untappd_enabled to false and preserves explicit
     },
   });
 
-  assert.equal(payload.cats[0].untappd_enabled, false);
-  assert.equal(payload.cats[1].untappd_enabled, true);
+  const beerCategory = payload.cats.find(category => category.key === 'beer');
+  const cannedCategory = payload.cats.find(category => category.key === 'canned');
+  const featuredCategory = payload.cats.find(category => category.key === 'featured_specials');
+
+  assert.equal(featuredCategory?.untappd_enabled, false);
+  assert.equal(beerCategory?.untappd_enabled, false);
+  assert.equal(cannedCategory?.untappd_enabled, true);
 });
 
 test('web menu cache snapshot includes untappd_enabled and defaults missing values to false', () => {

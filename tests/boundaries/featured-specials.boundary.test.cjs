@@ -26,7 +26,7 @@ test('ensureFeaturedSpecialsCategory inserts the fixed category first and folds 
       label: 'Monthly Specials',
       display_order: 2,
       items: [
-        { id: 'legacy-1', name: 'Spicy Mango Marg', featured_enabled: true, on_menu: true, visibility: 'public' },
+        { id: 'legacy-1', name: 'Spicy Mango Marg', featured_enabled: false, on_menu: true, visibility: 'public' },
       ],
     },
   ], { menuId: 'menu-drinks', menuType: 'drinks' });
@@ -34,7 +34,24 @@ test('ensureFeaturedSpecialsCategory inserts the fixed category first and folds 
   assert.equal(next[0].key, 'featured_specials');
   assert.equal(next[0].label, 'Featured Specials');
   assert.deepEqual(next[0].items.map(item => item.id), ['legacy-1']);
+  assert.equal(next[0].items[0].featured_enabled, true);
   assert.equal(next.some(category => category.key === 'special'), false);
+});
+
+test('normalizeFeaturedSpecialsLastSentState folds legacy special state into featured_specials and preserves visibility', async () => {
+  const module = await importFeaturedSpecials();
+  const next = module.normalizeFeaturedSpecialsLastSentState({
+    special: [
+      { id: 'legacy-1', name: 'Spicy Mango Marg', onMenu: true, visibility: 'public' },
+    ],
+    cocktails: [
+      { id: 'cocktail-1', name: 'House Marg', onMenu: true, visibility: 'public' },
+    ],
+  });
+
+  assert.deepEqual(Object.keys(next), ['cocktails', 'featured_specials']);
+  assert.equal(next.featured_specials[0].featured_enabled, true);
+  assert.equal(next.featured_specials[0].name, 'Spicy Mango Marg');
 });
 
 test('deriveFeaturedItems returns enabled items in category order only', async () => {

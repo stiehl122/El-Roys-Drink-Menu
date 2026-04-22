@@ -233,7 +233,16 @@ function buildDefaultFoodCategoryDefs(palette) {
   ];
 }
 
-const FEATURED_SPECIALS_CATEGORY_ID = (globalThis.__HF_FEATURED_SPECIALS__ || {}).FEATURED_SPECIALS_CATEGORY_ID || 'featured_specials';
+const FEATURED_SPECIALS_DOMAIN = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const FEATURED_SPECIALS_CATEGORY_ID = FEATURED_SPECIALS_DOMAIN.FEATURED_SPECIALS_CATEGORY_ID || 'featured_specials';
+const ensureFeaturedSpecialsCategory = typeof FEATURED_SPECIALS_DOMAIN.ensureFeaturedSpecialsCategory === 'function'
+  ? FEATURED_SPECIALS_DOMAIN.ensureFeaturedSpecialsCategory
+  : (cats => (Array.isArray(cats) ? cats : []));
+const normalizeFeaturedSpecialsLastSentState = typeof FEATURED_SPECIALS_DOMAIN.normalizeFeaturedSpecialsLastSentState === 'function'
+  ? FEATURED_SPECIALS_DOMAIN.normalizeFeaturedSpecialsLastSentState
+  : (lastSentState => lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState) ? { ...lastSentState } : {});
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
@@ -6090,8 +6099,16 @@ function sortCanonicalItems(items = []) {
   return (Array.isArray(items) ? items : []).slice().sort(compareCanonicalItemOrder);
 }
 
+function normalizeFeaturedSpecialCategoriesForMenu(cats = [], menuContext = {}) {
+  return ensureFeaturedSpecialsCategory(Array.isArray(cats) ? cats : [], {
+    menuId: menuContext.menuId || MENU_ID || '',
+    menuType: menuContext.menuType || MENU_TYPE || 'drinks',
+  });
+}
+
 function hydrateState({ cats, meta, restaurant }) {
-  const orderedCats = sortCanonicalCategories(cats);
+  const normalizedCats = normalizeFeaturedSpecialCategoriesForMenu(cats);
+  const orderedCats = sortCanonicalCategories(normalizedCats);
   const realCats = orderedCats.filter(c => c.key !== UNCATEGORIZED_ID);
   const uncatCat = orderedCats.find(c => c.key === UNCATEGORIZED_ID);
 
@@ -6110,9 +6127,11 @@ function hydrateState({ cats, meta, restaurant }) {
     }));
   }
 
-  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
-    ? meta.last_sent_state
-    : {};
+  const lastSentState = normalizeFeaturedSpecialsLastSentState(
+    meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+      ? meta.last_sent_state
+      : {}
+  );
   const hasLastSentTs = !!meta?.last_sent_ts;
   menuState = {};
   realCats.forEach(c => {
@@ -6168,7 +6187,8 @@ function applyPersistedDraftState(draftState = {}) {
     liveLastSentState[cat.id] = (menuState[cat.id]?.lastSent || []).map(cloneMenuItemState);
   });
 
-  const orderedCats = sortCanonicalCategories(cats);
+  const normalizedCats = normalizeFeaturedSpecialCategoriesForMenu(cats, draftState?.context || {});
+  const orderedCats = sortCanonicalCategories(normalizedCats);
   const realCats = orderedCats.filter(cat => cat.key !== UNCATEGORIZED_ID);
   const uncatCat = orderedCats.find(cat => cat.key === UNCATEGORIZED_ID) || null;
 
@@ -6706,7 +6726,10 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
     : {};
   return sortDraftDocumentInPlace({
     context: normalized.context && typeof normalized.context === 'object' ? normalized.context : null,
-    cats: Array.isArray(normalized.cats) ? normalized.cats : [],
+    cats: normalizeFeaturedSpecialCategoriesForMenu(
+      Array.isArray(normalized.cats) ? normalized.cats : [],
+      normalized.context && typeof normalized.context === 'object' ? normalized.context : {},
+    ),
     meta: normalized.meta && typeof normalized.meta === 'object' ? normalized.meta : {},
     restaurant: normalized.restaurant && typeof normalized.restaurant === 'object' ? normalized.restaurant : null,
     save_only_changes: Array.isArray(normalized.save_only_changes)

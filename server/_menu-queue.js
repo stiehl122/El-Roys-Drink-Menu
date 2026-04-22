@@ -7,6 +7,13 @@ const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalTh
 const isFeaturedSpecialsCategory = typeof featuredSpecials.isFeaturedSpecialsCategory === 'function'
   ? featuredSpecials.isFeaturedSpecialsCategory
   : (categoryOrKey => String(categoryOrKey?.key || categoryOrKey || '').trim() === 'featured_specials');
+const normalizeFeaturedSpecialsLastSentState = typeof featuredSpecials.normalizeFeaturedSpecialsLastSentState === 'function'
+  ? featuredSpecials.normalizeFeaturedSpecialsLastSentState
+  : (lastSentState => (
+      lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState)
+        ? Object.fromEntries(Object.entries(lastSentState).map(([key, items]) => [key, asArray(items).map(item => ({ ...item }))]))
+        : {}
+    ));
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -79,9 +86,7 @@ export function normalizeLegacyFeaturedBaseline({
   lastSentState = {},
   lastSentFeatured = [],
 } = {}) {
-  const normalizedState = lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState)
-    ? Object.fromEntries(Object.entries(lastSentState).map(([key, items]) => [key, asArray(items).map(item => ({ ...item }))]))
-    : {};
+  const normalizedState = normalizeFeaturedSpecialsLastSentState(lastSentState);
   const legacyFeaturedIds = new Set(asArray(lastSentFeatured).map(value => String(value || '').trim()).filter(Boolean));
   if (!legacyFeaturedIds.size) return normalizedState;
 
@@ -371,58 +376,15 @@ function buildCategoryGroupChanges(section, currentItems = [], previousItems = [
 }
 
 function buildFeaturedSpecialGroupChanges(section, currentItems = [], previousItems = []) {
-  const currentById = new Map(currentItems.map(item => [item.id, item]));
-  const previousById = new Map(previousItems.map(item => [item.id, item]));
-  const orderedIds = Array.from(new Set([
-    ...currentItems.map(item => item.id),
-    ...previousItems.map(item => item.id),
-  ]));
-  const groups = [];
-  const unsentCurrentItemIds = new Set();
-
-  orderedIds.forEach(itemId => {
-    const current = currentById.get(itemId) || null;
-    const previous = previousById.get(itemId) || null;
-    const currentEnabled = current?.featuredEnabled === true && current?.visible;
-    const previousEnabled = previous?.featuredEnabled === true && previous?.visible;
-
-    if (!previousEnabled && currentEnabled) {
-      const groupId = createGroupId(section.id, 'added', itemId);
-      groups.push({
-        id: groupId,
-        kind: 'added',
-        selectable: true,
-        sectionId: section.id,
-        sectionLabel: section.label,
-        icon: section.icon,
-        displayOrder: section.displayOrder,
-        itemId: String(itemId || ''),
-        lines: [createChangeLine(groupId, section, { kind: 'added', name: current?.name, itemId })],
-      });
-      unsentCurrentItemIds.add(itemId);
-      return;
-    }
-
-    if (previousEnabled && !currentEnabled) {
-      const groupId = createGroupId(section.id, 'removed', itemId);
-      groups.push({
-        id: groupId,
-        kind: 'removed',
-        selectable: true,
-        sectionId: section.id,
-        sectionLabel: section.label,
-        icon: section.icon,
-        displayOrder: section.displayOrder,
-        itemId: String(itemId || ''),
-        lines: [createChangeLine(groupId, section, { kind: 'removed', name: previous?.name, itemId })],
-      });
-    }
-  });
-
-  return {
-    groups,
-    unsentCurrentItemIds: Array.from(unsentCurrentItemIds),
-  };
+  const visibleEnabledCurrentItems = currentItems.map(item => ({
+    ...item,
+    visible: item?.visible === true && item?.featuredEnabled === true,
+  }));
+  const visibleEnabledPreviousItems = previousItems.map(item => ({
+    ...item,
+    visible: item?.visible === true && item?.featuredEnabled === true,
+  }));
+  return buildCategoryGroupChanges(section, visibleEnabledCurrentItems, visibleEnabledPreviousItems);
 }
 
 export function buildCategoryQueueState({

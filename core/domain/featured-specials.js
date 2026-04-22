@@ -8,10 +8,17 @@
     return item?.featured_enabled === true || item?.featuredEnabled === true;
   }
 
-  function normalizeFeaturedSpecialItem(item = {}) {
+  function isLegacyFeaturedSpecialCategory(categoryOrKey = '') {
+    const key = typeof categoryOrKey === 'string'
+      ? categoryOrKey
+      : String(categoryOrKey?.key || categoryOrKey?.id || '').trim();
+    return LEGACY_FEATURED_SPECIAL_IDS.has(key);
+  }
+
+  function normalizeFeaturedSpecialItem(item = {}, { forceFeaturedEnabled = false } = {}) {
     return {
       ...item,
-      featured_enabled: normalizeFeaturedEnabled(item),
+      featured_enabled: forceFeaturedEnabled || normalizeFeaturedEnabled(item),
     };
   }
 
@@ -49,15 +56,17 @@
     const collectedItems = [];
 
     (Array.isArray(categories) ? categories : []).forEach(category => {
-      const normalized = {
-        ...category,
-        items: (Array.isArray(category?.items) ? category.items : []).map(normalizeFeaturedSpecialItem),
-      };
-      if (isFeaturedSpecialsCategory(normalized)) {
+      if (isFeaturedSpecialsCategory(category)) {
+        const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(category);
+        const normalized = {
+          ...category,
+          items: (Array.isArray(category?.items) ? category.items : [])
+            .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled })),
+        };
         collectedItems.push(...normalized.items);
         return;
       }
-      next.push(normalized);
+      next.push(category);
     });
 
     const fixed = createFeaturedSpecialsCategory({ menuId, menuType });
@@ -67,6 +76,33 @@
     }, ...next];
   }
 
+  function normalizeFeaturedSpecialsLastSentState(lastSentState = {}) {
+    if (!lastSentState || typeof lastSentState !== 'object' || Array.isArray(lastSentState)) {
+      return {};
+    }
+
+    const normalizedState = {};
+    const featuredItems = [];
+    let hasFeaturedState = false;
+
+    Object.entries(lastSentState).forEach(([key, items]) => {
+      if (isFeaturedSpecialsCategory(key)) {
+        hasFeaturedState = true;
+        const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(key);
+        featuredItems.push(...(Array.isArray(items) ? items : [])
+          .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled })));
+        return;
+      }
+
+      normalizedState[key] = Array.isArray(items)
+        ? items.map(item => ({ ...item }))
+        : [];
+    });
+
+    if (hasFeaturedState) normalizedState[FEATURED_SPECIALS_CATEGORY_ID] = featuredItems;
+    return normalizedState;
+  }
+
   function isPublicFeaturedSpecialItem(item = {}) {
     return item?.onMenu !== false && item?.on_menu !== false && item?.visibility !== 'off_menu';
   }
@@ -74,19 +110,22 @@
   function deriveFeaturedItems(categories = []) {
     const category = (Array.isArray(categories) ? categories : [])
       .find(candidate => isFeaturedSpecialsCategory(candidate));
+    const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(category);
     return (Array.isArray(category?.items) ? category.items : [])
-      .map(normalizeFeaturedSpecialItem)
+      .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled }))
       .filter(item => item.featured_enabled === true && isPublicFeaturedSpecialItem(item));
   }
 
   const api = Object.freeze({
     FEATURED_SPECIALS_CATEGORY_ID,
+    isLegacyFeaturedSpecialCategory,
     isFeaturedSpecialsCategory,
     isPublicFeaturedSpecialItem,
     normalizeFeaturedEnabled,
     normalizeFeaturedSpecialItem,
     createFeaturedSpecialsCategory,
     ensureFeaturedSpecialsCategory,
+    normalizeFeaturedSpecialsLastSentState,
     deriveFeaturedItems,
   });
 
@@ -94,12 +133,14 @@
 
   if (typeof exports !== 'undefined') {
     exports.FEATURED_SPECIALS_CATEGORY_ID = FEATURED_SPECIALS_CATEGORY_ID;
+    exports.isLegacyFeaturedSpecialCategory = isLegacyFeaturedSpecialCategory;
     exports.isFeaturedSpecialsCategory = isFeaturedSpecialsCategory;
     exports.isPublicFeaturedSpecialItem = isPublicFeaturedSpecialItem;
     exports.normalizeFeaturedEnabled = normalizeFeaturedEnabled;
     exports.normalizeFeaturedSpecialItem = normalizeFeaturedSpecialItem;
     exports.createFeaturedSpecialsCategory = createFeaturedSpecialsCategory;
     exports.ensureFeaturedSpecialsCategory = ensureFeaturedSpecialsCategory;
+    exports.normalizeFeaturedSpecialsLastSentState = normalizeFeaturedSpecialsLastSentState;
     exports.deriveFeaturedItems = deriveFeaturedItems;
   }
 
