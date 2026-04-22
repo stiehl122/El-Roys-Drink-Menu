@@ -1635,55 +1635,46 @@ test('public route adapter converts legacy snapshot input into a contract bounda
   assert.equal(applyCalls, 1);
 });
 
-test('restaurant specials service centralizes add and match flows', async () => {
+test('featured state service refreshes through surviving workspace and public boundaries', async () => {
   const sandbox = loadAppSandbox();
-  const requestCalls = [];
-  const refreshCalls = [];
+  const workspaceCalls = [];
+  const publicCalls = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
     RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
-    currentUser: { role: 'manager', accessToken: 'token-1', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000021'] },
-    currentUserCanEditRestaurantSpecials: () => true,
-    persistState: async () => true,
-    _dirty: true,
-    _deletedItemIds: new Set(),
-    menuState: makeMenuState({
-      beer: [{ id: 'beer-1', name: 'Draft Lager', onMenu: true, visibility: 'public' }],
-      __uncategorized__: [{ id: 'pool-1', name: 'Off Menu Special', onMenu: true, visibility: 'off_menu' }],
-    }),
-    _featuredGroups: [
-      {
-        id: 'group-1',
-        name: 'Specials',
-        slots: [
-          { id: 'slot-1', itemId: 'featured-1', item: { id: 'featured-1', name: 'House Spritz', price: '$9', visibility: 'public', eightySixed: false, desc: '', recipe: [], upcharges: [], showDescription: true, showRecipe: false } },
+    currentUser: { role: 'manager', accessToken: 'token-1', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+    _featuredGroups: [],
+    _restaurantSpecialsSiblingCatalog: [{ id: 'legacy-sibling' }],
+    readMenuWorkspaceThroughApi: async payload => {
+      workspaceCalls.push(payload);
+      return {
+        featuredItems: [
+          { id: 'featured-1', name: 'House Spritz', price: '$9', visibility: 'public', is_eighty_sixed: false },
         ],
-      },
-    ],
-    _restaurantSpecialsSiblingCatalog: [
-      { id: 'sibling-1', name: 'Sibling Special', cat: 'Canned & Bottled', menuId: 'menu-sibling', menuLabel: 'Drinks', onMenu: true, visibility: 'public' },
-    ],
+      };
+    },
+    readApiJsonOrNull: async url => {
+      publicCalls.push(url);
+      return {
+        featuredItems: [
+          { id: 'public-1', name: 'Public Spritz', price: '$10', visibility: 'public', is_eighty_sixed: false },
+        ],
+      };
+    },
   });
 
   const service = sandbox.createRestaurantSpecialsService();
-  service.request = async (action, payload = {}) => {
-    requestCalls.push([action, payload]);
-    return {};
-  };
-  service.refreshForActiveMenu = async () => {
-    refreshCalls.push('refresh');
-    return sandbox._featuredGroups;
-  };
+  const result = await service.refreshForActiveMenu();
 
-  const matches = service.getMatches('', 'sibling');
-  assert.equal(matches.length, 1);
-  assert.equal(matches[0].id, 'sibling-1');
-
-  const added = await service.addSlot({ itemId: 'beer-1' });
-  assert.equal(added.ok, true);
-  assert.equal(requestCalls[0][0], 'add');
-  assert.equal(refreshCalls.length, 1);
+  assert.equal(workspaceCalls.length, 1);
+  assert.equal(workspaceCalls[0].menuId, 'menu-main');
+  assert.equal(publicCalls.length, 0);
+  assert.equal(Array.isArray(result), true);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].slots[0].item.name, 'House Spritz');
+  assert.equal(getState(sandbox, '_restaurantSpecialsSiblingCatalog.length'), 0);
+  assert.equal(service.getActiveGroup().slots[0].item.name, 'House Spritz');
 });
 
 test('manager menu switching closes the mobile drawer after the menu refresh completes', async () => {
@@ -2271,10 +2262,11 @@ test('runtime bootstrap and auth profile boundaries consume the consolidated aut
   assert.doesNotMatch(authApiSource, /fetch\('\/api\/role'/);
 });
 
-test('runtime workspace and history boundaries request server restaurant-tools and scoped history', () => {
+test('runtime workspace and history boundaries avoid deleted restaurant-tools includes while keeping scoped history', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 
-  assert.match(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.match(appSource, /action: 'workspace', menu_id: menuId/);
+  assert.doesNotMatch(appSource, /params\.set\('include', 'restaurant-tools'\)/);
   assert.match(appSource, /scope: canReadRestaurantTools \? 'restaurant' : 'menu'/);
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });

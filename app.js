@@ -5857,11 +5857,10 @@ async function readAdminSettingsContextThroughApi({ menuId = '', restaurantId = 
   });
 }
 
-async function readMenuWorkspaceThroughApi({ menuId = MENU_ID, includeRestaurantTools = false } = {}) {
+async function readMenuWorkspaceThroughApi({ menuId = MENU_ID } = {}) {
   const authorizedHeaders = getAuthorizedApiHeaders();
   if (!menuId || !authorizedHeaders.Authorization) return null;
   const params = new URLSearchParams({ action: 'workspace', menu_id: menuId });
-  if (includeRestaurantTools) params.set('include', 'restaurant-tools');
   return readApiJsonOrNull(`/api/manager?${params.toString()}`, {
     headers: authorizedHeaders,
   });
@@ -5905,7 +5904,7 @@ async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) 
   const isStaffMode = pageMode === 'manager' || pageMode === 'admin';
 
   if (isStaffMode) {
-    const workspace = await readMenuWorkspaceThroughApi({ menuId, includeRestaurantTools: true });
+    const workspace = await readMenuWorkspaceThroughApi({ menuId });
     if (workspace) return workspace;
   }
 
@@ -7012,7 +7011,7 @@ async function reloadLatestWorkspaceIntoLocalDraft() {
   const currentEnvelope = buildCurrentLocalDraftEnvelope();
   if (!currentEnvelope?.draftSnapshot) return { ok: false, reloaded: false };
 
-  const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID, includeRestaurantTools: true });
+  const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID });
   if (!workspace) return { ok: false, reloaded: false };
 
   hydrateState(workspace);
