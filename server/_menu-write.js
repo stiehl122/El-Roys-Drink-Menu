@@ -89,6 +89,7 @@ function normalizeSnapshot(snapshot = {}) {
         upcharges: cloneItemUpcharges(item?.upcharges),
         show_description: item?.show_description !== false,
         show_recipe: !!item?.show_recipe,
+        featured_enabled: item?.featured_enabled === true || item?.featuredEnabled === true,
         display_order: Number.isFinite(Number(item?.display_order)) ? Number(item.display_order) : itemIndex,
       })).filter(item => item.id && item.name),
     })).filter(category => category.key && category.label),
@@ -316,6 +317,7 @@ async function syncItems(menuId, normalizedSnapshot, categoryIdsByKey) {
       upcharges: item.upcharges,
       show_description: item.show_description,
       show_recipe: item.show_recipe,
+      featured_enabled: item.featured_enabled === true,
       display_order: item.display_order,
     }));
   });

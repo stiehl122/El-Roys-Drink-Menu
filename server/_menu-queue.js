@@ -81,17 +81,68 @@ export function readSnapshotCategories(snapshot = {}) {
     .filter(category => category.key && category.key !== UNCATEGORIZED_KEY);
 }
 
+function normalizeLegacyFeaturedEntry(entry = null) {
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const itemId = String(entry?.id || entry?.item_id || '').trim();
+    if (!itemId) return null;
+    return {
+      id: itemId,
+      item: { ...entry, id: itemId },
+    };
+  }
+
+  const itemId = String(entry || '').trim();
+  if (!itemId) return null;
+  return { id: itemId, item: null };
+}
+
+function findLegacyFeaturedLookupItem(itemId = '', categories = []) {
+  if (!itemId) return null;
+  for (const category of asArray(categories)) {
+    const match = asArray(category?.items).find(item => String(item?.id || '').trim() === itemId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function createLegacyFeaturedBaselineItem(item = {}, itemId = '') {
+  const normalizedId = String(item?.id || itemId || '').trim();
+  if (!normalizedId) return null;
+
+  const normalizedName = normalizeName(item?.name || item?.label || item?.title || normalizedId);
+  if (!normalizedName) return null;
+
+  const nextItem = {
+    ...item,
+    id: normalizedId,
+    name: normalizedName,
+    on_menu: true,
+    visibility: 'public',
+    featuredEnabled: true,
+    featured_enabled: true,
+  };
+  delete nextItem.onMenu;
+  return nextItem;
+}
+
 export function normalizeLegacyFeaturedBaseline({
   snapshot = {},
   lastSentState = {},
   lastSentFeatured = [],
 } = {}) {
   const normalizedState = normalizeFeaturedSpecialsLastSentState(lastSentState);
-  const legacyFeaturedIds = new Set(asArray(lastSentFeatured).map(value => String(value || '').trim()).filter(Boolean));
+  const legacyFeaturedEntries = asArray(lastSentFeatured)
+    .map(normalizeLegacyFeaturedEntry)
+    .filter(Boolean);
+  const legacyFeaturedIds = new Set(legacyFeaturedEntries.map(entry => entry.id));
   if (!legacyFeaturedIds.size) return normalizedState;
 
   const snapshotCategories = readSnapshotCategories(snapshot);
   const currentFeaturedCategory = snapshotCategories.find(category => isFeaturedSpecialsCategory(category));
+  const baselineLookupCategories = Object.entries(normalizedState).map(([key, items]) => ({
+    key,
+    items: asArray(items),
+  }));
   const featuredKeys = Array.from(new Set([
     ...Object.keys(normalizedState).filter(key => isFeaturedSpecialsCategory(key)),
     ...(currentFeaturedCategory?.key ? [currentFeaturedCategory.key] : []),
@@ -105,9 +156,11 @@ export function normalizeLegacyFeaturedBaseline({
     asArray(normalizedState[key]).forEach(item => {
       const itemId = String(item?.id || '').trim();
       const explicitFeatured = item?.featuredEnabled === true || item?.featured_enabled === true;
+      const nextFeatured = explicitFeatured || legacyFeaturedIds.has(itemId);
       const nextItem = {
         ...item,
-        featuredEnabled: explicitFeatured || legacyFeaturedIds.has(itemId),
+        featuredEnabled: nextFeatured,
+        featured_enabled: nextFeatured,
       };
       mergedItems.push(nextItem);
       if (itemId) itemIds.add(itemId);
@@ -120,7 +173,23 @@ export function normalizeLegacyFeaturedBaseline({
     mergedItems.push({
       ...item,
       featuredEnabled: true,
+      featured_enabled: true,
     });
+    itemIds.add(itemId);
+  });
+
+  legacyFeaturedEntries.forEach(entry => {
+    const itemId = String(entry?.id || '').trim();
+    if (!itemId || itemIds.has(itemId)) return;
+
+    // Reconstruct a one-time featured baseline from the last-sent document first,
+    // then fall back to the current snapshot or richer legacy metadata when needed.
+    const lookupItem = findLegacyFeaturedLookupItem(itemId, baselineLookupCategories)
+      || findLegacyFeaturedLookupItem(itemId, snapshotCategories)
+      || entry.item;
+    const baselineItem = createLegacyFeaturedBaselineItem(lookupItem || {}, itemId);
+    if (!baselineItem) return;
+    mergedItems.push(baselineItem);
     itemIds.add(itemId);
   });
 

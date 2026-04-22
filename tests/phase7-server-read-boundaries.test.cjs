@@ -420,6 +420,57 @@ test('legacy last_sent_featured does not create false featured_specials queue li
   assert.deepEqual(queueState.unsentItemIds, []);
 });
 
+test('legacy last_sent_featured still surfaces a first-cutover featured_specials removal from lookup state', async () => {
+  const queueHelper = await importApiModule('server/_menu-queue.js');
+  const snapshot = {
+    cats: [
+      {
+        key: 'featured_specials',
+        label: 'Featured Specials',
+        icon: '⭐',
+        items: [],
+      },
+      {
+        key: 'cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        items: [{ id: 'legacy-1', name: 'House Marg', featured_enabled: false, on_menu: true, visibility: 'public' }],
+      },
+    ],
+  };
+  const lastSentState = queueHelper.normalizeLegacyFeaturedBaseline({
+    snapshot,
+    lastSentState: {
+      cocktails: [{ id: 'legacy-1', name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+    },
+    lastSentFeatured: ['legacy-1'],
+  });
+  const queueState = queueHelper.buildCategoryQueueState({
+    snapshot,
+    lastSentState,
+  });
+
+  assert.equal(lastSentState.featured_specials.length, 1);
+  assert.equal(lastSentState.featured_specials[0].id, 'legacy-1');
+  assert.equal(lastSentState.featured_specials[0].name, 'House Marg');
+  assert.equal(lastSentState.featured_specials[0].featured_enabled, true);
+  assert.equal(lastSentState.featured_specials[0].featuredEnabled, true);
+  assert.equal(lastSentState.featured_specials[0].on_menu, true);
+  assert.equal(lastSentState.featured_specials[0].visibility, 'public');
+  assert.equal(queueState.hasNotificationChanges, true);
+  assert.deepEqual(queueState.diff, [{
+    id: 'featured_specials',
+    icon: '⭐',
+    label: 'Featured Specials',
+    displayOrder: 0,
+    added: [],
+    removed: ['House Marg'],
+    eightySixed: [],
+    restored: [],
+  }]);
+  assert.deepEqual(queueState.unsentItemIds, []);
+});
+
 test('workspace payload keeps rename, 86, and restore queue lines for enabled featured_specials items', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createMenuWorkspacePayload({
