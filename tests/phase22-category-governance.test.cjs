@@ -554,6 +554,30 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
             visibility: 'public',
             featuredEnabled: true,
           },
+          {
+            id: 'special-disabled-current',
+            name: 'Hidden Toggle Pour',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
+            id: 'special-off-menu-current',
+            name: 'Off Menu Daiquiri',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'off_menu',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-not-on-menu-current',
+            name: 'Staff Meal Shot',
+            eightySixed: false,
+            onMenu: false,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
         ],
         lastSent: [
           {
@@ -588,6 +612,30 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
             visibility: 'public',
             featuredEnabled: true,
           },
+          {
+            id: 'special-disabled-last-sent',
+            name: 'Hidden Toggle Old Fashioned',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
+            id: 'special-off-menu-last-sent',
+            name: 'Off Menu Collins',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'off_menu',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-not-on-menu-last-sent',
+            name: 'Server Shift Pour',
+            eightySixed: false,
+            onMenu: false,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
         ],
       },
       cocktails: { items: [], lastSent: [] },
@@ -608,4 +656,16 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
     eightySixed: ['Back Bar Deal'],
     restored: ['Night Cap Shot'],
   }]);
+  const diffLines = diff.flatMap(section => [
+    ...(section.added || []),
+    ...(section.removed || []),
+    ...(section.eightySixed || []),
+    ...(section.restored || []),
+  ]);
+  assert.equal(diffLines.includes('Hidden Toggle Pour'), false);
+  assert.equal(diffLines.includes('Off Menu Daiquiri'), false);
+  assert.equal(diffLines.includes('Staff Meal Shot'), false);
+  assert.equal(diffLines.includes('Hidden Toggle Old Fashioned'), false);
+  assert.equal(diffLines.includes('Off Menu Collins'), false);
+  assert.equal(diffLines.includes('Server Shift Pour'), false);
 });
