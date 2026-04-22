@@ -5,27 +5,63 @@ import '../core/domain/constants.js';
 const domainConstants = (globalThis.__HF_DOMAIN_CONSTANTS__ && typeof globalThis.__HF_DOMAIN_CONSTANTS__ === 'object')
   ? globalThis.__HF_DOMAIN_CONSTANTS__
   : {};
-const RESTAURANT_SPECIALS = domainConstants.RESTAURANT_SPECIALS || buildFallbackRestaurantSpecials();
+const RESTAURANTS = domainConstants.RESTAURANTS || buildFallbackRestaurants();
+const MENUS = domainConstants.MENUS || buildFallbackMenus();
+const KNOWN_MENU_ORDER = Array.isArray(domainConstants.KNOWN_MENU_ORDER) && domainConstants.KNOWN_MENU_ORDER.length
+  ? domainConstants.KNOWN_MENU_ORDER.slice()
+  : Object.values(MENUS).map(menu => menu?.id).filter(Boolean);
 
-function buildFallbackRestaurantSpecials() {
+function buildFallbackRestaurants() {
   return {
-    '00000000-0000-0000-0000-000000000010': {
-      canonicalId: 'leroyslounge-specials',
-      name: "Leroy's Specials",
-      menuIds: [
-        '00000000-0000-0000-0000-000000000020',
-        '00000000-0000-0000-0000-000000000021',
-      ],
+    LEROYS: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge", slug: 'leroys-lounge' },
+    ELROYS: { id: '00000000-0000-0000-0000-000000000001', name: "El Roy's Cantina", slug: 'el-roys-cantina' },
+  };
+}
+
+function buildFallbackMenus() {
+  return {
+    LEROYS_DRINKS: {
+      id: '00000000-0000-0000-0000-000000000020',
+      restaurantId: RESTAURANTS.LEROYS.id,
+      type: 'drinks',
+      slug: 'leroys-lounge-drinks',
+      name: "Leroy's Lounge Drinks",
     },
-    '00000000-0000-0000-0000-000000000001': {
-      canonicalId: 'elroyscantina-specials',
-      name: "El Roy's Specials",
-      menuIds: [
-        '00000000-0000-0000-0000-000000000002',
-        '00000000-0000-0000-0000-000000000003',
-      ],
+    LEROYS_FOOD: {
+      id: '00000000-0000-0000-0000-000000000021',
+      restaurantId: RESTAURANTS.LEROYS.id,
+      type: 'food',
+      slug: 'leroys-lounge-food',
+      name: "Leroy's Lounge Food",
+    },
+    ELROYS_DRINKS: {
+      id: '00000000-0000-0000-0000-000000000002',
+      restaurantId: RESTAURANTS.ELROYS.id,
+      type: 'drinks',
+      slug: 'el-roys-cantina-drinks',
+      name: "El Roy's Cantina Drinks",
+    },
+    ELROYS_FOOD: {
+      id: '00000000-0000-0000-0000-000000000003',
+      restaurantId: RESTAURANTS.ELROYS.id,
+      type: 'food',
+      slug: 'el-roys-cantina-food',
+      name: "El Roy's Cantina Food",
     },
   };
+}
+
+function getKnownMenuById(menuId) {
+  return Object.values(MENUS).find(menu => menu?.id === menuId) || null;
+}
+
+function getKnownRestaurantById(restaurantId) {
+  return Object.values(RESTAURANTS).find(restaurant => restaurant?.id === restaurantId) || null;
+}
+
+function getRestaurantMenuIds(restaurantId) {
+  return KNOWN_MENU_ORDER
+    .filter(menuId => getKnownMenuById(menuId)?.restaurantId === restaurantId);
 }
 
 function getSupabaseServerConfig() {
@@ -109,19 +145,28 @@ export async function requireMenuAccess(uid, role, menuId) {
 }
 
 export function getRestaurantSpecialConfig(restaurantId) {
-  return restaurantId ? RESTAURANT_SPECIALS[restaurantId] || null : null;
+  if (!restaurantId) return null;
+  const restaurant = getKnownRestaurantById(restaurantId);
+  const menuIds = getRestaurantMenuIds(restaurantId);
+  if (!restaurant || !menuIds.length) return null;
+  const canonicalSlug = String(restaurant.slug || '').replace(/[^a-z0-9]/gi, '');
+  return {
+    canonicalId: canonicalSlug ? `${canonicalSlug}-specials` : '',
+    name: `${String(restaurant.name || '').trim()} Specials`,
+    menuIds,
+  };
 }
 
-export async function requireRestaurantSpecialsAccess(uid, role, restaurantId) {
+export async function requireRestaurantMenuAccess(uid, role, restaurantId) {
   getSupabaseServerConfig();
-  const config = getRestaurantSpecialConfig(restaurantId);
-  if (!config) throw { status: 400, message: 'Unsupported restaurant' };
-  if (role === 'admin') return config;
+  const menuIds = getRestaurantMenuIds(restaurantId);
+  if (!menuIds.length) throw { status: 400, message: 'Unsupported restaurant' };
+  if (role === 'admin') return { restaurantId, menuIds };
 
-  const rows = await readMenuAccessForUser(uid, { menuIds: config.menuIds });
+  const rows = await readMenuAccessForUser(uid, { menuIds, select: 'menu_id' });
   const accessibleMenuIds = new Set(rows.map(row => row.menu_id));
-  if (!config.menuIds.every(menuId => accessibleMenuIds.has(menuId))) {
+  if (!menuIds.every(menuId => accessibleMenuIds.has(menuId))) {
     throw { status: 403, message: 'Forbidden' };
   }
-  return config;
+  return { restaurantId, menuIds };
 }

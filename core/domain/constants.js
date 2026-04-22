@@ -21,19 +21,6 @@
     MENUS.ELROYS_FOOD.id,
   ];
 
-  const RESTAURANT_SPECIALS = {
-    [RESTAURANTS.LEROYS.id]: {
-      canonicalId: 'leroyslounge-specials',
-      name: "Leroy's Specials",
-      menuIds: [MENUS.LEROYS_DRINKS.id, MENUS.LEROYS_FOOD.id],
-    },
-    [RESTAURANTS.ELROYS.id]: {
-      canonicalId: 'elroyscantina-specials',
-      name: "El Roy's Specials",
-      menuIds: [MENUS.ELROYS_DRINKS.id, MENUS.ELROYS_FOOD.id],
-    },
-  };
-
   const constants = {
     APP_VERSION: 'v0.8.9',
     RESTAURANT_TIME_ZONE: 'America/Detroit',
@@ -41,7 +28,6 @@
     MENUS,
     KNOWN_RESTAURANT_ORDER,
     KNOWN_MENU_ORDER,
-    RESTAURANT_SPECIALS,
     LEGACY_MENU_SLUG_ALIASES: {
       'el-roys': MENUS.ELROYS_DRINKS.slug,
     },

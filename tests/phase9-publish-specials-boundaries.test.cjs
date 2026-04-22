@@ -45,7 +45,7 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /resolveSelection/);
 });
 
-test('app runtime prefers consolidated publish and specials server boundaries', () => {
+test('app runtime prefers consolidated publish server boundaries', () => {
   const source = read('app.js');
 
   assert.match(source, /async function publishMenuThroughApi/);
@@ -53,25 +53,15 @@ test('app runtime prefers consolidated publish and specials server boundaries', 
   assert.match(source, /\/api\/manager/);
   assert.match(source, /action: 'preview_publish'/);
   assert.match(source, /selected_change_ids/);
-  assert.match(source, /await ensureCurrentMenuSession\(\)\.publishUpdate/);
   assert.match(source, /await fetch\('\/api\/manager'/);
   assert.match(source, /async request\(action,\s*payload = \{\}\)/);
 });
 
-test('manager route keeps restaurant-special mutations behind shared auth and server transport helpers', () => {
-  const specialsRoute = read('api/manager.js');
-  const specialsCommand = read('server/_specials-command.js');
+test('manager route no longer exposes specials mutation transport', () => {
+  const routeSource = read('api/manager.js');
 
-  assert.match(specialsRoute, /from '\.\.\/server\/_auth\.js'/);
-  assert.match(specialsRoute, /requireRole/);
-  assert.match(specialsRoute, /from '\.\.\/server\/_supabase\.js'/);
-  assert.match(specialsRoute, /getSupabaseServerConfig/);
-  assert.match(specialsRoute, /from '\.\.\/server\/_specials-command\.js'/);
-  assert.match(specialsRoute, /parseSpecialsCommand/);
-  assert.match(specialsRoute, /executeRestaurantSpecialsCommand/);
-  assert.match(specialsCommand, /requireRestaurantSpecialsAccess/);
-  assert.match(specialsCommand, /serviceHeaders/);
-  assert.match(specialsCommand, /export function createRestaurantSpecialsMutationService/);
-  assert.doesNotMatch(specialsRoute, /queryAction/);
-  assert.doesNotMatch(specialsRoute, /action\s*===\s*'migrate'/);
+  assert.doesNotMatch(routeSource, /executeRestaurantSpecialsCommand/);
+  assert.doesNotMatch(routeSource, /parseSpecialsCommand/);
+  assert.doesNotMatch(routeSource, /action === 'specials'/);
+  assert.doesNotMatch(routeSource, /includeFlags\.includes\('restaurant-tools'\)/);
 });

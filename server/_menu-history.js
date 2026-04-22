@@ -2,7 +2,7 @@ import {
   requireAuthenticatedUser,
   readProfile,
   requireMenuAccess,
-  requireRestaurantSpecialsAccess,
+  requireRestaurantMenuAccess,
 } from './_auth.js';
 import {
   getApiErrorMessage,
@@ -243,7 +243,7 @@ export async function readMenuHistoryForRequest(req) {
   const actor = await readAuthorizedHistoryActor(req, menuId);
 
   if (scope === 'restaurant' && menu?.restaurantId) {
-    const config = await requireRestaurantSpecialsAccess(actor.id, actor.role, menu.restaurantId);
+    const config = await requireRestaurantMenuAccess(actor.id, actor.role, menu.restaurantId);
     const historyResult = await readHistoryLogsForMenuIds(config?.menuIds || [], {
       days,
       limit,
