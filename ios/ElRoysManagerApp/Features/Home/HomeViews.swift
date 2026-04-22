@@ -155,15 +155,14 @@ struct RestaurantChooserView: View {
   }
 
   private func realFeaturedSpecials(for restaurant: RestaurantRecord) -> [String]? {
-    let workspaces = restaurantMenus(for: restaurant)
+    let names = restaurantMenus(for: restaurant)
       .compactMap { model.currentToolsMenus[$0.id] }
-    let groups = workspaces
-      .compactMap(\.restaurantTools?.featuredGroups)
-      .first(where: { !$0.isEmpty })
-    let names = groups?
-      .flatMap(\.slots)
-      .compactMap { $0.item?.name.nilIfBlank }
-    return names?.isEmpty == false ? names : nil
+      .flatMap { workspace in
+        workspace.cats.first(where: { $0.key == EditableMenuDocument.featuredSpecialsKey })?.items ?? []
+      }
+      .filter(\.featuredEnabled)
+      .compactMap { $0.name.nilIfBlank }
+    return names.isEmpty ? nil : names
   }
 
   private func realUpdates(for restaurant: RestaurantRecord) -> [HomeUpdate]? {

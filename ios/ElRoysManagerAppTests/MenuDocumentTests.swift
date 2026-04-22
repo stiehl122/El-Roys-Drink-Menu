@@ -2,6 +2,65 @@ import XCTest
 @testable import ElRoysManagerApp
 
 final class MenuDocumentTests: XCTestCase {
+  func testEditableDocumentEnsuresFeaturedSpecialsCategoryExistsAndDerivesEnabledItems() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+
+    XCTAssertEqual(document.visibleCategories.first?.key, EditableMenuDocument.featuredSpecialsKey)
+    XCTAssertEqual(document.category(for: EditableMenuDocument.featuredSpecialsKey)?.label, "Featured Specials")
+    XCTAssertTrue(document.featuredSpecialItems.isEmpty)
+  }
+
+  func testFeaturedSpecialItemsOnlyIncludeEnabledItemsFromFeaturedCategory() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "star.fill",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "special-1", name: "Happy Hour Marg", featuredEnabled: true),
+          makeItem(id: "special-2", name: "Old Seasonal", featuredEnabled: false)
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [makeItem(id: "item-1", name: "Pilsner", featuredEnabled: true)]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["special-1"])
+  }
+
   func testDeleteCategoryMovesItemsToOffMenuRecovery() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -23,7 +82,7 @@ final class MenuDocumentTests: XCTestCase {
     var document = EditableMenuDocument(workspace: workspace)
     document.deleteCategory(key: "wine")
 
-    XCTAssertTrue(document.visibleCategories.isEmpty)
+    XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey])
     XCTAssertEqual(document.uncategorizedItems.count, 1)
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
@@ -73,7 +132,7 @@ final class MenuDocumentTests: XCTestCase {
     var document = EditableMenuDocument(workspace: workspace)
     document.removeItemToOffMenu(itemID: "item-1", from: "beer")
 
-    XCTAssertEqual(document.visibleCategories.first?.items.count, 0)
+    XCTAssertEqual(document.category(for: "beer")?.items.count, 0)
     XCTAssertEqual(document.uncategorizedItems.count, 1)
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
@@ -489,10 +548,10 @@ final class MenuDocumentTests: XCTestCase {
     ])
 
     var document = EditableMenuDocument(workspace: workspace)
-    document.moveVisibleCategories(from: IndexSet(integer: 0), to: 2)
+    document.moveVisibleCategories(from: IndexSet(integer: 1), to: 3)
 
-    XCTAssertEqual(document.visibleCategories.map(\.key), ["wine", "beer"])
-    XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1])
+    XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "wine", "beer"])
+    XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1, 2])
     XCTAssertEqual(document.cats.last?.key, EditableMenuDocument.uncategorizedKey)
   }
 
@@ -501,6 +560,7 @@ final class MenuDocumentTests: XCTestCase {
     let appSource = try String(contentsOf: appEntrySourceURL(), encoding: .utf8)
 
     XCTAssertTrue(toolsSource.contains("Manage Categories"))
+    XCTAssertTrue(toolsSource.contains("Edit Menu Items"))
     XCTAssertTrue(appSource.contains("case categoryTools(MenuRecord)"))
     XCTAssertTrue(appSource.contains("RestaurantCategoryManagementScreen"))
   }
@@ -612,6 +672,18 @@ final class MenuDocumentTests: XCTestCase {
     {
       "cats": [
         {
+          "id": "featured_specials",
+          "key": "featured_specials",
+          "label": "Featured Specials",
+          "items": [
+            {
+              "id": "special-1",
+              "name": "Happy Hour Marg",
+              "featured_enabled": true
+            }
+          ]
+        },
+        {
           "id": "cat-1",
           "key": "beer",
           "label": "Beer",
@@ -632,37 +704,6 @@ final class MenuDocumentTests: XCTestCase {
         "id": "leroys-lounge",
         "slug": "leroyslounge",
         "name": "Leroy's Lounge"
-      },
-      "restaurant_tools": {
-        "restaurant_id": "leroys-lounge",
-        "featured_groups": [
-          {
-            "id": "group-1",
-            "name": "Featured",
-            "slots": [
-              {
-                "id": "slot-1",
-                "item_id": "item-1",
-                "item": {
-                  "id": "item-1",
-                  "name": "Lager",
-                  "eightySixed": false
-                }
-              }
-            ]
-          }
-        ],
-        "sibling_catalog": [
-          {
-            "id": "sib-1",
-            "name": "Michelada",
-            "cat": "Beer",
-            "menu_id": "menu-food",
-            "menu_label": "Food",
-            "on_menu": false,
-            "visibility": "off_menu"
-          }
-        ]
       },
       "context": {
         "kind": "menu-workspace",
@@ -705,10 +746,73 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.workspace.sharedDraft.source, "")
     XCTAssertFalse(payload.workspace.permissions.canAdmin)
     XCTAssertFalse(payload.workspace.capabilities.includesRestaurantTools)
-    XCTAssertEqual(payload.restaurantTools?.featuredGroups[0].slots[0].item?.price, "")
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.menuLabel, "Food")
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.onMenu, false)
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.visibility, "off_menu")
+    XCTAssertEqual(payload.cats.first?.items.first?.featuredEnabled, true)
+    XCTAssertNil(payload.restaurantTools)
+  }
+
+  func testMenuItemPayloadDecodesFeaturedEnabledFromSnakeCase() throws {
+    let data = Data("""
+    {
+      "id": "special-1",
+      "name": "Happy Hour Marg",
+      "featured_enabled": true
+    }
+    """.utf8)
+
+    let item = try JSONDecoder.backend.decode(MenuItemPayload.self, from: data)
+
+    XCTAssertTrue(item.featuredEnabled)
+  }
+
+  func testPublicMenuPayloadDecodesFeaturedItemsInsteadOfFeaturedGroups() throws {
+    let data = Data("""
+    {
+      "cats": [
+        {
+          "id": "cat-1",
+          "key": "beer",
+          "label": "Beer",
+          "items": [
+            {
+              "id": "item-1",
+              "name": "Pilsner",
+              "price": "$8"
+            }
+          ]
+        }
+      ],
+      "meta": {},
+      "featured_items": [
+        {
+          "id": "special-1",
+          "name": "Happy Hour Marg",
+          "price": "$9",
+          "featured_enabled": true
+        }
+      ],
+      "context": {
+        "kind": "public-menu",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "capabilities": {
+        "guest_readable": true,
+        "requires_auth": false,
+        "includes_draft_state": false,
+        "includes_notification_config": false
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(PublicMenuPayload.self, from: data)
+
+    XCTAssertEqual(payload.featuredItems.map(\.id), ["special-1"])
+    XCTAssertTrue(payload.featuredItems[0].featuredEnabled)
   }
 
   func testCategoryPayloadDefaultsUntappdEnabledToFalse() throws {
@@ -1056,7 +1160,7 @@ final class MenuDocumentTests: XCTestCase {
     model.deleteCategory(key: "beer")
 
     XCTAssertFalse(model.canEditCategories)
-    XCTAssertEqual(model.currentEditorDocument?.visibleCategories.count, 1)
+    XCTAssertEqual(model.currentEditorDocument?.visibleCategories.count, 2)
     XCTAssertEqual(model.currentEditorDocument?.category(for: "beer")?.label, "Beer")
   }
 
@@ -2759,7 +2863,6 @@ final class MenuDocumentTests: XCTestCase {
       liveSave: liveSaveClient,
       publish: publishClient,
       history: historyClient,
-      featuredTools: StubFeaturedToolsClient(),
       preview: StubPreviewClient(),
       productLookup: StubProductLookupClient()
     )
@@ -2772,7 +2875,8 @@ final class MenuDocumentTests: XCTestCase {
     desc: String = "",
     displayOrder: Int = 0,
     onMenu: Bool = true,
-    visibility: String = "public"
+    visibility: String = "public",
+    featuredEnabled: Bool = false
   ) -> MenuItemPayload {
     MenuItemPayload(
       id: id,
@@ -2786,7 +2890,8 @@ final class MenuDocumentTests: XCTestCase {
       visibility: visibility,
       upcharges: [],
       showDescription: true,
-      showRecipe: false
+      showRecipe: false,
+      featuredEnabled: featuredEnabled
     )
   }
 
@@ -3113,12 +3218,6 @@ private final class StubHistoryClient: HistoryClienting {
 
   func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload {
     payload
-  }
-}
-
-private final class StubFeaturedToolsClient: FeaturedToolsClienting {
-  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
-    throw TestError.message("Unused in this test")
   }
 }
 
