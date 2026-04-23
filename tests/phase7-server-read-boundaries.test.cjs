@@ -521,6 +521,7 @@ test('workspace payload keeps rename, 86, and restore queue lines for enabled fe
         { id: 'special-rename', name: 'After Party Marg', featured_enabled: true, on_menu: true, visibility: 'public' },
         { id: 'special-86', name: 'Back Bar Deal', featured_enabled: true, on_menu: true, visibility: 'public', is_eighty_sixed: true },
         { id: 'special-restore', name: 'Night Cap Shot', featured_enabled: true, on_menu: true, visibility: 'public', is_eighty_sixed: false },
+        { id: 'special-hidden-eighty', name: 'Dormant Frozen Pour', featured_enabled: true, on_menu: true, visibility: 'public', is_eighty_sixed: true },
       ],
     }],
     meta: {
@@ -531,6 +532,7 @@ test('workspace payload keeps rename, 86, and restore queue lines for enabled fe
           { id: 'special-rename', name: 'Before Party Marg', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: false },
           { id: 'special-86', name: 'Back Bar Deal', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: false },
           { id: 'special-restore', name: 'Night Cap Shot', featured_enabled: true, onMenu: true, visibility: 'public', eightySixed: true },
+          { id: 'special-hidden-eighty', name: 'Dormant Frozen Pour', featured_enabled: false, onMenu: true, visibility: 'public', eightySixed: true },
         ],
       },
       last_sent_featured: [],
@@ -545,13 +547,14 @@ test('workspace payload keeps rename, 86, and restore queue lines for enabled fe
     'special-rename',
     'special-86',
     'special-restore',
+    'special-hidden-eighty',
   ]);
   assert.deepEqual(payload.workspace.publishState.queue.sections, [{
     id: 'featured_specials',
     icon: '⭐',
     label: 'Featured Specials',
     displayOrder: 0,
-    added: ['After Party Marg'],
+    added: ['Dormant Frozen Pour', 'After Party Marg'],
     removed: ['Before Party Marg'],
     eightySixed: ['Back Bar Deal'],
     restored: ['Night Cap Shot'],
@@ -559,6 +562,32 @@ test('workspace payload keeps rename, 86, and restore queue lines for enabled fe
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('eightySixed')));
   assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('restored')));
+  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('added')));
+});
+
+test('normal categories do not treat hidden eighty-sixed items as added queue lines', async () => {
+  const queueHelper = await importApiModule('server/_menu-queue.js');
+  const queueState = queueHelper.buildCategoryQueueState({
+    snapshot: {
+      cats: [{
+        key: 'cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        items: [
+          { id: 'cocktail-hidden-eighty', name: 'After Hours Marg', on_menu: true, visibility: 'public', is_eighty_sixed: true },
+        ],
+      }],
+    },
+    lastSentState: {
+      cocktails: [
+        { id: 'cocktail-hidden-eighty', name: 'After Hours Marg', onMenu: false, visibility: 'public', eightySixed: true },
+      ],
+    },
+  });
+
+  assert.equal(queueState.hasNotificationChanges, false);
+  assert.deepEqual(queueState.diff, []);
+  assert.deepEqual(queueState.unsentItemIds, []);
 });
 
 test('server readers normalize legacy special categories and last_sent_state into featured_specials', async () => {

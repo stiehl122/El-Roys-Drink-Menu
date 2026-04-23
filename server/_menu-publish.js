@@ -138,10 +138,19 @@ function buildPatchMessage(sections = [], { menuName = '', menuLink = '', now = 
   return lines.join('\n').trim();
 }
 
+function canonicalizeLegacySelectionSectionId(sectionId = '') {
+  const normalizedId = String(sectionId || '').trim();
+  if (!normalizedId) return '';
+  if (normalizedId === '__featured__' || normalizedId === 'special' || normalizedId === 'featured') {
+    return 'featured_specials';
+  }
+  return normalizedId;
+}
+
 function mapLegacySelectionToLineIds(legacySections = [], notificationChanges = []) {
   const byKey = new Set();
   (Array.isArray(legacySections) ? legacySections : []).forEach(section => {
-    const sectionId = String(section?.id || '').trim();
+    const sectionId = canonicalizeLegacySelectionSectionId(section?.id);
     if (!sectionId) return;
     (Array.isArray(section?.added) ? section.added : []).forEach(name => {
       byKey.add(`${sectionId}::added::${String(name || '').trim().toLowerCase()}`);
@@ -159,11 +168,11 @@ function mapLegacySelectionToLineIds(legacySections = [], notificationChanges = 
 
   if (!byKey.size) return [];
   return (notificationChanges || [])
-    .filter(change => byKey.has(`${change.sectionId}::${change.kind}::${String(change.name || '').trim().toLowerCase()}`))
+    .filter(change => byKey.has(`${canonicalizeLegacySelectionSectionId(change.sectionId)}::${change.kind}::${String(change.name || '').trim().toLowerCase()}`))
     .map(change => change.id);
 }
 
-function resolveSelection(preview, selectedChangeIds = null, legacySelectedSections = []) {
+function resolveSelection(preview, selectedChangeIds = null, legacySelectedSections = null) {
   const groups = Array.isArray(preview?.changeGroups) ? preview.changeGroups : [];
   const selectableGroups = groups.filter(group => group?.selectable);
   if (!selectableGroups.length) {
@@ -198,15 +207,13 @@ function resolveSelection(preview, selectedChangeIds = null, legacySelectedSecti
         const groupId = lineToGroupId.get(id);
         if (groupId) selectedSet.add(groupId);
       });
-  } else {
+  } else if (Array.isArray(legacySelectedSections)) {
+    selectedSet = new Set();
     const legacyLineIds = mapLegacySelectionToLineIds(legacySelectedSections, preview?.notificationChanges || []);
-    if (legacyLineIds.length) {
-      selectedSet = new Set();
-      legacyLineIds.forEach(lineId => {
-        const groupId = lineToGroupId.get(String(lineId || '').trim());
-        if (groupId) selectedSet.add(groupId);
-      });
-    }
+    legacyLineIds.forEach(lineId => {
+      const groupId = lineToGroupId.get(String(lineId || '').trim());
+      if (groupId) selectedSet.add(groupId);
+    });
   }
 
   if (!selectedSet) {
@@ -299,7 +306,7 @@ function createWorkflowPatchMessage({
   return buildPatchMessage(sections, { menuName, menuLink });
 }
 
-function createWorkflowSelection(preview, selectedChangeIds = null, legacySelectedSections = []) {
+function createWorkflowSelection(preview, selectedChangeIds = null, legacySelectedSections = null) {
   const selection = resolveSelection(preview, selectedChangeIds, legacySelectedSections);
   return {
     selectedChangeIds: selection.selectedGroupIds,
@@ -344,8 +351,8 @@ function createServerMenuPublishPorts() {
     },
     preview: {
       buildCanonical: buildCanonicalPreviewForMenu,
-      resolveSelection({ preview, selectedChangeIds }) {
-        return createWorkflowSelection(preview, selectedChangeIds, []);
+      resolveSelection({ preview, selectedChangeIds, legacySelectedSections = null }) {
+        return createWorkflowSelection(preview, selectedChangeIds, legacySelectedSections);
       },
     },
     notifications: {
@@ -433,17 +440,29 @@ export async function previewMenuUpdateForMenu({
   };
 }
 
-export async function publishMenuUpdateForMenu({
-  actor,
-  menuId,
-  mode,
-  source,
-  snapshot = {},
-  selectedChangeIds = null,
-  expectedLiveRevision = null,
-  expectedDraftRevision = null,
-  expectedNotificationRevision = null,
-}) {
+export async function publishMenuUpdateForMenu(input = {}) {
+  const {
+    actor,
+    menuId,
+    mode,
+    source,
+    snapshot = {},
+    selectedChangeIds = null,
+    legacySelectedSections = null,
+    expectedLiveRevision = null,
+    expectedDraftRevision = null,
+    expectedNotificationRevision = null,
+  } = input;
+  const request = {
+    selectedChangeIds: Array.isArray(selectedChangeIds) ? selectedChangeIds : null,
+    expectedLiveRevision,
+    expectedDraftRevision,
+    expectedNotificationRevision,
+  };
+  if (Array.isArray(legacySelectedSections)) {
+    request.legacySelectedSections = legacySelectedSections;
+  }
+
   const workflow = createServerPublishWorkflow();
   const result = await workflow.execute({
     menuId,
@@ -451,12 +470,7 @@ export async function publishMenuUpdateForMenu({
     source,
     intent: mode === 'save' ? 'save' : (mode === 'send' ? 'send' : 'save-and-send'),
     snapshot: snapshot || {},
-    request: {
-      selectedChangeIds: Array.isArray(selectedChangeIds) ? selectedChangeIds : null,
-      expectedLiveRevision,
-      expectedDraftRevision,
-      expectedNotificationRevision,
-    },
+    request,
   });
 
   return {

@@ -314,7 +314,8 @@ function normalizeCurrentCategoryItems(category = {}) {
     .filter(Boolean);
 }
 
-function buildCategoryGroupChanges(section, currentItems = [], previousItems = []) {
+function buildCategoryGroupChanges(section, currentItems = [], previousItems = [], options = {}) {
+  const includeHiddenEightyAsAdded = options?.includeHiddenEightyAsAdded === true;
   const currentById = new Map(currentItems.map(item => [item.id, item]));
   const previousById = new Map(previousItems.map(item => [item.id, item]));
   const orderedIds = [];
@@ -421,6 +422,23 @@ function buildCategoryGroupChanges(section, currentItems = [], previousItems = [
       return;
     }
 
+    if (includeHiddenEightyAsAdded && previousState === 'hidden' && currentState === 'eighty') {
+      const groupId = createGroupId(section.id, 'added', itemId);
+      groups.push({
+        id: groupId,
+        kind: 'added',
+        selectable: true,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+        displayOrder: section.displayOrder,
+        itemId: String(itemId || ''),
+        lines: [createChangeLine(groupId, section, { kind: 'added', name: current?.name, itemId })],
+      });
+      unsentCurrentItemIds.add(itemId);
+      return;
+    }
+
     if (previousState === 'hidden' && currentState === 'active') {
       const groupId = createGroupId(section.id, 'added', itemId);
       groups.push({
@@ -453,7 +471,9 @@ function buildFeaturedSpecialGroupChanges(section, currentItems = [], previousIt
     ...item,
     visible: item?.visible === true && item?.featuredEnabled === true,
   }));
-  return buildCategoryGroupChanges(section, visibleEnabledCurrentItems, visibleEnabledPreviousItems);
+  return buildCategoryGroupChanges(section, visibleEnabledCurrentItems, visibleEnabledPreviousItems, {
+    includeHiddenEightyAsAdded: true,
+  });
 }
 
 export function buildCategoryQueueState({

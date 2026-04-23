@@ -295,6 +295,98 @@ test('workflow send without selected sections does not claim it sent notificatio
   assert.equal(result.userOutcome.successMessage, '✅ Main Menu send skipped.');
 });
 
+test('workflow forwards legacy selected sections into preview selection resolution', async () => {
+  let selectionArgs = null;
+  const { createMenuPublishWorkflow } = await importWorkflow();
+  const workflow = createMenuPublishWorkflow({
+    ports: createPorts({
+      preview: {
+        ...createPorts().preview,
+        resolveSelection(args) {
+          selectionArgs = args;
+          return {
+            selectedChangeIds: DEFAULT_SELECTED_CHANGE_IDS,
+            selectedSections: [DEFAULT_SELECTED_SECTION],
+            clearedChangeIds: [],
+            clearedSections: [],
+          };
+        },
+      },
+    }),
+  });
+
+  await workflow.execute(createExecuteInput({
+    request: {
+      ...DEFAULT_EXECUTE_REQUEST,
+      selectedChangeIds: null,
+      legacySelectedSections: [DEFAULT_SELECTED_SECTION],
+    },
+  }));
+
+  assert.deepEqual(selectionArgs?.legacySelectedSections, [DEFAULT_SELECTED_SECTION]);
+});
+
+test('workflow keeps omitted legacy selected sections out of preview selection resolution', async () => {
+  let selectionArgs = null;
+  const { createMenuPublishWorkflow } = await importWorkflow();
+  const workflow = createMenuPublishWorkflow({
+    ports: createPorts({
+      preview: {
+        ...createPorts().preview,
+        resolveSelection(args) {
+          selectionArgs = args;
+          return {
+            selectedChangeIds: DEFAULT_SELECTED_CHANGE_IDS,
+            selectedSections: [DEFAULT_SELECTED_SECTION],
+            clearedChangeIds: [],
+            clearedSections: [],
+          };
+        },
+      },
+    }),
+  });
+
+  await workflow.execute(createExecuteInput({
+    request: {
+      ...DEFAULT_EXECUTE_REQUEST,
+      selectedChangeIds: null,
+    },
+  }));
+
+  assert.equal(selectionArgs?.legacySelectedSections, null);
+});
+
+test('workflow preserves explicit empty legacy selected sections into preview selection resolution', async () => {
+  let selectionArgs = null;
+  const { createMenuPublishWorkflow } = await importWorkflow();
+  const workflow = createMenuPublishWorkflow({
+    ports: createPorts({
+      preview: {
+        ...createPorts().preview,
+        resolveSelection(args) {
+          selectionArgs = args;
+          return {
+            selectedChangeIds: [],
+            selectedSections: [],
+            clearedChangeIds: [DEFAULT_NOTIFICATION_CHANGE.id],
+            clearedSections: [DEFAULT_SELECTED_SECTION],
+          };
+        },
+      },
+    }),
+  });
+
+  await workflow.execute(createExecuteInput({
+    request: {
+      ...DEFAULT_EXECUTE_REQUEST,
+      selectedChangeIds: null,
+      legacySelectedSections: [],
+    },
+  }));
+
+  assert.deepEqual(selectionArgs?.legacySelectedSections, []);
+});
+
 test('workflow logs clear-without-send when unchecked queue lines are dropped', async () => {
   const auditCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();

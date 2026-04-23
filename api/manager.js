@@ -81,6 +81,7 @@ export default async function handler(req, res) {
       case 'publish': {
         const { body: publishBody, menuId, action: bodyAction } = parsePublishBody(req);
         if (!menuId) return res.status(400).json({ error: 'Missing menu_id' });
+        const hasLegacySelectedSections = Object.prototype.hasOwnProperty.call(publishBody || {}, 'selected_sections');
         const actor = await readAuthorizedMenuActor(req, menuId);
         const command = (bodyAction === 'preview' || action === 'preview_publish')
           ? previewMenuUpdateForMenu
@@ -94,7 +95,9 @@ export default async function handler(req, res) {
           selectedChangeIds: Array.isArray(publishBody?.selected_change_ids)
             ? publishBody.selected_change_ids
             : (Array.isArray(publishBody?.selected_group_ids) ? publishBody.selected_group_ids : null),
-          legacySelectedSections: Array.isArray(publishBody?.selected_sections) ? publishBody.selected_sections : [],
+          legacySelectedSections: hasLegacySelectedSections
+            ? (Array.isArray(publishBody?.selected_sections) ? publishBody.selected_sections : [])
+            : null,
           expectedLiveRevision: publishBody?.expected_live_revision ?? null,
           expectedDraftRevision: publishBody?.expected_draft_revision ?? null,
           expectedNotificationRevision: publishBody?.expected_notification_revision ?? null,

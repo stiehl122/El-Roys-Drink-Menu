@@ -74,6 +74,9 @@
         const selection = ports.preview.resolveSelection({
           preview,
           selectedChangeIds: command.request?.selectedChangeIds ?? null,
+          legacySelectedSections: Array.isArray(command.request?.legacySelectedSections)
+            ? command.request.legacySelectedSections
+            : null,
         });
         const ts = ports.clock.now();
         const operationId = ports.ids.operationId();

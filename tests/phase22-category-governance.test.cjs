@@ -555,6 +555,14 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
             featuredEnabled: true,
           },
           {
+            id: 'special-hidden-eighty',
+            name: 'Dormant Frozen Pour',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
             id: 'special-disabled-current',
             name: 'Hidden Toggle Pour',
             eightySixed: false,
@@ -613,6 +621,14 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
             featuredEnabled: true,
           },
           {
+            id: 'special-hidden-eighty',
+            name: 'Dormant Frozen Pour',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
             id: 'special-disabled-last-sent',
             name: 'Hidden Toggle Old Fashioned',
             eightySixed: false,
@@ -651,7 +667,7 @@ test('local featured diff detects rename, add/remove, and 86/restore for enabled
     id: '__featured__',
     icon: '⭐',
     label: "Leroy's Specials",
-    added: ['After Party Marg', 'Fresh Frozen Pour'],
+    added: ['After Party Marg', 'Fresh Frozen Pour', 'Dormant Frozen Pour'],
     removed: ['Before Party Marg', 'Last Call Old Fashioned'],
     eightySixed: ['Back Bar Deal'],
     restored: ['Night Cap Shot'],

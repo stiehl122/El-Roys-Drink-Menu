@@ -12018,8 +12018,9 @@ function restoreLabel(catId) {
   return 'Back in Stock';
 }
 
-function computeCategoryDiff(cat, stateOverride = null) {
+function computeCategoryDiff(cat, stateOverride = null, options = {}) {
   const state = stateOverride || menuState[cat.id] || { items: [], lastSent: [] };
+  const includeHiddenEightyAsAdded = options?.includeHiddenEightyAsAdded === true;
   const lastByName = new Map();
   const currentNames = [];
   const lastNames = [];
@@ -12052,6 +12053,9 @@ function computeCategoryDiff(cat, stateOverride = null) {
     if (isVisible && !item.eightySixed && trimmed) {
       currentNames.push(trimmed);
       currentSet.add(key);
+    } else if (includeHiddenEightyAsAdded && isVisible && item.eightySixed && trimmed && (!prev || prev.onMenu === false)) {
+      currentNames.push(trimmed);
+      currentSet.add(key);
     }
   });
 
@@ -12080,6 +12084,8 @@ function computeFeaturedDiff() {
   }, {
     items: (Array.isArray(featuredState.items) ? featuredState.items : []).filter(isVisibleEnabledFeaturedItem),
     lastSent: (Array.isArray(featuredState.lastSent) ? featuredState.lastSent : []).filter(isVisibleEnabledFeaturedItem),
+  }, {
+    includeHiddenEightyAsAdded: true,
   });
 }
 
