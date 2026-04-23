@@ -22,6 +22,30 @@
     };
   }
 
+  function getFeaturedSpecialItemIdentityKey(item = {}, fallback = '') {
+    const id = String(item?.id || item?.item_id || '').trim();
+    if (id) return `id:${id}`;
+    const name = String(item?.name || '').trim().toLowerCase();
+    if (name) return `name:${name}`;
+    return `fallback:${fallback}`;
+  }
+
+  function mergeFeaturedSpecialItems(itemGroups = []) {
+    const mergedItems = [];
+    const seenItemKeys = new Set();
+
+    (Array.isArray(itemGroups) ? itemGroups : []).forEach((group, groupIndex) => {
+      (Array.isArray(group?.items) ? group.items : []).forEach((item, itemIndex) => {
+        const itemKey = getFeaturedSpecialItemIdentityKey(item, `${groupIndex}:${itemIndex}`);
+        if (seenItemKeys.has(itemKey)) return;
+        seenItemKeys.add(itemKey);
+        mergedItems.push(item);
+      });
+    });
+
+    return mergedItems;
+  }
+
   function isFeaturedSpecialsCategory(categoryOrKey = '') {
     const key = typeof categoryOrKey === 'string'
       ? categoryOrKey
@@ -53,7 +77,8 @@
 
   function ensureFeaturedSpecialsCategory(categories = [], { menuId = '', menuType = 'drinks' } = {}) {
     const next = [];
-    const collectedItems = [];
+    const featuredItems = [];
+    const legacyFeaturedItems = [];
 
     (Array.isArray(categories) ? categories : []).forEach(category => {
       if (isFeaturedSpecialsCategory(category)) {
@@ -63,7 +88,11 @@
           items: (Array.isArray(category?.items) ? category.items : [])
             .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled })),
         };
-        collectedItems.push(...normalized.items);
+        if (forceFeaturedEnabled) {
+          legacyFeaturedItems.push(...normalized.items);
+        } else {
+          featuredItems.push(...normalized.items);
+        }
         return;
       }
       next.push(category);
@@ -72,7 +101,10 @@
     const fixed = createFeaturedSpecialsCategory({ menuId, menuType });
     return [{
       ...fixed,
-      items: collectedItems,
+      items: mergeFeaturedSpecialItems([
+        { items: featuredItems },
+        { items: legacyFeaturedItems },
+      ]),
     }, ...next];
   }
 
@@ -83,14 +115,20 @@
 
     const normalizedState = {};
     const featuredItems = [];
+    const legacyFeaturedItems = [];
     let hasFeaturedState = false;
 
     Object.entries(lastSentState).forEach(([key, items]) => {
       if (isFeaturedSpecialsCategory(key)) {
         hasFeaturedState = true;
         const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(key);
-        featuredItems.push(...(Array.isArray(items) ? items : [])
-          .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled })));
+        const normalizedItems = (Array.isArray(items) ? items : [])
+          .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled }));
+        if (forceFeaturedEnabled) {
+          legacyFeaturedItems.push(...normalizedItems);
+        } else {
+          featuredItems.push(...normalizedItems);
+        }
         return;
       }
 
@@ -99,7 +137,12 @@
         : [];
     });
 
-    if (hasFeaturedState) normalizedState[FEATURED_SPECIALS_CATEGORY_ID] = featuredItems;
+    if (hasFeaturedState) {
+      normalizedState[FEATURED_SPECIALS_CATEGORY_ID] = mergeFeaturedSpecialItems([
+        { items: featuredItems },
+        { items: legacyFeaturedItems },
+      ]);
+    }
     return normalizedState;
   }
 
@@ -108,11 +151,25 @@
   }
 
   function deriveFeaturedItems(categories = []) {
-    const category = (Array.isArray(categories) ? categories : [])
-      .find(candidate => isFeaturedSpecialsCategory(candidate));
-    const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(category);
-    return (Array.isArray(category?.items) ? category.items : [])
-      .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled }))
+    const canonicalItems = [];
+    const legacyItems = [];
+
+    (Array.isArray(categories) ? categories : []).forEach(category => {
+      if (!isFeaturedSpecialsCategory(category)) return;
+      const forceFeaturedEnabled = isLegacyFeaturedSpecialCategory(category);
+      const normalizedItems = (Array.isArray(category?.items) ? category.items : [])
+        .map(item => normalizeFeaturedSpecialItem(item, { forceFeaturedEnabled }));
+      if (forceFeaturedEnabled) {
+        legacyItems.push(...normalizedItems);
+      } else {
+        canonicalItems.push(...normalizedItems);
+      }
+    });
+
+    return mergeFeaturedSpecialItems([
+      { items: canonicalItems },
+      { items: legacyItems },
+    ])
       .filter(item => item.featured_enabled === true && isPublicFeaturedSpecialItem(item));
   }
 

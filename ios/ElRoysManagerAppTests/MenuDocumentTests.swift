@@ -126,6 +126,51 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-1", "special-1"])
   }
 
+  func testEditableDocumentNormalizationDedupesMixedLegacyAndFeaturedItemsByID() throws {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "shared-1", name: "Legacy Marg"),
+          makeItem(id: "legacy-only", name: "Legacy Only")
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [
+          makeItem(id: "shared-1", name: "Current Marg", featuredEnabled: false)
+        ]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+    let featured = try XCTUnwrap(document.category(for: EditableMenuDocument.featuredSpecialsKey))
+    let sharedItem = try XCTUnwrap(featured.items.first(where: { $0.id == "shared-1" }))
+    let legacyOnlyItem = try XCTUnwrap(featured.items.first(where: { $0.id == "legacy-only" }))
+
+    XCTAssertEqual(Set(featured.items.map(\.id)), Set(["shared-1", "legacy-only"]))
+    XCTAssertEqual(sharedItem.name, "Current Marg")
+    XCTAssertFalse(sharedItem.featuredEnabled)
+    XCTAssertTrue(legacyOnlyItem.featuredEnabled)
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-only"])
+  }
+
   func testEditableDocumentRuntimeNormalizationMigratesLegacyOfflineFeaturedDrafts() {
     var document = EditableMenuDocument(workspace: makeWorkspace(categories: []))
     document.cats = [
@@ -172,6 +217,51 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.cats.map { $0.key }, [EditableMenuDocument.featuredSpecialsKey, "beer"])
     XCTAssertEqual(document.featuredSpecialItems.map { $0.id }, ["legacy-1", "special-1"])
     XCTAssertEqual(document.category(for: EditableMenuDocument.featuredSpecialsKey)?.id, "featured_specials")
+  }
+
+  func testEditableDocumentRuntimeNormalizationDedupesMixedLegacyAndFeaturedItemsByID() throws {
+    var document = EditableMenuDocument(workspace: makeWorkspace(categories: []))
+    document.cats = [
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "shared-1", name: "Legacy Marg"),
+          makeItem(id: "legacy-only", name: "Legacy Only")
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [
+          makeItem(id: "shared-1", name: "Current Marg", featuredEnabled: false)
+        ]
+      )
+    ]
+
+    document.normalizeIdentifiersForRuntime()
+
+    let featured = try XCTUnwrap(document.category(for: EditableMenuDocument.featuredSpecialsKey))
+    let sharedItem = try XCTUnwrap(featured.items.first(where: { $0.id == "shared-1" }))
+
+    XCTAssertEqual(Set(featured.items.map(\.id)), Set(["shared-1", "legacy-only"]))
+    XCTAssertEqual(sharedItem.name, "Current Marg")
+    XCTAssertFalse(sharedItem.featuredEnabled)
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-only"])
   }
 
   func testDeleteCategoryMovesItemsToOffMenuRecovery() {

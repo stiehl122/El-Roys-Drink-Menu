@@ -1683,13 +1683,11 @@ struct EditableMenuDocument: Codable, Equatable {
       restaurantId: workspace.context.menu?.restaurantId ?? "",
       menuType: workspace.context.menu?.type ?? "drinks"
     )
-    cats = Self.normalizeIdentifiers(
-      in: MenuOrdering.canonicalize(categories: workspace.cats),
-      menuId: workspace.context.menu?.id ?? ""
-    )
+    cats = MenuOrdering.canonicalize(categories: workspace.cats)
     meta = workspace.meta
     restaurant = workspace.restaurant
     ensureFeaturedSpecialsCategory()
+    cats = Self.normalizeIdentifiers(in: cats, menuId: workspace.context.menu?.id ?? "")
   }
 
   var menuId: String { context.menuId }
@@ -1697,8 +1695,8 @@ struct EditableMenuDocument: Codable, Equatable {
   var isFoodMenu: Bool { context.menuType.lowercased() == "food" }
 
   mutating func normalizeIdentifiersForRuntime() {
-    cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
     ensureFeaturedSpecialsCategory()
+    cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
   }
 
   mutating func normalizePersistentItemIdentifiersForRuntime() {
@@ -1771,6 +1769,8 @@ struct EditableMenuDocument: Codable, Equatable {
 
   mutating func ensureFeaturedSpecialsCategory() {
     var mergedFeatured = fixedFeaturedSpecialsCategory()
+    var featuredItems: [MenuItemPayload] = []
+    var legacyFeaturedItems: [MenuItemPayload] = []
     var regularCategories: [MenuCategoryPayload] = []
     var uncategorized: MenuCategoryPayload?
 
@@ -1788,14 +1788,21 @@ struct EditableMenuDocument: Codable, Equatable {
             next.featuredEnabled = true
             return next
           }
+          legacyFeaturedItems.append(contentsOf: migratedItems)
+        } else {
+          featuredItems.append(contentsOf: migratedItems)
         }
-        mergedFeatured.items.append(contentsOf: migratedItems)
         continue
       }
       regularCategories.append(category)
     }
 
-    mergedFeatured.items = MenuOrdering.canonicalize(items: mergedFeatured.items)
+    mergedFeatured.items = MenuOrdering.canonicalize(
+      items: Self.mergeFeaturedSpecialItems(
+        featuredItems: featuredItems,
+        legacyFeaturedItems: legacyFeaturedItems
+      )
+    )
     cats = [mergedFeatured] + regularCategories + (uncategorized.map { [$0] } ?? [])
     renumberCategories()
   }
@@ -2109,6 +2116,39 @@ struct EditableMenuDocument: Codable, Equatable {
       displayOrder: 0,
       items: []
     )
+  }
+
+  private static func mergeFeaturedSpecialItems(
+    featuredItems: [MenuItemPayload],
+    legacyFeaturedItems: [MenuItemPayload]
+  ) -> [MenuItemPayload] {
+    var mergedItems: [MenuItemPayload] = []
+    var seenItemKeys: Set<String> = []
+
+    for (groupIndex, items) in [featuredItems, legacyFeaturedItems].enumerated() {
+      for (itemIndex, item) in items.enumerated() {
+        let identityKey = featuredSpecialItemIdentityKey(item, fallback: "\(groupIndex):\(itemIndex)")
+        guard !seenItemKeys.contains(identityKey) else { continue }
+        seenItemKeys.insert(identityKey)
+        mergedItems.append(item)
+      }
+    }
+
+    return mergedItems
+  }
+
+  private static func featuredSpecialItemIdentityKey(_ item: MenuItemPayload, fallback: String) -> String {
+    let normalizedID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !normalizedID.isEmpty {
+      return "id:\(normalizedID)"
+    }
+
+    let normalizedName = item.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if !normalizedName.isEmpty {
+      return "name:\(normalizedName)"
+    }
+
+    return "fallback:\(fallback)"
   }
 
   private static func normalizedCategoryKey(_ key: String) -> String {

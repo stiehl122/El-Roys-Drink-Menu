@@ -54,6 +54,54 @@ test('normalizeFeaturedSpecialsLastSentState folds legacy special state into fea
   assert.equal(next.featured_specials[0].name, 'Spicy Mango Marg');
 });
 
+test('ensureFeaturedSpecialsCategory dedupes mixed legacy and featured items by id and keeps featured data', async () => {
+  const module = await importFeaturedSpecials();
+  const next = module.ensureFeaturedSpecialsCategory([
+    {
+      id: 'legacy-special-id',
+      key: 'special',
+      label: 'Monthly Specials',
+      display_order: 1,
+      items: [
+        { id: 'shared-1', name: 'Legacy Marg', featured_enabled: false, on_menu: true, visibility: 'public' },
+        { id: 'legacy-only', name: 'Legacy Only', featured_enabled: false, on_menu: true, visibility: 'public' },
+      ],
+    },
+    {
+      id: 'featured-specials-id',
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      display_order: 2,
+      items: [
+        { id: 'shared-1', name: 'Current Marg', featured_enabled: false, on_menu: true, visibility: 'public' },
+      ],
+    },
+  ], { menuId: 'menu-drinks', menuType: 'drinks' });
+
+  assert.deepEqual(next[0].items.map(item => item.id), ['shared-1', 'legacy-only']);
+  assert.equal(next[0].items[0].name, 'Current Marg');
+  assert.equal(next[0].items[0].featured_enabled, false);
+  assert.equal(next[0].items[1].featured_enabled, true);
+});
+
+test('normalizeFeaturedSpecialsLastSentState dedupes mixed legacy and featured baseline items by id', async () => {
+  const module = await importFeaturedSpecials();
+  const next = module.normalizeFeaturedSpecialsLastSentState({
+    featured_specials: [
+      { id: 'shared-1', name: 'Current Marg', featured_enabled: false, onMenu: true, visibility: 'public' },
+    ],
+    special: [
+      { id: 'shared-1', name: 'Legacy Marg', onMenu: true, visibility: 'public' },
+      { id: 'legacy-only', name: 'Legacy Only', onMenu: true, visibility: 'public' },
+    ],
+  });
+
+  assert.deepEqual(next.featured_specials.map(item => item.id), ['shared-1', 'legacy-only']);
+  assert.equal(next.featured_specials[0].name, 'Current Marg');
+  assert.equal(next.featured_specials[0].featured_enabled, false);
+  assert.equal(next.featured_specials[1].featured_enabled, true);
+});
+
 test('deriveFeaturedItems returns enabled items in category order only', async () => {
   const module = await importFeaturedSpecials();
   const items = module.deriveFeaturedItems([
@@ -85,4 +133,25 @@ test('deriveFeaturedItems recognizes legacy special categories and excludes non-
   ]);
 
   assert.deepEqual(items.map(item => item.id), ['item-a']);
+});
+
+test('deriveFeaturedItems prefers featured_specials items when legacy special data duplicates them', async () => {
+  const module = await importFeaturedSpecials();
+  const items = module.deriveFeaturedItems([
+    {
+      key: 'special',
+      items: [
+        { id: 'shared-1', name: 'Legacy Marg', featured_enabled: true, onMenu: true, visibility: 'public' },
+      ],
+    },
+    {
+      key: 'featured_specials',
+      items: [
+        { id: 'shared-1', name: 'Current Marg', featured_enabled: false, onMenu: true, visibility: 'public' },
+        { id: 'current-1', name: 'Current Deal', featured_enabled: true, onMenu: true, visibility: 'public' },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(items.map(item => item.id), ['current-1']);
 });
