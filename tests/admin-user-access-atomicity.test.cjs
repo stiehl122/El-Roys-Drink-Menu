@@ -65,7 +65,7 @@ test('admin updateUserAccess rejects malformed explicit role updates before RPC'
     const { updateAdminUser } = await importApiModule('server/_admin-read-models.js');
     const req = { headers: { authorization: 'Bearer admin-token' } };
 
-    for (const malformedRole of [null, '', false, 0]) {
+    for (const malformedRole of [null, '', false, 0, ['admin']]) {
       calls.length = 0;
       await assert.rejects(
         updateAdminUser(req, { userId: 'target-user', role: malformedRole }),
