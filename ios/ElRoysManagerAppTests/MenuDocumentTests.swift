@@ -1071,8 +1071,8 @@ final class MenuDocumentTests: XCTestCase {
         }
       },
       "workspace": {
-        "menu_status": "Live | Unsent",
-        "has_unsent_changes": true,
+        "menu_status": "Live",
+        "has_unsent_changes": false,
         "accessible_menu_ids": ["menu"],
         "shared_draft": { "exists": false },
         "permissions": { "can_manage": true },
@@ -1091,8 +1091,8 @@ final class MenuDocumentTests: XCTestCase {
 
     let payload = try JSONDecoder.backend.decode(MenuWorkspacePayload.self, from: data)
 
-    XCTAssertEqual(payload.workspace.menuStatus, "Live | Unsent")
-    XCTAssertEqual(payload.workspace.hasUnsentChanges, true)
+    XCTAssertEqual(payload.workspace.menuStatus, "Live")
+    XCTAssertEqual(payload.workspace.hasUnsentChanges, false)
     XCTAssertEqual(payload.workspace.revisions.liveRevision, 200)
     XCTAssertEqual(payload.workspace.revisions.notificationBaselineRevision, 150)
   }
@@ -1527,8 +1527,8 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.selectedChangeIds, ["beer::added::ipa"])
     XCTAssertEqual(payload.preview?.metadata.contract, "menu-publish-preview.v1")
     XCTAssertEqual(payload.preview?.metadata.currentFeaturedIds, ["item-1"])
-    XCTAssertEqual(payload.preview?.menuStatus, "Live | Unsent")
-    XCTAssertEqual(payload.preview?.hasUnsentChanges, true)
+    XCTAssertEqual(payload.preview?.menuStatus, "Drafting")
+    XCTAssertEqual(payload.preview?.hasUnsentChanges, false)
     XCTAssertEqual(payload.preview?.diff.first?.displayOrder, 0)
   }
 
@@ -1693,7 +1693,7 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
-  func testSaveQuietlyRebaselinesAndKeepsQueueStateForLaterSend() async throws {
+  func testLiveSaveRebaselinesAndAdvancesQueueState() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
     let baseWorkspace = makeWorkspace(categories: [
@@ -1780,11 +1780,11 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(liveSaveClient.lastExpectedDraftRevision, 22)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
     XCTAssertNil(offlineStore.draft)
-    XCTAssertEqual(model.notice?.title, "Saved Quietly")
+    XCTAssertEqual(model.notice?.title, "Saved")
   }
 
   @MainActor
-  func testSaveQuietlyIgnoresStaleDraftRevisionWhenNoSharedDraftExists() async throws {
+  func testLiveSaveIgnoresStaleDraftRevisionWhenNoSharedDraftExists() async throws {
     let sessionStore = TestSessionStore()
     let workspace = makeWorkspace(
       categories: [
@@ -1860,7 +1860,7 @@ final class MenuDocumentTests: XCTestCase {
     beer.name = "House Pilsner"
     model.upsertItem(beer, categoryKey: "beer", originalCategoryKey: "beer")
 
-    XCTAssertTrue(model.canSaveQuietlyRemotely)
+    XCTAssertTrue(model.canSaveLiveRemotely)
 
     await model.saveLiveMenu()
 
@@ -1870,7 +1870,7 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
-  func testSaveQuietlyRefreshesLocalLiveRevisionWhenServerOnlyReturnsTimestamp() async throws {
+  func testLiveSaveRefreshesLocalLiveRevisionWhenServerOnlyReturnsTimestamp() async throws {
     let sessionStore = TestSessionStore()
     let initialWorkspace = makeWorkspace(
       categories: [
@@ -1912,8 +1912,8 @@ final class MenuDocumentTests: XCTestCase {
         lastSentRevision: 10,
         notificationBaselineRevision: 10
       ),
-      menuStatus: "Live | Unsent",
-      hasUnsentChanges: true
+      menuStatus: "Live",
+      hasUnsentChanges: false
     )
     let liveSaveClient = StubLiveSaveClient(
       response: PublishResponse(
@@ -2116,7 +2116,7 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
-  func testLiveUnsentStatusEnablesSendWithoutLocalDraft() async throws {
+  func testLiveStatusDoesNotEnableSendWithoutLocalDraft() async throws {
     let workspace = makeWorkspace(
       categories: [
         MenuCategoryPayload(
@@ -2138,8 +2138,8 @@ final class MenuDocumentTests: XCTestCase {
         lastSentRevision: 20,
         notificationBaselineRevision: 20
       ),
-      menuStatus: "Live | Unsent",
-      hasUnsentChanges: true
+      menuStatus: "Live",
+      hasUnsentChanges: false
     )
     let model = AppModel(
       environment: AppEnvironment(
@@ -2161,14 +2161,14 @@ final class MenuDocumentTests: XCTestCase {
 
     XCTAssertFalse(model.hasLocalDraftChanges)
     XCTAssertFalse(model.hasLiveMenuChanges)
-    XCTAssertTrue(model.hasServerUnsentChanges)
-    XCTAssertEqual(model.menuStatusLabel, "Live | Unsent")
-    XCTAssertTrue(model.canLoadPublishPreview)
-    XCTAssertFalse(model.canSaveQuietlyRemotely)
+    XCTAssertFalse(model.hasServerUnsentChanges)
+    XCTAssertEqual(model.menuStatusLabel, "Live")
+    XCTAssertFalse(model.canLoadPublishPreview)
+    XCTAssertFalse(model.canSaveLiveRemotely)
   }
 
   @MainActor
-  func testSendOnlyPublishRebaselinesStatusWithoutDependingOnImmediateReload() async throws {
+  func testLiveMenuWithoutDraftDoesNotPublishSendOnlyChanges() async throws {
     let notificationChangeIDs = ["beer::added::ipa"]
     let initialWorkspace = makeWorkspace(
       categories: [
@@ -2191,8 +2191,8 @@ final class MenuDocumentTests: XCTestCase {
         lastSentRevision: 20,
         notificationBaselineRevision: 20
       ),
-      menuStatus: "Live | Unsent",
-      hasUnsentChanges: true
+      menuStatus: "Live",
+      hasUnsentChanges: false
     )
     let publishClient = StubPublishClient(
       previewResponse: PublishResponse(
@@ -2261,20 +2261,131 @@ final class MenuDocumentTests: XCTestCase {
     await model.loadEditor(menuId: "menu")
     await model.loadPublishPreview()
 
-    XCTAssertTrue(model.hasServerUnsentChanges)
-    XCTAssertEqual(model.menuStatusLabel, "Live | Unsent")
+    XCTAssertFalse(model.hasServerUnsentChanges)
+    XCTAssertEqual(model.menuStatusLabel, "Live")
 
     await model.publishSelectedChanges()
 
-    XCTAssertEqual(publishClient.publishCallCount, 1)
-    XCTAssertEqual(publishClient.lastPublishExpectedLiveRevision, 30)
-    XCTAssertEqual(publishClient.lastPublishExpectedNotificationRevision, 20)
+    XCTAssertEqual(publishClient.publishCallCount, 0)
+    XCTAssertNil(publishClient.lastPublishExpectedLiveRevision)
+    XCTAssertNil(publishClient.lastPublishExpectedNotificationRevision)
     XCTAssertFalse(model.hasServerUnsentChanges)
     XCTAssertEqual(model.menuStatusLabel, "Live")
     XCTAssertNil(model.currentEditorPreview)
     XCTAssertTrue(model.selectedPreviewChangeIDs.isEmpty)
     XCTAssertFalse(model.canLoadPublishPreview)
-    XCTAssertEqual(model.notice?.message, "Sent successfully.")
+    XCTAssertNil(model.notice?.message)
+  }
+
+  @MainActor
+  func testPublishWithNotificationsDisabledSavesAndClearsWithoutSelectedRows() async throws {
+    let notificationChangeIDs = ["beer::added::ipa"]
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      revisions: WorkspaceRevisions(
+        liveRevision: 30,
+        draftRevision: nil,
+        lastSentRevision: 20,
+        notificationBaselineRevision: 20
+      ),
+      menuStatus: "Live",
+      hasUnsentChanges: false
+    )
+    let publishClient = StubPublishClient(
+      previewResponse: PublishResponse(
+        ok: true,
+        action: "preview",
+        ts: nil,
+        preview: try makePreviewPayload(
+          mode: "send",
+          selectionDefaults: notificationChangeIDs,
+          notificationChangeIDs: notificationChangeIDs
+        ),
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 20,
+          notificationBaselineRevision: 20
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      ),
+      publishResponse: PublishResponse(
+        ok: true,
+        action: "publish",
+        ts: 40,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 40,
+          notificationBaselineRevision: 40
+        ),
+        notificationStatus: NotificationStatus(
+          ok: true,
+          skipped: true,
+          partial: false,
+          statusCode: nil,
+          summary: nil,
+          results: nil
+        ),
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: []
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publishClient: publishClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    guard var beer = model.currentEditorDocument?.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded item")
+      return
+    }
+    beer.name = "House Pilsner"
+    model.upsertItem(beer, categoryKey: "beer", originalCategoryKey: "beer")
+    await model.loadPublishPreview()
+
+    XCTAssertEqual(model.selectedPreviewChangeIDs, Set(notificationChangeIDs))
+
+    await model.publishSelectedChanges(shouldNotify: false)
+
+    XCTAssertEqual(publishClient.publishCallCount, 1)
+    XCTAssertEqual(publishClient.lastPublishSelectedChangeIds, [])
+    XCTAssertFalse(model.hasServerUnsentChanges)
+    XCTAssertEqual(model.menuStatusLabel, "Live")
+    XCTAssertEqual(model.notice?.title, "Saved")
   }
 
   @MainActor
@@ -3385,6 +3496,7 @@ private final class StubPublishClient: PublishClienting {
   private(set) var lastPublishExpectedLiveRevision: Int?
   private(set) var lastPublishExpectedDraftRevision: Int?
   private(set) var lastPublishExpectedNotificationRevision: Int?
+  private(set) var lastPublishSelectedChangeIds: [String]?
 
   init(previewResponse: PublishResponse? = nil, publishResponse: PublishResponse? = nil) {
     self.previewResponse = previewResponse
@@ -3406,6 +3518,7 @@ private final class StubPublishClient: PublishClienting {
   func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     publishCallCount += 1
     lastPublishSnapshot = snapshot
+    lastPublishSelectedChangeIds = selectedChangeIds
     lastPublishExpectedLiveRevision = expectedLiveRevision
     lastPublishExpectedDraftRevision = expectedDraftRevision
     lastPublishExpectedNotificationRevision = expectedNotificationRevision

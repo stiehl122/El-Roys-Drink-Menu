@@ -154,8 +154,8 @@
             <div class="manager-shell-overview-hero manager-dossier-hero">
               <div class="manager-shell-overview-hero-copy">
                 <p class="manager-shell-overview-hero-kicker">Where to start</p>
-                <h3>Draft it. Polish it. Send it live.</h3>
-                <p class="manager-shell-overview-hero-text">Every edit sits as a draft until you hit the dock. Jump into a record, make your passes, come back here to publish.</p>
+                <h3>Draft it. Polish it. Save it live.</h3>
+                <p class="manager-shell-overview-hero-text">Every edit sits as a draft until you hit the dock. Jump into a record, make your passes, come back here to review and save.</p>
               </div>
               <div class="manager-shell-overview-hero-actions" role="group" aria-label="Quick manager actions">
                 <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-items-section')">Edit Items</button>
@@ -169,7 +169,7 @@
               <article class="manager-shell-stat-card">
                 <p class="manager-shell-stat-label">Menu Status</p>
                 <strong class="manager-shell-stat-value" id="manager-overview-status-value">Live</strong>
-                <span class="manager-shell-stat-meta" id="manager-overview-status-meta">No unsent changes</span>
+                <span class="manager-shell-stat-meta" id="manager-overview-status-meta">Live menu is current</span>
               </article>
               <article class="manager-shell-stat-card">
                 <p class="manager-shell-stat-label">Active Items</p>
@@ -214,7 +214,7 @@
                 <h2>Shape tonight's lineup.</h2>
               </div>
               <div class="manager-shell-section-actions">
-                <p class="manager-shell-section-copy">Swipe left to 86, right to bring it back. Nothing hits the floor until you send from the dock.</p>
+                <p class="manager-shell-section-copy">Swipe left to 86, right to bring it back. Review and save changes from the dock.</p>
                 <button type="button" class="btn-small manager-add-item-launch" id="manager-add-item-btn" onclick="openAddItemModal({ mode: 'manual' })" style="display:none">Add Item(s)</button>
               </div>
             </div>
@@ -341,8 +341,8 @@
         <footer class="manager-shell-footer manager-dossier-footer">
           <div class="manager-shell-footer-copy manager-dossier-footer-panel">
             <p class="manager-shell-footer-kicker">Behind the Pass</p>
-            <h3>Drafts stay here. Service sees the send.</h3>
-            <p class="manager-shell-footer-note">Publish from the dock whenever the line is ready.</p>
+            <h3>Drafts stay here until you save.</h3>
+            <p class="manager-shell-footer-note">Review and save from the dock whenever the line is ready.</p>
           </div>
           <div class="manager-shell-footer-meta manager-dossier-footer-panel">
             <div class="manager-shell-footer-pills manager-dossier-footer-pills">
@@ -362,8 +362,7 @@
       </div>
       <div class="manager-shell-actionbar-groups">
         <div class="btn-row manager-shell-actionbar-primary" id="manager-primary-action-group">
-          <button class="save-btn" id="save-btn" onclick="saveMenu()" title="Save changes without notifying anyone">Save Quietly</button>
-          <button class="send-btn" id="send-btn" onclick="openPreview()" title="Review changes before publishing them live">Save &amp; Send</button>
+          <button class="save-btn" id="save-btn" onclick="openPreview()" title="Review and save menu changes">Save</button>
           <button class="btn-small" id="discard-draft-btn" onclick="discardLocalDraft()" hidden>Discard Draft</button>
         </div>
       </div>
@@ -377,13 +376,13 @@
 
 <div class="modal-bg" id="modal-bg" hidden aria-hidden="true">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <h2 id="modal-title">Send Preview</h2>
-    <div class="modal-sub" id="modal-subtitle">Review how these changes will save, send, or clear.</div>
+    <h2 id="modal-title">Save Preview</h2>
+    <div class="modal-sub" id="modal-subtitle">Review how these changes will save or clear.</div>
     <div id="preview-content"></div>
     <div class="modal-actions">
       <button class="btn-cancel" id="cancel-preview-btn" onclick="closeModal()">Cancel</button>
-      <button class="btn-secondary" id="save-menu-btn" onclick="sendUpdate({ notify: false })">Save Menu</button>
-      <button class="btn-confirm" id="save-send-btn" onclick="sendUpdate({ notify: true })">Save &amp; Send</button>
+      <button class="btn-secondary" id="save-menu-btn" onclick="sendUpdate({ notify: false })">Save</button>
+      <button class="btn-confirm" id="save-send-btn" onclick="sendUpdate()">Save</button>
     </div>
   </div>
 </div>

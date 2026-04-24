@@ -65,6 +65,19 @@ function snapshotLastSentState(snapshot = {}) {
   ]));
 }
 
+function collectCurrentFeaturedIds(snapshot = {}) {
+  const cats = Array.isArray(snapshot?.cats) ? snapshot.cats : [];
+  return cats
+    .filter(category => isFeaturedSpecialsSectionKey(category?.key))
+    .flatMap(category => Array.isArray(category?.items) ? category.items : [])
+    .filter(item => (item?.featured_enabled === true || item?.featuredEnabled === true)
+      && item?.on_menu !== false
+      && item?.onMenu !== false
+      && item?.visibility !== 'off_menu')
+    .map(item => normalizePersistentItemId(item?.id))
+    .filter(Boolean);
+}
+
 function readSnapshotPreviewContext(snapshot = {}) {
   const context = snapshot?.preview_context && typeof snapshot.preview_context === 'object'
     ? snapshot.preview_context
@@ -323,6 +336,7 @@ async function buildCanonicalPreviewForMenu({
     metadata: {
       serverOwned: true,
       contract: PREVIEW_CONTRACT,
+      currentFeaturedIds: collectCurrentFeaturedIds(queueSnapshot),
       unsentItemIds: queueState.unsentItemIds,
       lastSentState: snapshotHasFeaturedSpecials
         ? snapshotLastSentState(queueSnapshot)

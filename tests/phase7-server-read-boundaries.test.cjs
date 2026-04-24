@@ -157,13 +157,13 @@ test('workspace payload preserves the live menu snapshot shape and adds staff co
   assert.equal(payload.workspace.revisions.notificationBaselineRevision, 1712705100000);
   assert.equal(payload.workspace.capabilities.includesDraftAuthorship, true);
   assert.equal(payload.workspace.capabilities.includesRestaurantTools, true);
-  assert.equal(payload.workspace.capabilities.canSaveQuietly, true);
+  assert.equal(payload.workspace.capabilities.canSaveLiveMenu, true);
   assert.equal(payload.restaurantTools.restaurantId, '00000000-0000-0000-0000-000000000010');
   assert.equal(payload.context.kind, 'menu-workspace');
   assert.equal(payload.compatibility.contract, 'menu-workspace.v4');
 });
 
-test('workspace payload projects server-owned Live | Unsent queue state from stable item IDs', async () => {
+test('workspace payload does not expose server-owned unsent queue state', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createMenuWorkspacePayload({
     menu: {
@@ -188,16 +188,16 @@ test('workspace payload projects server-owned Live | Unsent queue state from sta
     actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
   });
 
-  assert.equal(payload.workspace.publishState.status, 'live_unsent');
-  assert.equal(payload.workspace.publishState.statusLabel, 'Live | Unsent');
-  assert.equal(payload.workspace.publishState.hasUnsentChanges, true);
+  assert.equal(payload.workspace.publishState.status, 'live');
+  assert.equal(payload.workspace.publishState.statusLabel, 'Live');
+  assert.equal(payload.workspace.publishState.hasUnsentChanges, false);
   assert.equal(payload.workspace.publishState.revisions.notificationRevision, 1712705100000);
-  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, ['item-1']);
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
   assert.equal(payload.workspace.revisions.liveRevision, 1712705300000);
   assert.equal(payload.workspace.revisions.draftRevision, null);
   assert.equal(payload.workspace.revisions.lastSentRevision, 1712705100000);
   assert.equal(payload.workspace.revisions.notificationBaselineRevision, 1712705100000);
-  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
+  assert.deepEqual(payload.workspace.publishState.queue.selectableGroupIds, []);
 });
 
 test('workspace payload treats legacy last_sent_featured as the featured_specials baseline during migration', async () => {
@@ -590,7 +590,7 @@ test('legacy featured objects prefer item_id over wrapper id during migration', 
   assert.deepEqual(queueState.unsentItemIds, []);
 });
 
-test('workspace payload keeps rename, 86, and restore queue lines for enabled featured_specials items', async () => {
+test('workspace payload hides rename, 86, and restore queue lines for enabled featured_specials items', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createMenuWorkspacePayload({
     menu: {
@@ -629,27 +629,10 @@ test('workspace payload keeps rename, 86, and restore queue lines for enabled fe
     actor: { id: 'user-1', name: 'Alex', role: 'manager', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
   });
 
-  assert.equal(payload.workspace.publishState.status, 'live_unsent');
-  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, [
-    'special-rename',
-    'special-86',
-    'special-restore',
-    'special-hidden-eighty',
-  ]);
-  assert.deepEqual(payload.workspace.publishState.queue.sections, [{
-    id: 'featured_specials',
-    icon: '⭐',
-    label: 'Featured Specials',
-    displayOrder: 0,
-    added: ['Dormant Frozen Pour', 'After Party Marg'],
-    removed: ['Before Party Marg'],
-    eightySixed: ['Back Bar Deal'],
-    restored: ['Night Cap Shot'],
-  }]);
-  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('rename')));
-  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('eightySixed')));
-  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('restored')));
-  assert.ok(payload.workspace.publishState.queue.selectableGroupIds.some(groupId => groupId.includes('added')));
+  assert.equal(payload.workspace.publishState.status, 'live');
+  assert.deepEqual(payload.workspace.publishState.queue.unsentItemIds, []);
+  assert.deepEqual(payload.workspace.publishState.queue.sections, []);
+  assert.deepEqual(payload.workspace.publishState.queue.selectableGroupIds, []);
 });
 
 test('normal categories do not treat hidden eighty-sixed items as added queue lines', async () => {

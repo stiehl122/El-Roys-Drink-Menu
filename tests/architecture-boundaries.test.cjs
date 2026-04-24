@@ -253,34 +253,16 @@ function installPublishFacadeStub(sandbox, overrides = {}) {
 
       if (shouldNotify && delivery.partial) {
         warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
-        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: sessionPorts.dedupeWarnings(warnings),
-          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
-          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs attention.`,
-          snapshot: buildSnapshot('send-partial'),
-        };
+        warnings.push('Some channels did not receive the update. Changes were saved live without preserving a send queue.');
       }
 
       if (shouldNotify && !delivery.ok) {
         warnings.push(delivery.userMessage || 'Update could not be sent.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: sessionPorts.dedupeWarnings(warnings),
-          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
-          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs to be sent.`,
-          snapshot: buildSnapshot('send-failed-live-saved'),
-        };
       }
 
       if (shouldNotify) warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
 
-      if (mode === 'save-and-send' || mode === 'send') {
+      {
         const ts = liveSaveTs || sessionPorts.now();
         const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
         const restaurantId = sessionPorts.getRestaurantId();
@@ -314,7 +296,7 @@ function installPublishFacadeStub(sandbox, overrides = {}) {
         const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
         if (!cacheSynced) warnings.push('This device could not refresh its local cache after the send.');
 
-        const logged = patchMessage
+        const logged = shouldNotify && patchMessage
           ? await sessionPorts.logUpdate(
             typeof sandbox.serializeNotificationSectionsForLog === 'function'
               ? sandbox.serializeNotificationSectionsForLog(selectedSections)
@@ -333,9 +315,11 @@ function installPublishFacadeStub(sandbox, overrides = {}) {
           notificationStatus: shouldNotify ? delivery : null,
           warnings: finalWarnings,
           warningMessage: finalWarnings[0] || '',
-          successMessage: shouldNotify
+          successMessage: shouldNotify && delivery.ok
             ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved and sent!`
-            : `✅ ${sessionPorts.getMenuName() || 'Menu'} update list cleared without notifying channels.`,
+            : (shouldNotify
+                ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Notifications need attention.`
+                : `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live without sending notifications.`),
           snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
         };
       }
@@ -574,9 +558,9 @@ test('menu session lifecycle publishes updates through one preview-aware boundar
   assert.equal(result.ok, true);
   assert.equal(result.notificationStatus.statusCode, 207);
   assert.equal(result.preview, preview);
-  assert.equal(patchCalls.length, 0);
+  assert.ok(patchCalls.length > 0);
   assert.ok(result.warnings.some(message => message.includes('Some notification channels failed: SMS.')));
-  assert.ok(result.warnings.some(message => message.includes('remain ready to send again')));
+  assert.ok(result.warnings.some(message => message.includes('without preserving a send queue')));
 });
 
 test('menu session lifecycle can publish without firing notifications', async () => {
@@ -601,7 +585,7 @@ test('menu session lifecycle can publish without firing notifications', async ()
   assert.equal(result.notificationStatus, null);
   assert.equal(notificationCalls, 0);
   assert.equal(result.warnings.length, 0);
-  assert.match(result.successMessage, /saved to the live menu/i);
+  assert.match(result.successMessage, /saved live without sending notifications/i);
 });
 
 test('app runtime delegates preview and commit through the session publish facade', () => {
@@ -640,9 +624,9 @@ test('draft ledger service provides action-bar and item badge state through one 
   const actionBarState = service.getActionBarState({ isCompactViewport: false });
   assert.equal(actionBarState.hasDraftChanges, true);
   assert.equal(actionBarState.hasPendingUpdate, false);
-  assert.equal(actionBarState.saveLabel, 'Save Quietly');
-  assert.equal(actionBarState.publishLabel, 'Save & Send');
-  assert.equal(actionBarState.summaryText, '2 pending changes. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.');
+  assert.equal(actionBarState.saveLabel, 'Save');
+  assert.equal(actionBarState.publishLabel, '');
+  assert.equal(actionBarState.summaryText, '2 pending changes. Save opens a review before anything goes live.');
 
   const draftBadge = service.getItemBadge({
     item: { id: 'item-1', name: 'Lager', eightySixed: false },
@@ -670,8 +654,8 @@ test('draft ledger service provides action-bar and item badge state through one 
     catId: 'beer',
     lastSentNames: new Set(['lager']),
   });
-  assert.equal(unsentBadge.text, 'UNSENT');
-  assert.equal(unsentBadge.className, 'item-state-badge--unsent');
+  assert.equal(unsentBadge.text, '');
+  assert.equal(unsentBadge.className, 'item-state-badge--active');
 });
 
 test('manager action bar stays visible and reflects idle and active draft states', () => {
@@ -700,7 +684,8 @@ test('manager action bar stays visible and reflects idle and active draft states
   assert.equal(saveBtn.disabled, true);
   assert.equal(saveBtn.textContent, 'Save');
   assert.equal(sendBtn.disabled, true);
-  assert.equal(sendBtn.textContent, 'Send');
+  assert.equal(sendBtn.textContent, 'Save');
+  assert.equal(sendBtn.hidden, true);
   assert.equal(bar.classList.contains('is-idle'), true);
 
   setState(sandbox, {
@@ -721,11 +706,12 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   sandbox.updateManagerActionBar();
 
-  assert.equal(summary.textContent, '2 pending changes. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.');
+  assert.equal(summary.textContent, '2 pending changes. Save reviews and saves your changes.');
   assert.equal(saveBtn.disabled, false);
-  assert.equal(saveBtn.textContent, 'Save Quietly');
-  assert.equal(sendBtn.disabled, false);
-  assert.equal(sendBtn.textContent, 'Save & Send');
+  assert.equal(saveBtn.textContent, 'Save');
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(sendBtn.textContent, 'Save');
+  assert.equal(sendBtn.hidden, true);
   assert.equal(bar.classList.contains('is-idle'), false);
 
   setState(sandbox, {
@@ -746,11 +732,12 @@ test('manager action bar stays visible and reflects idle and active draft states
 
   sandbox.updateManagerActionBar();
 
-  assert.equal(summary.textContent, '1 update line is live and ready to send.');
-  assert.equal(saveBtn.disabled, true);
-  assert.equal(saveBtn.hidden, true);
-  assert.equal(sendBtn.disabled, false);
-  assert.equal(sendBtn.textContent, 'Send');
+  assert.equal(summary.textContent, '1 update line ready for review. Save opens the review before notifying.');
+  assert.equal(saveBtn.disabled, false);
+  assert.equal(saveBtn.hidden, false);
+  assert.equal(sendBtn.disabled, true);
+  assert.equal(sendBtn.textContent, 'Save');
+  assert.equal(sendBtn.hidden, true);
 });
 
 test('manager action bar reconciles stale dirty flags against the actual local draft state', () => {
@@ -775,7 +762,8 @@ test('manager action bar reconciles stale dirty flags against the actual local d
   assert.equal(saveBtn.disabled, true);
   assert.equal(saveBtn.textContent, 'Save');
   assert.equal(sendBtn.disabled, true);
-  assert.equal(sendBtn.textContent, 'Send');
+  assert.equal(sendBtn.textContent, 'Save');
+  assert.equal(sendBtn.hidden, true);
   assert.equal(bar.classList.contains('is-idle'), true);
   assert.equal(getState(sandbox, '_dirty'), false);
 });
@@ -855,7 +843,7 @@ test('save actions blur the focused editor before publishing workspace changes',
   await sandbox.saveMenu();
 
   assert.equal(blurred, true);
-  assert.deepEqual(requests.slice(0, 2), ['preview_publish', 'publish']);
+  assert.deepEqual(requests.slice(0, 2), ['preview_publish']);
 });
 
 test('save-only menu edits stay in the draft session until save', async () => {
@@ -891,7 +879,7 @@ test('save-only menu edits stay in the draft session until save', async () => {
   assert.equal(getState(sandbox, 'getDraftSaveOnlyChanges().length'), 1);
 });
 
-test('save draft routes a quiet live save through the publish boundary and leaves the queue unsent', async () => {
+test('save draft routes a quiet live save through the publish boundary and advances the baseline', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
   installPublishFacadeStub(sandbox);
@@ -941,10 +929,10 @@ test('save draft routes a quiet live save through the publish boundary and leave
   assert.ok(Array.isArray(requests[0][1].snapshot.cats));
   assert.equal(getState(sandbox, '_dirty'), false);
   assert.equal(getState(sandbox, 'hasSharedDraftState()'), false);
-  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE | UNSENT');
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('test').status"), 'LIVE');
 });
 
-test('save menu quietly writes a local draft to live and leaves unsent changes behind', async () => {
+test('save menu quietly writes a local draft to live and advances the baseline', async () => {
   const sandbox = loadAppSandbox();
   const requests = [];
   installPublishFacadeStub(sandbox);
@@ -989,11 +977,11 @@ test('save menu quietly writes a local draft to live and leaves unsent changes b
   assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'selected_sections'), false);
   assert.equal(Object.prototype.hasOwnProperty.call(requests[0][1], 'patch_message'), false);
   assert.equal(getState(sandbox, '_hasSharedDraft'), false);
-  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE | UNSENT');
+  assert.equal(getState(sandbox, "buildMenuSessionSnapshot('after-save').status"), 'LIVE');
   assert.match(result.successMessage, /saved to the live menu/i);
 });
 
-test('manager item badges mark live unsent changes distinctly from drafts', () => {
+test('manager item badges do not mark live changes as unsent', () => {
   const sandbox = loadAppSandbox();
 
   setState(sandbox, {
@@ -1014,8 +1002,8 @@ test('manager item badges mark live unsent changes distinctly from drafts', () =
   });
 
   const badge = sandbox.getItemStateBadge({ id: 'item-1', name: 'Lager', eightySixed: false }, 'beer', new Set());
-  assert.equal(badge.text, 'UNSENT');
-  assert.equal(badge.className, 'item-state-badge--unsent');
+  assert.equal(badge.text, 'NEW');
+  assert.equal(badge.className, 'item-state-badge--new');
 });
 
 test('access session service restores sessions and resolves settings access', async () => {
@@ -1802,10 +1790,10 @@ test('manager user header no longer depends on a header return button', () => {
 test('manager shell header stays minimal and action-focused', () => {
   const managerHtml = fs.readFileSync(path.join(__dirname, '..', 'manager', 'index.html'), 'utf8');
 
-  assert.match(managerHtml, /Manager Workspace/);
-  assert.match(managerHtml, /id="switch-menu-btn"[\s\S]*Menu Switcher/);
+  assert.match(managerHtml, /Revision Dock/);
+  assert.match(managerHtml, /id="switch-menu-btn"[\s\S]*Switch Menu/);
   assert.match(managerHtml, /id="admin-btn"[\s\S]*Admin Console/);
-  assert.match(managerHtml, /manager-shell-legacy-hooks/);
+  assert.doesNotMatch(managerHtml, /manager-shell-legacy-hooks/);
   assert.doesNotMatch(managerHtml, /Current Menu Control Room/);
   assert.doesNotMatch(managerHtml, /manager-shell-header-summary/);
 });

@@ -286,6 +286,39 @@ test('menu publish service honors an explicit global facade override for direct 
   assert.equal(calls[1].options.intent, 'save');
 });
 
+test('menu publish service prepares through the server preview port when no facade is loaded', async () => {
+  const sandbox = loadSandboxWithScripts(['core/session/publish-service.js']);
+  const previewCalls = [];
+  const service = sandbox.__HF_SESSION_MODULES__.createMenuPublishService(createMenuSessionPorts({
+    async requestPublishPreview(options = {}) {
+      previewCalls.push(options);
+      return {
+        ok: true,
+        status: 200,
+        payload: {
+          ok: true,
+          preview: {
+            hasChanges: true,
+            hasLocalDraft: true,
+            sections: [{ id: 'beer', changes: [] }],
+            notificationChanges: [{ id: 'beer::added::lager' }],
+          },
+          current_revisions: { live: 10 },
+        },
+      };
+    },
+  }), {});
+
+  const result = await service.prepare({ expectedLiveRevision: 10 });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 200);
+  assert.equal(result.current_revisions.live, 10);
+  assert.equal(result.preview.sections[0].id, 'beer');
+  assert.equal(previewCalls.length, 1);
+  assert.equal(previewCalls[0].expectedLiveRevision, 10);
+});
+
 test('menu publish service keeps fallback methods explicit for quiet-save and publish paths', async () => {
   const sandbox = loadSandboxWithScripts(['core/session/publish-service.js']);
   const quietSaveCalls = [];

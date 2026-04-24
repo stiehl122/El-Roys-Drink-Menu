@@ -436,16 +436,14 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
     ...draftMeta,
     last_sent_state: lastSentState,
   };
-  const unsentItemIds = Array.from(new Set(queueState.unsentItemIds));
-  const hasUnsentChanges = queueState.hasNotificationChanges;
-  const publishStatus = hasUnsentChanges ? 'live_unsent' : 'live';
+  const hasUnsentChanges = false;
+  const publishStatus = 'live';
   const liveRevision = bundle?.meta?.last_updated_ts || null;
   const draftRevision = bundle?.meta?.draft_saved_ts || null;
   const lastSentRevision = bundle?.meta?.last_sent_ts || null;
   const workspaceCapabilities = {
     canSaveDraft: canManage,
     canSaveLiveMenu: canManage,
-    canSaveQuietly: canManage,
     canPublishUpdates: canManage,
     canManageRestaurantSpecials: canEditRestaurantSpecials,
     canReadRestaurantTools: canEditRestaurantSpecials,
@@ -470,7 +468,7 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
       sharedDraft,
       publishState: {
         status: publishStatus,
-        statusLabel: hasUnsentChanges ? 'Live | Unsent' : 'Live',
+        statusLabel: 'Live',
         hasUnsentChanges,
         revisions: {
           liveRevision,
@@ -478,10 +476,10 @@ export function createMenuWorkspacePayload(bundle, { actor = null, restaurantToo
         },
         queue: {
           contract: 'menu-queue.v1',
-          unsentItemIds,
+          unsentItemIds: [],
           unsentFeaturedIds: [],
-          sections: queueState.diff,
-          selectableGroupIds: queueState.groups.map(group => group.id),
+          sections: [],
+          selectableGroupIds: [],
         },
       },
       permissions: {

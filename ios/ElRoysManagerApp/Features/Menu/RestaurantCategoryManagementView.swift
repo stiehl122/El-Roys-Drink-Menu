@@ -58,9 +58,9 @@ struct RestaurantCategoryManagementScreen: View {
           session: session,
           preview: preview,
           accent: accent,
-          onPublish: {
+          onPublish: { shouldNotify in
             Task {
-              await session.publishSelectedChanges()
+              await session.publishSelectedChanges(shouldNotify: shouldNotify)
               showingPreview = false
             }
           }
@@ -108,7 +108,7 @@ struct RestaurantCategoryManagementScreen: View {
       }
       Button("Keep Editing", role: .cancel) {}
     } message: {
-      Text("This only removes unsaved edits from this device and does not modify the shared server queue.")
+      Text("This only removes unsaved edits from this device and leaves the live menu unchanged.")
     }
   }
 
@@ -121,13 +121,7 @@ struct RestaurantCategoryManagementScreen: View {
       .disabled(!session.canEditCategories)
 
       HStack(spacing: 12) {
-        Button("Save Quietly") {
-          Task { await session.saveLiveMenu() }
-        }
-        .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-        .disabled(!session.canSaveQuietlyRemotely)
-
-        Button(session.hasLocalDraftChanges ? "Save & Send" : "Send Update") {
+        Button("Save") {
           Task {
             await session.loadPublishPreview()
             showingPreview = session.preview != nil
@@ -227,50 +221,116 @@ struct RestaurantCategoryManagementScreen: View {
 
 private struct RestaurantCategoryPublishPreviewSheet: View {
   @Environment(\.dismiss) private var dismiss
+  @State private var shouldNotify = true
   @Bindable var session: MenuEditorSession
   let preview: MenuPreviewPayload
   let accent: Color
-  let onPublish: () -> Void
+  let onPublish: (Bool) -> Void
+
+  private var summary: PublishPreviewSummary {
+    PublishPreviewSummary(
+      preview: preview,
+      selectedChangeIDs: shouldNotify ? session.selectedPreviewChangeIDs : []
+    )
+  }
 
   var body: some View {
+    let currentSummary = summary
+
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          Text(preview.patchMessage.isEmpty ? "Review the queued category changes before sending." : preview.patchMessage)
+          Text(preview.patchMessage.isEmpty ? "Review the category changes before saving." : preview.patchMessage)
             .font(AppTypography.body(14, weight: .medium))
 
-          ForEach(preview.sections) { section in
-            VStack(alignment: .leading, spacing: 10) {
-              Text(section.label)
-                .font(AppTypography.body(16, weight: .bold))
-
-              ForEach(section.changes) { change in
-                Toggle(
-                  isOn: Binding(
-                    get: { session.selectedPreviewChangeIDs.contains(change.id) },
-                    set: { session.updatePreviewSelection(change.id, selected: $0) }
-                  )
-                ) {
-                  Text(change.text)
-                }
-                .tint(accent)
+          if preview.hasNotificationChanges {
+            Toggle(isOn: $shouldNotify) {
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Send Notifications")
+                  .font(AppTypography.body(15, weight: .bold))
+                Text(shouldNotify ? "Checked rows will notify. Unchecked rows save quietly." : "All notification-ready rows will save quietly.")
+                  .font(AppTypography.body(12, weight: .medium))
+                  .foregroundStyle(.secondary)
               }
             }
+            .tint(accent)
             .appFieldChrome(tint: accent, cornerRadius: 20)
+
+            ForEach(preview.sections) { section in
+              VStack(alignment: .leading, spacing: 10) {
+                Text(section.label)
+                  .font(AppTypography.body(16, weight: .bold))
+
+                ForEach(section.changes) { change in
+                  Toggle(
+                    isOn: Binding(
+                      get: { session.selectedPreviewChangeIDs.contains(change.id) },
+                      set: { session.updatePreviewSelection(change.id, selected: $0) }
+                    )
+                  ) {
+                    Text(change.text)
+                  }
+                  .tint(accent)
+                  .disabled(!shouldNotify)
+                  .opacity(shouldNotify ? 1 : 0.55)
+                }
+              }
+              .appFieldChrome(tint: accent, cornerRadius: 20)
+            }
+          }
+
+          if !currentSummary.selectedNotificationChanges.isEmpty {
+            categorySummaryCard(
+              title: "Changes To Send",
+              items: currentSummary.selectedNotificationChanges.map(\.displayText)
+            )
+          }
+
+          if !currentSummary.clearedNotificationChanges.isEmpty {
+            categorySummaryCard(
+              title: "Notification Rows To Save Without Notification",
+              items: currentSummary.clearedNotificationChanges.map(\.displayText)
+            )
+          }
+
+          if !currentSummary.saveOnlyChanges.isEmpty {
+            categorySummaryCard(
+              title: "Other Changes To Save",
+              items: currentSummary.saveOnlyChanges.map { $0.label.nilIfBlank ?? $0.message }
+            )
+          } else if !preview.hasNotificationChanges {
+            categorySummaryCard(
+              title: "Live Save",
+              items: ["The current category changes will be saved live without sending notifications."]
+            )
           }
         }
         .padding(24)
       }
-      .navigationTitle("Send Preview")
+      .navigationTitle("Save Preview")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Close") { dismiss() }
         }
         ToolbarItem(placement: .confirmationAction) {
-          Button(preview.hasNotificationChanges ? "Send Update" : "Save Changes", action: onPublish)
+          Button("Save") {
+            onPublish(shouldNotify && preview.hasNotificationChanges)
+          }
             .disabled(!session.canPublishRemotely)
         }
       }
     }
+  }
+
+  private func categorySummaryCard(title: String, items: [String]) -> some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text(title)
+        .font(AppTypography.body(15, weight: .bold))
+      ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+        Text(item)
+          .font(AppTypography.body(13, weight: .medium))
+      }
+    }
+    .appFieldChrome(tint: accent, cornerRadius: 20)
   }
 }

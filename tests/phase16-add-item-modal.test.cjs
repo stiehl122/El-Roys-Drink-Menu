@@ -204,6 +204,38 @@ test('add item modal includes Featured Specials as a standard category option', 
   assert.equal(Array.from(options).slice(0, 2).join(','), 'featured_specials,cocktails');
 });
 
+test('adding a featured specials item hydrates the unified save action', () => {
+  const sandbox = loadAppSandbox();
+  setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    CATEGORY_DEFS: [
+      { id: 'featured_specials', title: 'Featured Specials', icon: '⭐', color: '', sub: '', placeholder: '', untappdEnabled: false },
+      { id: 'cocktails', title: 'Cocktails', icon: '🍹', color: '', sub: '', placeholder: '', untappdEnabled: false },
+    ],
+    menuState: {
+      featured_specials: { items: [], lastSent: [] },
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+  sandbox.setServerLiveSnapshot(sandbox.buildPersistedDraftStateSnapshot());
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('name', 'Burger Special');
+  sandbox.updateAddItemModalField('categoryId', 'featured_specials');
+
+  const result = sandbox.confirmAddItemModal();
+  const actionState = sandbox.getMenuActionState();
+  const saveOnlyChanges = sandbox.getDraftSaveOnlyChanges();
+
+  assert.equal(result.ok, true);
+  assert.equal(saveOnlyChanges.length, 1);
+  assert.equal(saveOnlyChanges[0].sectionId, 'featured_specials');
+  assert.equal(actionState.saveLabel, 'Save');
+  assert.equal(actionState.saveDisabled, false);
+  assert.equal(actionState.showDiscard, true);
+});
+
 test('add item modal defaults to the first normal category before Featured Specials', () => {
   const sandbox = loadAppSandbox();
   setState(sandbox, {

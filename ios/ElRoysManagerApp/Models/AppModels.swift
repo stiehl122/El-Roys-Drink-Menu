@@ -455,19 +455,12 @@ struct WorkspaceState: Codable, Equatable {
       SharedDraftInfo.self,
       forKey: .sharedDraft
     ) ?? SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
-    let menuStatusPrimary = try container.decodeIfPresent(String.self, forKey: .menuStatus)
-    let menuStatusLegacy = try container.decodeIfPresent(String.self, forKey: .publishStatus)
-    let menuStatusFallback = try container.decodeIfPresent(String.self, forKey: .status)
-    let menuStatus = menuStatusPrimary ?? menuStatusLegacy ?? menuStatusFallback ?? ""
-    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
-    let unsentLegacy = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
-    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasNotificationQueue)
-    let hasUnsentChanges = unsentPrimary ?? unsentLegacy ?? unsentFallback
+    let hasUnsentChanges = false
     self.actor = try container.decodeIfPresent(ActorProfile.self, forKey: .actor)
     self.accessibleMenuIds = (try? container.decode([String].self, forKey: .accessibleMenuIds)) ?? []
     self.hasSharedDraft = try container.decodeIfPresent(Bool.self, forKey: .hasSharedDraft) ?? sharedDraft.exists
     self.sharedDraft = sharedDraft
-    self.menuStatus = menuStatus
+    self.menuStatus = sharedDraft.exists ? "Drafting" : "Live"
     self.hasUnsentChanges = hasUnsentChanges
     self.permissions = try container.decodeIfPresent(
       WorkspacePermissions.self,
@@ -1445,9 +1438,7 @@ struct MenuPreviewPayload: Codable, Equatable {
     self.hasChanges = try container.decodeBool(forKey: .hasChanges)
     self.hasLocalDraft = try container.decodeBool(forKey: .hasLocalDraft)
     let sharedDraftFallback = try container.decodeBool(forKey: .hasSharedDraft)
-    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
-    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
-    self.hasUnsentChanges = unsentPrimary ?? unsentFallback ?? sharedDraftFallback
+    self.hasUnsentChanges = false
     self.hasSharedDraft = sharedDraftFallback
     self.hasNotificationChanges = try container.decodeBool(forKey: .hasNotificationChanges)
     self.hasSaveOnlyChanges = try container.decodeBool(forKey: .hasSaveOnlyChanges)
@@ -1460,11 +1451,7 @@ struct MenuPreviewPayload: Codable, Equatable {
     self.selectionDefaults = try container.decodeArray([String].self, forKey: .selectionDefaults)
     self.metadata = try container.decodeIfPresent(PreviewMetadata.self, forKey: .metadata)
       ?? PreviewMetadata(serverOwned: false, contract: "", currentFeaturedIds: [])
-    let decodedStatus = try container.decodeIfPresent(String.self, forKey: .menuStatus)?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    self.menuStatus = (decodedStatus?.isEmpty == false)
-      ? (decodedStatus ?? "")
-      : (self.hasUnsentChanges ? "Live | Unsent" : "Live")
+    self.menuStatus = self.hasLocalDraft || self.hasSharedDraft ? "Drafting" : "Live"
   }
 
   func encode(to encoder: Encoder) throws {
@@ -1561,9 +1548,7 @@ struct SnapshotPreviewContext: Codable, Equatable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let hasSharedDraft = try container.decodeBool(forKey: .hasSharedDraft)
     self.dirty = try container.decodeBool(forKey: .dirty)
-    let unsentPrimary = try container.decodeIfPresent(Bool.self, forKey: .hasUnsentChanges)
-    let unsentFallback = try container.decodeIfPresent(Bool.self, forKey: .hasPendingUpdate)
-    self.hasUnsentChanges = unsentPrimary ?? unsentFallback ?? hasSharedDraft
+    self.hasUnsentChanges = false
     self.hasSharedDraft = hasSharedDraft
     self.saveOnlyChanges = try container.decodeArray([SaveOnlyChange].self, forKey: .saveOnlyChanges)
   }

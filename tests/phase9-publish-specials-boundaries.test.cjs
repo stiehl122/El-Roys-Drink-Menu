@@ -123,6 +123,8 @@ test('server preview does not invent featured_specials diffs when legacy feature
     assert.equal(result.ok, true);
     assert.equal(result.preview.hasNotificationChanges, false);
     assert.deepEqual(result.preview.diff, []);
+    assert.equal(capturedPreview.metadata.currentFeaturedIds.length, 1);
+    assert.match(capturedPreview.metadata.currentFeaturedIds[0], /^[0-9a-f-]{36}$/i);
     assert.equal(capturedPreview.metadata.lastSentState.featured_specials.length, 1);
     assert.notEqual(capturedPreview.metadata.lastSentState.featured_specials[0].id, sharedItemId);
     assert.match(capturedPreview.metadata.lastSentState.featured_specials[0].id, /^[0-9a-f-]{36}$/i);
