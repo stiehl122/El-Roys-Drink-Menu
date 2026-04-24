@@ -67,6 +67,125 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /legacySelectedSections/);
 });
 
+test('server preview does not invent featured_specials diffs when legacy featured items share base menu item ids', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  const sharedItemId = '11111111-1111-4111-8111-111111111111';
+  let capturedPreview = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async preview(command) {
+      capturedPreview = await ports.preview.buildCanonical({
+        snapshot: command.snapshot,
+        meta: {
+          last_sent_state: {
+            cocktails: [{ id: sharedItemId, name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+          },
+          last_sent_featured: [sharedItemId],
+        },
+        knownMenu: {
+          id: '00000000-0000-0000-0000-000000000020',
+          type: 'drinks',
+          name: 'Main Drinks',
+        },
+      });
+      return {
+        ok: true,
+        preview: capturedPreview,
+        revisions: {},
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    const result = await publishModule.previewMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: '00000000-0000-0000-0000-000000000020',
+      source: 'web_manager',
+      snapshot: {
+        cats: [
+          {
+            key: 'cocktails',
+            label: 'Cocktails',
+            icon: '🍹',
+            items: [{ id: sharedItemId, name: 'House Marg', on_menu: true, visibility: 'public' }],
+          },
+          {
+            key: 'featured_specials',
+            label: 'Featured Specials',
+            icon: '⭐',
+            items: [{ id: sharedItemId, name: 'House Marg', featured_enabled: true, on_menu: true, visibility: 'public' }],
+          },
+        ],
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.hasNotificationChanges, false);
+    assert.deepEqual(result.preview.diff, []);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials.length, 1);
+    assert.notEqual(capturedPreview.metadata.lastSentState.featured_specials[0].id, sharedItemId);
+    assert.match(capturedPreview.metadata.lastSentState.featured_specials[0].id, /^[0-9a-f-]{36}$/i);
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+});
+
+test('server preview preserves the existing featured baseline when a legacy snapshot omits featured_specials', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  const sharedItemId = '11111111-1111-4111-8111-111111111111';
+  let capturedPreview = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async preview(command) {
+      capturedPreview = await ports.preview.buildCanonical({
+        snapshot: command.snapshot,
+        meta: {
+          last_sent_state: {
+            cocktails: [{ id: sharedItemId, name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+          },
+          last_sent_featured: [sharedItemId],
+        },
+        knownMenu: {
+          id: '00000000-0000-0000-0000-000000000020',
+          type: 'drinks',
+          name: 'Main Drinks',
+        },
+      });
+      return {
+        ok: true,
+        preview: capturedPreview,
+        revisions: {},
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    const result = await publishModule.previewMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: '00000000-0000-0000-0000-000000000020',
+      source: 'web_manager',
+      snapshot: {
+        cats: [{
+          key: 'cocktails',
+          label: 'Cocktails',
+          icon: '🍹',
+          items: [{ id: sharedItemId, name: 'House Marg', on_menu: true, visibility: 'public' }],
+        }],
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.hasNotificationChanges, false);
+    assert.deepEqual(result.preview.diff, []);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials.length, 1);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials[0].id, sharedItemId);
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+});
+
 test('server publish selection treats explicit empty legacy sections as clear-all', async () => {
   const originalFactory = globalThis.createMenuPublishWorkflow;
   let capturedSelection = null;

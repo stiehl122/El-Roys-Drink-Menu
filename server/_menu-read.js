@@ -28,6 +28,17 @@ const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalTh
 const ensureFeaturedSpecialsCategory = typeof featuredSpecials.ensureFeaturedSpecialsCategory === 'function'
   ? featuredSpecials.ensureFeaturedSpecialsCategory
   : (cats => cats);
+const createFeaturedSpecialsCategory = typeof featuredSpecials.createFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.createFeaturedSpecialsCategory
+  : (() => ({
+      id: 'featured_specials',
+      key: 'featured_specials',
+      label: 'Featured Specials',
+      items: [],
+    }));
+const isFeaturedSpecialsCategory = typeof featuredSpecials.isFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.isFeaturedSpecialsCategory
+  : (categoryOrKey => String(categoryOrKey?.key || categoryOrKey || '').trim() === 'featured_specials');
 const normalizeFeaturedSpecialsLastSentState = typeof featuredSpecials.normalizeFeaturedSpecialsLastSentState === 'function'
   ? featuredSpecials.normalizeFeaturedSpecialsLastSentState
   : (lastSentState => lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState) ? { ...lastSentState } : {});
@@ -150,12 +161,63 @@ export async function readCurrentFeaturedIdsForRestaurant(restaurantId = '') {
   if (!groupId) return [];
 
   const slotsResponse = await fetch(
-    `${sbUrl}/rest/v1/featured_slots?featured_group_id=eq.${groupId}&select=item_id`,
+    `${sbUrl}/rest/v1/featured_slots?featured_group_id=eq.${groupId}&select=item_id&order=display_order.asc`,
     { headers: serviceHeaders() }
   );
   if (!slotsResponse.ok) return [];
   const slots = await slotsResponse.json();
   return Array.from(new Set((Array.isArray(slots) ? slots : []).map(slot => slot?.item_id).filter(Boolean)));
+}
+
+function hasMenuOwnedFeaturedSpecialContent(categories = []) {
+  return (Array.isArray(categories) ? categories : []).some(category => (
+    isFeaturedSpecialsCategory(category) &&
+    Array.isArray(category?.items) &&
+    category.items.length > 0
+  ));
+}
+
+function cloneLegacyRestaurantFeaturedItem(item = {}) {
+  return {
+    ...item,
+    featured_enabled: true,
+    on_menu: true,
+    visibility: 'public',
+  };
+}
+
+async function injectLegacyRestaurantFeaturedSpecials(menu = null, categories = []) {
+  if (!menu?.restaurantId || hasMenuOwnedFeaturedSpecialContent(categories)) {
+    return Array.isArray(categories) ? categories : [];
+  }
+
+  const featuredItemIds = await readCurrentFeaturedIdsForRestaurant(menu.restaurantId);
+  if (!featuredItemIds.length) return Array.isArray(categories) ? categories : [];
+
+  const itemLookup = new Map();
+  (Array.isArray(categories) ? categories : []).forEach(category => {
+    (Array.isArray(category?.items) ? category.items : []).forEach(item => {
+      const itemId = String(item?.id || '').trim();
+      if (itemId && !itemLookup.has(itemId)) itemLookup.set(itemId, item);
+    });
+  });
+
+  const legacyFeaturedItems = featuredItemIds
+    .map(itemId => itemLookup.get(String(itemId || '').trim()))
+    .filter(Boolean)
+    .map(item => cloneLegacyRestaurantFeaturedItem(item));
+  if (!legacyFeaturedItems.length) return Array.isArray(categories) ? categories : [];
+
+  const featuredCategory = createFeaturedSpecialsCategory({
+    menuId: menu.id || '',
+    menuType: menu.type || 'drinks',
+  });
+  featuredCategory.items = legacyFeaturedItems;
+
+  return ensureFeaturedSpecialsCategory([featuredCategory, ...(Array.isArray(categories) ? categories : [])], {
+    menuId: menu.id || '',
+    menuType: menu.type || 'drinks',
+  });
 }
 
 export async function readMenuStateBundle(menuId) {
@@ -188,6 +250,15 @@ export async function readMenuStateBundle(menuId) {
     `${sbUrl}/rest/v1/restaurants?id=eq.${menuRow.restaurant_id}&select=id,name,slug,design,use_custom_design&limit=1`,
     'Failed to load restaurant'
   );
+  const sortedCategories = sortCategories(cats).map(category => ({
+    ...category,
+    items: sortCategoryItems(category?.items),
+  }));
+  const categoriesWithLegacyFeatured = await injectLegacyRestaurantFeaturedSpecials({
+    id: menuRow.id,
+    type: menuRow.type || 'drinks',
+    restaurantId: menuRow.restaurant_id || '',
+  }, sortedCategories);
   return {
     menu: {
       id: menuRow.id,
@@ -196,10 +267,7 @@ export async function readMenuStateBundle(menuId) {
       type: menuRow.type || 'drinks',
       restaurantId: menuRow.restaurant_id || '',
     },
-    cats: sortCategories(cats).map(category => ({
-      ...category,
-      items: sortCategoryItems(category?.items),
-    })),
+    cats: categoriesWithLegacyFeatured,
     meta: metaRows?.[0] || {},
     restaurant: restaurantRows?.[0] || null,
   };

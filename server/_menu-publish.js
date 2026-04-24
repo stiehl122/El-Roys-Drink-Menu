@@ -23,8 +23,17 @@ import {
   normalizeLegacyFeaturedBaseline,
   normalizeName,
 } from './_menu-queue.js';
+import {
+  prepareFeaturedCategoriesForPersistence,
+  remapFeaturedSpecialsLastSentState,
+} from './_featured-specials-persistence.js';
 
 const PREVIEW_CONTRACT = 'menu-publish-preview.v2';
+
+function isFeaturedSpecialsSectionKey(sectionKey = '') {
+  const normalized = String(sectionKey || '').trim();
+  return normalized === 'featured_specials' || normalized === 'special';
+}
 
 function createMenuPublishError(status, message, extras = {}) {
   const error = new Error(message);
@@ -239,15 +248,37 @@ async function buildCanonicalPreviewForMenu({
   meta = {},
   knownMenu = null,
 }) {
-  const lastSentState = normalizeLegacyFeaturedBaseline({
+  const snapshotHasFeaturedSpecials = Array.isArray(snapshot?.cats)
+    ? snapshot.cats.some(category => isFeaturedSpecialsSectionKey(category?.key))
+    : false;
+  const preparedSnapshotResult = prepareFeaturedCategoriesForPersistence(
+    Array.isArray(snapshot?.cats) ? snapshot.cats : [],
+    {
+      menuId: knownMenu?.id || '',
+      menuType: knownMenu?.type || 'drinks',
+    }
+  );
+  const queueSnapshot = {
+    ...snapshot,
+    cats: preparedSnapshotResult.categories,
+  };
+  const normalizedLastSentState = remapFeaturedSpecialsLastSentState(normalizeLegacyFeaturedBaseline({
     snapshot,
     lastSentState: meta?.last_sent_state && typeof meta.last_sent_state === 'object'
       ? meta.last_sent_state
       : {},
     lastSentFeatured: Array.isArray(meta?.last_sent_featured) ? meta.last_sent_featured : [],
-  });
+  }), preparedSnapshotResult.cloneIdMap);
+  const preservedFeaturedState = Object.fromEntries(
+    Object.entries(normalizedLastSentState).filter(([key]) => isFeaturedSpecialsSectionKey(key))
+  );
+  const lastSentState = snapshotHasFeaturedSpecials
+    ? normalizedLastSentState
+    : Object.fromEntries(
+        Object.entries(normalizedLastSentState).filter(([key]) => !isFeaturedSpecialsSectionKey(key))
+      );
   const categoryState = buildCategoryQueueState({
-    snapshot,
+    snapshot: queueSnapshot,
     lastSentState,
   });
   const queueState = {
@@ -293,7 +324,12 @@ async function buildCanonicalPreviewForMenu({
       serverOwned: true,
       contract: PREVIEW_CONTRACT,
       unsentItemIds: queueState.unsentItemIds,
-      lastSentState: snapshotLastSentState(snapshot),
+      lastSentState: snapshotHasFeaturedSpecials
+        ? snapshotLastSentState(queueSnapshot)
+        : {
+            ...snapshotLastSentState(queueSnapshot),
+            ...preservedFeaturedState,
+          },
     },
   };
 }

@@ -334,6 +334,93 @@ test('readMenuStateBundle canonicalizes workspace category and item ordering', a
   }
 });
 
+test('readMenuStateBundle backfills legacy restaurant-wide featured rows into featured_specials when no menu-owned items exist', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const menu = helper.getKnownMenus()[0];
+  assert.ok(menu?.id, 'expected a known menu id for legacy featured backfill coverage');
+
+  const originalFetch = global.fetch;
+  const originalSupabaseUrl = process.env.SUPABASE_URL;
+  const originalSupabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  global.fetch = async url => {
+    const requestUrl = String(url);
+
+    if (requestUrl.includes('/rest/v1/menus?')) {
+      return createJsonResponse([{
+        id: menu.id,
+        slug: menu.slug,
+        name: menu.name,
+        type: menu.type,
+        restaurant_id: menu.restaurantId,
+        archived: false,
+      }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/categories?')) {
+      return createJsonResponse([
+        {
+          id: 'cat-cocktails',
+          menu_id: menu.id,
+          key: 'cocktails',
+          label: 'Cocktails',
+          display_order: 1,
+          items: [
+            { id: 'cocktail-1', name: 'House Marg', display_order: 0, on_menu: false, visibility: 'off_menu' },
+            { id: 'cocktail-2', name: 'Paloma', display_order: 1, on_menu: true, visibility: 'public' },
+          ],
+        },
+      ]);
+    }
+
+    if (requestUrl.includes('/rest/v1/menu_meta?')) {
+      return createJsonResponse([{ last_updated_ts: 1712705100000 }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/restaurants?')) {
+      return createJsonResponse([{
+        id: menu.restaurantId,
+        name: 'Restaurant',
+        slug: 'restaurant',
+        design: {},
+        use_custom_design: false,
+      }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/featured_groups?')) {
+      return createJsonResponse([{ id: 'legacy-group-1' }]);
+    }
+
+    if (requestUrl.includes('/rest/v1/featured_slots?')) {
+      return createJsonResponse([
+        { item_id: 'cocktail-1' },
+        { item_id: 'sibling-only-1' },
+      ]);
+    }
+
+    throw new Error(`Unexpected fetch in test: ${requestUrl}`);
+  };
+
+  try {
+    const bundle = await helper.readMenuStateBundle(menu.id);
+    assert.equal(bundle.cats[0].key, 'featured_specials');
+    assert.deepEqual(bundle.cats[0].items.map(item => item.id), ['cocktail-1']);
+    assert.equal(bundle.cats[0].items[0].featured_enabled, true);
+    assert.equal(bundle.cats[0].items[0].on_menu, true);
+    assert.equal(bundle.cats[0].items[0].visibility, 'public');
+
+    const publicPayload = helper.createPublicMenuPayload(bundle);
+    assert.deepEqual(publicPayload.featuredItems.map(item => item.id), ['cocktail-1']);
+    assert.deepEqual(publicPayload.cats.map(category => category.key), ['cocktails']);
+  } finally {
+    global.fetch = originalFetch;
+    process.env.SUPABASE_URL = originalSupabaseUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = originalSupabaseServiceKey;
+  }
+});
+
 test('public payload strips staff-only menu metadata and filters non-public items', async () => {
   const helper = await importApiModule('server/_menu-read.js');
   const payload = helper.createPublicMenuPayload({

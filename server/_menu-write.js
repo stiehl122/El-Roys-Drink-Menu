@@ -15,6 +15,18 @@ import {
   getKnownMenuById,
   isSupportedMenuId,
 } from './_menu-read.js';
+import {
+  prepareFeaturedCategoriesForPersistence,
+} from './_featured-specials-persistence.js';
+
+import '../core/domain/featured-specials.js';
+
+const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const isFeaturedSpecialsCategory = typeof featuredSpecials.isFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.isFeaturedSpecialsCategory
+  : (categoryOrKey => String(categoryOrKey?.key || categoryOrKey || '').trim() === 'featured_specials');
 
 function getContentHeaders() {
   return serviceHeaders({
@@ -292,7 +304,9 @@ async function upsertCategories(menuId, normalizedSnapshot) {
 
 async function syncItems(menuId, normalizedSnapshot, categoryIdsByKey) {
   const { sbUrl } = getSupabaseServerConfig();
-  const currentCategoryIds = Array.from(categoryIdsByKey.values()).filter(Boolean);
+  const currentCategoryIds = normalizedSnapshot.cats
+    .map(category => categoryIdsByKey.get(category.key))
+    .filter(Boolean);
   const existingItems = currentCategoryIds.length
     ? await fetchJsonOrThrow(
         `${sbUrl}/rest/v1/items?category_id=in.(${formatInList(currentCategoryIds)})&select=id`,
@@ -346,15 +360,17 @@ async function syncItems(menuId, normalizedSnapshot, categoryIdsByKey) {
   }
 }
 
-async function syncDeletedCategories(menuId, normalizedSnapshot) {
+async function syncDeletedCategories(menuId, normalizedSnapshot, options = {}) {
   const { sbUrl } = getSupabaseServerConfig();
   const categories = await fetchJsonOrThrow(
     `${sbUrl}/rest/v1/categories?menu_id=eq.${menuId}&select=id,key`,
     'Failed to load existing categories'
   );
   const nextKeys = new Set(normalizedSnapshot.cats.map(category => category.key));
+  const preserveExistingFeaturedSpecials = options?.preserveExistingFeaturedSpecials === true;
   const deleteIds = (categories || [])
     .filter(category => category?.id && category?.key && !nextKeys.has(category.key))
+    .filter(category => !(preserveExistingFeaturedSpecials && isFeaturedSpecialsCategory(category.key)))
     .map(category => category.id);
   if (deleteIds.length) {
     await deleteOrThrow(
@@ -437,17 +453,31 @@ export async function saveLiveMenuForMenu({ menuId, snapshot = {}, expectedLiveR
     throw { status: 400, message: 'Unsupported menu_id' };
   }
 
-  const categoryIdsByKey = await upsertCategories(menuId, normalizedSnapshot);
-  await syncItems(menuId, normalizedSnapshot, categoryIdsByKey);
-  await syncDeletedCategories(menuId, normalizedSnapshot);
-  await patchMenuBotId(menuId, normalizedSnapshot.meta?.bot_id);
+  const snapshotHasFeaturedSpecials = normalizedSnapshot.cats.some(category => isFeaturedSpecialsCategory(category));
+  const { categories: preparedCategories } = prepareFeaturedCategoriesForPersistence(normalizedSnapshot.cats, {
+    menuId,
+    menuType: knownMenu.type || 'drinks',
+  });
+  const preparedSnapshot = snapshotHasFeaturedSpecials
+    ? {
+        ...normalizedSnapshot,
+        cats: preparedCategories,
+      }
+    : normalizedSnapshot;
+
+  const categoryIdsByKey = await upsertCategories(menuId, preparedSnapshot);
+  await syncItems(menuId, preparedSnapshot, categoryIdsByKey);
+  await syncDeletedCategories(menuId, preparedSnapshot, {
+    preserveExistingFeaturedSpecials: !snapshotHasFeaturedSpecials,
+  });
+  await patchMenuBotId(menuId, preparedSnapshot.meta?.bot_id);
 
   return {
     ok: true,
     menu_id: menuId,
     restaurant_id: knownMenu.restaurantId,
-    category_count: normalizedSnapshot.cats.length,
-    item_count: normalizedSnapshot.cats.reduce((total, category) => total + category.items.length, 0),
+    category_count: preparedSnapshot.cats.length,
+    item_count: preparedSnapshot.cats.reduce((total, category) => total + category.items.length, 0),
   };
 }
 

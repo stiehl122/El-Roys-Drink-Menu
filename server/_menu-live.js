@@ -20,6 +20,7 @@ import {
   readRevisionState,
 } from './_menu-write.js';
 import { assertCategoryGovernanceAllowed } from './_category-governance.js';
+import { prepareFeaturedCategoriesForPersistence } from './_featured-specials-persistence.js';
 
 const UNCATEGORIZED_ID = '__uncategorized__';
 
@@ -219,7 +220,7 @@ async function readMenuAndCategories(menuId) {
   const headers = serviceHeaders();
   const [menuRows, categoryRows] = await Promise.all([
     fetchJsonOrThrow(
-      `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,archived&limit=1`,
+      `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,type,archived&limit=1`,
       { headers },
       'Failed to load menu'
     ),
@@ -473,7 +474,11 @@ export async function saveLiveMenuCommand(req) {
 
   const { categories, meta, restaurant } = extractSnapshot(payload);
   const { menu, categoriesByKey: existingByKey } = await readMenuAndCategories(menuId);
-  const normalizedCategories = normalizeCategoryRows(menuId, categories);
+  const preparedSnapshotCategories = prepareFeaturedCategoriesForPersistence(categories, {
+    menuId,
+    menuType: menu?.type || 'drinks',
+  }).categories;
+  const normalizedCategories = normalizeCategoryRows(menuId, preparedSnapshotCategories);
   if (!normalizedCategories.categoryRows.length && !normalizedCategories.uncategorizedCategory) {
     throw { status: 400, message: 'Snapshot payload must include cats[]' };
   }
