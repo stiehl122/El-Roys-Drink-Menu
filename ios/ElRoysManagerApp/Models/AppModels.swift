@@ -540,15 +540,26 @@ struct ItemUpcharge: Codable, Equatable, Hashable, Identifiable {
     case price
   }
 
-  init(label: String, price: String) {
+  init(id: UUID = UUID(), label: String, price: String) {
+    self.id = id
     self.label = label
     self.price = price
   }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = UUID()
     self.label = try container.decodeString(forKey: .label)
     self.price = try container.decodeString(forKey: .price)
+  }
+
+  static func == (lhs: ItemUpcharge, rhs: ItemUpcharge) -> Bool {
+    lhs.label == rhs.label && lhs.price == rhs.price
+  }
+
+  func hash(into hasher: inout Hasher) {
+    hasher.combine(label)
+    hasher.combine(price)
   }
 }
 

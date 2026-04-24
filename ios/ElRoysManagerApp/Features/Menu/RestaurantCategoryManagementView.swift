@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct RestaurantCategoryManagementScreen: View {
-  @Bindable var model: AppModel
-  let menu: MenuRecord
+  @Bindable var session: MenuEditorSession
 
   @State private var addCategoryName = ""
   @State private var renameTarget: MenuCategoryPayload?
@@ -13,7 +12,7 @@ struct RestaurantCategoryManagementScreen: View {
   @State private var showingPreview = false
 
   private var accent: Color {
-    menu.isFoodMenu ? AppPalette.jade : AppPalette.bloodOrange
+    session.menu.isFoodMenu ? AppPalette.jade : AppPalette.bloodOrange
   }
 
   private func isProtectedCategory(_ category: MenuCategoryPayload) -> Bool {
@@ -25,18 +24,18 @@ struct RestaurantCategoryManagementScreen: View {
       VStack(alignment: .leading, spacing: 18) {
         AppSectionHeader(
           eyebrow: "Restaurant tools",
-          title: "\(menu.displayTypeLabel) categories",
+          title: "\(session.menu.displayTypeLabel) categories",
           subtitle: "Add and organize categories here. Featured Specials stays pinned first and is edited from the menu item flow.",
           tint: accent
         )
 
-        if let notice = model.notice {
+        if let notice = session.notice {
           StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
         }
 
         categoryActions
 
-        if let document = model.currentEditorDocument {
+        if let document = session.document {
           categoryList(document.visibleCategories)
         } else {
           AppLoadingCard(
@@ -48,20 +47,20 @@ struct RestaurantCategoryManagementScreen: View {
       }
       .padding(24)
     }
-    .navigationTitle("\(menu.displayTypeLabel) Categories")
+    .navigationTitle("\(session.menu.displayTypeLabel) Categories")
     .navigationBarTitleDisplayMode(.inline)
-    .task(id: menu.id) {
-      await model.loadEditor(menuId: menu.id)
+    .task(id: session.menu.id) {
+      await session.load()
     }
     .sheet(isPresented: $showingPreview) {
-      if let preview = model.currentEditorPreview {
+      if let preview = session.preview {
         RestaurantCategoryPublishPreviewSheet(
-          model: model,
+          session: session,
           preview: preview,
           accent: accent,
           onPublish: {
             Task {
-              await model.publishSelectedChanges()
+              await session.publishSelectedChanges()
               showingPreview = false
             }
           }
@@ -74,7 +73,7 @@ struct RestaurantCategoryManagementScreen: View {
     .alert("Add Category", isPresented: $showingAddCategory) {
       TextField("Category name", text: $addCategoryName)
       Button("Add") {
-        model.addCategory(label: addCategoryName)
+        session.addCategory(label: addCategoryName)
         addCategoryName = ""
       }
       Button("Cancel", role: .cancel) {
@@ -93,7 +92,7 @@ struct RestaurantCategoryManagementScreen: View {
       TextField("Category name", text: $renameText)
       Button("Save") {
         if let target = renameTarget {
-          model.renameCategory(key: target.key, label: renameText)
+          session.renameCategory(key: target.key, label: renameText)
         }
         renameTarget = nil
         renameText = ""
@@ -105,7 +104,7 @@ struct RestaurantCategoryManagementScreen: View {
     }
     .alert("Discard Local Draft?", isPresented: $showingDiscardDraftConfirm) {
       Button("Discard Draft", role: .destructive) {
-        model.discardLocalDraft()
+        session.discardLocalDraft()
       }
       Button("Keep Editing", role: .cancel) {}
     } message: {
@@ -119,29 +118,29 @@ struct RestaurantCategoryManagementScreen: View {
         showingAddCategory = true
       }
       .buttonStyle(PrimaryGlassButtonStyle(accent: accent))
-      .disabled(!model.canEditCategories)
+      .disabled(!session.canEditCategories)
 
       HStack(spacing: 12) {
         Button("Save Quietly") {
-          Task { await model.saveLiveMenu() }
+          Task { await session.saveLiveMenu() }
         }
         .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-        .disabled(!model.canSaveQuietlyRemotely)
+        .disabled(!session.canSaveQuietlyRemotely)
 
-        Button(model.hasLocalDraftChanges ? "Save & Send" : "Send Update") {
+        Button(session.hasLocalDraftChanges ? "Save & Send" : "Send Update") {
           Task {
-            await model.loadPublishPreview()
-            showingPreview = model.currentEditorPreview != nil
+            await session.loadPublishPreview()
+            showingPreview = session.preview != nil
           }
         }
         .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-        .disabled(!model.canLoadPublishPreview)
+        .disabled(!session.canLoadPublishPreview)
 
         Button("Discard Draft") {
           showingDiscardDraftConfirm = true
         }
         .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-        .disabled(!model.canDiscardLocalDraft)
+        .disabled(!session.canDiscardLocalDraft)
       }
     }
     .appGlassCard(tint: accent, cornerRadius: 28)
@@ -162,7 +161,7 @@ struct RestaurantCategoryManagementScreen: View {
             isReordering.toggle()
           }
           .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-          .disabled(!model.canEditCategories)
+          .disabled(!session.canEditCategories)
         }
       }
 
@@ -202,20 +201,20 @@ struct RestaurantCategoryManagementScreen: View {
                 renameText = category.label
               }
               .buttonStyle(SecondaryGlassButtonStyle(accent: accent))
-              .disabled(!model.canEditCategories)
+              .disabled(!session.canEditCategories)
 
               Button("Delete", role: .destructive) {
-                model.deleteCategory(key: category.key)
+                session.deleteCategory(key: category.key)
               }
               .buttonStyle(SecondaryGlassButtonStyle(accent: AppPalette.danger))
-              .disabled(!model.canEditCategories)
+              .disabled(!session.canEditCategories)
             }
           }
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
-          .moveDisabled(!isReordering || !model.canEditCategories || isProtectedCategory(category))
+          .moveDisabled(!isReordering || !session.canEditCategories || isProtectedCategory(category))
         }
-        .onMove(perform: model.moveVisibleCategories)
+        .onMove(perform: session.moveVisibleCategories)
       }
       .environment(\.editMode, .constant(isReordering ? .active : .inactive))
       .listStyle(.plain)
@@ -228,7 +227,7 @@ struct RestaurantCategoryManagementScreen: View {
 
 private struct RestaurantCategoryPublishPreviewSheet: View {
   @Environment(\.dismiss) private var dismiss
-  @Bindable var model: AppModel
+  @Bindable var session: MenuEditorSession
   let preview: MenuPreviewPayload
   let accent: Color
   let onPublish: () -> Void
@@ -248,8 +247,8 @@ private struct RestaurantCategoryPublishPreviewSheet: View {
               ForEach(section.changes) { change in
                 Toggle(
                   isOn: Binding(
-                    get: { model.selectedPreviewChangeIDs.contains(change.id) },
-                    set: { model.updatePreviewSelection(change.id, selected: $0) }
+                    get: { session.selectedPreviewChangeIDs.contains(change.id) },
+                    set: { session.updatePreviewSelection(change.id, selected: $0) }
                   )
                 ) {
                   Text(change.text)
@@ -269,7 +268,7 @@ private struct RestaurantCategoryPublishPreviewSheet: View {
         }
         ToolbarItem(placement: .confirmationAction) {
           Button(preview.hasNotificationChanges ? "Send Update" : "Save Changes", action: onPublish)
-            .disabled(!model.canPublishRemotely)
+            .disabled(!session.canPublishRemotely)
         }
       }
     }

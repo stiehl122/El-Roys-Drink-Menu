@@ -9,19 +9,18 @@ private enum MenuEditorSheet: String, Identifiable {
 
 struct MenuEditorScreen: View {
   @Environment(\.scenePhase) private var scenePhase
-  @Bindable var model: AppModel
-  let menu: MenuRecord
+  @Bindable var session: MenuEditorSession
   @State private var editingDraft = EditableItemDraft()
   @State private var activeSheet: MenuEditorSheet?
   @State private var showingDiscardDraftConfirm = false
   @State private var reorderingCategoryKey: String?
 
   private var theme: MenuEditorTheme {
-    .theme(for: menu)
+    .theme(for: session.menu)
   }
 
   private var menuAccent: Color {
-    menu.isFoodMenu ? theme.foodAccent : theme.drinkAccent
+    session.menu.isFoodMenu ? theme.foodAccent : theme.drinkAccent
   }
 
   var body: some View {
@@ -31,22 +30,21 @@ struct MenuEditorScreen: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 18) {
           MenuEditorHeaderCard(
-            menu: menu,
+            menu: session.menu,
             theme: theme,
             menuAccent: menuAccent,
-            hasLocalDraftChanges: model.hasLocalDraftChanges,
-            hasLiveMenuChanges: model.hasLiveMenuChanges,
-            hasServerUnsentChanges: model.hasServerUnsentChanges,
-            menuStatusLabel: model.menuStatusLabel
+            hasLocalDraftChanges: session.hasLocalDraftChanges,
+            hasLiveMenuChanges: session.hasLiveMenuChanges,
+            hasServerUnsentChanges: session.hasServerUnsentChanges,
+            menuStatusLabel: session.menuStatusLabel
           )
 
-          if let notice = model.notice {
+          if let notice = session.notice {
             StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
           }
 
           MenuEditorActionPanel(
-            model: model,
-            menu: menu,
+            session: session,
             theme: theme,
             menuAccent: menuAccent,
             onAddItem: presentNewItem,
@@ -55,23 +53,23 @@ struct MenuEditorScreen: View {
             onDiscardDraft: { showingDiscardDraftConfirm = true }
           )
 
-          if let document = model.currentEditorDocument {
+          if let document = session.document {
             MenuEditorCategoriesHeader(
               theme: theme
             )
             ForEach(document.visibleCategories) { category in
               MenuEditorCategoryCard(
-                menu: menu,
+                menu: session.menu,
                 category: category,
                 theme: theme,
                 menuAccent: menuAccent,
                 onSelectItem: { item in
                   reorderingCategoryKey = nil
-                  editingDraft = EditableItemDraft(item: item, categoryKey: category.key, isFoodMenu: menu.isFoodMenu)
+                  editingDraft = EditableItemDraft(item: item, categoryKey: category.key, isFoodMenu: session.menu.isFoodMenu)
                   activeSheet = .itemEditor
                 },
                 onToggleEightySix: { item in
-                  model.setItemEightySixed(
+                  session.setItemEightySixed(
                     itemID: item.id,
                     categoryKey: category.key,
                     isEightySixed: !item.isEightySixed
@@ -82,7 +80,7 @@ struct MenuEditorScreen: View {
                   reorderingCategoryKey = reorderingCategoryKey == category.key ? nil : category.key
                 },
                 onMoveVisibleItems: { source, destination in
-                  model.moveVisibleItems(in: category.key, from: source, to: destination)
+                  session.moveVisibleItems(in: category.key, from: source, to: destination)
                 }
               )
             }
@@ -93,10 +91,10 @@ struct MenuEditorScreen: View {
                 categories: document.visibleCategories,
                 theme: theme,
                 onRestore: { item, category in
-                  model.restoreItemFromOffMenu(itemID: item.id, to: category.key)
+                  session.restoreItemFromOffMenu(itemID: item.id, to: category.key)
                 },
                 onDelete: { item in
-                  model.deleteItem(itemID: item.id, categoryKey: EditableMenuDocument.uncategorizedKey)
+                  session.deleteItem(itemID: item.id, categoryKey: EditableMenuDocument.uncategorizedKey)
                 }
               )
             }
@@ -106,63 +104,63 @@ struct MenuEditorScreen: View {
         }
         .padding(24)
       }
-      .disabled(model.editorRefreshRequirement != nil)
-      .blur(radius: model.editorRefreshRequirement == nil ? 0 : 2)
+      .disabled(session.refreshRequirement != nil)
+      .blur(radius: session.refreshRequirement == nil ? 0 : 2)
 
-      if let requirement = model.editorRefreshRequirement {
+      if let requirement = session.refreshRequirement {
         Color.black.opacity(0.22)
           .ignoresSafeArea()
         MenuEditorRefreshOverlay(
           requirement: requirement,
           theme: theme,
-          onKeepLocalDrafts: { Task { await model.refreshEditorAfterRemoteUpdate(strategy: .keepLocalDrafts) } },
-          onUpdateDrafts: { Task { await model.refreshEditorAfterRemoteUpdate(strategy: .updateDrafts) } }
+          onKeepLocalDrafts: { Task { await session.refreshAfterRemoteUpdate(strategy: .keepLocalDrafts) } },
+          onUpdateDrafts: { Task { await session.refreshAfterRemoteUpdate(strategy: .updateDrafts) } }
         )
           .padding(24)
       }
     }
-    .navigationTitle(menu.displayTypeLabel)
+    .navigationTitle(session.menu.displayTypeLabel)
     .navigationBarTitleDisplayMode(.inline)
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {
-        NavigationLink(value: AppDestination.routePreview(menu)) {
+        NavigationLink(value: AppDestination.routePreview(session.menu)) {
           Image(systemName: "safari")
         }
         .accessibilityLabel("Exact Route Preview")
       }
     }
-    .task(id: menu.id) {
-      await model.loadEditor(menuId: menu.id)
+    .task(id: session.menu.id) {
+      await session.load()
     }
-    .task(id: menu.id) {
-      await model.monitorEditorRemoteChanges(for: menu.id)
+    .task(id: session.menu.id) {
+      await session.monitorRemoteChanges()
     }
-    .task(id: model.notice?.id) {
-      guard let notice = model.notice else { return }
+    .task(id: session.notice?.id) {
+      guard let notice = session.notice else { return }
       try? await Task.sleep(for: .seconds(4))
-      guard model.notice?.id == notice.id else { return }
-      model.notice = nil
+      guard session.notice?.id == notice.id else { return }
+      session.clearNotice()
     }
     .onChange(of: scenePhase) { _, phase in
       guard phase == .active else { return }
-      Task { await model.checkForRemoteMenuUpdate(menuId: menu.id, force: true) }
+      Task { await session.checkForRemoteUpdate(force: true) }
     }
-    .onChange(of: model.editorRefreshRequirement != nil) { _, required in
+    .onChange(of: session.refreshRequirement != nil) { _, required in
       guard required else { return }
       activeSheet = nil
       reorderingCategoryKey = nil
     }
     .sheet(item: Binding(
-      get: { model.editorRefreshRequirement == nil ? activeSheet : nil },
+      get: { session.refreshRequirement == nil ? activeSheet : nil },
       set: { activeSheet = $0 }
     )) { sheet in
       switch sheet {
       case .itemEditor:
-        ItemEditorSheet(model: model, menu: menu, draft: $editingDraft)
+        ItemEditorSheet(session: session, draft: $editingDraft)
       case .publishPreview:
-        if let preview = model.currentEditorPreview {
+        if let preview = session.preview {
           PublishPreviewSheet(
-            model: model,
+            session: session,
             preview: preview,
             theme: theme,
             menuAccent: menuAccent,
@@ -176,7 +174,7 @@ struct MenuEditorScreen: View {
     }
     .alert("Discard Local Draft?", isPresented: $showingDiscardDraftConfirm) {
       Button("Discard Draft", role: .destructive) {
-        model.discardLocalDraft()
+        session.discardLocalDraft()
       }
       Button("Keep Editing", role: .cancel) {}
     } message: {
@@ -185,13 +183,13 @@ struct MenuEditorScreen: View {
   }
 
   private func presentNewItem() {
-    if let firstCategoryKey = model.currentEditorDocument?.visibleCategories.first(where: {
+    if let firstCategoryKey = session.document?.visibleCategories.first(where: {
       $0.key != EditableMenuDocument.featuredSpecialsKey
-    })?.key ?? model.currentEditorDocument?.visibleCategories.first?.key {
-      editingDraft = EditableItemDraft(categoryKey: firstCategoryKey, isFoodMenu: menu.isFoodMenu)
+    })?.key ?? session.document?.visibleCategories.first?.key {
+      editingDraft = EditableItemDraft(categoryKey: firstCategoryKey, isFoodMenu: session.menu.isFoodMenu)
       activeSheet = .itemEditor
     } else {
-      model.notice = AppNotice(
+      session.notice = AppNotice(
         tone: .warning,
         title: "Add A Category First",
         message: "Create at least one category in Restaurant Tools before adding menu items."
@@ -200,19 +198,19 @@ struct MenuEditorScreen: View {
   }
 
   private func saveQuietly() {
-    Task { await model.saveLiveMenu() }
+    Task { await session.saveLiveMenu() }
   }
 
   private func loadSendPreview() {
     Task {
-      await model.loadPublishPreview()
-      activeSheet = model.currentEditorPreview == nil ? nil : .publishPreview
+      await session.loadPublishPreview()
+      activeSheet = session.preview == nil ? nil : .publishPreview
     }
   }
 
   private func publishChanges() {
     Task {
-      await model.publishSelectedChanges()
+      await session.publishSelectedChanges()
       activeSheet = nil
     }
   }
@@ -310,7 +308,7 @@ struct PublishPreviewSummary: Equatable {
 
 private struct PublishPreviewSheet: View {
   @Environment(\.dismiss) private var dismiss
-  @Bindable var model: AppModel
+  @Bindable var session: MenuEditorSession
   let preview: MenuPreviewPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
@@ -319,7 +317,7 @@ private struct PublishPreviewSheet: View {
   private var summary: PublishPreviewSummary {
     PublishPreviewSummary(
       preview: preview,
-      selectedChangeIDs: model.selectedPreviewChangeIDs
+      selectedChangeIDs: session.selectedPreviewChangeIDs
     )
   }
 
@@ -348,8 +346,8 @@ private struct PublishPreviewSheet: View {
                     .foregroundStyle(theme.subtleText)
                   ForEach(section.changes) { change in
                     Toggle(isOn: Binding(
-                      get: { model.selectedPreviewChangeIDs.contains(change.id) },
-                      set: { model.updatePreviewSelection(change.id, selected: $0) }
+                      get: { session.selectedPreviewChangeIDs.contains(change.id) },
+                      set: { session.updatePreviewSelection(change.id, selected: $0) }
                     )) {
                       Text(change.text)
                         .font(EditorTypography.body(13))
@@ -400,7 +398,7 @@ private struct PublishPreviewSheet: View {
           icon: actionButtonIcon,
           accent: menuAccent,
           theme: theme,
-          enabled: model.canPublishRemotely,
+          enabled: session.canPublishRemotely,
           action: onPublish
         )
         .padding(.horizontal, 24)
@@ -430,14 +428,14 @@ private struct PublishPreviewSheet: View {
     if !preview.hasNotificationChanges {
       return "Save"
     }
-    return model.hasLocalDraftChanges ? "Save & Send" : "Send"
+    return session.hasLocalDraftChanges ? "Save & Send" : "Send"
   }
 
   private var actionButtonSubtitle: String {
     if !preview.hasNotificationChanges {
       return "Save live without sending notifications."
     }
-    if model.hasLocalDraftChanges {
+    if session.hasLocalDraftChanges {
       return "Checked rows send now, unchecked rows clear quietly."
     }
     return "Send checked queue rows now."
@@ -630,8 +628,7 @@ private struct MenuEditorBadge: View {
 }
 
 private struct MenuEditorActionPanel: View {
-  @Bindable var model: AppModel
-  let menu: MenuRecord
+  @Bindable var session: MenuEditorSession
   let theme: MenuEditorTheme
   let menuAccent: Color
   let onAddItem: () -> Void
@@ -653,21 +650,21 @@ private struct MenuEditorActionPanel: View {
         Button(action: onSaveQuietly) {
           MenuEditorActionLabel(
             title: "Save Quietly",
-            subtitle: model.hasLiveMenuChanges ? "Save live without sending notifications" : "Live menu already matches",
+            subtitle: session.hasLiveMenuChanges ? "Save live without sending notifications" : "Live menu already matches",
             icon: "checkmark.seal.fill",
             accent: theme.successAccent
           )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canSaveQuietlyRemotely)
+        .disabled(!session.canSaveQuietlyRemotely)
       }
 
       HStack(spacing: 12) {
         Button(action: onSendUpdate) {
           MenuEditorActionLabel(
-            title: model.hasLocalDraftChanges ? "Save & Send" : "Send",
-            subtitle: model.currentEditorPreview == nil
-              ? (model.hasLocalDraftChanges
+            title: session.hasLocalDraftChanges ? "Save & Send" : "Send",
+            subtitle: session.preview == nil
+              ? (session.hasLocalDraftChanges
                   ? "Save live, then choose what to send or clear"
                   : "Choose which unsent queue groups to send or clear")
               : "Review the current send plan",
@@ -676,20 +673,20 @@ private struct MenuEditorActionPanel: View {
           )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canLoadPublishPreview)
+        .disabled(!session.canLoadPublishPreview)
       }
 
       HStack(spacing: 12) {
         Button(action: onDiscardDraft) {
           MenuEditorActionLabel(
             title: "Discard Draft",
-            subtitle: model.hasLocalDraftChanges ? "Remove local edits on this device" : "No local draft to discard",
+            subtitle: session.hasLocalDraftChanges ? "Remove local edits on this device" : "No local draft to discard",
             icon: "trash.fill",
             accent: theme.warningAccent
           )
         }
         .buttonStyle(.plain)
-        .disabled(!model.canDiscardLocalDraft)
+        .disabled(!session.canDiscardLocalDraft)
       }
     }
     .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
@@ -1223,7 +1220,19 @@ private extension View {
   }
 }
 
-private struct EditableItemDraft: Equatable {
+struct EditableItemUpchargeDraft: Equatable, Hashable, Identifiable {
+  let id: UUID
+  var label: String
+  var price: String
+
+  init(id: UUID = UUID(), label: String = "", price: String = "+$0") {
+    self.id = id
+    self.label = label
+    self.price = price
+  }
+}
+
+struct EditableItemDraft: Equatable {
   var itemID: String?
   var originalCategoryKey: String?
   var categoryKey: String = ""
@@ -1231,6 +1240,7 @@ private struct EditableItemDraft: Equatable {
   var description = ""
   var price = ""
   var recipeText = ""
+  var upcharges: [EditableItemUpchargeDraft] = []
   var isEightySixed = false
   var showDescription = true
   var showRecipe = false
@@ -1254,17 +1264,60 @@ private struct EditableItemDraft: Equatable {
     description = item.desc
     price = item.price
     recipeText = item.recipe.joined(separator: "\n")
+    upcharges = item.upcharges.map { EditableItemUpchargeDraft(id: $0.id, label: $0.label, price: $0.price) }
     isEightySixed = item.isEightySixed
     showDescription = item.showDescription
     showRecipe = item.showRecipe
     featuredEnabled = item.featuredEnabled
     self.isFoodMenu = isFoodMenu
   }
+
+  mutating func addUpcharge(label: String = "", price: String = "+$0") {
+    upcharges.append(
+      EditableItemUpchargeDraft(
+        label: label.trimmingCharacters(in: .whitespacesAndNewlines),
+        price: price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "+$0" : price.trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+    )
+  }
+
+  mutating func removeUpcharge(id: UUID) {
+    upcharges.removeAll { $0.id == id }
+  }
+
+  func makeMenuItem(categoryKey: String) -> MenuItemPayload {
+    let trimmedCategoryKey = categoryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    let recipe = isFoodMenu ? [] : recipeText
+      .split(separator: "\n")
+      .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+    let normalizedUpcharges = upcharges.compactMap { entry -> ItemUpcharge? in
+      let trimmedLabel = entry.label.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmedLabel.isEmpty else { return nil }
+      let trimmedPrice = entry.price.trimmingCharacters(in: .whitespacesAndNewlines)
+      return ItemUpcharge(id: entry.id, label: trimmedLabel, price: trimmedPrice)
+    }
+
+    return MenuItemPayload(
+      id: itemID ?? "local-\(UUID().uuidString.lowercased())",
+      name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+      desc: description.trimmingCharacters(in: .whitespacesAndNewlines),
+      recipe: recipe,
+      price: price.trimmingCharacters(in: .whitespacesAndNewlines),
+      isEightySixed: isEightySixed,
+      displayOrder: 0,
+      onMenu: trimmedCategoryKey != EditableMenuDocument.uncategorizedKey,
+      visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
+      upcharges: normalizedUpcharges,
+      showDescription: showDescription,
+      showRecipe: isFoodMenu ? false : showRecipe,
+      featuredEnabled: trimmedCategoryKey == EditableMenuDocument.featuredSpecialsKey ? featuredEnabled : false
+    )
+  }
 }
 
 private struct ItemEditorSheet: View {
-  @Bindable var model: AppModel
-  let menu: MenuRecord
+  @Bindable var session: MenuEditorSession
   @Binding var draft: EditableItemDraft
   @Environment(\.dismiss) private var dismiss
   @State private var showingScanner = false
@@ -1278,10 +1331,10 @@ private struct ItemEditorSheet: View {
           TextField("Price", text: $draft.price)
             .keyboardType(.decimalPad)
           Picker("Category", selection: $draft.categoryKey) {
-            ForEach(model.currentEditorDocument?.visibleCategories ?? []) { category in
+            ForEach(session.document?.visibleCategories ?? []) { category in
               Text(category.label).tag(category.key)
             }
-            if !(model.currentEditorDocument?.visibleCategories.contains(where: { $0.key == draft.categoryKey }) ?? true) {
+            if !(session.document?.visibleCategories.contains(where: { $0.key == draft.categoryKey }) ?? true) {
               Text("Off Menu").tag(EditableMenuDocument.uncategorizedKey)
             }
           }
@@ -1298,7 +1351,7 @@ private struct ItemEditorSheet: View {
         Section("Visibility") {
           Toggle("Show Description", isOn: $draft.showDescription)
           Toggle("86'd", isOn: $draft.isEightySixed)
-          if !menu.isFoodMenu {
+          if !session.menu.isFoodMenu {
             Toggle("Show Recipe", isOn: $draft.showRecipe)
             TextField("Recipe", text: $draft.recipeText, axis: .vertical)
           }
@@ -1307,6 +1360,23 @@ private struct ItemEditorSheet: View {
         if draft.categoryKey == EditableMenuDocument.featuredSpecialsKey {
           Section("Featured Strip") {
             Toggle("Show in featured strip", isOn: $draft.featuredEnabled)
+          }
+        }
+
+        Section("Upcharges") {
+          ForEach($draft.upcharges) { $entry in
+            VStack(alignment: .leading, spacing: 10) {
+              TextField("Label", text: $entry.label)
+              TextField("Price", text: $entry.price)
+            }
+
+            Button("Remove", role: .destructive) {
+              draft.removeUpcharge(id: entry.id)
+            }
+          }
+
+          Button("Add Upcharge") {
+            draft.addUpcharge()
           }
         }
 
@@ -1319,13 +1389,13 @@ private struct ItemEditorSheet: View {
           Button("Lookup Product") {
             Task {
               do {
-                let result = try await model.lookupBarcode(draft.barcode)
+                let result = try await session.lookupBarcode(draft.barcode)
                 draft.name = result.name
                 if draft.description.isEmpty {
                   draft.description = result.description
                 }
               } catch {
-                model.notice = AppNotice(tone: .warning, title: "Lookup Failed", message: error.localizedDescription)
+                session.notice = AppNotice(tone: .warning, title: "Lookup Failed", message: error.localizedDescription)
               }
             }
           }
@@ -1354,7 +1424,7 @@ private struct ItemEditorSheet: View {
 
   private func save() {
     guard let item = makeItem(categoryKey: draft.categoryKey) else { return }
-    model.upsertItem(item, categoryKey: draft.categoryKey, originalCategoryKey: draft.originalCategoryKey)
+    session.upsertItem(item, categoryKey: draft.categoryKey, originalCategoryKey: draft.originalCategoryKey)
 
     if draft.keepAdding {
       let preservedCategory = draft.categoryKey
@@ -1374,7 +1444,7 @@ private struct ItemEditorSheet: View {
       return
     }
     guard let item = makeItem(categoryKey: sourceCategoryKey, validateDuplicateName: false) else { return }
-    model.moveItemToOffMenu(item, from: sourceCategoryKey)
+    session.moveItemToOffMenu(item, from: sourceCategoryKey)
     dismiss()
   }
 
@@ -1382,7 +1452,7 @@ private struct ItemEditorSheet: View {
     let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
     let trimmedCategoryKey = categoryKey.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedCategoryKey.isEmpty else {
-      model.notice = AppNotice(
+      session.notice = AppNotice(
         tone: .warning,
         title: "Category Required",
         message: "Select a category for this item before saving."
@@ -1390,35 +1460,16 @@ private struct ItemEditorSheet: View {
       return nil
     }
     guard !trimmedName.isEmpty else {
-      model.notice = AppNotice(tone: .warning, title: "Name Required", message: "Every menu item needs a non-empty name.")
+      session.notice = AppNotice(tone: .warning, title: "Name Required", message: "Every menu item needs a non-empty name.")
       return nil
     }
     if validateDuplicateName {
-      guard model.canUseItemName(trimmedName, in: trimmedCategoryKey, excluding: draft.itemID) else {
-        model.notice = AppNotice(tone: .warning, title: "Duplicate Item", message: "That category already has an item with the same name.")
+      guard session.canUseItemName(trimmedName, in: trimmedCategoryKey, excluding: draft.itemID) else {
+        session.notice = AppNotice(tone: .warning, title: "Duplicate Item", message: "That category already has an item with the same name.")
         return nil
       }
     }
 
-    let recipe = draft.isFoodMenu ? [] : draft.recipeText
-      .split(separator: "\n")
-      .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-      .filter { !$0.isEmpty }
-
-    return MenuItemPayload(
-      id: draft.itemID ?? "local-\(UUID().uuidString.lowercased())",
-      name: trimmedName,
-      desc: draft.description.trimmingCharacters(in: .whitespacesAndNewlines),
-      recipe: recipe,
-      price: draft.price.trimmingCharacters(in: .whitespacesAndNewlines),
-      isEightySixed: draft.isEightySixed,
-      displayOrder: 0,
-      onMenu: trimmedCategoryKey != EditableMenuDocument.uncategorizedKey,
-      visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
-      upcharges: [],
-      showDescription: draft.showDescription,
-      showRecipe: draft.isFoodMenu ? false : draft.showRecipe,
-      featuredEnabled: draft.categoryKey == EditableMenuDocument.featuredSpecialsKey ? draft.featuredEnabled : false
-    )
+    return draft.makeMenuItem(categoryKey: trimmedCategoryKey)
   }
 }

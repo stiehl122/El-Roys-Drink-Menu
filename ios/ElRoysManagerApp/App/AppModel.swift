@@ -9,12 +9,18 @@ enum AuthScreenMode: String, CaseIterable, Identifiable {
   var id: String { rawValue }
 }
 
-struct AppNotice: Identifiable, Equatable {
+struct FeatureNotice: Identifiable, Equatable {
   let id = UUID()
   var tone: StatusBanner.Tone
   var title: String
   var message: String
+
+  static func success(_ title: String, _ message: String) -> FeatureNotice {
+    FeatureNotice(tone: .success, title: title, message: message)
+  }
 }
+
+typealias AppNotice = FeatureNotice
 
 enum EditorRefreshStrategy {
   case keepLocalDrafts
@@ -117,6 +123,9 @@ final class AppModel {
   @ObservationIgnored private var draftBaselineDocumentData: Data?
   @ObservationIgnored private var liveBaselineDocumentData: Data?
   @ObservationIgnored private let encoder = JSONEncoder()
+  @ObservationIgnored private var editorSessionsByMenuID: [String: MenuEditorSession] = [:]
+  @ObservationIgnored private var publicMenuSessionsByMenuID: [String: PublicMenuSession] = [:]
+  @ObservationIgnored private var restaurantToolsSessionsByRestaurantID: [String: RestaurantToolsSession] = [:]
 
   init(
     environment: AppEnvironment = .fromBundle(),
@@ -282,6 +291,9 @@ final class AppModel {
     editorHasLiveChanges = false
     draftBaselineDocumentData = nil
     liveBaselineDocumentData = nil
+    editorSessionsByMenuID = [:]
+    publicMenuSessionsByMenuID = [:]
+    restaurantToolsSessionsByRestaurantID = [:]
     notice = AppNotice(tone: .neutral, title: "Signed Out", message: "The stored device session has been cleared.")
   }
 
@@ -289,27 +301,113 @@ final class AppModel {
     accessibleMenus.first { $0.restaurantId == restaurantId && $0.type.lowercased() == type.lowercased() }
   }
 
+  func editorSession(for menu: MenuRecord) -> MenuEditorSession {
+    if let session = editorSessionsByMenuID[menu.id] {
+      return session
+    }
+    let session = MenuEditorSession(menu: menu, appModel: self)
+    editorSessionsByMenuID[menu.id] = session
+    return session
+  }
+
+  func publicMenuSession(for menu: MenuRecord) -> PublicMenuSession {
+    if let session = publicMenuSessionsByMenuID[menu.id] {
+      return session
+    }
+    let session = PublicMenuSession(menu: menu, appModel: self)
+    publicMenuSessionsByMenuID[menu.id] = session
+    return session
+  }
+
+  func restaurantToolsSession(for restaurant: RestaurantRecord) -> RestaurantToolsSession {
+    if let session = restaurantToolsSessionsByRestaurantID[restaurant.id] {
+      return session
+    }
+    let session = RestaurantToolsSession(restaurant: restaurant, appModel: self)
+    restaurantToolsSessionsByRestaurantID[restaurant.id] = session
+    return session
+  }
+
+  func loadWorkspace(menuId: String) async throws -> MenuWorkspacePayload {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+  }
+
+  func loadHistory(menuId: String) async throws -> HistoryPayload {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    return try await services.history.fetch(menuId: menuId, accessToken: accessToken)
+  }
+
+  func loadPublicMenuPayload(menuId: String) async throws -> PublicMenuPayload {
+    try await services.publicMenu.fetch(menuId: menuId, accessToken: authSession?.accessToken)
+  }
+
+  func loadRestaurantToolsPayloads(
+    for restaurantId: String
+  ) async throws -> (menus: [String: MenuWorkspacePayload], histories: [String: HistoryPayload]) {
+    guard let accessToken = authSession?.accessToken else {
+      throw BackendError.unauthorized
+    }
+    let workspaceClient = services.workspace
+    let historyClient = services.history
+    let menuIds = accessibleMenus.filter { $0.restaurantId == restaurantId }.map(\.id)
+    guard !menuIds.isEmpty else {
+      return (menus: [:], histories: [:])
+    }
+
+    var menus: [String: MenuWorkspacePayload] = [:]
+    var histories: [String: HistoryPayload] = [:]
+    try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload?).self) { group in
+      for menuId in menuIds {
+        group.addTask {
+          let workspace = try await workspaceClient.fetch(menuId: menuId, accessToken: accessToken)
+          let history: HistoryPayload?
+          do {
+            history = try await historyClient.fetch(menuId: menuId, accessToken: accessToken)
+          } catch {
+            history = nil
+            #if DEBUG
+              print("Restaurant tools history unavailable for \(menuId): \(error)")
+            #endif
+          }
+          return (menuId, workspace, history)
+        }
+      }
+      for try await (menuId, workspace, history) in group {
+        menus[menuId] = workspace
+        if let history {
+          histories[menuId] = history
+        }
+      }
+    }
+    return (menus: menus, histories: histories)
+  }
+
   func loadPublicMenu(menuId: String) async {
     guard bootstrap?.menus.contains(where: { $0.id == menuId }) == true else { return }
     currentMenuId = menuId
     await run("Loading Public Menu") { model in
-      let payload = try await model.services.publicMenu.fetch(menuId: menuId, accessToken: model.authSession?.accessToken)
+      let payload = try await model.loadPublicMenuPayload(menuId: menuId)
       guard model.currentMenuId == menuId else { return }
       model.currentPublicMenu = payload
     }
   }
 
   func loadEditor(menuId: String) async {
-    guard let accessToken = authSession?.accessToken else {
+    guard authSession?.accessToken != nil else {
       notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Editing is only available to authenticated staff.")
       return
     }
     currentMenuId = menuId
     await run("Loading Editor") { model in
-      let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
+      let workspace = try await model.loadWorkspace(menuId: menuId)
       let history: HistoryPayload?
       do {
-        history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
+        history = try await model.loadHistory(menuId: menuId)
       } catch {
         history = nil
         #if DEBUG
@@ -379,45 +477,15 @@ final class AppModel {
   }
 
   func loadRestaurantTools(for restaurantId: String) async {
-    guard let accessToken = authSession?.accessToken else {
+    guard authSession?.accessToken != nil else {
       notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Restaurant tools require an authenticated staff session.")
       return
     }
     let menuIds = accessibleMenus.filter { $0.restaurantId == restaurantId }.map(\.id)
     guard !menuIds.isEmpty else { return }
     await run("Loading Restaurant Tools") { model in
-      var menus: [String: MenuWorkspacePayload] = [:]
-      var histories: [String: HistoryPayload] = [:]
-      try await withThrowingTaskGroup(of: (String, MenuWorkspacePayload, HistoryPayload?).self) { group in
-        for menuId in menuIds {
-          group.addTask {
-            let workspace = try await model.services.workspace.fetch(menuId: menuId, accessToken: accessToken)
-            let history: HistoryPayload?
-            do {
-              history = try await model.services.history.fetch(menuId: menuId, accessToken: accessToken)
-            } catch {
-              history = nil
-              #if DEBUG
-                print("Restaurant tools history unavailable for \(menuId): \(error)")
-              #endif
-            }
-            return (menuId, workspace, history)
-          }
-        }
-        for try await (menuId, workspace, history) in group {
-          menus[menuId] = workspace
-          if let history {
-            histories[menuId] = history
-          }
-        }
-      }
-      for (menuId, workspace) in menus {
-        model.currentToolsMenus[menuId] = workspace
-      }
-      for (menuId, history) in histories {
-        model.currentToolsHistories[menuId] = history
-      }
-      model.homeDataVersion += 1
+      let payloads = try await model.loadRestaurantToolsPayloads(for: restaurantId)
+      model.syncHomeRestaurantToolsCache(menus: payloads.menus, histories: payloads.histories)
       if model.currentMenuId == nil || !menuIds.contains(model.currentMenuId ?? "") {
         model.currentMenuId = menuIds.first
       }
@@ -699,6 +767,44 @@ final class AppModel {
     }
   }
 
+  func withInstalledEditorSession<Result>(
+    _ session: MenuEditorSession,
+    perform operation: (AppModel) throws -> Result
+  ) rethrows -> Result {
+    let snapshot = captureInstalledEditorSessionState()
+    installEditorSession(session)
+    defer {
+      syncInstalledEditorSession(into: session)
+      restoreInstalledEditorSessionState(snapshot)
+    }
+    return try operation(self)
+  }
+
+  func withInstalledEditorSession<Result>(
+    _ session: MenuEditorSession,
+    perform operation: @escaping @MainActor (AppModel) async throws -> Result
+  ) async rethrows -> Result {
+    let snapshot = captureInstalledEditorSessionState()
+    installEditorSession(session)
+    defer {
+      syncInstalledEditorSession(into: session)
+      restoreInstalledEditorSessionState(snapshot)
+    }
+    return try await operation(self)
+  }
+
+  func syncHomeRestaurantToolsCache(
+    menus: [String: MenuWorkspacePayload],
+    histories: [String: HistoryPayload]
+  ) {
+    for (menuId, workspace) in menus {
+      currentToolsMenus[menuId] = workspace
+    }
+    for (menuId, history) in histories {
+      currentToolsHistories[menuId] = history
+    }
+    homeDataVersion += 1
+  }
   private func restoreSession() async {
     do {
       var storedSession = try await sessionStore.loadSession(promptForBiometrics: true)
@@ -736,6 +842,76 @@ final class AppModel {
   private func persistSession(_ session: AuthSession) throws {
     authSession = session
     try sessionStore.saveSession(session)
+  }
+
+  private func captureInstalledEditorSessionState() -> InstalledEditorSessionState {
+    InstalledEditorSessionState(
+      isWorking: isWorking,
+      notice: notice,
+      currentPublicMenu: currentPublicMenu,
+      currentEditorWorkspace: currentEditorWorkspace,
+      currentEditorHistory: currentEditorHistory,
+      currentEditorDocument: currentEditorDocument,
+      currentEditorPreview: currentEditorPreview,
+      currentMenuId: currentMenuId,
+      selectedPreviewChangeIDs: selectedPreviewChangeIDs,
+      editorRefreshRequirement: editorRefreshRequirement,
+      editorHasServerUnsentChanges: editorHasServerUnsentChanges,
+      editorDirty: editorDirty,
+      editorHasLiveChanges: editorHasLiveChanges
+    )
+  }
+
+  private func installEditorSession(_ session: MenuEditorSession) {
+    isWorking = session.isWorking
+    notice = session.notice
+    currentPublicMenu = nil
+    currentEditorWorkspace = session.workspace
+    currentEditorHistory = session.history
+    currentEditorDocument = session.document
+    currentEditorPreview = session.preview
+    currentMenuId = session.menu.id
+    selectedPreviewChangeIDs = session.selectedPreviewChangeIDs
+    editorRefreshRequirement = session.refreshRequirement
+    editorHasServerUnsentChanges = session.hasServerUnsentChanges
+    editorDirty = session.hasLocalDraftChanges
+    editorHasLiveChanges = session.hasLiveMenuChanges
+  }
+
+  private func syncInstalledEditorSession(into session: MenuEditorSession) {
+    session.isWorking = isWorking
+    session.notice = notice
+    session.workspace = currentEditorWorkspace
+    session.history = currentEditorHistory
+    session.document = currentEditorDocument
+    session.preview = currentEditorPreview
+    session.selectedPreviewChangeIDs = selectedPreviewChangeIDs
+    session.refreshRequirement = editorRefreshRequirement
+    session.hasLocalDraftChanges = editorDirty
+    session.hasLiveMenuChanges = editorHasLiveChanges
+    session.hasServerUnsentChanges = editorHasServerUnsentChanges
+    session.canEditCategories = canEditCategories
+    session.canDiscardLocalDraft = canDiscardLocalDraft
+    session.canSaveQuietlyRemotely = canSaveQuietlyRemotely
+    session.canLoadPublishPreview = canLoadPublishPreview
+    session.canPublishRemotely = canPublishRemotely
+    session.menuStatusLabel = menuStatusLabel
+  }
+
+  private func restoreInstalledEditorSessionState(_ state: InstalledEditorSessionState) {
+    isWorking = state.isWorking
+    notice = state.notice
+    currentPublicMenu = state.currentPublicMenu
+    currentEditorWorkspace = state.currentEditorWorkspace
+    currentEditorHistory = state.currentEditorHistory
+    currentEditorDocument = state.currentEditorDocument
+    currentEditorPreview = state.currentEditorPreview
+    currentMenuId = state.currentMenuId
+    selectedPreviewChangeIDs = state.selectedPreviewChangeIDs
+    editorRefreshRequirement = state.editorRefreshRequirement
+    editorHasServerUnsentChanges = state.editorHasServerUnsentChanges
+    editorDirty = state.editorDirty
+    editorHasLiveChanges = state.editorHasLiveChanges
   }
 
   private func mutateEditorDocument(_ change: (inout EditableMenuDocument) -> Void) {
@@ -1181,6 +1357,23 @@ final class AppModel {
       notice = AppNotice(tone: .danger, title: label, message: error.localizedDescription)
     }
   }
+}
+
+
+private struct InstalledEditorSessionState {
+  var isWorking: Bool
+  var notice: AppNotice?
+  var currentPublicMenu: PublicMenuPayload?
+  var currentEditorWorkspace: MenuWorkspacePayload?
+  var currentEditorHistory: HistoryPayload?
+  var currentEditorDocument: EditableMenuDocument?
+  var currentEditorPreview: MenuPreviewPayload?
+  var currentMenuId: String?
+  var selectedPreviewChangeIDs: Set<String>
+  var editorRefreshRequirement: EditorRefreshRequirement?
+  var editorHasServerUnsentChanges: Bool
+  var editorDirty: Bool
+  var editorHasLiveChanges: Bool
 }
 
 private struct ItemDocumentState: Equatable {
