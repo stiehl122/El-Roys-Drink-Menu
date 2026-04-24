@@ -122,58 +122,50 @@ export async function updateAdminUser(req, payload = {}) {
   const { sbUrl, sbService } = getSupabaseServerConfig();
   const caller = await requireRole(req, 'admin');
   const { userId, role, name, menuAccess } = payload || {};
-  if (!userId) throw { status: 400, message: 'userId required' };
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) throw { status: 400, message: 'userId required' };
 
-  if (role !== undefined && userId === caller.uid) {
+  if (role !== undefined && normalizedUserId === caller.uid) {
     throw { status: 400, message: 'Cannot change your own role' };
   }
 
-  const profileUpdate = {};
+  const hasRoleUpdate = role !== undefined;
+  const hasNameUpdate = name !== undefined;
+  const hasMenuAccessUpdate = Array.isArray(menuAccess);
+  let normalizedRole = null;
   if (role !== undefined) {
-    if (!['none', 'manager', 'admin'].includes(role)) {
+    normalizedRole = String(role || 'manager').trim() || 'manager';
+    if (!['none', 'manager', 'admin'].includes(normalizedRole)) {
       throw { status: 400, message: 'Invalid role' };
     }
-    profileUpdate.role = role;
-  }
-  if (name !== undefined) {
-    profileUpdate.name = String(name).trim().slice(0, 100);
   }
 
-  if (Object.keys(profileUpdate).length) {
-    const updateRes = await fetch(`${sbUrl}/rest/v1/profiles?id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: serviceHeaders({
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      }, sbService),
-      body: JSON.stringify(profileUpdate),
-    });
-    if (!updateRes.ok) throw { status: 500, message: 'Failed to update profile' };
-  }
-
-  if (Array.isArray(menuAccess)) {
-    const deleteRes = await fetch(`${sbUrl}/rest/v1/menu_access?user_id=eq.${userId}`, {
-      method: 'DELETE',
-      headers: serviceHeaders({}, sbService),
-    });
-    if (!deleteRes.ok) throw { status: 500, message: 'Failed to update menu access' };
-
-    if (menuAccess.length) {
-      const rows = menuAccess.map(menuId => ({ user_id: userId, menu_id: menuId }));
-      const insertRes = await fetch(`${sbUrl}/rest/v1/menu_access`, {
-        method: 'POST',
-        headers: serviceHeaders({
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        }, sbService),
-        body: JSON.stringify(rows),
-      });
-      if (!insertRes.ok) throw { status: 500, message: 'Failed to insert menu access' };
-    }
-  }
-
-  if (!Object.keys(profileUpdate).length && !Array.isArray(menuAccess)) {
+  if (!hasRoleUpdate && !hasNameUpdate && !hasMenuAccessUpdate) {
     throw { status: 400, message: 'Nothing to update' };
+  }
+
+  const response = await fetch(`${sbUrl}/rest/v1/rpc/update_user_profile_and_menu_access`, {
+    method: 'POST',
+    headers: serviceHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }, sbService),
+    body: JSON.stringify({
+      target_user_id: normalizedUserId,
+      target_full_name: hasNameUpdate ? String(name || '').trim().slice(0, 100) : null,
+      target_role: normalizedRole,
+      target_menu_ids: hasMenuAccessUpdate
+        ? menuAccess.map(menuId => String(menuId || '').trim()).filter(Boolean)
+        : null,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await readJsonSafe(response);
+    throw {
+      status: response.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to update user access'),
+    };
   }
 
   return { ok: true };
