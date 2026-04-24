@@ -81,3 +81,66 @@ test('admin updateUserAccess rejects malformed explicit role updates before RPC'
     global.fetch = originalFetch;
   }
 });
+
+test('admin updateUserAccess rejects malformed explicit menuAccess entries before RPC', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const originalFetch = global.fetch;
+  const rpcBodies = [];
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    const href = String(url);
+    calls.push(href);
+    if (href.includes('/auth/v1/user')) {
+      return {
+        ok: true,
+        async json() {
+          return { id: 'admin-user' };
+        },
+      };
+    }
+    if (href.includes('/rest/v1/profiles?')) {
+      return {
+        ok: true,
+        async json() {
+          return [{ role: 'admin' }];
+        },
+      };
+    }
+    if (href.includes('/rest/v1/rpc/update_user_profile_and_menu_access')) {
+      rpcBodies.push(JSON.parse(options.body || '{}'));
+      return {
+        ok: true,
+        async json() {
+          return { ok: true };
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    const { updateAdminUser } = await importApiModule('server/_admin-read-models.js');
+    const req = { headers: { authorization: 'Bearer admin-token' } };
+
+    for (const malformedMenuAccess of [[null], [''], [false], [0]]) {
+      calls.length = 0;
+      rpcBodies.length = 0;
+      await assert.rejects(
+        updateAdminUser(req, { userId: 'target-user', menuAccess: malformedMenuAccess }),
+        error => error?.status === 400 && error?.message === 'Invalid menu access'
+      );
+      assert.equal(
+        calls.some(href => href.includes('/rest/v1/rpc/update_user_profile_and_menu_access')),
+        false,
+        `malformed menuAccess ${JSON.stringify(malformedMenuAccess)} must not reach the RPC`
+      );
+    }
+
+    await updateAdminUser(req, { userId: 'target-user', menuAccess: [] });
+    assert.deepEqual(rpcBodies.at(-1)?.target_menu_ids, []);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});

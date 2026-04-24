@@ -133,6 +133,7 @@ export async function updateAdminUser(req, payload = {}) {
   const hasNameUpdate = name !== undefined;
   const hasMenuAccessUpdate = Array.isArray(menuAccess);
   let normalizedRole = null;
+  let normalizedMenuAccess = null;
   if (role !== undefined) {
     if (typeof role !== 'string') {
       throw { status: 400, message: 'Invalid role' };
@@ -140,6 +141,15 @@ export async function updateAdminUser(req, payload = {}) {
     normalizedRole = String(role).trim();
     if (!['none', 'manager', 'admin'].includes(normalizedRole)) {
       throw { status: 400, message: 'Invalid role' };
+    }
+  }
+  if (hasMenuAccessUpdate) {
+    normalizedMenuAccess = [];
+    for (const menuId of menuAccess) {
+      if (typeof menuId !== 'string' || !menuId.trim()) {
+        throw { status: 400, message: 'Invalid menu access' };
+      }
+      normalizedMenuAccess.push(menuId.trim());
     }
   }
 
@@ -157,9 +167,7 @@ export async function updateAdminUser(req, payload = {}) {
       target_user_id: normalizedUserId,
       target_full_name: hasNameUpdate ? String(name || '').trim().slice(0, 100) : null,
       target_role: normalizedRole,
-      target_menu_ids: hasMenuAccessUpdate
-        ? menuAccess.map(menuId => String(menuId || '').trim()).filter(Boolean)
-        : null,
+      target_menu_ids: normalizedMenuAccess,
     }),
   });
 
