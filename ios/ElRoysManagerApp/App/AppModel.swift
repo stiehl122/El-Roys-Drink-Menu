@@ -597,7 +597,7 @@ final class AppModel {
     notice = AppNotice(
       tone: .neutral,
       title: "Draft Discarded",
-      message: "Local edits on this device were removed. The shared server queue was not changed."
+      message: "Local edits on this device were removed. The live menu was not changed."
     )
   }
 
@@ -645,7 +645,7 @@ final class AppModel {
         serverDocument: currentDocument,
         revisions: model.currentEditorWorkspace?.workspace.revisions
       )
-      model.notice = AppNotice(tone: .success, title: "Saved Quietly", message: "The live menu was updated without sending notifications.")
+      model.notice = AppNotice(tone: .success, title: "Saved", message: "The live menu was updated without sending notifications.")
     }
   }
 

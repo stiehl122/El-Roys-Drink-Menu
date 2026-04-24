@@ -1780,7 +1780,7 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(liveSaveClient.lastExpectedDraftRevision, 22)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
     XCTAssertNil(offlineStore.draft)
-    XCTAssertEqual(model.notice?.title, "Saved Quietly")
+    XCTAssertEqual(model.notice?.title, "Saved")
   }
 
   @MainActor

@@ -851,6 +851,18 @@ function markSaveOnlyDraftChange(change) {
   scheduleCurrentLocalDraftPersistence();
   updateSaveBtn();
 }
+function markFeaturedSpecialItemDraftChange(catId, item, actionLabel = 'Updated') {
+  if (catId !== FEATURED_SPECIALS_CATEGORY_ID || !item?.id) return;
+  const itemName = String(item.name || 'featured special').trim() || 'featured special';
+  markSaveOnlyDraftChange({
+    key: `featured-specials:${catId}:${item.id}`,
+    label: `${actionLabel} featured special ${itemName}`,
+    message: `${actionLabel} featured special ${itemName}`,
+    sectionId: catId,
+    itemId: item.id,
+    kind: 'featured-special',
+  });
+}
 function getDraftChangeCount() {
   return countDiffLines() + getDraftSaveOnlyChanges().length;
 }
@@ -1972,6 +1984,7 @@ function confirmAddItemModal(options = {}) {
   if (!menuState[categoryId]) menuState[categoryId] = { items: [], lastSent: [] };
   const item = buildNewMenuItemFromAddModal(fields);
   menuState[categoryId].items.push(item);
+  markFeaturedSpecialItemDraftChange(categoryId, item, 'Added');
   _lastAddItemCategoryId = categoryId;
   invalidateDiff();
   renderManagerItems(categoryId);
@@ -10173,6 +10186,7 @@ async function discardLocalDraft() {
   await loadActiveMenuState({ includePersistedDraft: false, source: 'discard' });
   renderManagerWorkspace({ includeRecentChanges: false });
   updateDraftIndicator();
+  updateSaveBtn();
   showToast(`✅ ${_activeMenuName || 'Menu'} draft discarded.`, 'success');
 }
 
@@ -10218,7 +10232,10 @@ function addItem(catId) {
     const offMenu = menuState[catId].items.find(
       i => i.onMenu === false && i.name.toLowerCase() === nameLower
     );
-    if (offMenu) { offMenu.onMenu = true; }
+    if (offMenu) {
+      offMenu.onMenu = true;
+      markFeaturedSpecialItemDraftChange(catId, offMenu, 'Restored');
+    }
     else {
       // Check uncategorized pool — if found, move it into this category
       const uncatIdx = (menuState[UNCATEGORIZED_ID]?.items || []).findIndex(
@@ -10226,10 +10243,12 @@ function addItem(catId) {
       );
       if (uncatIdx !== -1) {
         const [uncatItem] = menuState[UNCATEGORIZED_ID].items.splice(uncatIdx, 1);
-        menuState[catId].items.push({ ...uncatItem, onMenu: true });
+        const movedItem = { ...uncatItem, onMenu: true };
+        menuState[catId].items.push(movedItem);
+        markFeaturedSpecialItemDraftChange(catId, movedItem, 'Added');
         movedFromUncategorized = true;
       } else {
-        menuState[catId].items.push({
+        const newItem = {
           id: uid(),
           name,
           desc: '',
@@ -10240,7 +10259,9 @@ function addItem(catId) {
           upcharges: [],
           showDescription: true,
           showRecipe: false,
-        });
+        };
+        menuState[catId].items.push(newItem);
+        markFeaturedSpecialItemDraftChange(catId, newItem, 'Added');
       }
     }
   }
@@ -10831,9 +10852,10 @@ function renameItem(catId, itemId, newName) {
 // ─── DRAFT INDICATOR ─────────────────────────────────────────────────────────
 function updateDraftIndicator() {
   const btn = document.getElementById('send-btn');
-  if (!btn) return;
-  btn.textContent = 'Save';
-  btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
+  if (btn) {
+    btn.textContent = 'Save';
+    btn.style.boxShadow = getDraftChangeCount() > 0 ? '0 4px 22px rgba(255,77,0,0.55)' : '';
+  }
   renderManagerOverviewStats();
   updateManagerActionBar();
 }

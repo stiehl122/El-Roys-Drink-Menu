@@ -108,7 +108,7 @@ struct RestaurantCategoryManagementScreen: View {
       }
       Button("Keep Editing", role: .cancel) {}
     } message: {
-      Text("This only removes unsaved edits from this device and does not modify the shared server queue.")
+      Text("This only removes unsaved edits from this device and leaves the live menu unchanged.")
     }
   }
 
