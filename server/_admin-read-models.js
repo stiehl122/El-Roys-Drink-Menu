@@ -134,7 +134,7 @@ export async function updateAdminUser(req, payload = {}) {
   const hasMenuAccessUpdate = Array.isArray(menuAccess);
   let normalizedRole = null;
   if (role !== undefined) {
-    normalizedRole = String(role || 'manager').trim() || 'manager';
+    normalizedRole = String(role).trim();
     if (!['none', 'manager', 'admin'].includes(normalizedRole)) {
       throw { status: 400, message: 'Invalid role' };
     }
