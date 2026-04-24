@@ -20,7 +20,6 @@ final class MenuEditorSession {
   var hasServerUnsentChanges = false
   var canEditCategories = false
   var canDiscardLocalDraft = false
-  var canSaveQuietlyRemotely = false
   var canLoadPublishPreview = false
   var canPublishRemotely = false
   var menuStatusLabel = "Live"
@@ -80,9 +79,9 @@ final class MenuEditorSession {
     }
   }
 
-  func publishSelectedChanges() async {
+  func publishSelectedChanges(shouldNotify: Bool = true) async {
     await appModel.withInstalledEditorSession(self) { model in
-      await model.publishSelectedChanges()
+      await model.publishSelectedChanges(shouldNotify: shouldNotify)
     }
   }
 

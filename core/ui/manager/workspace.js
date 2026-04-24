@@ -17,7 +17,7 @@
     const countDiffLines = typeof deps.countDiffLines === 'function' ? deps.countDiffLines : (() => 0);
     const createDraftLedgerService = typeof deps.createDraftLedgerService === 'function'
       ? deps.createDraftLedgerService
-      : (() => ({ getActionBarState: () => ({ hasDraftChanges: false, hasDraftWork: false, hasPendingUpdate: false, summaryText: 'No Pending Changes', publishLabel: 'Save' }) }));
+      : (() => ({ getActionBarState: () => ({ hasDraftChanges: false, hasDraftWork: false, hasPendingUpdate: false, saveDisabled: true, publishDisabled: true, showDiscard: false }) }));
 
     const renderManagerCategories = typeof deps.renderManagerCategories === 'function' ? deps.renderManagerCategories : (() => {});
     const renderPricingSection = typeof deps.renderPricingSection === 'function' ? deps.renderPricingSection : (() => {});
@@ -38,7 +38,6 @@
     function renderManagerOverviewStats() {
       const categoryDefs = getCategoryDefs();
       const menuState = getMenuState();
-      const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport: windowRef.innerWidth <= 480 });
       const activeItems = categoryDefs.reduce((total, cat) => (
         total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
       ), 0);
@@ -55,14 +54,14 @@
       const eightysixValue = documentRef.getElementById('manager-overview-86-value');
       const eightysixMeta = documentRef.getElementById('manager-overview-86-meta');
 
-      if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (notifyCount > 0 ? 'Live | Unsent' : 'Live');
+      if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : 'Live';
       if (statusMeta) {
         if (hasLocalDraft) {
           statusMeta.textContent = `${draftCount} pending change${draftCount === 1 ? '' : 's'} on this device.`;
         } else if (notifyCount > 0) {
-          statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
+          statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready for review.`;
         } else {
-          statusMeta.textContent = 'No unsent changes';
+          statusMeta.textContent = 'Live menu is current';
         }
       }
       if (activeValue) activeValue.textContent = String(activeItems);
@@ -86,29 +85,48 @@
       const isCompactViewport = windowRef.innerWidth <= 480;
       const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
       const saveBtn = documentRef.getElementById('save-btn');
-      const publishBtn = documentRef.getElementById('send-btn');
+      const sendBtn = documentRef.getElementById('send-btn');
       const discardBtn = documentRef.getElementById('discard-draft-btn');
+      const saveDisabled = !!ledgerState.saveDisabled && !!ledgerState.publishDisabled;
 
       if (primaryGroup) primaryGroup.hidden = false;
       if (saveBtn) {
-        saveBtn.disabled = !!ledgerState.saveDisabled;
-        saveBtn.textContent = ledgerState.saveLabel || 'Save';
-        saveBtn.hidden = !ledgerState.saveLabel;
-        saveBtn.title = ledgerState.hasDraftChanges ? 'Save the live menu without notifying anyone yet' : '';
+        saveBtn.disabled = saveDisabled;
+        saveBtn.textContent = 'Save';
+        saveBtn.hidden = false;
+        saveBtn.title = 'Review and save menu changes';
+        saveBtn.setAttribute('aria-label', 'Review and save menu changes');
+        saveBtn.setAttribute('onclick', 'openPreview()');
       }
-      if (publishBtn) {
-        publishBtn.disabled = !!ledgerState.publishDisabled;
-        publishBtn.textContent = ledgerState.publishLabel;
+      if (sendBtn) {
+        sendBtn.disabled = true;
+        sendBtn.hidden = true;
+        sendBtn.textContent = 'Save';
+        sendBtn.setAttribute('aria-hidden', 'true');
+        sendBtn.setAttribute('tabindex', '-1');
       }
       if (discardBtn) {
         discardBtn.hidden = !ledgerState.showDiscard;
         discardBtn.disabled = !ledgerState.showDiscard;
       }
       bar.hidden = false;
-      bar.classList.toggle('is-idle', ledgerState.saveDisabled && ledgerState.publishDisabled && !ledgerState.showDiscard);
+      bar.classList.toggle('is-idle', saveDisabled && !ledgerState.showDiscard);
       syncManagerActionBarStatus(syncEl);
 
-      if (summary) summary.textContent = ledgerState.summaryText;
+      if (summary) {
+        const draftCount = getDraftChangeCount();
+        const reviewCount = countDiffLines();
+        if (ledgerState.hasDraftChanges || ledgerState.hasDraftWork) {
+          const count = draftCount || reviewCount;
+          summary.textContent = count > 0
+            ? `${count} pending change${count === 1 ? '' : 's'}. Save reviews and saves your changes.`
+            : 'Save reviews and saves your changes.';
+        } else if (ledgerState.hasPendingUpdate || reviewCount > 0) {
+          summary.textContent = `${reviewCount} update line${reviewCount === 1 ? '' : 's'} ready for review. Save opens the review before notifying.`;
+        } else {
+          summary.textContent = 'No pending changes';
+        }
+      }
     }
 
     function renderManagerWorkspace(options = {}) {

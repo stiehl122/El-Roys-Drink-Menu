@@ -592,6 +592,7 @@ let _localDraftBaseSnapshot = null;
 let _localDraftPersistTimer = null;
 let _previewModalState = null;
 let _previewSelectionState = {};
+let _previewNotifyEnabled = true;
 let _lastAddItemCategoryId = '';
 const ADD_ITEM_MODAL_MANUAL_MODE = 'manual';
 const ADD_ITEM_MODAL_SCAN_MODE = 'scan';
@@ -863,13 +864,13 @@ function getMenuActionState({ isCompactViewport = false } = {}) {
   const hasNotificationChanges = notificationCount > 0;
   const hasSaveOnlyChanges = saveOnlyCount > 0;
   const hasChanges = hasNotificationChanges || hasSaveOnlyChanges;
-  const hasPendingServerQueue = !hasLocalDraft && hasNotificationChanges;
+  const hasPendingServerQueue = false;
 
   if (hasLocalDraft) {
     const summaryText = hasNotificationChanges
       ? (isCompactViewport
-          ? `${getDraftChangeCount()} pending change${getDraftChangeCount() === 1 ? '' : 's'}. Save quietly or review the send queue.`
-          : `${getDraftChangeCount()} pending change${getDraftChangeCount() === 1 ? '' : 's'}. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.`)
+          ? `${getDraftChangeCount()} pending change${getDraftChangeCount() === 1 ? '' : 's'} ready to review.`
+          : `${getDraftChangeCount()} pending change${getDraftChangeCount() === 1 ? '' : 's'}. Save opens a review before anything goes live.`)
       : `${saveOnlyCount || getDraftChangeCount()} quiet change${(saveOnlyCount || getDraftChangeCount()) === 1 ? '' : 's'} ready to save.`;
     return {
       hasLocalDraft,
@@ -878,27 +879,11 @@ function getMenuActionState({ isCompactViewport = false } = {}) {
       hasSaveOnlyChanges,
       hasChanges,
       summaryText,
-      saveLabel: hasNotificationChanges ? 'Save Quietly' : 'Save',
+      saveLabel: 'Save',
       saveDisabled: !hasChanges,
-      publishLabel: 'Save & Send',
-      publishDisabled: !hasNotificationChanges,
+      publishLabel: '',
+      publishDisabled: true,
       showDiscard: true,
-    };
-  }
-
-  if (hasPendingServerQueue) {
-    return {
-      hasLocalDraft,
-      hasPendingServerQueue,
-      hasNotificationChanges,
-      hasSaveOnlyChanges,
-      hasChanges,
-      summaryText: `${notificationCount} update line${notificationCount === 1 ? ' is' : 's are'} live and ready to send.`,
-      saveLabel: '',
-      saveDisabled: true,
-      publishLabel: 'Send',
-      publishDisabled: false,
-      showDiscard: false,
     };
   }
 
@@ -911,7 +896,7 @@ function getMenuActionState({ isCompactViewport = false } = {}) {
     summaryText: 'No pending changes',
     saveLabel: 'Save',
     saveDisabled: true,
-    publishLabel: 'Send',
+    publishLabel: '',
     publishDisabled: true,
     showDiscard: false,
   };
@@ -926,12 +911,13 @@ function updateSaveBtn() {
     saveBtn.textContent = actionState.saveLabel || 'Save';
     saveBtn.hidden = !actionState.saveLabel;
     saveBtn.title = actionState.hasLocalDraft
-      ? 'Save the live menu without notifying anyone yet'
+      ? 'Review and save these changes'
       : '';
   }
   if (publishBtn) {
     publishBtn.disabled = !!actionState.publishDisabled;
     publishBtn.textContent = actionState.publishLabel;
+    publishBtn.hidden = true;
   }
   if (discardBtn) {
     discardBtn.hidden = !actionState.showDiscard;
@@ -2360,7 +2346,6 @@ function buildMenuSessionSnapshot(source = 'live', request = buildCurrentMenuPag
   const notifyDiff = getCachedDiff();
   const saveOnlyChanges = getDraftSaveOnlyChanges();
   const hasLocalDraft = syncLocalDraftDirtyState();
-  const hasPendingUpdate = !hasLocalDraft && countDiffLines(notifyDiff) > 0;
   return {
     request,
     source,
@@ -2377,7 +2362,7 @@ function buildMenuSessionSnapshot(source = 'live', request = buildCurrentMenuPag
     draftSavedTs: getDraftSavedTs(),
     saveOnlyChanges,
     notifyDiff,
-    status: hasLocalDraft ? 'DRAFTING' : (hasPendingUpdate ? 'LIVE | UNSENT' : 'LIVE'),
+    status: hasLocalDraft ? 'DRAFTING' : 'LIVE',
     hasMultipleMenus: _hasMultipleMenus,
   };
 }
@@ -2850,34 +2835,16 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
 
       if (shouldNotify && delivery.partial) {
         warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
-        warnings.push('Some channels did not receive the update. The lines remain ready to send again.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: sessionPorts.dedupeWarnings(warnings),
-          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
-          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs attention.`,
-          snapshot: buildSnapshot('send-partial'),
-        };
+        warnings.push('Some channels did not receive the update. Changes were saved live without preserving a send queue.');
       }
 
       if (shouldNotify && !delivery.ok) {
         warnings.push(delivery.userMessage || 'Update could not be sent.');
-        return {
-          ok: true,
-          preview,
-          notificationStatus: delivery,
-          warnings: sessionPorts.dedupeWarnings(warnings),
-          warningMessage: sessionPorts.dedupeWarnings(warnings)[0] || '',
-          successMessage: `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Update still needs to be sent.`,
-          snapshot: buildSnapshot('send-failed-live-saved'),
-        };
       }
 
       if (shouldNotify) warnings.push(...sessionPorts.collectNotificationWarnings(delivery.summary));
 
-      if (mode === 'save-and-send' || mode === 'send') {
+      {
         const ts = liveSaveTs || sessionPorts.now();
         const lastSentState = sessionPorts.snapshotCurrentItemsAsLastSent();
         await sessionPorts.patchMenuMeta({
@@ -2897,7 +2864,7 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
           warnings.push('This device could not refresh its local cache after the send.');
         }
 
-        const logged = patchMessage ? await sessionPorts.logUpdate(serializeSectionsForUpdateLog(selectedSections), patchMessage) : true;
+        const logged = shouldNotify && patchMessage ? await sessionPorts.logUpdate(serializeSectionsForUpdateLog(selectedSections), patchMessage) : true;
         if (!logged) {
           warnings.push('The recent-changes audit log could not be written for this send.');
         }
@@ -2911,9 +2878,11 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
           notificationStatus: shouldNotify ? delivery : null,
           warnings: finalWarnings,
           warningMessage: finalWarnings[0] || '',
-          successMessage: shouldNotify
+          successMessage: shouldNotify && delivery.ok
             ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved and sent!`
-            : `✅ ${sessionPorts.getMenuName() || 'Menu'} update list cleared without notifying channels.`,
+            : (shouldNotify
+                ? `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live. Notifications need attention.`
+                : `✅ ${sessionPorts.getMenuName() || 'Menu'} saved live without sending notifications.`),
           snapshot: buildSnapshot(finalWarnings.length ? 'publish-warning' : 'publish-complete'),
         };
       }
@@ -6204,7 +6173,6 @@ function renderManagerOverviewStats() {
   ), 0);
   const draftCount = getDraftChangeCount();
   const hasLocalDraft = syncLocalDraftDirtyState();
-  const notifyCount = !hasLocalDraft ? countDiffLines() : 0;
   const statusValue = document.getElementById('manager-overview-status-value');
   const statusMeta = document.getElementById('manager-overview-status-meta');
   const activeValue = document.getElementById('manager-overview-active-value');
@@ -6212,14 +6180,12 @@ function renderManagerOverviewStats() {
   const eightysixValue = document.getElementById('manager-overview-86-value');
   const eightysixMeta = document.getElementById('manager-overview-86-meta');
 
-  if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : (notifyCount > 0 ? 'Live | Unsent' : 'Live');
+  if (statusValue) statusValue.textContent = hasLocalDraft ? 'Drafting' : 'Live';
   if (statusMeta) {
     if (hasLocalDraft) {
       statusMeta.textContent = `${draftCount} pending change${draftCount === 1 ? '' : 's'} on this device.`;
-    } else if (notifyCount > 0) {
-      statusMeta.textContent = `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready to send`;
     } else {
-      statusMeta.textContent = 'No unsent changes';
+      statusMeta.textContent = 'Saved live';
     }
   }
   if (activeValue) activeValue.textContent = String(activeItems);
@@ -6259,51 +6225,22 @@ function createDraftLedgerService(deps = {}) {
       const hasNotificationChanges = notificationCount > 0;
       const hasSaveOnlyChanges = saveOnlyCount > 0;
       const hasChanges = hasNotificationChanges || hasSaveOnlyChanges;
-      const actionState = hasLocalDraft
-        ? {
-            hasLocalDraft,
-            hasPendingServerQueue: false,
-            hasNotificationChanges,
-            hasSaveOnlyChanges,
-            hasChanges,
-            summaryText: hasNotificationChanges
-              ? (isCompactViewport
-                  ? `${draftCount} pending change${draftCount === 1 ? '' : 's'}. Save quietly or review the send queue.`
-                  : `${draftCount} pending change${draftCount === 1 ? '' : 's'}. Save Quietly writes live without sending. Save & Send reviews the queue before notifying.`)
-              : `${saveOnlyCount || draftCount} quiet change${(saveOnlyCount || draftCount) === 1 ? '' : 's'} ready to save.`,
-            saveLabel: hasNotificationChanges ? 'Save Quietly' : 'Save',
-            saveDisabled: !hasChanges,
-            publishLabel: 'Save & Send',
-            publishDisabled: !hasNotificationChanges,
-            showDiscard: true,
-          }
-        : (hasNotificationChanges
-            ? {
-                hasLocalDraft,
-                hasPendingServerQueue: true,
-                hasNotificationChanges,
-                hasSaveOnlyChanges,
-                hasChanges,
-                summaryText: `${notificationCount} update line${notificationCount === 1 ? ' is' : 's are'} live and ready to send.`,
-                saveLabel: '',
-                saveDisabled: true,
-                publishLabel: 'Send',
-                publishDisabled: false,
-                showDiscard: false,
-              }
-            : {
-                hasLocalDraft,
-                hasPendingServerQueue: false,
-                hasNotificationChanges,
-                hasSaveOnlyChanges,
-                hasChanges,
-                summaryText: 'No pending changes',
-                saveLabel: 'Save',
-                saveDisabled: true,
-                publishLabel: 'Send',
-                publishDisabled: true,
-                showDiscard: false,
-              });
+      const changeCount = hasLocalDraft ? draftCount : notificationCount;
+      const actionState = {
+        hasLocalDraft,
+        hasPendingServerQueue: false,
+        hasNotificationChanges,
+        hasSaveOnlyChanges,
+        hasChanges,
+        summaryText: hasChanges
+          ? `${changeCount || saveOnlyCount} pending change${(changeCount || saveOnlyCount) === 1 ? '' : 's'}. Save opens a review before anything goes live.`
+          : 'No pending changes',
+        saveLabel: 'Save',
+        saveDisabled: !hasChanges,
+        publishLabel: '',
+        publishDisabled: true,
+        showDiscard: hasLocalDraft,
+      };
       return {
         hasDraftChanges: actionState.hasLocalDraft,
         hasSharedDraft: false,
@@ -6326,14 +6263,10 @@ function createDraftLedgerService(deps = {}) {
       const changeLookup = buildLookup();
       const sectionNames = changeLookup.byCategoryName.get(catId) || new Set();
       const hasDraftTag = isDirty() && (changeLookup.byItemId.has(item?.id) || sectionNames.has(nameKey));
-      const hasUnsentTag = sectionNames.has(nameKey);
       const isNew = lastSentNames ? !lastSentNames.has(nameKey) : false;
 
       if (hasDraftTag) {
         return { className: 'item-state-badge--draft', text: 'DRAFT', label: 'Draft change' };
-      }
-      if (hasUnsentTag) {
-        return { className: 'item-state-badge--unsent', text: 'UNSENT', label: 'Unsent update' };
       }
       if (is86) {
         return { className: 'item-state-badge--86', text: '86', label: "86'd" };
@@ -6375,11 +6308,12 @@ function updateManagerActionBar() {
     saveBtn.disabled = !!ledgerState.saveDisabled;
     saveBtn.textContent = ledgerState.saveLabel || 'Save';
     saveBtn.hidden = !ledgerState.saveLabel;
-    saveBtn.title = ledgerState.hasDraftChanges ? 'Save the live menu without notifying anyone yet' : '';
+    saveBtn.title = ledgerState.hasDraftChanges ? 'Review and save these changes' : '';
   }
   if (publishBtn) {
-    publishBtn.disabled = !!ledgerState.publishDisabled;
-    publishBtn.textContent = ledgerState.publishLabel;
+    publishBtn.disabled = true;
+    publishBtn.textContent = '';
+    publishBtn.hidden = true;
   }
   if (discardBtn) {
     discardBtn.hidden = !ledgerState.showDiscard;
@@ -10226,13 +10160,8 @@ async function persistState(options = {}) {
 async function saveMenu() {
   await flushFocusedManagerEditor();
   const actionState = getMenuActionState();
-  if (!actionState.hasLocalDraft) {
-    if (actionState.hasPendingServerQueue) {
-      await openPreview();
-    }
-    return;
-  }
-  await sendUpdate({ notify: false });
+  if (!actionState.hasChanges) return;
+  await openPreview();
 }
 
 async function discardLocalDraft() {
@@ -10412,7 +10341,7 @@ function toggle86(catId, itemId) {
     wrapper.classList.add(cls);
     setTimeout(() => wrapper.classList.remove(cls), 400);
   }
-  showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
+  showToast(item.eightySixed ? "🚫 Marked 86'd — save to review notification options" : `↩ Marked ${restoreLabel(catId)} — save to review notification options`, 'info');
 }
 
 function toggleFeaturedSpecialEnabled(catId, itemId, checked) {
@@ -10999,8 +10928,15 @@ function computeDiff() {
   return results;
 }
 
-function buildPreviewDecisionGroups(preview = {}) {
+function buildPreviewDecisionGroups(preview = {}, notifyEnabled = _previewNotifyEnabled) {
   const notificationChanges = Array.isArray(preview.notificationChanges) ? preview.notificationChanges : [];
+  if (!notifyEnabled) {
+    return {
+      selectedSections: [],
+      clearSections: groupNotificationChangesBySection(notificationChanges),
+      saveOnlyChanges: Array.isArray(preview.saveOnlyChanges) ? preview.saveOnlyChanges : [],
+    };
+  }
   return {
     selectedSections: groupNotificationChangesBySection(notificationChanges.filter(change => _previewSelectionState[change.id] !== false)),
     clearSections: groupNotificationChangesBySection(notificationChanges.filter(change => _previewSelectionState[change.id] === false)),
@@ -11025,31 +10961,33 @@ function renderPreviewModal(preview, options = {}) {
   _previewModalState = preview;
   if (!options.preserveSelection) {
     _previewSelectionState = Object.fromEntries((preview.notificationChanges || []).map(change => [change.id, true]));
+    _previewNotifyEnabled = !!preview.hasNotificationChanges;
   }
   content.innerHTML = '';
-  const isSendOnly = preview.mode === 'send' || preview.mode === 'update-only';
-  const decisionGroups = buildPreviewDecisionGroups(preview);
+  const notifyEnabled = !!preview.hasNotificationChanges && !!_previewNotifyEnabled;
+  const decisionGroups = buildPreviewDecisionGroups(preview, notifyEnabled);
   if (subtitle) {
-    subtitle.textContent = isSendOnly
-      ? 'These changes are already live. Checked rows will send now, and unchecked rows will clear without sending.'
-      : (preview.hasNotificationChanges
-          ? 'Checked rows will send now, unchecked rows will clear without sending, and quiet changes will save live only.'
-          : 'These changes will save live without sending notifications.');
+    subtitle.textContent = preview.hasNotificationChanges
+      ? 'Review what will be saved, then choose whether this save should notify channels.'
+      : 'Review what will be saved live without sending notifications.';
   }
-  saveMenuBtn.style.display = isSendOnly ? 'none' : '';
-  saveMenuBtn.disabled = !preview.hasLocalDraft;
-  saveMenuBtn.textContent = preview.hasNotificationChanges ? 'Save Quietly' : 'Save';
-  saveSendBtn.style.display = preview.hasNotificationChanges ? '' : 'none';
-  saveSendBtn.textContent = isSendOnly ? 'Send' : 'Save & Send';
-  saveSendBtn.disabled = !preview.hasNotificationChanges;
+  saveMenuBtn.style.display = 'none';
+  saveMenuBtn.disabled = true;
+  saveSendBtn.style.display = '';
+  saveSendBtn.textContent = notifyEnabled ? 'Save & Send' : 'Save';
+  saveSendBtn.disabled = !preview.hasChanges;
   if (!preview.hasChanges) {
     content.innerHTML = `<div class="no-changes">🎉 No changes since the last update.<br><span style="font-size:11px;color:#444;">Add, remove, or 86 items to generate an update.</span></div>`;
     saveMenuBtn.disabled = true;
     saveSendBtn.disabled = true;
   } else {
+    const notifySelector = preview.hasNotificationChanges
+      ? `<label class="preview-notify-toggle"><input id="preview-notify-toggle" type="checkbox" ${notifyEnabled ? 'checked' : ''} onchange="setPreviewNotifyEnabled(this.checked)"/><span>Notify channels for selected update rows</span></label>`
+      : `<div class="preview-group-title">This save has no notification-ready rows.</div>`;
     content.innerHTML = [
-      renderPreviewSectionGroup('Will Send', decisionGroups.selectedSections, { selectable: true }),
-      renderPreviewSectionGroup('Will Clear Without Sending', decisionGroups.clearSections, { selectable: true }),
+      notifySelector,
+      renderPreviewSectionGroup('Will Send', decisionGroups.selectedSections, { selectable: notifyEnabled }),
+      renderPreviewSectionGroup(notifyEnabled ? 'Will Save Without Notification' : 'Will Save Without Notification', decisionGroups.clearSections, { selectable: notifyEnabled }),
       decisionGroups.saveOnlyChanges.length
         ? `<div class="preview-block">${buildSaveOnlyPreviewBlockHtml(decisionGroups.saveOnlyChanges).replace('Quiet Live Changes', 'Will Save Only')}</div>`
         : '',
@@ -11097,6 +11035,11 @@ function closeModal() {
 
 function setPreviewChangeSelected(changeId, checked) {
   _previewSelectionState[changeId] = !!checked;
+  if (_previewModalState) renderPreviewModal(_previewModalState, { preserveSelection: true });
+}
+
+function setPreviewNotifyEnabled(checked) {
+  _previewNotifyEnabled = !!checked;
   if (_previewModalState) renderPreviewModal(_previewModalState, { preserveSelection: true });
 }
 
@@ -11167,9 +11110,7 @@ function setPreviewModalActionState(mode = '') {
   if (cancelBtn) cancelBtn.disabled = isBusy;
   if (saveMenuBtn) {
     saveMenuBtn.disabled = isBusy;
-    saveMenuBtn.textContent = mode === 'save-menu'
-      ? 'Saving…'
-      : ((_previewModalState?.hasNotificationChanges ? 'Save Quietly' : 'Save'));
+    saveMenuBtn.textContent = 'Save';
   }
   if (saveSendBtn) {
     saveSendBtn.disabled = isBusy;
@@ -11177,7 +11118,7 @@ function setPreviewModalActionState(mode = '') {
       ? 'Sending…'
       : (mode === 'save-send'
           ? 'Saving & Sending…'
-          : (((_previewModalState?.mode === 'send') || (_previewModalState?.mode === 'update-only')) ? 'Send' : 'Save & Send'));
+          : (_previewNotifyEnabled && _previewModalState?.hasNotificationChanges ? 'Save & Send' : 'Save'));
   }
 }
 
@@ -11220,10 +11161,11 @@ async function sendUpdate(options = {}) {
     showToast('Update is long and will be truncated.', 'info');
   }
 
-  const selectedChangeIds = getSelectedPreviewChangeIds();
-  const intent = options.notify === false
-    ? 'save'
-    : ((preview.mode === 'send' || preview.mode === 'update-only') ? 'send' : 'save-and-send');
+  const notify = typeof options.notify === 'boolean'
+    ? options.notify
+    : (!!preview.hasNotificationChanges && !!_previewNotifyEnabled);
+  const selectedChangeIds = notify ? getSelectedPreviewChangeIds() : [];
+  const intent = notify ? (preview.hasLocalDraft ? 'save-and-send' : 'send') : 'save';
   setPreviewModalActionState(intent === 'save' ? 'save-menu' : (intent === 'send' ? 'send-update' : 'save-send'));
 
   try {

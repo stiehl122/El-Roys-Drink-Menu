@@ -88,11 +88,12 @@ Use it to answer three questions:
 | Capability | Web | iOS | Future-Client Target | Notes |
 | --- | --- | --- | --- | --- |
 | Menu editor workspace | Full | Full | Staff editor clients | Both clients expose a dedicated menu editor for Drinks and Food. |
-| Menu status (`Drafting`, `Live`, `Live \| Unsent`) | Full | Full | Staff editor clients | Both clients surface the shared save/send model. |
+| Menu status (`Drafting`, `Live`) | Full | Full | Staff editor clients | Both clients now avoid a persistent unsent state; saved menus are either drafting locally or live. |
 | Device-local drafts | Full | Full | Staff editor clients | Both keep local drafts separate from the shared server queue. |
 | Discard local draft | Full | Full | Staff editor clients | Explicit local-only discard flow exists in both clients. |
-| Save quietly / live save | Full | Full | Staff editor clients | Both support quiet live saves without sending notifications. |
-| Send preview and selective send | Full | Full | Staff editor clients | Both can preview grouped changes and select which ones to send. |
+| Unified save review | Full | Full | Staff editor clients | Both clients use one Save action that opens a review modal/sheet before persisting live. |
+| Optional notification during save | Full | Full | Staff editor clients | The save review lets staff choose whether selected notification-ready rows should notify channels; notify-off saves live and clears the queue baseline. |
+| Send preview and selective send | Full | Full | Staff editor clients | Both can preview grouped changes and select which rows notify during the unified save flow. |
 | Remote change detection and conflict refresh | Full | Full | Staff editor clients | Both clients detect remote changes and force review/reload when needed. |
 | Recent change history | Full | Full | Staff editor clients | Web has manager recent changes/history views; iOS surfaces recent updates in home and restaurant tools. |
 | Add items manually | Full | Full | Staff editor clients | Both can create new items from the editor. |

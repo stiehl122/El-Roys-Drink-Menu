@@ -48,8 +48,7 @@ struct MenuEditorScreen: View {
             theme: theme,
             menuAccent: menuAccent,
             onAddItem: presentNewItem,
-            onSaveQuietly: saveQuietly,
-            onSendUpdate: loadSendPreview,
+            onSave: loadSavePreview,
             onDiscardDraft: { showingDiscardDraftConfirm = true }
           )
 
@@ -164,7 +163,9 @@ struct MenuEditorScreen: View {
             preview: preview,
             theme: theme,
             menuAccent: menuAccent,
-            onPublish: publishChanges
+            onPublish: { shouldNotify in
+              publishChanges(shouldNotify: shouldNotify)
+            }
           )
         } else {
           ProgressView("Loading preview…")
@@ -197,20 +198,16 @@ struct MenuEditorScreen: View {
     }
   }
 
-  private func saveQuietly() {
-    Task { await session.saveLiveMenu() }
-  }
-
-  private func loadSendPreview() {
+  private func loadSavePreview() {
     Task {
       await session.loadPublishPreview()
       activeSheet = session.preview == nil ? nil : .publishPreview
     }
   }
 
-  private func publishChanges() {
+  private func publishChanges(shouldNotify: Bool) {
     Task {
-      await session.publishSelectedChanges()
+      await session.publishSelectedChanges(shouldNotify: shouldNotify)
       activeSheet = nil
     }
   }
@@ -308,16 +305,17 @@ struct PublishPreviewSummary: Equatable {
 
 private struct PublishPreviewSheet: View {
   @Environment(\.dismiss) private var dismiss
+  @State private var shouldNotify = true
   @Bindable var session: MenuEditorSession
   let preview: MenuPreviewPayload
   let theme: MenuEditorTheme
   let menuAccent: Color
-  let onPublish: () -> Void
+  let onPublish: (Bool) -> Void
 
   private var summary: PublishPreviewSummary {
     PublishPreviewSummary(
       preview: preview,
-      selectedChangeIDs: session.selectedPreviewChangeIDs
+      selectedChangeIDs: shouldNotify ? session.selectedPreviewChangeIDs : []
     )
   }
 
@@ -335,8 +333,21 @@ private struct PublishPreviewSheet: View {
           }
 
           if preview.hasNotificationChanges {
+            Toggle(isOn: $shouldNotify) {
+              VStack(alignment: .leading, spacing: 4) {
+                Text("Send Notifications")
+                  .font(EditorTypography.body(15, weight: .bold))
+                  .foregroundStyle(theme.titleText)
+                Text(shouldNotify ? "Checked rows will notify. Unchecked rows save quietly." : "All notification-ready rows will be saved quietly.")
+                  .font(EditorTypography.body(12, weight: .medium))
+                  .foregroundStyle(theme.subtleText)
+              }
+            }
+            .tint(menuAccent)
+            .menuEditorSurface(colors: [theme.panelTop, theme.panelBottom], border: theme.panelBorder)
+
             VStack(alignment: .leading, spacing: 10) {
-              Text("Notification Toggles")
+              Text("Notification Rows")
                 .font(EditorTypography.body(15, weight: .bold))
                 .foregroundStyle(theme.titleText)
               ForEach(preview.sections) { section in
@@ -354,6 +365,8 @@ private struct PublishPreviewSheet: View {
                         .foregroundStyle(theme.bodyText)
                     }
                     .tint(menuAccent)
+                    .disabled(!shouldNotify)
+                    .opacity(shouldNotify ? 1 : 0.55)
                   }
                 }
               }
@@ -363,7 +376,7 @@ private struct PublishPreviewSheet: View {
 
           if !currentSummary.selectedNotificationChanges.isEmpty {
             PublishPreviewSummaryCard(
-              title: "Changes To Send In Notification",
+              title: "Changes To Send",
               items: currentSummary.selectedNotificationChanges.map(\.displayText),
               theme: theme
             )
@@ -371,7 +384,7 @@ private struct PublishPreviewSheet: View {
 
           if !currentSummary.clearedNotificationChanges.isEmpty {
             PublishPreviewSummaryCard(
-              title: "Changes To Clear",
+              title: "Notification Rows To Save Without Notification",
               items: currentSummary.clearedNotificationChanges.map(\.displayText),
               theme: theme
             )
@@ -379,8 +392,14 @@ private struct PublishPreviewSheet: View {
 
           if !currentSummary.saveOnlyChanges.isEmpty {
             PublishPreviewSummaryCard(
-              title: "Save Only Changes",
+              title: "Other Changes To Save",
               items: currentSummary.saveOnlyChanges.map { $0.label.nilIfBlank ?? $0.message },
+              theme: theme
+            )
+          } else if !preview.hasNotificationChanges {
+            PublishPreviewSummaryCard(
+              title: "Live Save",
+              items: ["The current menu changes will be saved live without sending notifications."],
               theme: theme
             )
           }
@@ -399,7 +418,7 @@ private struct PublishPreviewSheet: View {
           accent: menuAccent,
           theme: theme,
           enabled: session.canPublishRemotely,
-          action: onPublish
+          action: { onPublish(shouldNotify && preview.hasNotificationChanges) }
         )
         .padding(.horizontal, 24)
         .padding(.top, 12)
@@ -421,28 +440,25 @@ private struct PublishPreviewSheet: View {
   }
 
   private var screenTitle: String {
-    preview.hasNotificationChanges ? "Send Notification" : "Save Changes"
+    "Save Preview"
   }
 
   private var actionButtonTitle: String {
-    if !preview.hasNotificationChanges {
-      return "Save"
-    }
-    return session.hasLocalDraftChanges ? "Save & Send" : "Send"
+    "Save"
   }
 
   private var actionButtonSubtitle: String {
     if !preview.hasNotificationChanges {
       return "Save live without sending notifications."
     }
-    if session.hasLocalDraftChanges {
-      return "Checked rows send now, unchecked rows clear quietly."
+    if shouldNotify {
+      return "Checked rows notify, unchecked rows save quietly."
     }
-    return "Send checked queue rows now."
+    return "Save live and clear notification rows without sending."
   }
 
   private var actionButtonIcon: String {
-    preview.hasNotificationChanges ? "paperplane.fill" : "square.and.arrow.down.fill"
+    shouldNotify && preview.hasNotificationChanges ? "paperplane.fill" : "square.and.arrow.down.fill"
   }
 }
 
@@ -632,8 +648,7 @@ private struct MenuEditorActionPanel: View {
   let theme: MenuEditorTheme
   let menuAccent: Color
   let onAddItem: () -> Void
-  let onSaveQuietly: () -> Void
-  let onSendUpdate: () -> Void
+  let onSave: () -> Void
   let onDiscardDraft: () -> Void
 
   var body: some View {
@@ -647,28 +662,16 @@ private struct MenuEditorActionPanel: View {
           MenuEditorActionLabel(title: "Add Item", subtitle: "Create a new menu item", icon: "plus.circle.fill", accent: menuAccent)
         }
         .buttonStyle(.plain)
-        Button(action: onSaveQuietly) {
-          MenuEditorActionLabel(
-            title: "Save Quietly",
-            subtitle: session.hasLiveMenuChanges ? "Save live without sending notifications" : "Live menu already matches",
-            icon: "checkmark.seal.fill",
-            accent: theme.successAccent
-          )
-        }
-        .buttonStyle(.plain)
-        .disabled(!session.canSaveQuietlyRemotely)
       }
 
       HStack(spacing: 12) {
-        Button(action: onSendUpdate) {
+        Button(action: onSave) {
           MenuEditorActionLabel(
-            title: session.hasLocalDraftChanges ? "Save & Send" : "Send",
+            title: "Save",
             subtitle: session.preview == nil
-              ? (session.hasLocalDraftChanges
-                  ? "Save live, then choose what to send or clear"
-                  : "Choose which unsent queue groups to send or clear")
-              : "Review the current send plan",
-            icon: "paperplane.fill",
+              ? "Preview what will save and choose notification options"
+              : "Review the current save plan",
+            icon: "square.and.arrow.down.fill",
             accent: menuAccent
           )
         }

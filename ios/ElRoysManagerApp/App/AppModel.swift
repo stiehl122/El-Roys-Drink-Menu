@@ -178,7 +178,7 @@ final class AppModel {
     if hasLocalDraftChanges {
       return "Drafting"
     }
-    return hasServerUnsentChanges ? "Live | Unsent" : "Live"
+    return "Live"
   }
 
   var canMutateRemoteEditorState: Bool {
@@ -189,14 +189,10 @@ final class AppModel {
     canMutateRemoteEditorState && hasLocalDraftChanges
   }
 
-  var canSaveQuietlyRemotely: Bool {
+  var canSaveLiveRemotely: Bool {
     canMutateRemoteEditorState &&
       (editorCapabilities?.canSaveLiveMenu ?? false) &&
       hasLiveMenuChanges
-  }
-
-  var canSaveLiveRemotely: Bool {
-    canSaveQuietlyRemotely
   }
 
   var canLoadPublishPreview: Bool {
@@ -499,7 +495,7 @@ final class AppModel {
           let workspace = currentEditorWorkspace,
           let snapshot = editorSnapshot() else { return }
 
-    let operationLabel = hasLiveMenuChanges ? "Building Save & Send Preview" : "Building Send Preview"
+    let operationLabel = "Building Save Preview"
     await run(operationLabel) { model in
       let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
       let expectedNotificationRevision = model.expectedNotificationBaselineRevision(for: workspace)
@@ -518,14 +514,14 @@ final class AppModel {
     }
   }
 
-  func publishSelectedChanges() async {
+  func publishSelectedChanges(shouldNotify: Bool = true) async {
     guard canPublishRemotely,
           let menuId = currentMenuId,
           let accessToken = authSession?.accessToken,
           let workspace = currentEditorWorkspace,
           let snapshot = editorSnapshot() else { return }
 
-    let operationLabel = hasLiveMenuChanges ? "Saving And Sending" : "Sending Updates"
+    let operationLabel = "Saving"
     await run(operationLabel) { model in
       let expectedDraftRevision = model.expectedDraftRevision(for: workspace)
       let expectedNotificationRevision = model.expectedNotificationBaselineRevision(for: workspace)
@@ -548,7 +544,7 @@ final class AppModel {
         }
       }
 
-      let selection = Array(model.selectedPreviewChangeIDs)
+      let selection = shouldNotify ? Array(model.selectedPreviewChangeIDs) : []
       let response = try await model.services.publish.publish(
         menuId: menuId,
         snapshot: snapshot,
@@ -560,15 +556,16 @@ final class AppModel {
         source: "ios_app"
       )
       let hasNotificationChanges = preview?.hasNotificationChanges ?? false
-      var title = "Saved Quietly"
-      var message = "The live menu was saved with no notification-ready queue items."
+      var title = "Saved"
+      var message = "The live menu was saved without sending notifications."
       if hasNotificationChanges {
-        if selection.isEmpty {
-          title = model.hasLiveMenuChanges ? "Saved And Cleared" : "Queue Cleared"
-          message = "Unchecked queue groups were cleared without sending notifications."
+        if !shouldNotify {
+          message = "Notification-ready changes were saved live and cleared without sending."
+        } else if selection.isEmpty {
+          message = "Unchecked notification rows were saved live without sending."
         } else {
-          title = model.hasLiveMenuChanges ? "Saved And Sent" : "Sent"
-          message = "Selected queue groups were sent to notification channels."
+          title = "Saved And Sent"
+          message = "Selected notification rows were sent. Unchecked rows were saved without notification."
         }
       }
       if let successMessage = response.successMessage?.nilIfBlank {
@@ -892,7 +889,6 @@ final class AppModel {
     session.hasServerUnsentChanges = editorHasServerUnsentChanges
     session.canEditCategories = canEditCategories
     session.canDiscardLocalDraft = canDiscardLocalDraft
-    session.canSaveQuietlyRemotely = canSaveQuietlyRemotely
     session.canLoadPublishPreview = canLoadPublishPreview
     session.canPublishRemotely = canPublishRemotely
     session.menuStatusLabel = menuStatusLabel
@@ -1102,8 +1098,6 @@ final class AppModel {
   ) {
     guard var workspace = currentEditorWorkspace else { return }
 
-    let previousNotificationBaseline = expectedNotificationBaselineRevision(for: previousWorkspace)
-    let previousLiveRevision = previousWorkspace.workspace.revisions.liveRevision
     let publishMode = preview?.mode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
     let didPersistLive = publishMode.isEmpty ? hasLiveMenuChanges : publishMode != "send"
 
@@ -1141,20 +1135,8 @@ final class AppModel {
     nextDocument.meta.draftSavedByName = nil
     nextDocument.meta.draftSavedSource = nil
 
-    let nextNotificationBaseline = expectedNotificationBaselineRevision(for: workspace)
-    let queueBaselineAdvanced = nextNotificationBaseline != previousNotificationBaseline
-    let nextHasUnsentChanges: Bool
-    if queueBaselineAdvanced {
-      nextHasUnsentChanges = false
-    } else if preview?.hasNotificationChanges == true {
-      nextHasUnsentChanges = true
-    } else if didPersistLive, nextRevisions.liveRevision != previousLiveRevision {
-      nextHasUnsentChanges = false
-    } else {
-      nextHasUnsentChanges = serverHasUnsentChanges(in: previousWorkspace)
-    }
-    workspace.workspace.hasUnsentChanges = nextHasUnsentChanges
-    workspace.workspace.menuStatus = nextHasUnsentChanges ? "Live | Unsent" : "Live"
+    workspace.workspace.hasUnsentChanges = false
+    workspace.workspace.menuStatus = "Live"
 
     currentEditorWorkspace = workspace
     currentEditorDocument = nextDocument

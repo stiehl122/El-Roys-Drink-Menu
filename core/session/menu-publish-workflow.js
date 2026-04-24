@@ -85,7 +85,7 @@
         const auditResults = [];
         const metaResults = [];
         let livePersisted = false;
-        const baselineAdvancedIntent = command.intent === 'send' || command.intent === 'save-and-send';
+        const shouldNotify = (command.intent === 'send' || command.intent === 'save-and-send') && selection.selectedSections.length > 0;
         let baselineAdvanced = false;
         const menuName = context.knownMenu?.name || 'Menu';
         const lastSentState = preview.metadata?.lastSentState && typeof preview.metadata.lastSentState === 'object'
@@ -110,7 +110,7 @@
           retryable: false,
         };
 
-        if ((command.intent === 'send' || command.intent === 'save-and-send') && selection.selectedSections.length) {
+        if (shouldNotify) {
           notification = {
             attempted: true,
             ...(await ports.notifications.deliver({
@@ -133,21 +133,9 @@
             operationId,
             eventType: 'send_failed',
             sections: selection.selectedSections,
-            message: 'Notification delivery failed or was partial. Queue preserved.',
+            message: 'Notification delivery failed or was partial. Changes were saved live without preserving a send queue.',
           }));
           auditEventTypes.push('send_failed');
-          metaResults.push(await ports.menus.patchMeta({
-            menuId: command.menuId,
-            patch: {
-              last_updated_ts: livePersisted ? ts : (context.meta?.last_updated_ts || null),
-              draft_state: livePersisted ? {} : (context.meta?.draft_state || {}),
-              draft_saved_ts: livePersisted ? null : (context.meta?.draft_saved_ts || null),
-              draft_saved_by_user_id: livePersisted ? null : (context.meta?.draft_saved_by_user_id ?? undefined),
-              draft_saved_by_name: livePersisted ? '' : (context.meta?.draft_saved_by_name ?? undefined),
-              draft_saved_source: livePersisted ? '' : (context.meta?.draft_saved_source ?? undefined),
-            },
-            optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
-          }));
         } else {
           if (command.intent === 'save') {
             auditResults.push(await ports.audit.append({
@@ -157,26 +145,10 @@
               operationId,
               eventType: 'quiet_save',
               sections: selection.selectedSections,
-              message: preview.hasNotificationChanges ? 'Saved live quietly. Queue preserved.' : 'Saved live quietly.',
+              message: preview.hasNotificationChanges ? 'Saved live without sending notifications.' : 'Saved live quietly.',
             }));
             auditEventTypes.push('quiet_save');
           }
-          baselineAdvanced = baselineAdvancedIntent;
-          metaResults.push(await ports.menus.patchMeta({
-            menuId: command.menuId,
-            patch: {
-              last_updated_ts: livePersisted ? ts : (context.meta?.last_updated_ts || null),
-              last_sent_ts: baselineAdvanced ? ts : (context.meta?.last_sent_ts || null),
-              last_sent_state: baselineAdvanced ? lastSentState : (context.meta?.last_sent_state || {}),
-              last_sent_categories: baselineAdvanced ? (preview.diff || []).map(section => section.id) : (context.meta?.last_sent_categories || []),
-              draft_state: livePersisted ? {} : (context.meta?.draft_state || {}),
-              draft_saved_ts: livePersisted ? null : (context.meta?.draft_saved_ts || null),
-              draft_saved_by_user_id: livePersisted ? null : (context.meta?.draft_saved_by_user_id ?? undefined),
-              draft_saved_by_name: livePersisted ? '' : (context.meta?.draft_saved_by_name ?? undefined),
-              draft_saved_source: livePersisted ? '' : (context.meta?.draft_saved_source ?? undefined),
-            },
-            optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
-          }));
           if (selection.selectedSections.length && notification.attempted && notification.delivered) {
             auditResults.push(await ports.audit.append({
               menuId: command.menuId,
@@ -207,11 +179,30 @@
           }
         }
 
+        baselineAdvanced = true;
+        metaResults.push(await ports.menus.patchMeta({
+          menuId: command.menuId,
+          patch: {
+            last_updated_ts: livePersisted ? ts : (context.meta?.last_updated_ts || null),
+            last_sent_ts: ts,
+            last_sent_state: lastSentState,
+            last_sent_categories: (preview.diff || []).map(section => section.id),
+            draft_state: livePersisted ? {} : (context.meta?.draft_state || {}),
+            draft_saved_ts: livePersisted ? null : (context.meta?.draft_saved_ts || null),
+            draft_saved_by_user_id: livePersisted ? null : (context.meta?.draft_saved_by_user_id ?? undefined),
+            draft_saved_by_name: livePersisted ? '' : (context.meta?.draft_saved_by_name ?? undefined),
+            draft_saved_source: livePersisted ? '' : (context.meta?.draft_saved_source ?? undefined),
+          },
+          optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
+        }));
+
         let successMessage = `✅ ${menuName} saved live.`;
         if (notification.attempted && notification.delivered && baselineAdvanced) {
           successMessage = `✅ ${menuName} saved and sent!`;
+        } else if (notification.attempted && !notification.delivered) {
+          successMessage = `✅ ${menuName} saved live. Notifications need attention.`;
         } else if (command.intent === 'send' && !notification.attempted) {
-          successMessage = `✅ ${menuName} send skipped.`;
+          successMessage = `✅ ${menuName} saved live without sending notifications.`;
         }
 
         return {

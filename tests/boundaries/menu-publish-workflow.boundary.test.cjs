@@ -200,7 +200,7 @@ test('workflow execute advances queue baseline after successful send', async () 
   assert.ok(result.audit.loggedEvents.includes('send_notification'));
 });
 
-test('workflow preserves queue when notification delivery is partial', async () => {
+test('workflow advances queue baseline when notification delivery is partial', async () => {
   const patchCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();
   const workflow = createMenuPublishWorkflow({
@@ -233,10 +233,13 @@ test('workflow preserves queue when notification delivery is partial', async () 
 
   assert.equal(result.ok, true);
   assert.equal(result.notification.partial, true);
-  assert.equal(result.queue.baselineAdvanced, false);
+  assert.equal(result.queue.baselineAdvanced, true);
   assert.ok(result.userOutcome.warnings.some(message => message.includes('failed')));
   assert.deepEqual(patchCalls[0].patch, {
     last_updated_ts: 1000,
+    last_sent_ts: 1000,
+    last_sent_state: DEFAULT_LAST_SENT_STATE,
+    last_sent_categories: ['beer'],
     draft_state: {},
     draft_saved_ts: null,
     draft_saved_by_user_id: null,
@@ -292,7 +295,7 @@ test('workflow send without selected sections does not claim it sent notificatio
 
   assert.equal(result.ok, true);
   assert.equal(result.notification.attempted, false);
-  assert.equal(result.userOutcome.successMessage, '✅ Main Menu send skipped.');
+  assert.equal(result.userOutcome.successMessage, '✅ Main Menu saved live without sending notifications.');
 });
 
 test('workflow forwards legacy selected sections into preview selection resolution', async () => {
