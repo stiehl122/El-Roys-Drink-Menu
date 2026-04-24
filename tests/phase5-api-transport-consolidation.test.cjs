@@ -28,7 +28,7 @@ test('consolidated api routes consume shared supabase transport helper', () => {
   assert.match(manager, /from '\.\.\/server\/_request\.js'/);
   assert.doesNotMatch(manager, /function\s+serviceHeaders\s*\(/);
   assert.doesNotMatch(manager, /function\s+readJsonSafe\s*\(/);
-  assert.doesNotMatch(manager, /SUPABASE_SERVICE_ROLE_KEY.*SUPABASE_SERVICE_ROLE_KEY/s);
+  assert.doesNotMatch(manager, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.doesNotMatch(manager, /queryAction/);
   assert.doesNotMatch(manager, /action\s*===\s*'migrate'/);
 });
@@ -43,5 +43,5 @@ test('manager route composes shared authorization and delivery boundaries', () =
   assert.match(notify, /from '\.\.\/server\/_auth\.js'/);
   assert.match(notify, /from '\.\.\/server\/_request\.js'/);
   assert.doesNotMatch(notify, /serviceHeaders\s*\(/);
-  assert.doesNotMatch(notify, /SUPABASE_SERVICE_ROLE_KEY.*SUPABASE_SERVICE_ROLE_KEY/s);
+  assert.doesNotMatch(notify, /SUPABASE_SERVICE_ROLE_KEY/);
 });

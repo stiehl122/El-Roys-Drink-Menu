@@ -4962,7 +4962,8 @@ function compareCanonicalCategoryOrder(left = {}, right = {}) {
 }
 
 function compareCanonicalItemOrder(left = {}, right = {}) {
-  const displayDelta = canonicalNumericDisplayOrder(left?.display_order) - canonicalNumericDisplayOrder(right?.display_order);
+  const displayDelta = canonicalNumericDisplayOrder(left?.display_order ?? left?.displayOrder) -
+    canonicalNumericDisplayOrder(right?.display_order ?? right?.displayOrder);
   if (displayDelta !== 0) return displayDelta;
 
   const idDelta = canonicalCompareText(left?.id, right?.id);

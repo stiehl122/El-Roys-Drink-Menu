@@ -40,6 +40,13 @@ function createPersistedDraftItem(id, name, displayOrder) {
   };
 }
 
+function createCamelPersistedDraftItem(id, name, displayOrder) {
+  const item = createPersistedDraftItem(id, name, displayOrder);
+  delete item.display_order;
+  item.displayOrder = displayOrder;
+  return item;
+}
+
 test('reordering manager items creates a saveable quiet draft change', () => {
   const sandbox = loadAppSandbox();
   const alpha = createMenuItem('alpha', 'Alpha');
@@ -187,6 +194,73 @@ test('applyPersistedDraftState canonicalizes tied draft items without false dirt
   assert.deepEqual(
     getState(sandbox, 'JSON.parse(JSON.stringify(menuState.beer.items.map(item => item.id)))'),
     ['item-c', 'item-a', 'item-b'],
+  );
+  assert.equal(getState(sandbox, 'hasActualLocalDraftChanges()'), false);
+});
+
+test('dirty comparison honors camel-case displayOrder before canonical reindexing', () => {
+  const sandbox = loadAppSandbox();
+  const displayOrderItems = [
+    createPersistedDraftItem('item-b', 'Bordeaux', 0),
+    createPersistedDraftItem('item-a', 'Albarino', 1),
+  ];
+  const camelDisplayOrderItems = [
+    createCamelPersistedDraftItem('item-a', 'Albarino', 1),
+    createCamelPersistedDraftItem('item-b', 'Bordeaux', 0),
+  ];
+
+  setState(sandbox, {
+    CATEGORY_DEFS: [],
+    menuState: {},
+    currentUser: { uid: 'manager-1' },
+    MENU_ID: 'menu-1',
+  });
+
+  setState(sandbox, {
+    __baseDraftSnapshot: {
+      cats: [{
+        id: 'cat-beer',
+        key: 'beer',
+        label: 'Beer',
+        icon: '',
+        color: '',
+        sub: '',
+        placeholder: '',
+        untappd_enabled: false,
+        display_order: 0,
+        items: camelDisplayOrderItems,
+      }],
+      meta: {},
+      restaurant: null,
+      featured_groups: [],
+      save_only_changes: [],
+    },
+    __resumedDraftSnapshot: {
+      cats: [{
+        id: 'cat-beer',
+        key: 'beer',
+        label: 'Beer',
+        icon: '',
+        color: '',
+        sub: '',
+        placeholder: '',
+        untappd_enabled: false,
+        display_order: 0,
+        items: displayOrderItems,
+      }],
+      meta: {},
+      restaurant: null,
+      featured_groups: [],
+      save_only_changes: [],
+    },
+  });
+
+  getState(sandbox, 'setLocalDraftBaseSnapshot(__baseDraftSnapshot);');
+  assert.equal(getState(sandbox, 'applyPersistedDraftState(__resumedDraftSnapshot)'), true);
+
+  assert.deepEqual(
+    getState(sandbox, 'JSON.parse(JSON.stringify(menuState.beer.items.map(item => item.id)))'),
+    ['item-b', 'item-a'],
   );
   assert.equal(getState(sandbox, 'hasActualLocalDraftChanges()'), false);
 });
