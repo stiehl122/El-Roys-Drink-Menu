@@ -239,17 +239,18 @@ function colorAt(palette, index) {
 
 function buildDefaultCategoryDefs(palette) {
   return [
+    { id: 'featured_specials', icon: '⭐', color: colorAt(palette, 3), title: 'Featured Specials', sub: 'Limited pours, specials, and deal items', placeholder: 'e.g. Happy Hour Margarita...', untappdEnabled: false },
     { id: 'beer', icon: '🍺', color: colorAt(palette, 0), title: 'Beers on Tap', sub: 'Current draft offerings', placeholder: 'e.g. Modelo Especial...', untappdEnabled: false },
     { id: 'canned', icon: '🍻', color: colorAt(palette, 4), title: 'Canned & Bottled', sub: 'Canned & bottled offerings', placeholder: 'e.g. Modelo Especial (can), Topo Chico...', untappdEnabled: false },
     { id: 'cocktails', icon: '🍹', color: colorAt(palette, 5), title: 'Cocktails', sub: 'Craft cocktail offerings', placeholder: 'e.g. Paloma, Spicy Margarita...', untappdEnabled: false },
     { id: 'tequila', icon: '🌶️', color: colorAt(palette, 1), title: 'Infused Tequila', sub: 'Rotating infused marg tequila', placeholder: 'e.g. Jalapeño-Pineapple Blanco...', untappdEnabled: false },
     { id: 'frozen', icon: '🧊', color: colorAt(palette, 2), title: 'Frozen Marg', sub: 'Current frozen margarita flavor', placeholder: 'e.g. Strawberry Basil...', untappdEnabled: false },
-    { id: 'special', icon: '⭐', color: colorAt(palette, 3), title: 'Monthly Specials', sub: 'Featured cocktails & promos', placeholder: 'e.g. The Valentina — raspberry, grapefruit...', untappdEnabled: false },
   ];
 }
 
 function buildDefaultFoodCategoryDefs(palette) {
   return [
+    { key: 'featured_specials', label: '⭐ Featured Specials', icon: '⭐', color: colorAt(palette, 3), sub: 'Limited dishes and deal items', placeholder: 'e.g. Taco Tuesday Plate...', untappdEnabled: false },
     { key: 'starters', label: '🥗 Starters', icon: '🥗', color: colorAt(palette, 4), sub: '', placeholder: 'e.g. Chips & Salsa...', untappdEnabled: false },
     { key: 'tacos', label: '🌮 Tacos', icon: '🌮', color: colorAt(palette, 0), sub: '', placeholder: 'e.g. Al Pastor...', untappdEnabled: false },
     { key: 'entrees', label: '🍽 Entrees', icon: '🍽', color: colorAt(palette, 1), sub: '', placeholder: 'e.g. Enchiladas...', untappdEnabled: false },
@@ -257,6 +258,17 @@ function buildDefaultFoodCategoryDefs(palette) {
     { key: 'desserts', label: '🍮 Desserts', icon: '🍮', color: colorAt(palette, 3), sub: '', placeholder: 'e.g. Flan...', untappdEnabled: false },
   ];
 }
+
+const FEATURED_SPECIALS_DOMAIN = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const FEATURED_SPECIALS_CATEGORY_ID = FEATURED_SPECIALS_DOMAIN.FEATURED_SPECIALS_CATEGORY_ID || 'featured_specials';
+const ensureFeaturedSpecialsCategory = typeof FEATURED_SPECIALS_DOMAIN.ensureFeaturedSpecialsCategory === 'function'
+  ? FEATURED_SPECIALS_DOMAIN.ensureFeaturedSpecialsCategory
+  : (cats => (Array.isArray(cats) ? cats : []));
+const normalizeFeaturedSpecialsLastSentState = typeof FEATURED_SPECIALS_DOMAIN.normalizeFeaturedSpecialsLastSentState === 'function'
+  ? FEATURED_SPECIALS_DOMAIN.normalizeFeaturedSpecialsLastSentState
+  : (lastSentState => lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState) ? { ...lastSentState } : {});
 
 // Reserved key for items orphaned by category deletion — never rendered in UI
 const UNCATEGORIZED_ID = '__uncategorized__';
@@ -787,18 +799,11 @@ function alignDraftDocumentSnapshotWithLiveSnapshot(snapshot = null, liveSnapsho
   if (!nextSnapshot) return null;
 
   const normalizedLiveSnapshot = normalizeDraftDocumentSnapshot(liveSnapshot);
-  const liveFeaturedGroups = Array.isArray(normalizedLiveSnapshot.featured_groups)
-    ? cloneJsonCompatible(normalizedLiveSnapshot.featured_groups, [])
-    : [];
   const liveSaveOnlyChanges = Array.isArray(normalizedLiveSnapshot.save_only_changes)
     ? cloneJsonCompatible(normalizedLiveSnapshot.save_only_changes, [])
     : [];
-  const hasFeaturedGroups = Array.isArray(nextSnapshot.featured_groups);
   const hasSaveOnlyChanges = Array.isArray(nextSnapshot.save_only_changes) || Array.isArray(nextSnapshot.saveOnlyChanges);
 
-  if (!hasFeaturedGroups || (!nextSnapshot.featured_groups.length && liveFeaturedGroups.length)) {
-    nextSnapshot.featured_groups = liveFeaturedGroups;
-  }
   if (!hasSaveOnlyChanges) {
     nextSnapshot.save_only_changes = liveSaveOnlyChanges;
   }
@@ -1058,6 +1063,15 @@ function isLegacySpecialCategory(catOrId) {
   return id === 'special';
 }
 
+function isProtectedSystemCategory(catId = '') {
+  return catId === FEATURED_SPECIALS_CATEGORY_ID || catId === UNCATEGORIZED_ID;
+}
+
+function isHiddenPublicCategory(catOrId) {
+  const id = typeof catOrId === 'string' ? catOrId : catOrId?.id;
+  return isProtectedSystemCategory(id) || isLegacySpecialCategory(id);
+}
+
 function getManagedCategoryDefs() {
   return CATEGORY_DEFS.map(cat => (
     isLegacySpecialCategory(cat)
@@ -1075,13 +1089,13 @@ function shouldShowCategoryUntappdControl(category = null) {
   const categoryId = typeof category === 'string' ? category : category?.id;
   return currentUserCanEditCategories() &&
     MENU_TYPE !== 'food' &&
-    categoryId !== UNCATEGORIZED_ID &&
+    !isProtectedSystemCategory(categoryId) &&
     !isLegacySpecialCategory(categoryId);
 }
 
 function categorySupportsUntappdImport(category = null) {
   const categoryId = typeof category === 'string' ? category : category?.id;
-  if (!categoryId || categoryId === UNCATEGORIZED_ID || MENU_TYPE === 'food') return false;
+  if (!categoryId || isProtectedSystemCategory(categoryId) || MENU_TYPE === 'food') return false;
   const categoryDef = typeof category === 'string'
     ? CATEGORY_DEFS.find(candidate => candidate.id === category)
     : category;
@@ -1113,11 +1127,36 @@ function getAddItemModalCategoryDefs() {
   ];
 }
 
+function getPublicCategoryDefs() {
+  return getManagedCategoryDefs().filter(cat => !isHiddenPublicCategory(cat.id));
+}
+
+function getCurrentMenuFeaturedItems() {
+  const featuredSpecials = globalThis.__HF_FEATURED_SPECIALS__ || {};
+  const deriveFeaturedItems = typeof featuredSpecials.deriveFeaturedItems === 'function'
+    ? featuredSpecials.deriveFeaturedItems
+    : null;
+  const categoryDefs = getManagedCategoryDefs();
+  const hasFeaturedCategory = categoryDefs.some(cat => cat.id === FEATURED_SPECIALS_CATEGORY_ID || isLegacySpecialCategory(cat.id));
+  if (deriveFeaturedItems && hasFeaturedCategory) {
+    return deriveFeaturedItems(categoryDefs.map(category => ({
+      key: category.id,
+      items: menuState[category.id]?.items || [],
+    })));
+  }
+  return _featuredGroups
+    .flatMap(group => (group?.slots || []).map(slot => slot?.item))
+    .filter(Boolean);
+}
+
 function getAddItemModalDefaultCategoryId() {
   const categoryDefs = getAddItemModalCategoryDefs();
   const validCategoryIds = new Set(categoryDefs.map(cat => cat.id));
   if (_lastAddItemCategoryId && validCategoryIds.has(_lastAddItemCategoryId)) return _lastAddItemCategoryId;
-  return categoryDefs[0]?.id || UNCATEGORIZED_ID;
+  const preferredCategory = categoryDefs.find(cat => !isHiddenPublicCategory(cat.id) && cat.id !== UNCATEGORIZED_ID);
+  if (preferredCategory?.id) return preferredCategory.id;
+  const fallbackCategory = categoryDefs.find(cat => cat.id !== UNCATEGORIZED_ID);
+  return fallbackCategory?.id || UNCATEGORIZED_ID;
 }
 
 function createAddItemModalFields(overrides = {}) {
@@ -2814,33 +2853,16 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
       if (mode === 'save-and-send' || mode === 'send') {
         const ts = liveSaveTs || sessionPorts.now();
         const lastSentState = sessionPorts.snapshotCurrentItemsAsLastSent();
-        const currentFeaturedIds = sessionPorts.getCurrentFeaturedIds();
-        const restaurantId = sessionPorts.getRestaurantId();
-        const restaurantMenuIds = sessionPorts.canEditRestaurantSpecials(restaurantId)
-          ? sessionPorts.getRestaurantMenuIds(restaurantId)
-          : [];
-        const patchResults = await Promise.all([
-          sessionPorts.patchMenuMeta({
-            last_updated_ts: ts,
-            last_sent_ts: ts,
-            last_sent_state: lastSentState,
-            last_sent_categories: preview.diff.map(section => section.id),
-            last_sent_featured: currentFeaturedIds,
-          }),
-          ...restaurantMenuIds
-            .filter(menuId => menuId && menuId !== sessionPorts.getMenuId())
-            .map(menuId => sessionPorts.patchMenuMetaForMenu(menuId, {
-              last_sent_featured: currentFeaturedIds,
-            })),
-        ]);
-        if (patchResults.some(result => (result?.downgradedFields || []).includes('last_sent_featured'))) {
-          warnings.push('Featured sync used legacy metadata compatibility on this deployment.');
-        }
+        await sessionPorts.patchMenuMeta({
+          last_updated_ts: ts,
+          last_sent_ts: ts,
+          last_sent_state: lastSentState,
+          last_sent_categories: preview.diff.map(section => section.id),
+        });
 
         sessionPorts.commitPublished({
           diff: preview.diff,
           ts,
-          featuredIds: currentFeaturedIds,
         });
 
         const cacheSynced = sessionPorts.syncLocalCache({ silent: true });
@@ -4614,19 +4636,7 @@ function scheduleSessionRefreshRetry(delayMs = 60_000) {
 function canReadRestaurantToolsFromWorkspace(workspace = {}) {
   const permissions = workspace?.permissions && typeof workspace.permissions === 'object' ? workspace.permissions : {};
   const capabilities = workspace?.capabilities && typeof workspace.capabilities === 'object' ? workspace.capabilities : {};
-  return !!(permissions.canReadRestaurantTools || capabilities.canReadRestaurantTools || capabilities.includesRestaurantTools);
-}
-
-function normalizeWorkspaceSiblingCatalog(catalog = []) {
-  return (Array.isArray(catalog) ? catalog : []).map(item => ({
-    id: item?.id || '',
-    name: item?.name || '',
-    cat: item?.cat || item?.category || '',
-    menuId: item?.menuId || item?.menu_id || '',
-    menuLabel: item?.menuLabel || item?.menu_label || '',
-    onMenu: item?.onMenu !== false && item?.on_menu !== false,
-    visibility: item?.visibility || 'public',
-  })).filter(item => item.id && item.name);
+  return !!(permissions.canReadRestaurantTools || capabilities.canReadRestaurantTools);
 }
 
 function normalizeWorkspaceFeaturedGroups(groups = []) {
@@ -4652,6 +4662,32 @@ function normalizeWorkspaceFeaturedGroups(groups = []) {
       };
     }).filter(slot => slot.item && slot.itemId),
   })).filter(group => group.id);
+}
+
+function normalizePublicFeaturedItems(items = []) {
+  return (Array.isArray(items) ? items : []).map(item => {
+    const hydratedItem = item && typeof item === 'object' ? hydrateMenuItem(item) : null;
+    return hydratedItem && hydratedItem.id ? hydratedItem : null;
+  }).filter(Boolean);
+}
+
+function adaptPublicFeaturedItemsToGroups(items = []) {
+  const featuredItems = normalizePublicFeaturedItems(items);
+  if (!featuredItems.length) return [];
+  return [{
+    id: 'public-featured-specials',
+    name: 'Featured Specials',
+    displayOrder: 0,
+    slots: featuredItems.map((item, index) => ({
+      id: `public-featured-slot-${item.id || index + 1}`,
+      itemId: item.id || `public-featured-item-${index + 1}`,
+      sellNote: '',
+      displayOrder: index,
+      confirmedAt: null,
+      confirmedBy: null,
+      item,
+    })),
+  }];
 }
 
 async function readPublicMenuIndexThroughApi() {
@@ -4687,11 +4723,10 @@ async function readAdminSettingsContextThroughApi({ menuId = '', restaurantId = 
   });
 }
 
-async function readMenuWorkspaceThroughApi({ menuId = MENU_ID, includeRestaurantTools = false } = {}) {
+async function readMenuWorkspaceThroughApi({ menuId = MENU_ID } = {}) {
   const authorizedHeaders = getAuthorizedApiHeaders();
   if (!menuId || !authorizedHeaders.Authorization) return null;
   const params = new URLSearchParams({ action: 'workspace', menu_id: menuId });
-  if (includeRestaurantTools) params.set('include', 'restaurant-tools');
   return readApiJsonOrNull(`/api/manager?${params.toString()}`, {
     headers: authorizedHeaders,
   });
@@ -4701,24 +4736,15 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const workspace = workspacePayload?.workspace && typeof workspacePayload.workspace === 'object'
     ? workspacePayload.workspace
     : {};
-  const tools = workspacePayload?.restaurantTools && typeof workspacePayload.restaurantTools === 'object'
-    ? workspacePayload.restaurantTools
+  const featuredItems = Array.isArray(workspacePayload?.featuredItems)
+    ? workspacePayload.featuredItems
     : null;
-  const featuredGroups = tools && Array.isArray(tools.featuredGroups)
-    ? tools.featuredGroups
-    : (Array.isArray(workspacePayload?.featuredGroups) ? workspacePayload.featuredGroups : null);
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
-  if (!featuredGroups && !tools) return false;
+  if (!featuredItems) return false;
 
-  if (Array.isArray(featuredGroups)) {
-    _featuredGroups = normalizeWorkspaceFeaturedGroups(featuredGroups);
-  }
-  if (Array.isArray(tools?.siblingCatalog)) {
-    _restaurantSpecialsSiblingCatalog = normalizeWorkspaceSiblingCatalog(tools.siblingCatalog);
-  } else if (!tools) {
-    _restaurantSpecialsSiblingCatalog = [];
-  }
+  _featuredGroups = adaptPublicFeaturedItemsToGroups(featuredItems);
+  _restaurantSpecialsSiblingCatalog = [];
   return true;
 }
 
@@ -4730,7 +4756,7 @@ async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) 
   const isStaffMode = pageMode === 'manager' || pageMode === 'admin';
 
   if (isStaffMode) {
-    const workspace = await readMenuWorkspaceThroughApi({ menuId, includeRestaurantTools: true });
+    const workspace = await readMenuWorkspaceThroughApi({ menuId });
     if (workspace) return workspace;
   }
 
@@ -4873,6 +4899,7 @@ function hydrateMenuItem(record, overrides = {}) {
     upcharges:   itemUpchargeArray(record.upcharges),
     showDescription: record.showDescription ?? record.show_description ?? true,
     showRecipe:  record.showRecipe ?? record.show_recipe ?? false,
+    featuredEnabled: record.featuredEnabled === true || record.featured_enabled === true,
   };
 }
 
@@ -4941,8 +4968,16 @@ function sortCanonicalItems(items = []) {
   return (Array.isArray(items) ? items : []).slice().sort(compareCanonicalItemOrder);
 }
 
+function normalizeFeaturedSpecialCategoriesForMenu(cats = [], menuContext = {}) {
+  return ensureFeaturedSpecialsCategory(Array.isArray(cats) ? cats : [], {
+    menuId: menuContext.menuId || MENU_ID || '',
+    menuType: menuContext.menuType || MENU_TYPE || 'drinks',
+  });
+}
+
 function hydrateState({ cats, meta, restaurant }) {
-  const orderedCats = sortCanonicalCategories(cats);
+  const normalizedCats = normalizeFeaturedSpecialCategoriesForMenu(cats);
+  const orderedCats = sortCanonicalCategories(normalizedCats);
   const realCats = orderedCats.filter(c => c.key !== UNCATEGORIZED_ID);
   const uncatCat = orderedCats.find(c => c.key === UNCATEGORIZED_ID);
 
@@ -4961,9 +4996,11 @@ function hydrateState({ cats, meta, restaurant }) {
     }));
   }
 
-  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
-    ? meta.last_sent_state
-    : {};
+  const lastSentState = normalizeFeaturedSpecialsLastSentState(
+    meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+      ? meta.last_sent_state
+      : {}
+  );
   const hasLastSentTs = !!meta?.last_sent_ts;
   menuState = {};
   realCats.forEach(c => {
@@ -5019,7 +5056,8 @@ function applyPersistedDraftState(draftState = {}) {
     liveLastSentState[cat.id] = (menuState[cat.id]?.lastSent || []).map(cloneMenuItemState);
   });
 
-  const orderedCats = sortCanonicalCategories(cats);
+  const normalizedCats = normalizeFeaturedSpecialCategoriesForMenu(cats, draftState?.context || {});
+  const orderedCats = sortCanonicalCategories(normalizedCats);
   const realCats = orderedCats.filter(cat => cat.key !== UNCATEGORIZED_ID);
   const uncatCat = orderedCats.find(cat => cat.key === UNCATEGORIZED_ID) || null;
 
@@ -5143,14 +5181,9 @@ function createRestaurantSpecialsService() {
         return _featuredGroups;
       }
 
-      if (currentUserCanEditRestaurantSpecials(restaurantId) && currentUser?.accessToken) {
-        const workspace = await readMenuWorkspaceThroughApi({
-          menuId: MENU_ID,
-          includeRestaurantTools: true,
-        });
-        if (workspace && applyWorkspaceRestaurantTools(workspace)) {
-          return _featuredGroups;
-        }
+      if (currentUser?.accessToken) {
+        const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID });
+        if (workspace && applyWorkspaceRestaurantTools(workspace)) return _featuredGroups;
       } else {
         this.resetCatalog();
       }
@@ -5169,98 +5202,6 @@ function createRestaurantSpecialsService() {
       if (groupId) return _featuredGroups.find(group => group.id === groupId) || null;
       return _featuredGroups[0] || null;
     },
-
-    getMatches(groupId, query) {
-      const q = query.trim().toLowerCase();
-      if (!q) return [];
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      const existingItemIds = new Set((group?.slots || []).map(slot => slot.itemId));
-      return this.getCatalog()
-        .filter(item =>
-          item.onMenu !== false &&
-          !existingItemIds.has(item.id) &&
-          String(item.name || '').toLowerCase().includes(q)
-        )
-        .slice(0, 8);
-    },
-
-    async request(action, payload = {}) {
-      const response = await fetch('/api/manager', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${currentUser?.accessToken || ''}`,
-        },
-        body: JSON.stringify({
-          action: 'specials',
-          specials_action: action,
-          restaurantId: RESTAURANT_ID,
-          ...payload,
-        }),
-      });
-      let data = {};
-      try {
-        data = await response.json();
-      } catch (_) {
-        data = {};
-      }
-      if (!response.ok) throw new Error(data.error || `Request failed (${response.status})`);
-      return data;
-    },
-
-    async addSlot({ groupId = '', itemId }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      const slotCount = group?.slots?.length || 0;
-      if (slotCount >= 5) return { ok: false, userMessage: 'Max 5 specials per restaurant.', userHandled: true };
-      if ((group?.slots || []).some(slot => slot.itemId === itemId)) {
-        return { ok: false, userMessage: 'That item is already in specials.', userHandled: true };
-      }
-      if (_dirty || _deletedItemIds.size) {
-        const persisted = await persistState();
-        if (persisted === false) return { ok: false, userHandled: true };
-      }
-      await this.request('add', { itemId });
-      await this.refreshForActiveMenu();
-      invalidateDiff();
-      updateDraftIndicator();
-      return { ok: true, successMessage: 'Special added!' };
-    },
-
-    async removeSlot({ slotId }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      await this.request('remove', { slotId });
-      await this.refreshForActiveMenu();
-      invalidateDiff();
-      updateDraftIndicator();
-      return { ok: true, successMessage: 'Special removed.' };
-    },
-
-    async saveNote({ slotId, note }) {
-      if (!currentUserCanEditRestaurantSpecials()) return { ok: false, userHandled: true };
-      await this.request('note', { slotId, note });
-      return { ok: true };
-    },
-
-    async moveSlot({ groupId = '', slotId, direction }) {
-      if (!currentUserCanEditRestaurantSpecials()) {
-        return { ok: false, userMessage: 'Specials require access to both menus for this restaurant.' };
-      }
-      const group = this.getActiveGroup(groupId) || this.getActiveGroup();
-      if (!group) return { ok: false, userHandled: true };
-      const idx = group.slots.findIndex(slot => slot.id === slotId);
-      if (idx < 0) return { ok: false, userHandled: true };
-      const newIdx = idx + direction;
-      if (newIdx < 0 || newIdx >= group.slots.length) return { ok: false, userHandled: true };
-      await this.request('move', { slotId, direction });
-      await this.refreshForActiveMenu();
-      return { ok: true };
-    },
-
   };
 }
 
@@ -5580,6 +5521,7 @@ function buildMenuCacheSnapshot() {
       upcharges: itemUpchargeArray(item.upcharges),
       show_description: isItemDescriptionPublic(item),
       show_recipe: isItemRecipePublic(item),
+      featured_enabled: item.featuredEnabled === true,
       display_order: itemIndex,
     })),
   }));
@@ -5607,6 +5549,7 @@ function buildMenuCacheSnapshot() {
         upcharges: itemUpchargeArray(item.upcharges),
         show_description: isItemDescriptionPublic(item),
         show_recipe: isItemRecipePublic(item),
+        featured_enabled: item.featuredEnabled === true,
         display_order: itemIndex,
       })),
     });
@@ -5620,9 +5563,6 @@ function buildMenuCacheSnapshot() {
     last_sent_state: snapshotLastSentState(),
     last_sent_categories: menuState._meta?.lastSentCategories || [],
   };
-  if (_menuMetaSupportsLastSentFeatured !== false) {
-    meta.last_sent_featured = Array.from(_lastSentFeaturedIds);
-  }
   const restaurant = isValidRestaurant(RESTAURANT_ID)
     ? {
         id: RESTAURANT_ID,
@@ -5636,7 +5576,6 @@ function buildMenuCacheSnapshot() {
     cats,
     meta,
     restaurant,
-    featured_groups: buildFeaturedGroupsSnapshotValue(),
     save_only_changes: getDraftSaveOnlyChanges(),
   };
 }
@@ -5656,10 +5595,12 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
     : {};
   return sortDraftDocumentInPlace({
     context: normalized.context && typeof normalized.context === 'object' ? normalized.context : null,
-    cats: Array.isArray(normalized.cats) ? normalized.cats : [],
+    cats: normalizeFeaturedSpecialCategoriesForMenu(
+      Array.isArray(normalized.cats) ? normalized.cats : [],
+      normalized.context && typeof normalized.context === 'object' ? normalized.context : {},
+    ),
     meta: normalized.meta && typeof normalized.meta === 'object' ? normalized.meta : {},
     restaurant: normalized.restaurant && typeof normalized.restaurant === 'object' ? normalized.restaurant : null,
-    featured_groups: Array.isArray(normalized.featured_groups) ? normalized.featured_groups : [],
     save_only_changes: Array.isArray(normalized.save_only_changes)
       ? normalized.save_only_changes
       : (Array.isArray(normalized.saveOnlyChanges) ? normalized.saveOnlyChanges : []),
@@ -5670,7 +5611,6 @@ function stripDraftDocumentForComparison(snapshot = {}) {
   const normalized = normalizeDraftDocumentSnapshot(snapshot);
   return {
     cats: normalized.cats,
-    featured_groups: normalized.featured_groups,
     save_only_changes: normalized.save_only_changes,
   };
 }
@@ -5739,12 +5679,9 @@ function buildSnapshotDelta(baseSnapshot = null, updatedSnapshot = null) {
     categoryChanges.set(key, updatedCategory);
   });
 
-  const baseFeatured = normalizeDraftDocumentSnapshot(baseSnapshot).featured_groups;
-  const updatedFeatured = normalizeDraftDocumentSnapshot(updatedSnapshot).featured_groups;
   return {
     itemChanges,
     categoryChanges,
-    featuredGroupsChanged: JSON.stringify(baseFeatured) !== JSON.stringify(updatedFeatured),
   };
 }
 
@@ -5774,10 +5711,6 @@ function buildLocalDraftOverlapSummary(baseSnapshot = null, localSnapshot = null
     labels.add(`Category: ${categoryLabel}`);
   });
 
-  if (localDelta.featuredGroupsChanged && remoteDelta.featuredGroupsChanged) {
-    labels.add('Featured items');
-  }
-
   return {
     labels: Array.from(labels).sort(),
     usedFallback: false,
@@ -5791,18 +5724,6 @@ function sortDraftDocumentInPlace(snapshot = {}) {
     items: sortCanonicalItems(category.items).map((item, itemIndex) => ({
       ...item,
       display_order: itemIndex,
-    })),
-  }));
-  snapshot.featured_groups = (Array.isArray(snapshot.featured_groups) ? snapshot.featured_groups : []).sort((left, right) => (
-    Number(left?.display_order || 0) - Number(right?.display_order || 0)
-  )).map((group, groupIndex) => ({
-    ...group,
-    display_order: groupIndex,
-    slots: (Array.isArray(group?.slots) ? group.slots : []).sort((left, right) => (
-      Number(left?.display_order || 0) - Number(right?.display_order || 0)
-    )).map((slot, slotIndex) => ({
-      ...slot,
-      display_order: slotIndex,
     })),
   }));
   return snapshot;
@@ -5868,10 +5789,6 @@ function mergeLocalDraftSnapshots({
       if (strategy === 'update-local' && (hasRemoteItemConflict || hasRemoteCategoryConflict)) return;
       applyItemChangeToDraftDocument(merged, itemId, change);
     });
-
-  if (localDelta.featuredGroupsChanged && !(strategy === 'update-local' && remoteDelta.featuredGroupsChanged)) {
-    merged.featured_groups = cloneJsonCompatible(localDocument.featured_groups, []);
-  }
 
   merged.context = remoteDocument.context;
   merged.meta = remoteDocument.meta;
@@ -5960,7 +5877,7 @@ async function reloadLatestWorkspaceIntoLocalDraft() {
   const currentEnvelope = buildCurrentLocalDraftEnvelope();
   if (!currentEnvelope?.draftSnapshot) return { ok: false, reloaded: false };
 
-  const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID, includeRestaurantTools: true });
+  const workspace = await readMenuWorkspaceThroughApi({ menuId: MENU_ID });
   if (!workspace) return { ok: false, reloaded: false };
 
   hydrateState(workspace);
@@ -6746,6 +6663,7 @@ function renderCategoriesTab() {
     card.id = 'catmgr-' + cat.id;
     const isFirst = idx === 0;
     const isLast  = idx === managedCategories.length - 1;
+    const canManageCategory = canEdit && !isProtectedSystemCategory(cat.id);
     const untappdRowHtml = shouldShowCategoryUntappdControl(cat)
       ? `
         <label class="catmgr-checkbox-row" for="ce-untappd-${escHtml(cat.id)}">
@@ -6760,16 +6678,16 @@ function renderCategoriesTab() {
           <div class="catmgr-title">${escHtml(cat.title)}</div>
           <div class="catmgr-sub">${escHtml(cat.sub || '')}</div>
         </div>
-        ${canEdit
+        ${canManageCategory
           ? `<div class="catmgr-actions">
               <button class="btn-small" onclick="moveCategoryUp('${escHtml(cat.id)}')" ${isFirst ? 'disabled' : ''} title="Move up" aria-label="Move ${escHtml(cat.title)} up">↑</button>
               <button class="btn-small" onclick="moveCategoryDown('${escHtml(cat.id)}')" ${isLast ? 'disabled' : ''} title="Move down" aria-label="Move ${escHtml(cat.title)} down">↓</button>
               <button class="btn-small" onclick="toggleCategoryEdit('${escHtml(cat.id)}')" aria-label="Edit ${escHtml(cat.title)}">✏️</button>
               <button class="btn-small btn-danger" onclick="deleteCategory('${escHtml(cat.id)}')" aria-label="Delete ${escHtml(cat.title)}">×</button>
             </div>`
-          : '<div class="catmgr-readonly-pill">Admin-managed</div>'}
+          : `<div class="catmgr-readonly-pill">${canEdit ? 'Fixed category' : 'Admin-managed'}</div>`}
       </div>
-      ${canEdit
+      ${canManageCategory
         ? `<div class="catmgr-edit" id="catmgr-edit-${escHtml(cat.id)}" style="display:none">
             <div class="catmgr-field-row">
               <label for="ce-icon-${escHtml(cat.id)}">Icon</label>
@@ -6799,14 +6717,14 @@ function renderCategoriesTab() {
 }
 
 function toggleCategoryEdit(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const el = document.getElementById('catmgr-edit-' + catId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? '' : 'none';
 }
 
 async function saveCategoryEdit(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const icon  = document.getElementById('ce-icon-'  + catId)?.value.trim() || cat.icon;
@@ -6837,7 +6755,7 @@ async function saveCategoryEdit(catId) {
 }
 
 async function moveCategoryUp(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx <= 0) return;
   [CATEGORY_DEFS[idx-1], CATEGORY_DEFS[idx]] = [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx-1]];
@@ -6854,7 +6772,7 @@ async function moveCategoryUp(catId) {
 }
 
 async function moveCategoryDown(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const idx = CATEGORY_DEFS.findIndex(c => c.id === catId);
   if (idx < 0 || idx >= CATEGORY_DEFS.length - 1) return;
   [CATEGORY_DEFS[idx], CATEGORY_DEFS[idx+1]] = [CATEGORY_DEFS[idx+1], CATEGORY_DEFS[idx]];
@@ -6871,7 +6789,7 @@ async function moveCategoryDown(catId) {
 }
 
 async function deleteCategory(catId) {
-  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId)) return;
+  if (!currentUserCanEditCategories() || isLegacySpecialCategory(catId) || isProtectedSystemCategory(catId)) return;
   const cat = CATEGORY_DEFS.find(c => c.id === catId);
   if (!cat) return;
   const items = menuState[catId]?.items || [];
@@ -7126,18 +7044,13 @@ function buildPublicRouteRenderSnapshot(options = {}) {
   const siteRestaurant = options.siteRestaurantId
     ? (getRestaurantById(options.siteRestaurantId) || _siteRestaurant)
     : _siteRestaurant;
-  const featuredSnapshot = getFeaturedViewPolicy().buildSnapshot({
-    actor,
-    restaurantId: RESTAURANT_ID,
-    featuredGroups: _featuredGroups,
-  });
   return {
     activeMenuName: _activeMenuName,
     appVersion: APP_VERSION,
     canEditRestaurantSpecials: currentUserCanEditRestaurantSpecials(RESTAURANT_ID, actor),
-    categoryDefs: getManagedCategoryDefs(),
+    categoryDefs: getPublicCategoryDefs(),
     currentUser: actor,
-    featuredGroups: featuredSnapshot.featuredGroups,
+    featuredItems: getCurrentMenuFeaturedItems(),
     isPreview: IS_PREVIEW,
     knownMenus: knownMenuList(),
     lastUpdatedTs: getLastUpdatedTs(),
@@ -7149,7 +7062,6 @@ function buildPublicRouteRenderSnapshot(options = {}) {
       restaurantId: RESTAURANT_ID,
     }),
     restaurantId: RESTAURANT_ID,
-    restaurantSpecials: featuredSnapshot.restaurantSpecials,
     siteRestaurant,
   };
 }
@@ -7777,56 +7689,42 @@ function syncPublicStaffFooterActions(state = buildPublicStaffFooterState()) {
 function renderFeaturedPublicSection() {
   const featuredEl = document.getElementById('featured-public-section');
   if (!featuredEl) return;
-  const featuredView = getFeaturedViewPolicy().buildSnapshot({
-    actor: currentUser,
-    restaurantId: RESTAURANT_ID,
-    featuredGroups: _featuredGroups,
-  });
-  const featuredGroups = featuredView.featuredGroups;
-  const hasSlots = featuredGroups.some(g => g.slots.length > 0);
-  if (!hasSlots) {
+  const featuredItems = getCurrentMenuFeaturedItems().slice(0, 5);
+  if (!featuredItems.length) {
     featuredEl.style.display = 'none';
     featuredEl.innerHTML = '';
     return;
   }
   featuredEl.style.display = '';
-  featuredEl.innerHTML = featuredGroups
-    .filter(g => g.slots.length)
-    .map(group => {
-      const slotsHtml = group.slots.map(slot => {
-        const is86 = slot.item?.eightySixed;
-        const showDescription = isItemDescriptionPublic(slot.item);
-        const showRecipe = isItemRecipePublic(slot.item);
-        const description = showDescription ? String(slot.item?.desc || '').trim() : '';
-        const recipeText = showRecipe ? recipeArray(slot.item?.recipe).join(', ') : '';
-        const upcharges = itemUpchargeArray(slot.item?.upcharges);
-        const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
-        const priceHtml = slot.item?.price ? `<span class="featured-price">${escHtml(slot.item.price)}</span>` : '';
-        const descriptionHtml = description ? `<div class="featured-slot-desc">${escHtml(description)}</div>` : '';
-        const recipeHtml = recipeText ? `<div class="featured-slot-desc featured-slot-desc--secondary">Recipe: ${escHtml(recipeText)}</div>` : '';
-        const upchargesHtml = upcharges.length
-          ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
-          : '';
-        const sellNoteHtml = slot.sellNote
-          ? `<div class="featured-sell-note">${escHtml(slot.sellNote)}</div>`
-          : '';
-        return `<div class="${classes}">
-          <div class="featured-slot-main">
-            <span class="featured-slot-name">${escHtml(slot.item?.name || '')}</span>
-            ${priceHtml}
-            ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
-          </div>
-          ${descriptionHtml}
-          ${recipeHtml}
-          ${upchargesHtml}
-          ${sellNoteHtml}
-        </div>`;
-      }).join('');
-      return `<div class="featured-group">
-        <div class="featured-group-name">${escHtml(group.name)}</div>
-        ${slotsHtml}
-      </div>`;
-    }).join('');
+  const featuredItemsHtml = featuredItems.map(item => {
+    const is86 = item?.eightySixed;
+    const showDescription = isItemDescriptionPublic(item);
+    const showRecipe = isItemRecipePublic(item);
+    const description = showDescription ? String(item?.desc || '').trim() : '';
+    const recipeText = showRecipe ? recipeArray(item?.recipe).join(', ') : '';
+    const upcharges = itemUpchargeArray(item?.upcharges);
+    const classes = ['featured-slot', is86 ? 'is-eighty-sixed' : ''].filter(Boolean).join(' ');
+    const priceHtml = item?.price ? `<span class="featured-price">${escHtml(item.price)}</span>` : '';
+    const descriptionHtml = description ? `<div class="featured-slot-desc">${escHtml(description)}</div>` : '';
+    const recipeHtml = recipeText ? `<div class="featured-slot-desc featured-slot-desc--secondary">Recipe: ${escHtml(recipeText)}</div>` : '';
+    const upchargesHtml = upcharges.length
+      ? `<div class="featured-upcharges-row">${upcharges.map(upcharge => `<span class="featured-upcharge-chip">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
+      : '';
+    return `<div class="${classes}">
+      <div class="featured-slot-main">
+        <span class="featured-slot-name">${escHtml(item?.name || '')}</span>
+        ${priceHtml}
+        ${is86 ? '<span class="eighty-sixed-tag">86\'D</span>' : ''}
+      </div>
+      ${descriptionHtml}
+      ${recipeHtml}
+      ${upchargesHtml}
+    </div>`;
+  }).join('');
+  featuredEl.innerHTML = `<div class="featured-group">
+    <div class="featured-group-name">${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</div>
+    ${featuredItemsHtml}
+  </div>`;
 }
 
 function buildPublicItemHtml(item) {
@@ -7962,7 +7860,7 @@ function _renderDefaultPublicView() {
   container.innerHTML = '';
   renderFeaturedPublicSection();
   const lastSentCats = menuState._meta && menuState._meta.lastSentCategories;
-  getManagedCategoryDefs().forEach(cat => {
+  getPublicCategoryDefs().forEach(cat => {
     const state = menuState[cat.id] || { items: [], lastSent: [] };
     const section = buildPublicCategorySection(cat, state, lastSentCats);
     if (section) container.appendChild(section);
@@ -9943,6 +9841,12 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
   const is86 = !!item.eightySixed;
   const stateClass = is86 ? 'is-eighty-sixed' : (item.visibility === 'off_menu' ? 'is-off-menu' : '');
   const badge = getItemStateBadge(item, catId, lastSentNames);
+  const featuredToggle = catId === FEATURED_SPECIALS_CATEGORY_ID
+    ? `<label class="item-featured-toggle">
+        <input type="checkbox" ${item.featuredEnabled ? 'checked' : ''} onchange="toggleFeaturedSpecialEnabled(${escAttrJs(catId)},${escAttrJs(item.id)},this.checked)"/>
+        <span>Show in featured strip</span>
+      </label>`
+    : '';
   return `<div class="current-item items-row ${stateClass}">
       <div class="item-row-main">
         <button class="item-drag-handle" type="button" draggable="true"
@@ -9956,6 +9860,7 @@ function buildItemsRowHtml(item, catId, lastSentNames) {
           onblur="renameItem('${catId}','${item.id}',this.value)"
           onkeydown="if(event.key==='Enter')this.blur()"/></div>
       </div>
+      ${featuredToggle}
       <span class="item-actions-compact">
         <button class="eighty-six-btn${is86 ? ' restore' : ''}" title="${is86 ? 'Restore' : '86'}" aria-label="${is86 ? `Restore ${escHtml(item.name)}` : `Mark ${escHtml(item.name)} 86'd`}" onclick="toggle86('${catId}','${item.id}')">${is86 ? '↩' : '86'}</button>
         <button class="del-item" onclick="removeItem('${catId}','${item.id}')" aria-label="Remove ${escHtml(item.name)}">×</button>
@@ -10481,6 +10386,20 @@ function toggle86(catId, itemId) {
   showToast(item.eightySixed ? "🚫 Marked 86'd — use Save & Send to notify channels" : `↩ Marked ${restoreLabel(catId)} — use Save & Send to notify channels`, 'info');
 }
 
+function toggleFeaturedSpecialEnabled(catId, itemId, checked) {
+  const item = (menuState[catId]?.items || []).find(candidate => candidate.id === itemId);
+  if (!item) return;
+  const nextValue = checked === true;
+  if (item.featuredEnabled === nextValue) return;
+  item.featuredEnabled = nextValue;
+  invalidateDiff();
+  renderManagerItems(catId);
+  markSectionsStale(_activeManagerSection);
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  renderFeaturedPublicSection();
+}
+
 // ─── UPCHARGE CRUD ───────────────────────────────────────────────────────────
 function toggleUpcharges(catId, itemId) {
   const panel = document.getElementById('upcharges-' + itemId);
@@ -10968,8 +10887,9 @@ function restoreLabel(catId) {
   return 'Back in Stock';
 }
 
-function computeCategoryDiff(cat) {
-  const state = menuState[cat.id] || { items: [], lastSent: [] };
+function computeCategoryDiff(cat, stateOverride = null, options = {}) {
+  const state = stateOverride || menuState[cat.id] || { items: [], lastSent: [] };
+  const includeHiddenEightyAsAdded = options?.includeHiddenEightyAsAdded === true;
   const lastByName = new Map();
   const currentNames = [];
   const lastNames = [];
@@ -11002,6 +10922,9 @@ function computeCategoryDiff(cat) {
     if (isVisible && !item.eightySixed && trimmed) {
       currentNames.push(trimmed);
       currentSet.add(key);
+    } else if (includeHiddenEightyAsAdded && isVisible && item.eightySixed && trimmed && (!prev || prev.onMenu === false)) {
+      currentNames.push(trimmed);
+      currentSet.add(key);
     }
   });
 
@@ -11011,45 +10934,34 @@ function computeCategoryDiff(cat) {
   return { id: cat.id, icon: cat.icon, label: cat.title, added, removed, eightySixed, restored };
 }
 
+function isVisibleEnabledFeaturedItem(item = {}) {
+  const featuredEnabled = item?.featuredEnabled === true || item?.featured_enabled === true;
+  const onMenu = item?.onMenu !== false && item?.on_menu !== false;
+  return featuredEnabled && onMenu && item?.visibility !== 'off_menu';
+}
+
 function computeFeaturedDiff() {
-  const featuredByItemId = new Map();
-  const currentFeaturedIds = new Set();
-  _featuredGroups.forEach(group => {
-    group.slots.forEach(slot => {
-      if (!slot.item) return;
-      currentFeaturedIds.add(slot.itemId);
-      featuredByItemId.set(slot.itemId, slot);
-    });
-  });
-  const featuredAdded = [];
-  const featuredRemoved = [];
-  currentFeaturedIds.forEach(id => {
-    if (!_lastSentFeaturedIds.has(id)) {
-      const slot = featuredByItemId.get(id);
-      if (slot?.item) featuredAdded.push(slot.item.name);
-    }
-  });
-  _lastSentFeaturedIds.forEach(id => {
-    if (!currentFeaturedIds.has(id)) {
-      const slot = featuredByItemId.get(id);
-      featuredRemoved.push(slot?.item?.name || '(removed item)');
-    }
-  });
-  if (!featuredAdded.length && !featuredRemoved.length) return null;
-  return {
+  const featuredCategory = CATEGORY_DEFS.find(cat => cat.id === FEATURED_SPECIALS_CATEGORY_ID);
+  if (!featuredCategory) return null;
+
+  const featuredState = menuState[FEATURED_SPECIALS_CATEGORY_ID] || { items: [], lastSent: [] };
+  return computeCategoryDiff({
     id: '__featured__',
-    icon: '⭐',
+    icon: featuredCategory.icon || '⭐',
     label: getRestaurantSpecialLabel(RESTAURANT_ID),
-    added: featuredAdded,
-    removed: featuredRemoved,
-    eightySixed: [],
-    restored: [],
-  };
+    title: getRestaurantSpecialLabel(RESTAURANT_ID),
+  }, {
+    items: (Array.isArray(featuredState.items) ? featuredState.items : []).filter(isVisibleEnabledFeaturedItem),
+    lastSent: (Array.isArray(featuredState.lastSent) ? featuredState.lastSent : []).filter(isVisibleEnabledFeaturedItem),
+  }, {
+    includeHiddenEightyAsAdded: true,
+  });
 }
 
 function computeDiff() {
   const results = [];
   getManagedCategoryDefs().forEach(cat => {
+    if (cat.id === FEATURED_SPECIALS_CATEGORY_ID || isLegacySpecialCategory(cat.id)) return;
     const diff = computeCategoryDiff(cat);
     if (diff) results.push(diff);
   });
@@ -11199,9 +11111,9 @@ function snapshotLastSentState() {
 }
 
 function getCurrentFeaturedIds() {
-  const ids = [];
-  _featuredGroups.forEach(g => g.slots.forEach(s => { if (s.item) ids.push(s.itemId); }));
-  return ids;
+  return getCurrentMenuFeaturedItems()
+    .map(item => item?.id)
+    .filter(Boolean);
 }
 
 function applySentState(diff, ts) {
@@ -11727,42 +11639,34 @@ function renderFeaturedTab() {
   const wrap = document.getElementById('featured-mgr-wrap');
   const action = document.getElementById('manager-featured-action');
   if (!wrap) return;
-  if (!currentUserCanEditRestaurantSpecials()) {
-    const accessNote = getRestaurantSpecialAccessNote();
-    wrap.innerHTML = `<div class="featured-specials-access-note" role="note" aria-live="polite">
-      <p class="featured-specials-access-kicker">Limited access</p>
-      <h4>${escHtml(accessNote.title)}</h4>
-      <p class="featured-specials-access-copy">${escHtml(accessNote.summary)}</p>
-      <p class="featured-specials-access-detail">${escHtml(accessNote.detail)}</p>
-    </div>`;
-    if (action) {
-      action.textContent = 'Needs both menus';
-      action.disabled = true;
-      action.setAttribute('aria-disabled', 'true');
-      action.title = accessNote.detail;
-    }
-    return;
-  }
+  const featuredItems = getCurrentMenuFeaturedItems();
+  const previewItems = featuredItems.slice(0, 5);
+  const totalCount = featuredItems.length;
+  const currentMenu = getMenuById(MENU_ID);
+  const menuLabel = formatMenuDisplayName(
+    _activeMenuName || currentMenu?.name || 'Current Menu',
+    MENU_TYPE,
+    RESTAURANT_ID
+  );
   if (action) {
-    action.textContent = 'Edit Featured';
-    action.disabled = false;
-    action.removeAttribute('aria-disabled');
-    action.removeAttribute('title');
+    action.textContent = 'Open Category';
+    action.disabled = !currentUserCanManageMenu();
+    action.setAttribute('aria-disabled', action.disabled ? 'true' : 'false');
+    action.title = currentUserCanManageMenu()
+      ? 'Jump to the Featured Specials category in Edit Menu.'
+      : 'Open the current menu to manage Featured Specials.';
+    if (!action.disabled) action.removeAttribute('aria-disabled');
   }
-  const group = getActiveRestaurantSpecialGroup();
-  const groupId = group?.id || '';
-  const slotCount = group?.slots?.length || 0;
-  const restaurantName = getRestaurantById(RESTAURANT_ID)?.name || 'this restaurant';
-  const slotsHtml = slotCount
-    ? group.slots.map((slot, idx) => {
-        const description = isItemDescriptionPublic(slot.item) ? String(slot.item?.desc || '').trim() : '';
-        const recipeText = isItemRecipePublic(slot.item) ? recipeArray(slot.item?.recipe).join(', ') : '';
-        const upcharges = itemUpchargeArray(slot.item?.upcharges);
+  const itemsHtml = previewItems.length
+    ? previewItems.map((item, idx) => {
+        const description = isItemDescriptionPublic(item) ? String(item?.desc || '').trim() : '';
+        const recipeText = isItemRecipePublic(item) ? recipeArray(item?.recipe).join(', ') : '';
+        const upcharges = itemUpchargeArray(item?.upcharges);
         const badges = [
-          slot.item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
-          slot.item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
+          item?.visibility === 'off_menu' ? '<span class="featured-special-tag">Off Menu</span>' : '',
+          item?.eightySixed ? '<span class="featured-special-tag featured-special-tag--danger">86\'D</span>' : '',
         ].filter(Boolean).join('');
-        const priceHtml = slot.item?.price ? `<span class="featured-special-price">${escHtml(slot.item.price)}</span>` : '';
+        const priceHtml = item?.price ? `<span class="featured-special-price">${escHtml(item.price)}</span>` : '';
         const copyHtml = [
           description ? `<p class="featured-special-copy">${escHtml(description)}</p>` : '',
           recipeText ? `<p class="featured-special-copy featured-special-copy--muted">Recipe: ${escHtml(recipeText)}</p>` : '',
@@ -11770,165 +11674,62 @@ function renderFeaturedTab() {
         const upchargesHtml = upcharges.length
           ? `<div class="featured-special-upcharges">${upcharges.map(upcharge => `<span class="featured-special-upcharge">${escHtml(upcharge.label || 'Upcharge')}${upcharge.price ? ` <strong>${escHtml(upcharge.price)}</strong>` : ''}</span>`).join('')}</div>`
           : '';
-        return `<article class="featured-special-row" data-slot-id="${escHtml(slot.id)}">
+        return `<article class="featured-special-row">
           <div class="featured-special-row-head">
-            <div class="featured-special-order">Slot ${idx + 1}</div>
-            <div class="featured-special-actions">
-              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},-1)" ${idx === 0 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} up">&#8593;</button>
-              <button class="btn-small" onclick="moveFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(slot.id)},1)" ${idx === slotCount - 1 ? 'disabled' : ''} aria-label="Move ${escHtml(slot.item?.name || 'special')} down">&#8595;</button>
-              <button class="btn-small btn-danger" onclick="removeFeaturedSlot(${escAttrJs(slot.id)},${escAttrJs(groupId)})" aria-label="Remove ${escHtml(slot.item?.name || 'special')} from specials">&#215;</button>
-            </div>
+            <div class="featured-special-order">Preview ${idx + 1}</div>
           </div>
           <div class="featured-special-name">
-            <span class="item-name-static">${escHtml(slot.item?.name || '(deleted)')}</span>
+            <span class="item-name-static">${escHtml(item?.name || '(untitled item)')}</span>
             ${priceHtml}
             ${badges}
           </div>
           ${copyHtml}
           ${upchargesHtml}
-          <label class="featured-sell-note-field">
-            <span class="desc-field-label">Sell note</span>
-            <input class="featured-sell-note-input" type="text" placeholder="Sell note for staff…"
-              aria-label="Sell note for ${escHtml(slot.item?.name || 'special')}"
-              value="${escHtml(slot.sellNote)}"
-              onblur="saveFeaturedSellNote(${escAttrJs(slot.id)},this.value)"/>
-          </label>
         </article>`;
       }).join('')
-    : `<div class="empty-state"><span class="empty-state-icon">+</span><span>No specials yet. Add up to five items for ${escHtml(restaurantName)}.</span></div>`;
-
-  const inputKey = groupId || 'pending';
-  wrap.innerHTML = `<div class="featured-specials-editor">
+    : `<div class="empty-state"><span class="empty-state-icon">⭐</span><span>No items are currently set to show in the featured strip for ${escHtml(menuLabel || 'this menu')}.</span></div>`;
+  const capNote = totalCount > previewItems.length
+    ? `<p class="featured-specials-access-detail">The public featured strip shows the first five featured items. ${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} stay in the category.</p>`
+    : '';
+  wrap.innerHTML = `<div class="featured-specials-editor featured-specials-editor--readonly">
+    <div class="featured-specials-access-note" role="note" aria-live="polite">
+      <p class="featured-specials-access-kicker">Category-owned flow</p>
+      <h4>Manage featured items from Edit Menu</h4>
+      <p class="featured-specials-access-copy">Use the <strong>Featured Specials</strong> category and its <strong>Show in featured strip</strong> toggles to control this menu’s featured items.</p>
+      <p class="featured-specials-access-detail">This overview is read-only now that featured specials are owned by the menu itself instead of a separate restaurant-wide transport.</p>
+      ${capNote}
+    </div>
     <div class="featured-specials-head">
       <div>
-        <h4>${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}</h4>
+        <h4>Featured Strip Preview</h4>
+        <p class="featured-specials-access-detail">${escHtml(menuLabel || 'Current Menu')}</p>
       </div>
-      <span class="featured-count">${slotCount} / 5 live</span>
+      <span class="featured-count">${previewItems.length} / 5 previewed</span>
     </div>
-    ${slotCount < 5 ? `
-      <div class="featured-specials-composer">
-        <div class="add-item-wrap featured-special-add">
-          <div class="add-item-area">
-            <input type="text" class="add-item-input featured-add-input" id="featured-add-${escHtml(inputKey)}"
-              placeholder="Search items to add to featured…"
-              oninput="filterFeaturedPicker(${escAttrJs(groupId)},this.value)"
-              onblur="setTimeout(()=>filterFeaturedPicker(${escAttrJs(groupId)},''),150)"
-              onkeydown="handleFeaturedAddKeydown(event,${escAttrJs(groupId)})"/>
-            <button class="add-item-btn" onclick="addFeaturedSlotFromInput(${escAttrJs(groupId)})" aria-label="Add item to ${escHtml(getRestaurantSpecialLabel(RESTAURANT_ID))}">+</button>
-          </div>
-          <div class="featured-picker-list" id="featured-picker-${escHtml(inputKey)}"></div>
-        </div>
-      </div>` : ''}
-    <div class="featured-specials-list">${slotsHtml}</div>
+    <div class="featured-specials-list">${itemsHtml}</div>
   </div>`;
 }
 
-function getFeatureableMatches(groupId, query) {
-  return getRestaurantSpecialsService().getMatches(groupId, query);
-}
-
-function filterFeaturedPicker(groupId, query) {
-  const listId = 'featured-picker-' + (groupId || 'pending');
-  const list = document.getElementById(listId);
-  if (!list) return;
-  if (!currentUserCanEditRestaurantSpecials()) {
-    list.innerHTML = '';
-    return;
-  }
-  const matches = getFeatureableMatches(groupId, query);
-  if (!query.trim()) { list.innerHTML = ''; return; }
-  list.innerHTML = matches.map(m =>
-    `<div class="featured-picker-item" onmousedown="addFeaturedSlot(${escAttrJs(groupId)},${escAttrJs(m.id)})">
-      ${escHtml(m.name)} <span class="featured-picker-cat">${escHtml(`${m.menuLabel} · ${m.cat}`)}</span>
-      ${m.visibility === 'off_menu' ? '<span class="featured-picker-offmenu">off-menu</span>' : ''}
-    </div>`
-  ).join('') || '<div class="featured-picker-empty">No matches</div>';
-}
-
-function handleFeaturedAddKeydown(event, groupId) {
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    addFeaturedSlotFromInput(groupId);
-    return;
-  }
-  if (event.key === 'Escape') filterFeaturedPicker(groupId, '');
-}
-
-async function addFeaturedSlotFromInput(groupId) {
-  const inputId = 'featured-add-' + (groupId || 'pending');
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  const query = input.value.trim();
-  if (!query) return;
-  const matches = getFeatureableMatches(groupId, query);
-  if (!matches.length) {
-    showToast('No matching items found for specials.', 'info');
-    return;
-  }
-  const exactMatch = matches.find(match => match.name.trim().toLowerCase() === query.toLowerCase());
-  await addFeaturedSlot(groupId, (exactMatch || matches[0]).id);
-}
-
-async function addFeaturedSlot(groupId, itemId) {
-  try {
-    const result = await getRestaurantSpecialsService().addSlot({ groupId, itemId });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-    const input = document.getElementById('featured-add-' + (groupId || 'pending'));
-    if (input) input.value = '';
-    filterFeaturedPicker(groupId, '');
-    showToast(result.successMessage || 'Special added!', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to add special.', 'error'); }
-}
-
-async function removeFeaturedSlot(slotId, groupId) {
-  try {
-    const result = await getRestaurantSpecialsService().removeSlot({ slotId, groupId });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-    showToast(result.successMessage || 'Special removed.', 'success');
-  } catch(e) { showToast(e?.message || 'Failed to remove.', 'error'); }
-}
-
-async function saveFeaturedSellNote(slotId, note) {
-  try {
-    await getRestaurantSpecialsService().saveNote({ slotId, note });
-  } catch (error) {
-    showToast(error?.message || 'Failed to save note.', 'error');
-  }
-}
-
-async function moveFeaturedSlot(groupId, slotId, direction) {
-  try {
-    const result = await getRestaurantSpecialsService().moveSlot({ groupId, slotId, direction });
-    if (!result?.ok) {
-      if (result?.userMessage) showToast(result.userMessage, result.userHandled ? 'info' : 'error');
-      return;
-    }
-    renderFeaturedTab();
-    renderPublicView();
-  } catch(e) { showToast(e?.message || 'Failed to reorder.', 'error'); }
+function focusFeaturedCategoryCard() {
+  const featuredCard = document.getElementById('mgr-card-' + FEATURED_SPECIALS_CATEGORY_ID);
+  if (!featuredCard) return false;
+  if (featuredCard.classList.contains('collapsed')) toggleManagerCategory(FEATURED_SPECIALS_CATEGORY_ID);
+  featuredCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const focusTarget = featuredCard.querySelector('.collapsible-header') || featuredCard;
+  if (typeof focusTarget?.focus === 'function') focusTarget.focus();
+  return true;
 }
 
 function focusFeaturedManagerCard() {
-  if (!currentUserCanEditRestaurantSpecials()) return;
-  const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-overview-section"]');
-  focusSettingsSection('manager-overview-section', overviewTrigger || null);
+  if (!currentUserCanManageMenu()) return;
+  const overviewTrigger = document.querySelector('.settings-rail-btn[data-target="manager-items-section"]');
+  renderManagerCategories();
+  _activeManagerSection = 'manager-items-section';
+  focusSettingsSection('manager-items-section', overviewTrigger || null);
   requestAnimationFrame(() => {
-    const featuredCard = document.getElementById('manager-featured-overview-card');
-    if (!featuredCard) return;
-    featuredCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => {
-      document.querySelector('#featured-mgr-wrap .featured-add-input')?.focus();
-    }, 180);
+    if (focusFeaturedCategoryCard()) return;
+    const itemsSection = document.getElementById('manager-items-section');
+    if (itemsSection) itemsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 }
 

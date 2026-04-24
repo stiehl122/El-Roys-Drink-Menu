@@ -393,6 +393,12 @@ function installPublishFacadeStub(sandbox, overrides = {}) {
   };
 }
 
+test('route rendering uses sharedState.featuredItems and omits the hidden category from normal sections', () => {
+  const source = read('leroyslounge/app.js');
+  assert.match(source, /sharedState\.featuredItems/);
+  assert.doesNotMatch(source, /restaurantSpecials\?\.slots/);
+});
+
 test('menu session lifecycle handles redirect and fallback-aware open results', async () => {
   const sandbox = loadAppSandbox();
   const restored = [];
@@ -1629,55 +1635,46 @@ test('public route adapter converts legacy snapshot input into a contract bounda
   assert.equal(applyCalls, 1);
 });
 
-test('restaurant specials service centralizes add and match flows', async () => {
+test('featured state service refreshes through surviving workspace and public boundaries', async () => {
   const sandbox = loadAppSandbox();
-  const requestCalls = [];
-  const refreshCalls = [];
+  const workspaceCalls = [];
+  const publicCalls = [];
 
   setState(sandbox, {
     MENU_ID: 'menu-main',
     RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
-    currentUser: { role: 'manager', accessToken: 'token-1', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000021'] },
-    currentUserCanEditRestaurantSpecials: () => true,
-    persistState: async () => true,
-    _dirty: true,
-    _deletedItemIds: new Set(),
-    menuState: makeMenuState({
-      beer: [{ id: 'beer-1', name: 'Draft Lager', onMenu: true, visibility: 'public' }],
-      __uncategorized__: [{ id: 'pool-1', name: 'Off Menu Special', onMenu: true, visibility: 'off_menu' }],
-    }),
-    _featuredGroups: [
-      {
-        id: 'group-1',
-        name: 'Specials',
-        slots: [
-          { id: 'slot-1', itemId: 'featured-1', item: { id: 'featured-1', name: 'House Spritz', price: '$9', visibility: 'public', eightySixed: false, desc: '', recipe: [], upcharges: [], showDescription: true, showRecipe: false } },
+    currentUser: { role: 'manager', accessToken: 'token-1', accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'] },
+    _featuredGroups: [],
+    _restaurantSpecialsSiblingCatalog: [{ id: 'legacy-sibling' }],
+    readMenuWorkspaceThroughApi: async payload => {
+      workspaceCalls.push(payload);
+      return {
+        featuredItems: [
+          { id: 'featured-1', name: 'House Spritz', price: '$9', visibility: 'public', is_eighty_sixed: false },
         ],
-      },
-    ],
-    _restaurantSpecialsSiblingCatalog: [
-      { id: 'sibling-1', name: 'Sibling Special', cat: 'Canned & Bottled', menuId: 'menu-sibling', menuLabel: 'Drinks', onMenu: true, visibility: 'public' },
-    ],
+      };
+    },
+    readApiJsonOrNull: async url => {
+      publicCalls.push(url);
+      return {
+        featuredItems: [
+          { id: 'public-1', name: 'Public Spritz', price: '$10', visibility: 'public', is_eighty_sixed: false },
+        ],
+      };
+    },
   });
 
   const service = sandbox.createRestaurantSpecialsService();
-  service.request = async (action, payload = {}) => {
-    requestCalls.push([action, payload]);
-    return {};
-  };
-  service.refreshForActiveMenu = async () => {
-    refreshCalls.push('refresh');
-    return sandbox._featuredGroups;
-  };
+  const result = await service.refreshForActiveMenu();
 
-  const matches = service.getMatches('', 'sibling');
-  assert.equal(matches.length, 1);
-  assert.equal(matches[0].id, 'sibling-1');
-
-  const added = await service.addSlot({ itemId: 'beer-1' });
-  assert.equal(added.ok, true);
-  assert.equal(requestCalls[0][0], 'add');
-  assert.equal(refreshCalls.length, 1);
+  assert.equal(workspaceCalls.length, 1);
+  assert.equal(workspaceCalls[0].menuId, 'menu-main');
+  assert.equal(publicCalls.length, 0);
+  assert.equal(Array.isArray(result), true);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].slots[0].item.name, 'House Spritz');
+  assert.equal(getState(sandbox, '_restaurantSpecialsSiblingCatalog.length'), 0);
+  assert.equal(service.getActiveGroup().slots[0].item.name, 'House Spritz');
 });
 
 test('manager menu switching closes the mobile drawer after the menu refresh completes', async () => {
@@ -1836,6 +1833,18 @@ test('public route contract and route renderers register and hydrate both restau
   for (const routeCase of routeCases) {
     const sandbox = loadAppSandbox();
     const { page, settingsWrapper } = setupRouteDom(sandbox, routeCase.prefix);
+    const featuredItems = Array.from({ length: 5 }, (_, index) => ({
+      id: `special-${index + 1}`,
+      name: `House Margarita ${index + 1}`,
+      price: '$12',
+      visibility: 'public',
+      eightySixed: false,
+      desc: 'Citrus and salt',
+      recipe: ['tequila', 'lime'],
+      upcharges: [],
+      showDescription: true,
+      showRecipe: true,
+    }));
     setState(sandbox, {
       _siteRestaurant: { id: routeCase.restaurantId, name: routeCase.restaurantName },
       RESTAURANT_ID: routeCase.restaurantId,
@@ -1847,22 +1856,11 @@ test('public route contract and route renderers register and hydrate both restau
         {
           id: 'group-1',
           name: 'Specials',
-          slots: Array.from({ length: 5 }, (_, index) => ({
+          slots: featuredItems.map((item, index) => ({
             id: `slot-${index + 1}`,
-            itemId: `special-${index + 1}`,
+            itemId: item.id,
             sellNote: '',
-            item: {
-              id: `special-${index + 1}`,
-              name: `House Margarita ${index + 1}`,
-              price: '$12',
-              visibility: 'public',
-              eightySixed: false,
-              desc: 'Citrus and salt',
-              recipe: ['tequila', 'lime'],
-              upcharges: [],
-              showDescription: true,
-              showRecipe: true,
-            },
+            item,
           })),
         },
       ],
@@ -1888,7 +1886,7 @@ test('public route contract and route renderers register and hydrate both restau
         canEditRestaurantSpecials: true,
         categoryDefs: [{ id: 'beer', title: 'Beers on Tap', icon: '🍺' }],
         currentUser: getState(sandbox, 'currentUser'),
-        featuredGroups: getState(sandbox, '_featuredGroups'),
+        featuredItems,
         isPreview: true,
         knownMenus: [{ id: routeCase.menuId, restaurantId: routeCase.restaurantId, type: 'drinks', name: routeCase.menuName, slug: 'test-slug' }],
         lastUpdatedTs: '1712705100000',
@@ -1896,7 +1894,6 @@ test('public route contract and route renderers register and hydrate both restau
         menuState: getState(sandbox, 'menuState'),
         menuType: 'drinks',
         restaurantId: routeCase.restaurantId,
-        restaurantSpecials: getState(sandbox, '_featuredGroups')[0],
         siteRestaurant: getState(sandbox, '_siteRestaurant'),
       },
       helpers: {
@@ -2088,7 +2085,7 @@ test('fallback defaults reset category definitions by menu type', () => {
 
   assert.equal(result.source, 'default');
   const categoryIds = getState(sandbox, 'CATEGORY_DEFS.map(cat => cat.id)');
-  assert.equal(Array.from(categoryIds).slice(0, 3).join(','), 'starters,tacos,entrees');
+  assert.equal(Array.from(categoryIds).slice(0, 3).join(','), 'featured_specials,starters,tacos');
 });
 
 test('menu link resolver uses per-menu configuration with canonical route fallback', () => {
@@ -2265,10 +2262,15 @@ test('runtime bootstrap and auth profile boundaries consume the consolidated aut
   assert.doesNotMatch(authApiSource, /fetch\('\/api\/role'/);
 });
 
-test('runtime workspace and history boundaries request server restaurant-tools and scoped history', () => {
+test('runtime workspace and history boundaries avoid deleted restaurant-tools includes while keeping scoped history', () => {
   const appSource = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 
-  assert.match(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.match(appSource, /action: 'workspace', menu_id: menuId/);
+  assert.doesNotMatch(appSource, /params\.set\('include', 'restaurant-tools'\)/);
+  assert.doesNotMatch(appSource, /workspacePayload\?\.restaurantTools/);
+  assert.doesNotMatch(appSource, /tools\.featuredGroups/);
+  assert.doesNotMatch(appSource, /tools\.siblingCatalog/);
+  assert.doesNotMatch(appSource, /capabilities\.includesRestaurantTools/);
   assert.match(appSource, /scope: canReadRestaurantTools \? 'restaurant' : 'menu'/);
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });

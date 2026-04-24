@@ -4,9 +4,6 @@ struct RestaurantToolsScreen: View {
   @Bindable var model: AppModel
   let restaurant: RestaurantRecord
   @State private var selectedType = "drinks"
-  @State private var showingCatalog = false
-  @State private var noteEditingSlot: FeaturedSlot?
-  @State private var noteText = ""
 
   var body: some View {
     ScrollView(showsIndicators: false) {
@@ -20,7 +17,7 @@ struct RestaurantToolsScreen: View {
         }
 
         if let workspace = currentWorkspace {
-          featuredLineupCard(workspace: workspace)
+          featuredGuidanceCard(workspace: workspace)
             .appEntryReveal(delay: 0.08)
         } else {
           loadingCard
@@ -43,34 +40,14 @@ struct RestaurantToolsScreen: View {
     .task {
       await model.loadRestaurantTools(for: restaurant.id)
     }
-    .sheet(isPresented: $showingCatalog) {
-      FeaturedCatalogSheet(
-        items: currentWorkspace?.restaurantTools?.siblingCatalog ?? [],
-        accent: accent,
-        onSelect: { item in
-          Task {
-            await model.saveFeaturedAction(action: "add", restaurantId: restaurant.id, itemId: item.id)
-            showingCatalog = false
-          }
-        }
-      )
-    }
-    .alert("Edit Sell Note", isPresented: Binding(
-      get: { noteEditingSlot != nil },
-      set: { if !$0 { noteEditingSlot = nil } }
-    )) {
-      TextField("Sell note", text: $noteText)
-      Button("Save") {
-        if let slot = noteEditingSlot {
-          Task { await model.saveFeaturedAction(action: "note", restaurantId: restaurant.id, slotId: slot.id, note: noteText) }
-        }
-      }
-      Button("Cancel", role: .cancel) {}
-    }
   }
 
   private var accent: Color {
     selectedType == "food" ? AppPalette.jade : AppPalette.bloodOrange
+  }
+
+  private var selectedMenu: MenuRecord? {
+    model.menu(for: restaurant.id, type: selectedType)
   }
 
   private var headerCard: some View {
@@ -78,8 +55,8 @@ struct RestaurantToolsScreen: View {
       HStack(alignment: .top) {
         AppSectionHeader(
           eyebrow: "Restaurant tools",
-          title: "Featured lineup control",
-          subtitle: "Curate the floor-facing spotlight list, manage sell notes, and confirm the final sequence before service.",
+          title: "Menu tools",
+          subtitle: "Featured Specials now live inside each menu's dedicated category, so use menu editing and category management from here.",
           tint: accent
         )
         Spacer(minLength: 16)
@@ -92,46 +69,46 @@ struct RestaurantToolsScreen: View {
         title: { $0.capitalized }
       )
 
-      if let menu = model.menu(for: restaurant.id, type: selectedType) {
+      if let menu = selectedMenu {
         NavigationLink(value: AppDestination.categoryTools(menu)) {
           AppIslandButtonLabel(
             title: "Manage Categories",
-            subtitle: "Add, rename, delete, and reorder \(menu.displayTypeLabel.lowercased()) categories.",
+            subtitle: "Open the selected menu's category management screen.",
             systemImage: "square.split.1x2.fill"
           )
         }
         .buttonStyle(.plain)
         .appPillChrome(accent: accent)
-      }
 
-      Button {
-        showingCatalog = true
-      } label: {
-        AppIslandButtonLabel(
-          title: "Add from catalog",
-          subtitle: "Pull an item from the sibling catalog into the featured sequence.",
-          systemImage: "plus"
-        )
+        NavigationLink(value: AppDestination.editor(menu)) {
+          AppIslandButtonLabel(
+            title: "Edit Menu Items",
+            subtitle: "Open the selected menu editor to toggle featured specials and reorder items.",
+            systemImage: "list.bullet.rectangle"
+          )
+        }
+        .buttonStyle(.plain)
+        .appPillChrome(accent: accent, filled: true)
       }
-      .buttonStyle(.plain)
-      .appPillChrome(accent: accent, filled: true)
-      .disabled(currentWorkspace == nil)
-      .opacity(currentWorkspace == nil ? 0.55 : 1)
     }
     .appGlassCard(tint: accent, cornerRadius: 38)
   }
 
-  private func featuredLineupCard(workspace: MenuWorkspacePayload) -> some View {
-    VStack(alignment: .leading, spacing: 16) {
+  private func featuredGuidanceCard(workspace: MenuWorkspacePayload) -> some View {
+    let featuredCategory = workspace.cats.first(where: { $0.key == EditableMenuDocument.featuredSpecialsKey })
+    let featuredItems = featuredCategory?.items ?? []
+    let liveItems = featuredItems.filter(\.isPubliclyVisibleFeaturedSpecial)
+
+    return VStack(alignment: .leading, spacing: 16) {
       HStack(alignment: .center) {
         VStack(alignment: .leading, spacing: 6) {
           AppEyebrow(title: "Featured", tint: accent)
-          Text("Current lineup")
+          Text("Current setup")
             .font(AppTypography.display(28, weight: .bold))
             .foregroundStyle(AppPalette.espresso)
         }
         Spacer(minLength: 16)
-        Text("\(workspace.restaurantTools?.featuredGroups.reduce(0) { $0 + $1.slots.count } ?? 0) live slots")
+        Text("\(liveItems.count) live items")
           .font(AppTypography.micro(9, weight: .bold))
           .tracking(1.6)
           .padding(.vertical, 8)
@@ -140,51 +117,79 @@ struct RestaurantToolsScreen: View {
           .foregroundStyle(accent)
       }
 
-      ForEach(workspace.restaurantTools?.featuredGroups ?? []) { group in
+      Text("Use the Featured Specials category for this menu to store reusable deals, then turn on Show in featured strip for the items you want guests to see.")
+        .font(AppTypography.body(14, weight: .medium))
+        .foregroundStyle(AppPalette.espresso.opacity(0.74))
+        .fixedSize(horizontal: false, vertical: true)
+
+      if featuredItems.isEmpty {
+        Text("No featured-special items exist on this menu yet.")
+          .font(AppTypography.body(14, weight: .semibold))
+          .foregroundStyle(AppPalette.ink)
+          .padding(14)
+          .appFieldChrome(tint: accent, cornerRadius: 22)
+      } else if liveItems.isEmpty {
+        Text("No featured-special items are currently live on this menu.")
+          .font(AppTypography.body(14, weight: .semibold))
+          .foregroundStyle(AppPalette.ink)
+          .padding(14)
+          .appFieldChrome(tint: accent, cornerRadius: 22)
+      } else {
         VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text(group.name)
-              .font(AppTypography.body(18, weight: .bold))
-              .foregroundStyle(AppPalette.ink)
-            Spacer(minLength: 12)
-            Text("\(group.slots.count) items")
-              .font(AppTypography.micro(9, weight: .bold))
-              .tracking(1.4)
-              .foregroundStyle(AppPalette.espresso.opacity(0.68))
-          }
+          ForEach(liveItems) { item in
+            HStack(alignment: .top, spacing: 12) {
+              VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                  Text(item.name)
+                    .font(AppTypography.body(16, weight: .bold))
+                    .foregroundStyle(AppPalette.ink)
+                    .strikethrough(item.isEightySixed)
 
-          ForEach(group.slots) { slot in
-            FeaturedSlotCard(
-              slot: slot,
-              accent: accent,
-              onMoveUp: {
-                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: -1) }
-              },
-              onMoveDown: {
-                Task { await model.saveFeaturedAction(action: "move", restaurantId: restaurant.id, slotId: slot.id, direction: 1) }
-              },
-              onEditNote: {
-                noteEditingSlot = slot
-                noteText = slot.sellNote
-              },
-              onRemove: {
-                Task { await model.saveFeaturedAction(action: "remove", restaurantId: restaurant.id, slotId: slot.id) }
+                  if item.isPubliclyVisibleFeaturedSpecial {
+                    Text("LIVE")
+                      .font(AppTypography.micro(8, weight: .bold))
+                      .tracking(1.4)
+                      .padding(.vertical, 5)
+                      .padding(.horizontal, 8)
+                      .background(accent.opacity(0.10), in: Capsule(style: .continuous))
+                      .foregroundStyle(accent)
+                  }
+
+                  if item.isEightySixed {
+                    Text("86'D")
+                      .font(AppTypography.micro(8, weight: .bold))
+                      .tracking(1.4)
+                      .padding(.vertical, 5)
+                      .padding(.horizontal, 8)
+                      .background(AppPalette.danger.opacity(0.10), in: Capsule(style: .continuous))
+                      .foregroundStyle(AppPalette.danger)
+                  }
+                }
+
+                if item.showDescription, !item.desc.isEmpty {
+                  Text(item.desc)
+                    .font(AppTypography.body(13, weight: .medium))
+                    .foregroundStyle(AppPalette.espresso.opacity(0.72))
+                    .fixedSize(horizontal: false, vertical: true)
+                }
               }
-            )
+
+              Spacer(minLength: 12)
+
+              if let price = item.price.nilIfBlank {
+                Text(price)
+                  .font(AppTypography.body(13, weight: .bold))
+                  .foregroundStyle(accent)
+                  .padding(.vertical, 7)
+                  .padding(.horizontal, 10)
+                  .background(accent.opacity(0.10), in: Capsule(style: .continuous))
+              }
+            }
+            .padding(15)
+            .appFieldChrome(tint: accent, cornerRadius: 22)
           }
         }
-        .appGlassCard(tint: accent, cornerRadius: 30)
       }
-
-      AppIslandActionButton(
-        title: "Confirm featured lineup",
-        subtitle: "Lock the final sell sequence for service.",
-        systemImage: "checkmark",
-        accent: accent,
-        action: {
-          Task { await model.saveFeaturedAction(action: "confirm", restaurantId: restaurant.id) }
-        }
-      )
     }
     .appGlassCard(tint: AppPalette.brass, cornerRadius: 36)
   }
@@ -228,150 +233,18 @@ struct RestaurantToolsScreen: View {
   private var loadingCard: some View {
     AppLoadingCard(
       title: "Loading restaurant tools",
-      subtitle: "Fetching the featured lineup, catalog, and recent service history.",
+      subtitle: "Fetching the selected menu workspace and recent history.",
       tint: accent
     )
   }
 
   private var currentWorkspace: MenuWorkspacePayload? {
-    if let menu = model.menu(for: restaurant.id, type: selectedType) {
-      return model.currentToolsMenus[menu.id]
-    }
-    return nil
+    guard let menu = selectedMenu else { return nil }
+    return model.currentToolsMenus[menu.id]
   }
 
   private var currentHistory: HistoryPayload? {
-    if let menu = model.menu(for: restaurant.id, type: selectedType) {
-      return model.currentToolsHistories[menu.id]
-    }
-    return nil
-  }
-}
-
-private struct FeaturedSlotCard: View {
-  let slot: FeaturedSlot
-  let accent: Color
-  let onMoveUp: () -> Void
-  let onMoveDown: () -> Void
-  let onEditNote: () -> Void
-  let onRemove: () -> Void
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(alignment: .top, spacing: 12) {
-        VStack(alignment: .leading, spacing: 6) {
-          HStack(spacing: 8) {
-            Text(slot.item?.name ?? "Featured item")
-              .font(AppTypography.body(16, weight: .bold))
-              .foregroundStyle(AppPalette.ink)
-              if let confirmedAt = slot.confirmedAt?.nilIfBlank {
-              Text("CONFIRMED")
-                .font(AppTypography.micro(8, weight: .bold))
-                .tracking(1.4)
-                .padding(.vertical, 5)
-                .padding(.horizontal, 8)
-                .background(AppPalette.success.opacity(0.10), in: Capsule(style: .continuous))
-                .foregroundStyle(AppPalette.success)
-                .help(confirmedAt)
-            }
-          }
-          if !slot.sellNote.isEmpty {
-            Text(slot.sellNote)
-              .font(AppTypography.body(13, weight: .medium))
-              .foregroundStyle(AppPalette.espresso.opacity(0.72))
-              .fixedSize(horizontal: false, vertical: true)
-          }
-        }
-        Spacer(minLength: 12)
-        if let price = slot.item?.price.nilIfBlank {
-          Text(price)
-            .font(AppTypography.body(13, weight: .bold))
-            .foregroundStyle(accent)
-            .padding(.vertical, 7)
-            .padding(.horizontal, 10)
-            .background(accent.opacity(0.10), in: Capsule(style: .continuous))
-        }
-      }
-
-      HStack(spacing: 8) {
-        toolButton(title: "Up", icon: "arrow.up", accent: accent, action: onMoveUp)
-        toolButton(title: "Down", icon: "arrow.down", accent: accent, action: onMoveDown)
-        toolButton(title: "Note", icon: "pencil", accent: AppPalette.brass, action: onEditNote)
-        toolButton(title: "Remove", icon: "trash", accent: AppPalette.danger, action: onRemove)
-      }
-    }
-    .padding(15)
-    .appFieldChrome(tint: accent, cornerRadius: 22)
-  }
-
-  private func toolButton(title: String, icon: String, accent: Color, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
-      Label(title, systemImage: icon)
-        .font(AppTypography.micro(9, weight: .bold))
-        .tracking(1.2)
-        .padding(.horizontal, 11)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-    }
-    .buttonStyle(.plain)
-    .foregroundStyle(accent)
-    .appPillChrome(accent: accent, filled: false)
-  }
-}
-
-private struct FeaturedCatalogSheet: View {
-  @Environment(\.dismiss) private var dismiss
-  let items: [SiblingCatalogItem]
-  let accent: Color
-  let onSelect: (SiblingCatalogItem) -> Void
-
-  var body: some View {
-    NavigationStack {
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 14) {
-          ForEach(items) { item in
-            Button {
-              onSelect(item)
-            } label: {
-              HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                  Text(item.name)
-                    .font(AppTypography.body(16, weight: .bold))
-                    .foregroundStyle(AppPalette.ink)
-                  Text("\(item.menuLabel) • \(item.cat)")
-                    .font(AppTypography.body(13, weight: .medium))
-                    .foregroundStyle(AppPalette.espresso.opacity(0.68))
-                  if !item.onMenu {
-                    Text("Off menu")
-                      .font(AppTypography.micro(8, weight: .bold))
-                      .tracking(1.4)
-                      .foregroundStyle(AppPalette.warning)
-                  }
-                }
-                Spacer(minLength: 12)
-                Image(systemName: "arrow.up.right")
-                  .font(.system(size: 14, weight: .semibold))
-                  .foregroundStyle(accent)
-              }
-              .padding(15)
-            }
-            .buttonStyle(.plain)
-            .appFieldChrome(tint: accent, cornerRadius: 22)
-          }
-        }
-        .padding(24)
-      }
-      .background {
-        AppBackground()
-          .ignoresSafeArea()
-      }
-      .navigationTitle("Add Featured Item")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button("Close") { dismiss() }
-        }
-      }
-    }
+    guard let menu = selectedMenu else { return nil }
+    return model.currentToolsHistories[menu.id]
   }
 }

@@ -56,12 +56,12 @@
   }
 
   function buildFeaturedHtml(sharedState) {
-    const featuredSlots = (sharedState.restaurantSpecials?.slots || [])
-      .filter(slot => slot.item)
-      .slice(0, 5);
-    if (!featuredSlots.length) return '<p class="erc-route-empty">Nothing featured right now.</p>';
+    const featuredItems = Array.isArray(sharedState.featuredItems)
+      ? sharedState.featuredItems.slice(0, 5)
+      : [];
+    if (!featuredItems.length) return '<p class="erc-route-empty">Nothing featured right now.</p>';
 
-    return featuredSlots.slice(0, 5).map((slot, index) => buildItemHtml(slot.item, {
+    return featuredItems.map((item, index) => buildItemHtml(item, {
       badgeText: index === 0 ? "Chef's Choice" : '',
     })).join('');
   }

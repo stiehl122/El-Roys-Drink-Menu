@@ -13,6 +13,7 @@ const LANDING_RUNTIME_SCRIPTS = [
 const DEFAULT_RUNTIME_SCRIPTS = [
   'core/domain/constants.js',
   'core/domain/category-defaults.js',
+  'core/domain/featured-specials.js',
   'core/auth/auth-api.js',
   'core/auth/auth-session-service.js',
   'core/auth/auth-overlay-template.js',

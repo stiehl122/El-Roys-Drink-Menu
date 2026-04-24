@@ -15,13 +15,13 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?phase20=${Date.now()}-${Math.random()}`);
 }
 
-test('manager route can include restaurant tools without widening menu access checks', () => {
-  const routeSource = read('api/manager.js');
+test('public menu route no longer depends on restaurant tools read transport', () => {
+  const routeSource = read('api/public.js');
 
-  assert.match(routeSource, /readIncludeFlags/);
-  assert.match(routeSource, /includeFlags\.includes\('restaurant-tools'\)/);
-  assert.match(routeSource, /requireRestaurantSpecialsAccess/);
-  assert.match(routeSource, /readRestaurantToolsPayload/);
+  assert.doesNotMatch(routeSource, /readRestaurantToolsPayload/);
+  assert.doesNotMatch(routeSource, /featuredGroups/);
+  assert.doesNotMatch(routeSource, /featuredCompatibility/);
+  assert.match(routeSource, /createPublicMenuPayload\(bundle\)/);
 });
 
 test('server write helpers degrade optional draft and source metadata cleanly', async () => {

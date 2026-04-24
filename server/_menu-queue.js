@@ -1,4 +1,19 @@
+import '../core/domain/featured-specials.js';
+
 const UNCATEGORIZED_KEY = '__uncategorized__';
+const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
+  ? globalThis.__HF_FEATURED_SPECIALS__
+  : {};
+const isFeaturedSpecialsCategory = typeof featuredSpecials.isFeaturedSpecialsCategory === 'function'
+  ? featuredSpecials.isFeaturedSpecialsCategory
+  : (categoryOrKey => String(categoryOrKey?.key || categoryOrKey || '').trim() === 'featured_specials');
+const normalizeFeaturedSpecialsLastSentState = typeof featuredSpecials.normalizeFeaturedSpecialsLastSentState === 'function'
+  ? featuredSpecials.normalizeFeaturedSpecialsLastSentState
+  : (lastSentState => (
+      lastSentState && typeof lastSentState === 'object' && !Array.isArray(lastSentState)
+        ? Object.fromEntries(Object.entries(lastSentState).map(([key, items]) => [key, asArray(items).map(item => ({ ...item }))]))
+        : {}
+    ));
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -39,6 +54,7 @@ function toNormalizedQueueItem(item = {}, {
     nameKey: name.toLowerCase(),
     visible: isVisibleItem(item),
     eightySixed: isEightySixed(item),
+    featuredEnabled: item?.featured_enabled === true || item?.featuredEnabled === true,
   };
 }
 
@@ -63,6 +79,125 @@ export function readSnapshotCategories(snapshot = {}) {
       items: readCategoryItems(category),
     }))
     .filter(category => category.key && category.key !== UNCATEGORIZED_KEY);
+}
+
+function normalizeLegacyFeaturedEntry(entry = null) {
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const itemId = String(entry?.item_id || entry?.id || '').trim();
+    if (!itemId) return null;
+    return {
+      id: itemId,
+      item: { ...entry, id: itemId },
+    };
+  }
+
+  const itemId = String(entry || '').trim();
+  if (!itemId) return null;
+  return { id: itemId, item: null };
+}
+
+function findLegacyFeaturedLookupItem(itemId = '', categories = []) {
+  if (!itemId) return null;
+  for (const category of asArray(categories)) {
+    const match = asArray(category?.items).find(item => String(item?.id || '').trim() === itemId);
+    if (match) return match;
+  }
+  return null;
+}
+
+function createLegacyFeaturedBaselineItem(item = {}, itemId = '') {
+  const normalizedId = String(item?.id || itemId || '').trim();
+  if (!normalizedId) return null;
+
+  const normalizedName = normalizeName(item?.name || item?.label || item?.title || normalizedId);
+  if (!normalizedName) return null;
+
+  const nextItem = {
+    ...item,
+    id: normalizedId,
+    name: normalizedName,
+    on_menu: true,
+    visibility: 'public',
+    featuredEnabled: true,
+    featured_enabled: true,
+  };
+  delete nextItem.onMenu;
+  return nextItem;
+}
+
+export function normalizeLegacyFeaturedBaseline({
+  snapshot = {},
+  lastSentState = {},
+  lastSentFeatured = [],
+} = {}) {
+  const normalizedState = normalizeFeaturedSpecialsLastSentState(lastSentState);
+  const legacyFeaturedEntries = asArray(lastSentFeatured)
+    .map(normalizeLegacyFeaturedEntry)
+    .filter(Boolean);
+  const legacyFeaturedIds = new Set(legacyFeaturedEntries.map(entry => entry.id));
+  if (!legacyFeaturedIds.size) return normalizedState;
+
+  const snapshotCategories = readSnapshotCategories(snapshot);
+  const currentFeaturedCategory = snapshotCategories.find(category => isFeaturedSpecialsCategory(category));
+  const baselineLookupCategories = Object.entries(normalizedState).map(([key, items]) => ({
+    key,
+    items: asArray(items),
+  }));
+  const featuredKeys = Array.from(new Set([
+    ...Object.keys(normalizedState).filter(key => isFeaturedSpecialsCategory(key)),
+    ...(currentFeaturedCategory?.key ? [currentFeaturedCategory.key] : []),
+    'featured_specials',
+  ]));
+  const targetKey = currentFeaturedCategory?.key || featuredKeys[0] || 'featured_specials';
+  const mergedItems = [];
+  const itemIds = new Set();
+
+  featuredKeys.forEach(key => {
+    asArray(normalizedState[key]).forEach(item => {
+      const itemId = String(item?.id || '').trim();
+      const explicitFeatured = item?.featuredEnabled === true || item?.featured_enabled === true;
+      const nextFeatured = explicitFeatured || legacyFeaturedIds.has(itemId);
+      const nextItem = {
+        ...item,
+        featuredEnabled: nextFeatured,
+        featured_enabled: nextFeatured,
+      };
+      mergedItems.push(nextItem);
+      if (itemId) itemIds.add(itemId);
+    });
+  });
+
+  asArray(currentFeaturedCategory?.items).forEach(item => {
+    const itemId = String(item?.id || '').trim();
+    if (!itemId || itemIds.has(itemId) || !legacyFeaturedIds.has(itemId)) return;
+    mergedItems.push({
+      ...item,
+      featuredEnabled: true,
+      featured_enabled: true,
+    });
+    itemIds.add(itemId);
+  });
+
+  legacyFeaturedEntries.forEach(entry => {
+    const itemId = String(entry?.id || '').trim();
+    if (!itemId || itemIds.has(itemId)) return;
+
+    // Reconstruct a one-time featured baseline from the last-sent document first,
+    // then fall back to the current snapshot or richer legacy metadata when needed.
+    const lookupItem = findLegacyFeaturedLookupItem(itemId, baselineLookupCategories)
+      || findLegacyFeaturedLookupItem(itemId, snapshotCategories)
+      || entry.item;
+    const baselineItem = createLegacyFeaturedBaselineItem(lookupItem || {}, itemId);
+    if (!baselineItem) return;
+    mergedItems.push(baselineItem);
+    itemIds.add(itemId);
+  });
+
+  featuredKeys.forEach(key => {
+    if (key !== targetKey) delete normalizedState[key];
+  });
+  normalizedState[targetKey] = mergedItems;
+  return normalizedState;
 }
 
 function createSectionState(category = {}, fallbackOrder = Number.MAX_SAFE_INTEGER) {
@@ -179,7 +314,8 @@ function normalizeCurrentCategoryItems(category = {}) {
     .filter(Boolean);
 }
 
-function buildCategoryGroupChanges(section, currentItems = [], previousItems = []) {
+function buildCategoryGroupChanges(section, currentItems = [], previousItems = [], options = {}) {
+  const includeHiddenEightyAsAdded = options?.includeHiddenEightyAsAdded === true;
   const currentById = new Map(currentItems.map(item => [item.id, item]));
   const previousById = new Map(previousItems.map(item => [item.id, item]));
   const orderedIds = [];
@@ -286,6 +422,23 @@ function buildCategoryGroupChanges(section, currentItems = [], previousItems = [
       return;
     }
 
+    if (includeHiddenEightyAsAdded && previousState === 'hidden' && currentState === 'eighty') {
+      const groupId = createGroupId(section.id, 'added', itemId);
+      groups.push({
+        id: groupId,
+        kind: 'added',
+        selectable: true,
+        sectionId: section.id,
+        sectionLabel: section.label,
+        icon: section.icon,
+        displayOrder: section.displayOrder,
+        itemId: String(itemId || ''),
+        lines: [createChangeLine(groupId, section, { kind: 'added', name: current?.name, itemId })],
+      });
+      unsentCurrentItemIds.add(itemId);
+      return;
+    }
+
     if (previousState === 'hidden' && currentState === 'active') {
       const groupId = createGroupId(section.id, 'added', itemId);
       groups.push({
@@ -307,6 +460,20 @@ function buildCategoryGroupChanges(section, currentItems = [], previousItems = [
     groups,
     unsentCurrentItemIds: Array.from(unsentCurrentItemIds),
   };
+}
+
+function buildFeaturedSpecialGroupChanges(section, currentItems = [], previousItems = []) {
+  const visibleEnabledCurrentItems = currentItems.map(item => ({
+    ...item,
+    visible: item?.visible === true && item?.featuredEnabled === true,
+  }));
+  const visibleEnabledPreviousItems = previousItems.map(item => ({
+    ...item,
+    visible: item?.visible === true && item?.featuredEnabled === true,
+  }));
+  return buildCategoryGroupChanges(section, visibleEnabledCurrentItems, visibleEnabledPreviousItems, {
+    includeHiddenEightyAsAdded: true,
+  });
 }
 
 export function buildCategoryQueueState({
@@ -335,7 +502,9 @@ export function buildCategoryQueueState({
     const section = createSectionState(category, Number.MAX_SAFE_INTEGER - 1000 + sectionIndex);
     const currentItems = normalizeCurrentCategoryItems(category);
     const previousItems = normalizeBaselineCategoryItems(lastSentState, sectionKey);
-    const result = buildCategoryGroupChanges(section, currentItems, previousItems);
+    const result = isFeaturedSpecialsCategory(section)
+      ? buildFeaturedSpecialGroupChanges(section, currentItems, previousItems)
+      : buildCategoryGroupChanges(section, currentItems, previousItems);
     result.groups.forEach(group => groups.push(group));
     result.unsentCurrentItemIds.forEach(itemId => {
       if (itemId) unsentItemIds.add(String(itemId));

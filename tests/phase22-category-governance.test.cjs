@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
@@ -11,6 +12,10 @@ const {
 } = require('./helpers/runtime.cjs');
 
 const ROOT = path.join(__dirname, '..');
+
+function read(relativePath) {
+  return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
 
 async function importApiModule(relativePath) {
   const fileUrl = pathToFileURL(path.join(ROOT, relativePath)).href;
@@ -119,8 +124,13 @@ test('workspace payload defaults untappd_enabled to false and preserves explicit
     },
   });
 
-  assert.equal(payload.cats[0].untappd_enabled, false);
-  assert.equal(payload.cats[1].untappd_enabled, true);
+  const beerCategory = payload.cats.find(category => category.key === 'beer');
+  const cannedCategory = payload.cats.find(category => category.key === 'canned');
+  const featuredCategory = payload.cats.find(category => category.key === 'featured_specials');
+
+  assert.equal(featuredCategory?.untappd_enabled, false);
+  assert.equal(beerCategory?.untappd_enabled, false);
+  assert.equal(cannedCategory?.untappd_enabled, true);
 });
 
 test('web menu cache snapshot includes untappd_enabled and defaults missing values to false', () => {
@@ -426,4 +436,252 @@ test('canceling the add-category form resets the Untappd toggle to its default s
   assert.equal(addForm.style.display, 'none');
   assert.equal(addButton.textContent, '+ Add Category');
   assert.equal(untappdCheckbox.checked, false);
+});
+
+test('category governance blocks rename, move, and delete for featured_specials', () => {
+  const source = read('app.js');
+  assert.match(source, /function isProtectedSystemCategory\(/);
+  assert.match(source, /catId === FEATURED_SPECIALS_CATEGORY_ID/);
+});
+
+test('local diffing counts featured_specials through featured diff only once', () => {
+  const sandbox = loadAppSandbox();
+  setState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'featured_specials',
+        title: 'Featured Specials',
+        label: 'Featured Specials',
+        icon: '⭐',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+      {
+        id: 'cocktails',
+        title: 'Cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+    ],
+    menuState: {
+      featured_specials: {
+        items: [{
+          id: 'special-1',
+          name: 'House Margarita',
+          desc: '',
+          recipe: [],
+          price: '$12',
+          eightySixed: false,
+          onMenu: true,
+          visibility: 'public',
+          upcharges: [],
+          showDescription: true,
+          showRecipe: false,
+          featuredEnabled: true,
+        }],
+        lastSent: [],
+      },
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+      _meta: {},
+    },
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+  });
+
+  const diffIds = Array.from(getState(sandbox, 'computeDiff().map(section => section.id)'));
+  assert.equal(diffIds.join(','), '__featured__');
+});
+
+test('local featured diff detects rename, add/remove, and 86/restore for enabled visible items', () => {
+  const sandbox = loadAppSandbox();
+  setState(sandbox, {
+    CATEGORY_DEFS: [
+      {
+        id: 'featured_specials',
+        title: 'Featured Specials',
+        label: 'Featured Specials',
+        icon: '⭐',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+      {
+        id: 'cocktails',
+        title: 'Cocktails',
+        label: 'Cocktails',
+        icon: '🍹',
+        color: '',
+        sub: '',
+        placeholder: '',
+      },
+    ],
+    menuState: {
+      featured_specials: {
+        items: [
+          {
+            id: 'special-rename',
+            name: 'After Party Marg',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-86',
+            name: 'Back Bar Deal',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-restore',
+            name: 'Night Cap Shot',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-added',
+            name: 'Fresh Frozen Pour',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-hidden-eighty',
+            name: 'Dormant Frozen Pour',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-disabled-current',
+            name: 'Hidden Toggle Pour',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
+            id: 'special-off-menu-current',
+            name: 'Off Menu Daiquiri',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'off_menu',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-not-on-menu-current',
+            name: 'Staff Meal Shot',
+            eightySixed: false,
+            onMenu: false,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+        ],
+        lastSent: [
+          {
+            id: 'special-rename',
+            name: 'Before Party Marg',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-86',
+            name: 'Back Bar Deal',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-restore',
+            name: 'Night Cap Shot',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-removed',
+            name: 'Last Call Old Fashioned',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-hidden-eighty',
+            name: 'Dormant Frozen Pour',
+            eightySixed: true,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
+            id: 'special-disabled-last-sent',
+            name: 'Hidden Toggle Old Fashioned',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'public',
+            featuredEnabled: false,
+          },
+          {
+            id: 'special-off-menu-last-sent',
+            name: 'Off Menu Collins',
+            eightySixed: false,
+            onMenu: true,
+            visibility: 'off_menu',
+            featuredEnabled: true,
+          },
+          {
+            id: 'special-not-on-menu-last-sent',
+            name: 'Server Shift Pour',
+            eightySixed: false,
+            onMenu: false,
+            visibility: 'public',
+            featuredEnabled: true,
+          },
+        ],
+      },
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+      _meta: {},
+    },
+    RESTAURANT_ID: '00000000-0000-0000-0000-000000000010',
+    _lastSentFeaturedIds: new Set(['special-rename', 'special-86', 'special-restore', 'special-removed']),
+  });
+
+  const diff = getState(sandbox, 'JSON.parse(JSON.stringify(computeDiff()))');
+  assert.deepEqual(diff, [{
+    id: '__featured__',
+    icon: '⭐',
+    label: "Leroy's Specials",
+    added: ['After Party Marg', 'Fresh Frozen Pour', 'Dormant Frozen Pour'],
+    removed: ['Before Party Marg', 'Last Call Old Fashioned'],
+    eightySixed: ['Back Bar Deal'],
+    restored: ['Night Cap Shot'],
+  }]);
+  const diffLines = diff.flatMap(section => [
+    ...(section.added || []),
+    ...(section.removed || []),
+    ...(section.eightySixed || []),
+    ...(section.restored || []),
+  ]);
+  assert.equal(diffLines.includes('Hidden Toggle Pour'), false);
+  assert.equal(diffLines.includes('Off Menu Daiquiri'), false);
+  assert.equal(diffLines.includes('Staff Meal Shot'), false);
+  assert.equal(diffLines.includes('Hidden Toggle Old Fashioned'), false);
+  assert.equal(diffLines.includes('Off Menu Collins'), false);
+  assert.equal(diffLines.includes('Server Shift Pour'), false);
 });

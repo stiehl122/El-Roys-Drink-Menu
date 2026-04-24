@@ -26,8 +26,8 @@ struct PublicMenuScreen: View {
           summaryStrip(payload: payload)
             .appEntryReveal(delay: 0.08)
 
-          if !payload.featuredGroups.isEmpty {
-            FeaturedGroupsSection(groups: payload.featuredGroups, accent: accent)
+          if !payload.featuredItems.isEmpty {
+            FeaturedItemsSection(items: payload.featuredItems, accent: accent)
               .appEntryReveal(delay: 0.12)
           }
 
@@ -101,7 +101,7 @@ struct PublicMenuScreen: View {
     return HStack(spacing: 10) {
       metricPill(title: "sections", value: "\(payload.cats.count)")
       metricPill(title: "items", value: "\(itemCount)")
-      metricPill(title: "featured", value: "\(payload.featuredGroups.reduce(0) { $0 + $1.slots.count })")
+      metricPill(title: "featured", value: "\(payload.featuredItems.count)")
     }
   }
 
@@ -112,7 +112,7 @@ struct PublicMenuScreen: View {
   private var loadingCard: some View {
     AppLoadingCard(
       title: "Loading public menu",
-      subtitle: "Pulling the live guest-facing sections, featured groups, and pricing.",
+      subtitle: "Pulling the live guest-facing sections, featured specials, and pricing.",
       tint: accent
     )
   }
@@ -128,8 +128,8 @@ struct PublicMenuScreen: View {
   }
 }
 
-private struct FeaturedGroupsSection: View {
-  let groups: [FeaturedGroup]
+private struct FeaturedItemsSection: View {
+  let items: [MenuItemPayload]
   let accent: Color
 
   var body: some View {
@@ -137,54 +137,15 @@ private struct FeaturedGroupsSection: View {
       HStack {
         AppSectionHeader(
           eyebrow: "Featured",
-          title: "Spotlight groups",
+          title: "Current specials",
           tint: accent
         )
         Spacer(minLength: 16)
       }
 
-      ForEach(groups) { group in
-        VStack(alignment: .leading, spacing: 12) {
-          HStack {
-            Text(group.name)
-              .font(AppTypography.body(18, weight: .bold))
-              .foregroundStyle(AppPalette.espresso)
-            Spacer()
-            Text("\(group.slots.count) items")
-              .font(AppTypography.micro(9, weight: .bold))
-              .tracking(1.4)
-              .padding(.vertical, 7)
-              .padding(.horizontal, 10)
-              .background(accent.opacity(0.10), in: Capsule(style: .continuous))
-              .foregroundStyle(accent)
-          }
-
-          ForEach(group.slots) { slot in
-            HStack(alignment: .top, spacing: 12) {
-              VStack(alignment: .leading, spacing: 5) {
-                Text(slot.item?.name ?? "Featured Item")
-                  .font(AppTypography.body(16, weight: .bold))
-                  .foregroundStyle(AppPalette.ink)
-                if !slot.sellNote.isEmpty {
-                  Text(slot.sellNote)
-                    .font(AppTypography.body(13, weight: .medium))
-                    .foregroundStyle(AppPalette.espresso.opacity(0.70))
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-              }
-              Spacer(minLength: 12)
-              if let price = slot.item?.price.nilIfBlank {
-                Text(price)
-                  .font(AppTypography.body(13, weight: .bold))
-                  .foregroundStyle(accent)
-                  .padding(.vertical, 7)
-                  .padding(.horizontal, 10)
-                  .background(accent.opacity(0.10), in: Capsule(style: .continuous))
-              }
-            }
-            .padding(14)
-            .appFieldChrome(tint: accent, cornerRadius: 20)
-          }
+      ForEach(items) { item in
+        VStack(alignment: .leading, spacing: 10) {
+          PublicMenuItemRow(item: item, accent: accent)
         }
         .appGlassCard(tint: accent, cornerRadius: 30)
       }

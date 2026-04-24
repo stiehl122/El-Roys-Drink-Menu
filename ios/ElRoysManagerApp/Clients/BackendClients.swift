@@ -69,10 +69,6 @@ protocol HistoryClienting {
   func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload
 }
 
-protocol FeaturedToolsClienting {
-  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws
-}
-
 protocol PreviewClienting {
   func exactRouteURL(for menu: MenuRecord) -> URL
 }
@@ -174,26 +170,6 @@ private struct PublishRequest: Encodable {
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
   var expectedNotificationRevision: Int?
-}
-
-private struct SpecialsRequest: Encodable {
-  var action: String
-  var specialsAction: String?
-  var restaurantId: String
-  var itemId: String?
-  var slotId: String?
-  var note: String?
-  var direction: Int?
-
-  enum CodingKeys: String, CodingKey {
-    case action
-    case specialsAction = "specials_action"
-    case restaurantId
-    case itemId
-    case slotId
-    case note
-    case direction
-  }
 }
 
 private struct ProductLookupRequest: Encodable {
@@ -431,7 +407,6 @@ final class WorkspaceClient: WorkspaceClienting {
       queryItems: [
         URLQueryItem(name: "action", value: "workspace"),
         URLQueryItem(name: "menu_id", value: menuId),
-        URLQueryItem(name: "include", value: "restaurant-tools"),
       ],
       accessToken: accessToken
     )
@@ -580,31 +555,6 @@ final class HistoryClient: HistoryClienting {
         URLQueryItem(name: "menu_id", value: menuId),
       ],
       accessToken: accessToken
-    )
-  }
-}
-
-final class FeaturedToolsClient: FeaturedToolsClienting {
-  private let http: HTTPService
-
-  init(environment: AppEnvironment, session: URLSession = .shared) {
-    http = HTTPService(environment: environment, session: session)
-  }
-
-  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
-    try await http.requestVoid(
-      path: "api/manager",
-      method: .post,
-      accessToken: accessToken,
-      body: SpecialsRequest(
-        action: "specials",
-        specialsAction: action,
-        restaurantId: restaurantId,
-        itemId: itemId,
-        slotId: slotId,
-        note: note,
-        direction: direction
-      )
     )
   }
 }

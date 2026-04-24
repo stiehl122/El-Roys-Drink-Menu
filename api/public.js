@@ -6,7 +6,6 @@ import {
   parseMenuId,
   readMenuStateBundle,
 } from '../server/_menu-read.js';
-import { readRestaurantToolsPayload } from '../server/_restaurant-tools-read.js';
 import { proxyFontFile, proxyFontStylesheet } from '../server/_font-proxy.js';
 import { readLandingPageState } from '../server/_landing-page-state.js';
 import { getSupabaseServerConfig, readJsonSafe, serviceHeaders } from '../server/_supabase.js';
@@ -66,14 +65,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Unsupported menu_id' });
     }
     const bundle = await readMenuStateBundle(menuId);
-    const restaurantTools = await readRestaurantToolsPayload({
-      restaurantId: bundle?.menu?.restaurantId || '',
-      currentMenuId: menuId,
-    });
-    return res.json(createPublicMenuPayload(bundle, {
-      featuredGroups: restaurantTools.featuredGroups,
-      featuredCompatibility: restaurantTools.compatibility,
-    }));
+    return res.json(createPublicMenuPayload(bundle));
   } catch (error) {
     return res.status(error?.status || 500).json({ error: error?.message || 'Server error' });
   }

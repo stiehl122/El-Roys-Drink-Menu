@@ -23,18 +23,6 @@ function buildInjectedDomainConstants() {
     MENUS: menus,
     KNOWN_RESTAURANT_ORDER: [restaurants.LEROYS.id, restaurants.ELROYS.id],
     KNOWN_MENU_ORDER: [menus.LEROYS_DRINKS.id, menus.LEROYS_FOOD.id, menus.ELROYS_DRINKS.id, menus.ELROYS_FOOD.id],
-    RESTAURANT_SPECIALS: {
-      [restaurants.LEROYS.id]: {
-        canonicalId: 'leroyslounge-specials',
-        name: "Leroy's Specials",
-        menuIds: [menus.LEROYS_DRINKS.id, menus.LEROYS_FOOD.id],
-      },
-      [restaurants.ELROYS.id]: {
-        canonicalId: 'elroyscantina-specials',
-        name: "El Roy's Specials",
-        menuIds: [menus.ELROYS_DRINKS.id, menus.ELROYS_FOOD.id],
-      },
-    },
     LEGACY_MENU_SLUG_ALIASES: {
       'el-roys': menus.ELROYS_DRINKS.slug,
     },
@@ -97,9 +85,11 @@ test('app runtime consumes injected category defaults through one boundary', () 
   assert.equal(getState(sandbox, "getDefaultCategoryDefsForMenuType('drinks')[0].id"), 'test-drink-category');
 });
 
-test('api auth helper resolves restaurant specials from shared domain boundary', () => {
+test('auth boundary no longer defines restaurant specials config', () => {
+  const constantsSource = fs.readFileSync(path.join(__dirname, '..', 'core', 'domain', 'constants.js'), 'utf8');
   const authSource = fs.readFileSync(path.join(__dirname, '..', 'server', '_auth.js'), 'utf8');
 
-  assert.match(authSource, /__HF_DOMAIN_CONSTANTS__/);
-  assert.doesNotMatch(authSource, /const RESTAURANT_SPECIALS\\s*=\\s*\\{/);
+  assert.doesNotMatch(constantsSource, /RESTAURANT_SPECIALS/);
+  assert.doesNotMatch(authSource, /requireRestaurantSpecialsAccess/);
+  assert.match(authSource, /requireRestaurantMenuAccess/);
 });

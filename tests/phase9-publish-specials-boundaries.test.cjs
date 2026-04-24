@@ -15,6 +15,26 @@ async function importApiModule(relativePath) {
   return import(`${fileUrl}?wave3=${Date.now()}-${Math.random()}`);
 }
 
+function createMockResponse() {
+  return {
+    statusCode: 200,
+    body: null,
+    ended: false,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+    end() {
+      this.ended = true;
+      return this;
+    },
+  };
+}
+
 test('manager route delegates publish auth and command execution through shared server modules', () => {
   const publishRoute = read('api/manager.js');
 
@@ -24,6 +44,7 @@ test('manager route delegates publish auth and command execution through shared 
   assert.match(publishRoute, /previewMenuUpdateForMenu/);
   assert.match(publishRoute, /publishMenuUpdateForMenu/);
   assert.match(publishRoute, /parsePublishBody/);
+  assert.match(publishRoute, /legacySelectedSections/);
 });
 
 test('wave 3 publish command module owns notification delivery and persistence composition', async () => {
@@ -43,9 +64,453 @@ test('wave 3 publish command module owns notification delivery and persistence c
   assert.match(publishModuleSource, /menu-publish-preview\.v2/);
   assert.match(publishModuleSource, /buildCanonicalPreviewForMenu/);
   assert.match(publishModuleSource, /resolveSelection/);
+  assert.match(publishModuleSource, /legacySelectedSections/);
 });
 
-test('app runtime prefers consolidated publish and specials server boundaries', () => {
+test('server preview does not invent featured_specials diffs when legacy featured items share base menu item ids', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  const sharedItemId = '11111111-1111-4111-8111-111111111111';
+  let capturedPreview = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async preview(command) {
+      capturedPreview = await ports.preview.buildCanonical({
+        snapshot: command.snapshot,
+        meta: {
+          last_sent_state: {
+            cocktails: [{ id: sharedItemId, name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+          },
+          last_sent_featured: [sharedItemId],
+        },
+        knownMenu: {
+          id: '00000000-0000-0000-0000-000000000020',
+          type: 'drinks',
+          name: 'Main Drinks',
+        },
+      });
+      return {
+        ok: true,
+        preview: capturedPreview,
+        revisions: {},
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    const result = await publishModule.previewMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: '00000000-0000-0000-0000-000000000020',
+      source: 'web_manager',
+      snapshot: {
+        cats: [
+          {
+            key: 'cocktails',
+            label: 'Cocktails',
+            icon: '🍹',
+            items: [{ id: sharedItemId, name: 'House Marg', on_menu: true, visibility: 'public' }],
+          },
+          {
+            key: 'featured_specials',
+            label: 'Featured Specials',
+            icon: '⭐',
+            items: [{ id: sharedItemId, name: 'House Marg', featured_enabled: true, on_menu: true, visibility: 'public' }],
+          },
+        ],
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.hasNotificationChanges, false);
+    assert.deepEqual(result.preview.diff, []);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials.length, 1);
+    assert.notEqual(capturedPreview.metadata.lastSentState.featured_specials[0].id, sharedItemId);
+    assert.match(capturedPreview.metadata.lastSentState.featured_specials[0].id, /^[0-9a-f-]{36}$/i);
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+});
+
+test('server preview preserves the existing featured baseline when a legacy snapshot omits featured_specials', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  const sharedItemId = '11111111-1111-4111-8111-111111111111';
+  let capturedPreview = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async preview(command) {
+      capturedPreview = await ports.preview.buildCanonical({
+        snapshot: command.snapshot,
+        meta: {
+          last_sent_state: {
+            cocktails: [{ id: sharedItemId, name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+          },
+          last_sent_featured: [sharedItemId],
+        },
+        knownMenu: {
+          id: '00000000-0000-0000-0000-000000000020',
+          type: 'drinks',
+          name: 'Main Drinks',
+        },
+      });
+      return {
+        ok: true,
+        preview: capturedPreview,
+        revisions: {},
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    const result = await publishModule.previewMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: '00000000-0000-0000-0000-000000000020',
+      source: 'web_manager',
+      snapshot: {
+        cats: [{
+          key: 'cocktails',
+          label: 'Cocktails',
+          icon: '🍹',
+          items: [{ id: sharedItemId, name: 'House Marg', on_menu: true, visibility: 'public' }],
+        }],
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.preview.hasNotificationChanges, false);
+    assert.deepEqual(result.preview.diff, []);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials.length, 1);
+    assert.equal(capturedPreview.metadata.lastSentState.featured_specials[0].id, sharedItemId);
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+});
+
+test('server publish selection treats explicit empty legacy sections as clear-all', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  let capturedSelection = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async execute(command) {
+      const preview = {
+        changeGroups: [{
+          id: 'beer::added::lager-group',
+          selectable: true,
+          lines: [{
+            id: 'beer::added::lager',
+            kind: 'added',
+            name: 'Lager',
+          }],
+        }],
+        notificationChanges: [{
+          id: 'beer::added::lager',
+          sectionId: 'beer',
+          kind: 'added',
+          name: 'Lager',
+        }],
+      };
+
+      capturedSelection = ports.preview.resolveSelection({
+        preview,
+        selectedChangeIds: command.request?.selectedChangeIds ?? null,
+        legacySelectedSections: command.request?.legacySelectedSections ?? null,
+      });
+
+      return {
+        ok: true,
+        ts: 1000,
+        preview,
+        revisions: {},
+        notification: { delivered: false, partial: false, retryable: false, summary: null },
+        queue: {
+          selectedChangeIds: capturedSelection.selectedChangeIds,
+          clearedChangeIds: capturedSelection.clearedChangeIds,
+        },
+        compatibility: { downgradedFields: [] },
+        operationId: 'op-test',
+        userOutcome: { warnings: [], successMessage: 'ok' },
+        reconnect: null,
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    await publishModule.publishMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: 'elroys-cantina-drinks',
+      mode: 'send',
+      source: 'web_manager',
+      snapshot: {},
+      selectedChangeIds: null,
+      legacySelectedSections: [],
+    });
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+
+  assert.deepEqual(capturedSelection?.selectedChangeIds, []);
+  assert.equal(capturedSelection?.selectedSections?.length, 0);
+  assert.equal(capturedSelection?.clearedChangeIds?.length, 1);
+});
+
+test('server publish selection defaults omitted legacy sections to select-all', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  let capturedSelection = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async execute(command) {
+      const preview = {
+        changeGroups: [{
+          id: 'beer::added::lager-group',
+          selectable: true,
+          lines: [{
+            id: 'beer::added::lager',
+            kind: 'added',
+            name: 'Lager',
+          }],
+        }],
+        notificationChanges: [{
+          id: 'beer::added::lager',
+          sectionId: 'beer',
+          kind: 'added',
+          name: 'Lager',
+        }],
+      };
+
+      capturedSelection = ports.preview.resolveSelection({
+        preview,
+        selectedChangeIds: command.request?.selectedChangeIds ?? null,
+        legacySelectedSections: command.request?.legacySelectedSections ?? null,
+      });
+
+      return {
+        ok: true,
+        ts: 1000,
+        preview,
+        revisions: {},
+        notification: { delivered: false, partial: false, retryable: false, summary: null },
+        queue: {
+          selectedChangeIds: capturedSelection.selectedChangeIds,
+          clearedChangeIds: capturedSelection.clearedChangeIds,
+        },
+        compatibility: { downgradedFields: [] },
+        operationId: 'op-test',
+        userOutcome: { warnings: [], successMessage: 'ok' },
+        reconnect: null,
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    await publishModule.publishMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: 'elroys-cantina-drinks',
+      mode: 'send',
+      source: 'web_manager',
+      snapshot: {},
+      selectedChangeIds: null,
+    });
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+
+  assert.equal(capturedSelection?.selectedChangeIds?.length, 1);
+  assert.equal(capturedSelection?.clearedChangeIds?.length, 0);
+});
+
+test('server publish selection maps legacy __featured__ sections onto featured_specials', async () => {
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  let capturedSelection = null;
+
+  globalThis.createMenuPublishWorkflow = ({ ports }) => ({
+    async execute(command) {
+      const preview = {
+        changeGroups: [{
+          id: 'featured_specials::added::happy-hour-marg-group',
+          selectable: true,
+          lines: [{
+            id: 'featured_specials::added::happy-hour-marg',
+            kind: 'added',
+            name: 'Happy Hour Marg',
+          }],
+        }],
+        notificationChanges: [{
+          id: 'featured_specials::added::happy-hour-marg',
+          sectionId: 'featured_specials',
+          kind: 'added',
+          name: 'Happy Hour Marg',
+        }],
+      };
+
+      capturedSelection = ports.preview.resolveSelection({
+        preview,
+        selectedChangeIds: command.request?.selectedChangeIds ?? null,
+        legacySelectedSections: command.request?.legacySelectedSections ?? null,
+      });
+
+      return {
+        ok: true,
+        ts: 1000,
+        preview,
+        revisions: {},
+        notification: { delivered: false, partial: false, retryable: false, summary: null },
+        queue: {
+          selectedChangeIds: capturedSelection.selectedChangeIds,
+          clearedChangeIds: capturedSelection.clearedChangeIds,
+        },
+        compatibility: { downgradedFields: [] },
+        operationId: 'op-test',
+        userOutcome: { warnings: [], successMessage: 'ok' },
+        reconnect: null,
+      };
+    },
+  });
+
+  try {
+    const publishModule = await importApiModule('server/_menu-publish.js');
+    await publishModule.publishMenuUpdateForMenu({
+      actor: { id: 'user-1', role: 'manager' },
+      menuId: 'elroys-cantina-drinks',
+      mode: 'send',
+      source: 'web_manager',
+      snapshot: {},
+      selectedChangeIds: null,
+      legacySelectedSections: [{
+        id: '__featured__',
+        added: ['Happy Hour Marg'],
+        removed: [],
+        eightySixed: [],
+        restored: [],
+      }],
+    });
+  } finally {
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+
+  assert.equal(capturedSelection?.selectedChangeIds?.length, 1);
+  assert.equal(capturedSelection?.clearedChangeIds?.length, 0);
+});
+
+test('manager publish handler preserves legacy selected_sections semantics across HTTP payloads', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const originalFetch = global.fetch;
+  const originalFactory = globalThis.createMenuPublishWorkflow;
+  const capturedRequests = [];
+  const legacySelectedSection = {
+    id: '__featured__',
+    added: ['Happy Hour Marg'],
+    removed: [],
+    eightySixed: [],
+    restored: [],
+  };
+
+  global.fetch = async (url) => {
+    const href = String(url);
+    if (href.includes('/auth/v1/user')) {
+      return {
+        ok: true,
+        async json() {
+          return { id: 'user-1' };
+        },
+      };
+    }
+    if (href.includes('/rest/v1/profiles?')) {
+      return {
+        ok: true,
+        async json() {
+          return [{ role: 'manager', name: 'Alex' }];
+        },
+      };
+    }
+    if (href.includes('/rest/v1/menu_access?')) {
+      return {
+        ok: true,
+        async json() {
+          return [{ menu_id: '00000000-0000-0000-0000-000000000020' }];
+        },
+      };
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  globalThis.createMenuPublishWorkflow = () => ({
+    async execute(command) {
+      capturedRequests.push(command.request);
+      return {
+        ok: true,
+        ts: 1000,
+        preview: {},
+        revisions: {},
+        notification: { delivered: false, partial: false, retryable: false, summary: null },
+        queue: {
+          selectedChangeIds: [],
+          clearedChangeIds: [],
+        },
+        compatibility: { downgradedFields: [] },
+        operationId: 'op-test',
+        userOutcome: { warnings: [], warningMessage: '', successMessage: 'ok' },
+        reconnect: null,
+      };
+    },
+  });
+
+  try {
+    const managerRoute = await importApiModule('api/manager.js');
+    const baseRequest = {
+      method: 'POST',
+      url: '/api/manager',
+      headers: {
+        host: 'localhost',
+        authorization: 'Bearer test-token',
+      },
+    };
+
+    await managerRoute.default({
+      ...baseRequest,
+      body: {
+        action: 'publish',
+        menu_id: '00000000-0000-0000-0000-000000000020',
+        mode: 'send',
+        snapshot: {},
+      },
+    }, createMockResponse());
+
+    await managerRoute.default({
+      ...baseRequest,
+      body: {
+        action: 'publish',
+        menu_id: '00000000-0000-0000-0000-000000000020',
+        mode: 'send',
+        snapshot: {},
+        selected_sections: [],
+      },
+    }, createMockResponse());
+
+    await managerRoute.default({
+      ...baseRequest,
+      body: {
+        action: 'publish',
+        menu_id: '00000000-0000-0000-0000-000000000020',
+        mode: 'send',
+        snapshot: {},
+        selected_sections: [legacySelectedSection],
+      },
+    }, createMockResponse());
+  } finally {
+    global.fetch = originalFetch;
+    globalThis.createMenuPublishWorkflow = originalFactory;
+  }
+
+  assert.equal(Object.prototype.hasOwnProperty.call(capturedRequests[0], 'legacySelectedSections'), false);
+  assert.deepEqual(capturedRequests[1].legacySelectedSections, []);
+  assert.deepEqual(capturedRequests[2].legacySelectedSections, [legacySelectedSection]);
+});
+
+test('app runtime prefers consolidated publish server boundaries', () => {
   const source = read('app.js');
 
   assert.match(source, /async function publishMenuThroughApi/);
@@ -53,25 +518,16 @@ test('app runtime prefers consolidated publish and specials server boundaries', 
   assert.match(source, /\/api\/manager/);
   assert.match(source, /action: 'preview_publish'/);
   assert.match(source, /selected_change_ids/);
-  assert.match(source, /await ensureCurrentMenuSession\(\)\.publishUpdate/);
-  assert.match(source, /await fetch\('\/api\/manager'/);
-  assert.match(source, /async request\(action,\s*payload = \{\}\)/);
+  assert.match(source, /postApiJson\('\/api\/manager'/);
+  assert.doesNotMatch(source, /action:\s*'specials'/);
+  assert.doesNotMatch(source, /specials_action/);
 });
 
-test('manager route keeps restaurant-special mutations behind shared auth and server transport helpers', () => {
-  const specialsRoute = read('api/manager.js');
-  const specialsCommand = read('server/_specials-command.js');
+test('manager route no longer exposes specials mutation transport', () => {
+  const routeSource = read('api/manager.js');
 
-  assert.match(specialsRoute, /from '\.\.\/server\/_auth\.js'/);
-  assert.match(specialsRoute, /requireRole/);
-  assert.match(specialsRoute, /from '\.\.\/server\/_supabase\.js'/);
-  assert.match(specialsRoute, /getSupabaseServerConfig/);
-  assert.match(specialsRoute, /from '\.\.\/server\/_specials-command\.js'/);
-  assert.match(specialsRoute, /parseSpecialsCommand/);
-  assert.match(specialsRoute, /executeRestaurantSpecialsCommand/);
-  assert.match(specialsCommand, /requireRestaurantSpecialsAccess/);
-  assert.match(specialsCommand, /serviceHeaders/);
-  assert.match(specialsCommand, /export function createRestaurantSpecialsMutationService/);
-  assert.doesNotMatch(specialsRoute, /queryAction/);
-  assert.doesNotMatch(specialsRoute, /action\s*===\s*'migrate'/);
+  assert.doesNotMatch(routeSource, /executeRestaurantSpecialsCommand/);
+  assert.doesNotMatch(routeSource, /parseSpecialsCommand/);
+  assert.doesNotMatch(routeSource, /action === 'specials'/);
+  assert.doesNotMatch(routeSource, /includeFlags\.includes\('restaurant-tools'\)/);
 });

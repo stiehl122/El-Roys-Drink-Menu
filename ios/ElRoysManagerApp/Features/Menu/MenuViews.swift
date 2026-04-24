@@ -185,7 +185,9 @@ struct MenuEditorScreen: View {
   }
 
   private func presentNewItem() {
-    if let firstCategoryKey = model.currentEditorDocument?.visibleCategories.first?.key {
+    if let firstCategoryKey = model.currentEditorDocument?.visibleCategories.first(where: {
+      $0.key != EditableMenuDocument.featuredSpecialsKey
+    })?.key ?? model.currentEditorDocument?.visibleCategories.first?.key {
       editingDraft = EditableItemDraft(categoryKey: firstCategoryKey, isFoodMenu: menu.isFoodMenu)
       activeSheet = .itemEditor
     } else {
@@ -1232,6 +1234,7 @@ private struct EditableItemDraft: Equatable {
   var isEightySixed = false
   var showDescription = true
   var showRecipe = false
+  var featuredEnabled = false
   var barcode = ""
   var keepAdding = false
   var isFoodMenu = false
@@ -1254,6 +1257,7 @@ private struct EditableItemDraft: Equatable {
     isEightySixed = item.isEightySixed
     showDescription = item.showDescription
     showRecipe = item.showRecipe
+    featuredEnabled = item.featuredEnabled
     self.isFoodMenu = isFoodMenu
   }
 }
@@ -1297,6 +1301,12 @@ private struct ItemEditorSheet: View {
           if !menu.isFoodMenu {
             Toggle("Show Recipe", isOn: $draft.showRecipe)
             TextField("Recipe", text: $draft.recipeText, axis: .vertical)
+          }
+        }
+
+        if draft.categoryKey == EditableMenuDocument.featuredSpecialsKey {
+          Section("Featured Strip") {
+            Toggle("Show in featured strip", isOn: $draft.featuredEnabled)
           }
         }
 
@@ -1407,7 +1417,8 @@ private struct ItemEditorSheet: View {
       visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
       upcharges: [],
       showDescription: draft.showDescription,
-      showRecipe: draft.isFoodMenu ? false : draft.showRecipe
+      showRecipe: draft.isFoodMenu ? false : draft.showRecipe,
+      featuredEnabled: draft.categoryKey == EditableMenuDocument.featuredSpecialsKey ? draft.featuredEnabled : false
     )
   }
 }

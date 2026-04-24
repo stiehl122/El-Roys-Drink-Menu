@@ -565,7 +565,12 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
   var upcharges: [ItemUpcharge]
   var showDescription: Bool
   var showRecipe: Bool
+  var featuredEnabled: Bool
   fileprivate var canonicalServerDisplayOrder: Int?
+
+  var isPubliclyVisibleFeaturedSpecial: Bool {
+    featuredEnabled && onMenu && visibility != "off_menu"
+  }
 
   enum CodingKeys: String, CodingKey {
     case id
@@ -581,6 +586,8 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     case upcharges
     case showDescription
     case showRecipe
+    case featuredEnabled
+    case featured_enabled
   }
 
   init(
@@ -595,7 +602,8 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     visibility: String,
     upcharges: [ItemUpcharge],
     showDescription: Bool,
-    showRecipe: Bool
+    showRecipe: Bool,
+    featuredEnabled: Bool = false
   ) {
     self.id = id
     self.name = name
@@ -609,6 +617,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     self.upcharges = upcharges
     self.showDescription = showDescription
     self.showRecipe = showRecipe
+    self.featuredEnabled = featuredEnabled
     self.canonicalServerDisplayOrder = displayOrder
   }
 
@@ -633,6 +642,9 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     self.upcharges = (try? container.decode([ItemUpcharge].self, forKey: .upcharges)) ?? []
     self.showDescription = try container.decodeIfPresent(Bool.self, forKey: .showDescription) ?? true
     self.showRecipe = try container.decodeIfPresent(Bool.self, forKey: .showRecipe) ?? false
+    self.featuredEnabled = try container.decodeIfPresent(Bool.self, forKey: .featuredEnabled)
+      ?? (try container.decodeIfPresent(Bool.self, forKey: .featured_enabled))
+      ?? false
     self.canonicalServerDisplayOrder = decodedDisplayOrder
   }
 
@@ -650,6 +662,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     try container.encode(upcharges, forKey: .upcharges)
     try container.encode(showDescription, forKey: .showDescription)
     try container.encode(showRecipe, forKey: .showRecipe)
+    try container.encode(featuredEnabled, forKey: .featuredEnabled)
   }
 
   mutating func normalizePersistentIdentifierForRuntime() {
@@ -676,6 +689,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
       && lhs.upcharges == rhs.upcharges
       && lhs.showDescription == rhs.showDescription
       && lhs.showRecipe == rhs.showRecipe
+      && lhs.featuredEnabled == rhs.featuredEnabled
   }
 
   func hash(into hasher: inout Hasher) {
@@ -691,6 +705,7 @@ struct MenuItemPayload: Codable, Equatable, Hashable, Identifiable {
     hasher.combine(upcharges)
     hasher.combine(showDescription)
     hasher.combine(showRecipe)
+    hasher.combine(featuredEnabled)
   }
 }
 
@@ -1112,7 +1127,7 @@ struct PublicMenuPayload: Codable, Equatable {
   var cats: [MenuCategoryPayload]
   var meta: MenuMetaPayload
   var restaurant: RestaurantRecord?
-  var featuredGroups: [FeaturedGroup]
+  var featuredItems: [MenuItemPayload]
   var context: MenuContext
   var capabilities: PublicMenuCapabilities
 }
@@ -1122,7 +1137,7 @@ extension PublicMenuPayload {
     case cats
     case meta
     case restaurant
-    case featuredGroups
+    case featuredItems
     case context
     case capabilities
   }
@@ -1134,7 +1149,7 @@ extension PublicMenuPayload {
     )
     self.meta = try container.decode(MenuMetaPayload.self, forKey: .meta)
     self.restaurant = try container.decodeIfPresent(RestaurantRecord.self, forKey: .restaurant)
-    self.featuredGroups = try container.decode([FeaturedGroup].self, forKey: .featuredGroups)
+    self.featuredItems = (try? container.decode([MenuItemPayload].self, forKey: .featuredItems)) ?? []
     self.context = try container.decode(MenuContext.self, forKey: .context)
     self.capabilities = try container.decode(PublicMenuCapabilities.self, forKey: .capabilities)
   }
@@ -1556,7 +1571,6 @@ struct MenuSnapshotPayload: Codable, Equatable {
   var cats: [MenuCategoryPayload]
   var meta: MenuMetaPayload
   var restaurant: RestaurantRecord?
-  var featuredGroups: [FeaturedGroup]
   var saveOnlyChanges: [SaveOnlyChange]
   var previewContext: SnapshotPreviewContext
 }
@@ -1656,12 +1670,12 @@ struct LocalDraftEnvelope: Codable, Equatable, Identifiable {
 
 struct EditableMenuDocument: Codable, Equatable {
   static let uncategorizedKey = "__uncategorized__"
+  static let featuredSpecialsKey = "featured_specials"
 
   var context: MenuSnapshotContext
   var cats: [MenuCategoryPayload]
   var meta: MenuMetaPayload
   var restaurant: RestaurantRecord?
-  var featuredGroups: [FeaturedGroup]
 
   init(workspace: MenuWorkspacePayload) {
     context = MenuSnapshotContext(
@@ -1669,13 +1683,11 @@ struct EditableMenuDocument: Codable, Equatable {
       restaurantId: workspace.context.menu?.restaurantId ?? "",
       menuType: workspace.context.menu?.type ?? "drinks"
     )
-    cats = Self.normalizeIdentifiers(
-      in: MenuOrdering.canonicalize(categories: workspace.cats),
-      menuId: workspace.context.menu?.id ?? ""
-    )
+    cats = MenuOrdering.canonicalize(categories: workspace.cats)
     meta = workspace.meta
     restaurant = workspace.restaurant
-    featuredGroups = workspace.restaurantTools?.featuredGroups ?? []
+    ensureFeaturedSpecialsCategory()
+    cats = Self.normalizeIdentifiers(in: cats, menuId: workspace.context.menu?.id ?? "")
   }
 
   var menuId: String { context.menuId }
@@ -1683,6 +1695,7 @@ struct EditableMenuDocument: Codable, Equatable {
   var isFoodMenu: Bool { context.menuType.lowercased() == "food" }
 
   mutating func normalizeIdentifiersForRuntime() {
+    ensureFeaturedSpecialsCategory()
     cats = Self.normalizeIdentifiers(in: cats, menuId: menuId)
   }
 
@@ -1696,6 +1709,10 @@ struct EditableMenuDocument: Codable, Equatable {
 
   var uncategorizedItems: [MenuItemPayload] {
     cats.first(where: { $0.key == Self.uncategorizedKey })?.items ?? []
+  }
+
+  var featuredSpecialItems: [MenuItemPayload] {
+    cats.first(where: { $0.key == Self.featuredSpecialsKey })?.items.filter(\.isPubliclyVisibleFeaturedSpecial) ?? []
   }
 
   var visibleCategories: [MenuCategoryPayload] {
@@ -1750,6 +1767,46 @@ struct EditableMenuDocument: Codable, Equatable {
     )
   }
 
+  mutating func ensureFeaturedSpecialsCategory() {
+    var mergedFeatured = fixedFeaturedSpecialsCategory()
+    var featuredItems: [MenuItemPayload] = []
+    var legacyFeaturedItems: [MenuItemPayload] = []
+    var regularCategories: [MenuCategoryPayload] = []
+    var uncategorized: MenuCategoryPayload?
+
+    for category in cats {
+      let normalizedKey = Self.normalizedCategoryKey(category.key)
+      if normalizedKey == Self.uncategorizedKey {
+        uncategorized = category
+        continue
+      }
+      if Self.isFeaturedSpecialsCategory(category) || Self.isLegacySpecialCategory(category) {
+        var migratedItems = category.items
+        if Self.isLegacySpecialCategory(category) {
+          migratedItems = migratedItems.map { item in
+            var next = item
+            next.featuredEnabled = true
+            return next
+          }
+          legacyFeaturedItems.append(contentsOf: migratedItems)
+        } else {
+          featuredItems.append(contentsOf: migratedItems)
+        }
+        continue
+      }
+      regularCategories.append(category)
+    }
+
+    mergedFeatured.items = MenuOrdering.canonicalize(
+      items: Self.mergeFeaturedSpecialItems(
+        featuredItems: featuredItems,
+        legacyFeaturedItems: legacyFeaturedItems
+      )
+    )
+    cats = [mergedFeatured] + regularCategories + (uncategorized.map { [$0] } ?? [])
+    renumberCategories()
+  }
+
   mutating func addCategory(label: String, icon: String = "", color: String = "") {
     let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
@@ -1784,12 +1841,23 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   mutating func renameCategory(key: String, label: String) {
+    guard key != Self.featuredSpecialsKey else { return }
     guard let index = cats.firstIndex(where: { $0.key == key }) else { return }
     cats[index].label = label.trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
   mutating func moveVisibleCategories(from source: IndexSet, to destination: Int) {
     var regular = visibleCategories
+    guard let featuredIndex = regular.firstIndex(where: { $0.key == Self.featuredSpecialsKey }) else {
+      regular.moveItems(fromOffsets: source, toOffset: destination)
+      let uncategorized = cats.first(where: { $0.key == Self.uncategorizedKey })
+      cats = regular + (uncategorized.map { [$0] } ?? [])
+      renumberCategories()
+      return
+    }
+    if source.contains(featuredIndex) || destination <= featuredIndex {
+      return
+    }
     regular.moveItems(fromOffsets: source, toOffset: destination)
     let uncategorized = cats.first(where: { $0.key == Self.uncategorizedKey })
     cats = regular + (uncategorized.map { [$0] } ?? [])
@@ -1797,7 +1865,7 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   mutating func deleteCategory(key: String) {
-    guard key != Self.uncategorizedKey else { return }
+    guard key != Self.uncategorizedKey, key != Self.featuredSpecialsKey else { return }
     guard let index = cats.firstIndex(where: { $0.key == key }) else { return }
     ensureUncategorizedCategory()
     let removed = cats.remove(at: index)
@@ -1901,6 +1969,7 @@ struct EditableMenuDocument: Codable, Equatable {
   }
 
   mutating func upsertCategoryStructure(from category: MenuCategoryPayload) {
+    guard category.key != Self.featuredSpecialsKey else { return }
     let preservedItems = self.category(for: category.key)?.items ?? []
     var nextCategory = category
     nextCategory.menuId = menuId
@@ -1931,7 +2000,6 @@ struct EditableMenuDocument: Codable, Equatable {
       cats: orderedSnapshotCategories(),
       meta: meta,
       restaurant: restaurant,
-      featuredGroups: featuredGroups,
       saveOnlyChanges: [],
       previewContext: SnapshotPreviewContext(
         dirty: hasUnsavedChanges,
@@ -2029,6 +2097,70 @@ struct EditableMenuDocument: Codable, Equatable {
     }
     used.insert(candidate)
     return candidate
+  }
+
+  private func fixedFeaturedSpecialsCategory() -> MenuCategoryPayload {
+    MenuCategoryPayload(
+      id: "featured_specials",
+      menuId: menuId,
+      key: Self.featuredSpecialsKey,
+      label: "Featured Specials",
+      icon: "star.fill",
+      color: "",
+      sub: isFoodMenu
+        ? "Limited dishes and deal items for this menu"
+        : "Limited pours, specials, and deal items for this menu",
+      placeholder: isFoodMenu
+        ? "e.g. Taco Tuesday Plate..."
+        : "e.g. Happy Hour Margarita...",
+      displayOrder: 0,
+      items: []
+    )
+  }
+
+  private static func mergeFeaturedSpecialItems(
+    featuredItems: [MenuItemPayload],
+    legacyFeaturedItems: [MenuItemPayload]
+  ) -> [MenuItemPayload] {
+    var mergedItems: [MenuItemPayload] = []
+    var seenItemKeys: Set<String> = []
+
+    for (groupIndex, items) in [featuredItems, legacyFeaturedItems].enumerated() {
+      for (itemIndex, item) in items.enumerated() {
+        let identityKey = featuredSpecialItemIdentityKey(item, fallback: "\(groupIndex):\(itemIndex)")
+        guard !seenItemKeys.contains(identityKey) else { continue }
+        seenItemKeys.insert(identityKey)
+        mergedItems.append(item)
+      }
+    }
+
+    return mergedItems
+  }
+
+  private static func featuredSpecialItemIdentityKey(_ item: MenuItemPayload, fallback: String) -> String {
+    let normalizedID = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !normalizedID.isEmpty {
+      return "id:\(normalizedID)"
+    }
+
+    let normalizedName = item.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if !normalizedName.isEmpty {
+      return "name:\(normalizedName)"
+    }
+
+    return "fallback:\(fallback)"
+  }
+
+  private static func normalizedCategoryKey(_ key: String) -> String {
+    key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  }
+
+  private static func isFeaturedSpecialsCategory(_ category: MenuCategoryPayload) -> Bool {
+    normalizedCategoryKey(category.key) == featuredSpecialsKey
+  }
+
+  private static func isLegacySpecialCategory(_ category: MenuCategoryPayload) -> Bool {
+    normalizedCategoryKey(category.key) == "special"
   }
 }
 
