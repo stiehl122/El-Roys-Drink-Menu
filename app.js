@@ -4979,6 +4979,24 @@ function sortCanonicalItems(items = []) {
   return (Array.isArray(items) ? items : []).slice().sort(compareCanonicalItemOrder);
 }
 
+function compareDraftItemsForDirtyState(left = {}, right = {}) {
+  const leftOrder = Number(left.display_order ?? left.displayOrder ?? 0);
+  const rightOrder = Number(right.display_order ?? right.displayOrder ?? 0);
+  if (Number.isFinite(leftOrder) && Number.isFinite(rightOrder) && leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  const leftId = String(left.id || '');
+  const rightId = String(right.id || '');
+  if (leftId !== rightId) return leftId.localeCompare(rightId);
+
+  return String(left.name || '').localeCompare(String(right.name || ''));
+}
+
+function normalizeDraftItemsForDirtyState(items = []) {
+  return (Array.isArray(items) ? items : []).slice().sort(compareDraftItemsForDirtyState);
+}
+
 function normalizeFeaturedSpecialCategoriesForMenu(cats = [], menuContext = {}) {
   return ensureFeaturedSpecialsCategory(Array.isArray(cats) ? cats : [], {
     menuId: menuContext.menuId || MENU_ID || '',
@@ -5621,7 +5639,19 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
 function stripDraftDocumentForComparison(snapshot = {}) {
   const normalized = normalizeDraftDocumentSnapshot(snapshot);
   return {
-    cats: normalized.cats,
+    cats: normalized.cats.map(category => ({
+      ...category,
+      items: normalizeDraftItemsForDirtyState(category.items).map((item, itemIndex) => {
+        const nextItem = { ...item };
+        delete nextItem.displayOrder;
+        delete nextItem.featuredEnabled;
+        delete nextItem.featured_enabled;
+        delete nextItem.display_order;
+        nextItem.featured_enabled = item.featured_enabled === true || item.featuredEnabled === true;
+        nextItem.display_order = itemIndex;
+        return nextItem;
+      }),
+    })),
     save_only_changes: normalized.save_only_changes,
   };
 }

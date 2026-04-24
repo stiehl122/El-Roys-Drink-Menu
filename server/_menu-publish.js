@@ -14,6 +14,7 @@ import {
   normalizePersistentItemId,
   patchMenuMetaForMenuWithCompatibility,
   readMenuMeta,
+  readRevisionState,
   saveLiveMenuForMenu,
 } from './_menu-write.js';
 import { getKnownMenuById } from './_menu-read.js';
@@ -40,6 +41,20 @@ function createMenuPublishError(status, message, extras = {}) {
   error.status = status;
   Object.assign(error, extras);
   return error;
+}
+
+function normalizeRevision(value) {
+  if (value == null || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function assertNoDraftRevisionConflict(currentRevisions, expectedDraftRevision, options = {}) {
+  assertExpectedRevision(expectedDraftRevision, currentRevisions?.draft_revision ?? null, 'draft_revision', options);
+}
+
+function assertNoNotificationRevisionConflict(currentRevisions, expectedNotificationRevision, options = {}) {
+  assertExpectedRevision(expectedNotificationRevision, currentRevisions?.last_sent_revision ?? null, 'notification_revision', options);
 }
 
 function collectNotificationWarnings(summary = {}) {
@@ -389,13 +404,25 @@ function createServerMenuPublishPorts() {
         return assertCategoryGovernanceAllowed({ ...input, requireCategorySnapshot: true });
       },
       assertRevisions({ menuId, meta, expectedLiveRevision, expectedDraftRevision, expectedNotificationRevision }) {
-        assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts, 'live_revision', { menuId });
-        assertExpectedRevision(expectedDraftRevision, meta?.draft_saved_ts, 'draft_revision', { menuId });
-        assertExpectedRevision(expectedNotificationRevision, meta?.last_sent_ts, 'notification_revision', { menuId });
+        const currentRevisions = readRevisionState(meta);
+        const normalizedLiveRevision = normalizeRevision(expectedLiveRevision);
+        const normalizedDraftRevision = normalizeRevision(expectedDraftRevision);
+        const normalizedNotificationRevision = normalizeRevision(expectedNotificationRevision);
+        const notificationBaselineRevision = normalizedNotificationRevision ?? normalizedDraftRevision;
+        const conflictOptions = {
+          menuId,
+          command: 'menu-publish.v2',
+          currentRevisions,
+        };
+
+        assertExpectedRevision(normalizedLiveRevision, currentRevisions.live_revision, 'live_revision', conflictOptions);
+        assertNoDraftRevisionConflict(currentRevisions, normalizedDraftRevision, conflictOptions);
+        assertNoNotificationRevisionConflict(currentRevisions, notificationBaselineRevision, conflictOptions);
+
         return {
-          liveRevision: meta?.last_updated_ts || null,
-          draftRevision: meta?.draft_saved_ts || null,
-          notificationRevision: meta?.last_sent_ts || null,
+          liveRevision: currentRevisions.live_revision,
+          draftRevision: currentRevisions.draft_revision,
+          notificationRevision: currentRevisions.last_sent_revision,
         };
       },
     },

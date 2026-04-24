@@ -24,9 +24,11 @@ test('consolidated api routes consume shared supabase transport helper', () => {
   const manager = read('api/manager.js');
 
   assert.match(admin, /from '\.\.\/server\/_admin-read-models\.js'/);
-  assert.match(manager, /from '\.\.\/server\/_supabase\.js'/);
+  assert.match(manager, /from '\.\.\/server\/_auth\.js'/);
+  assert.match(manager, /from '\.\.\/server\/_request\.js'/);
   assert.doesNotMatch(manager, /function\s+serviceHeaders\s*\(/);
   assert.doesNotMatch(manager, /function\s+readJsonSafe\s*\(/);
+  assert.doesNotMatch(manager, /SUPABASE_SERVICE_ROLE_KEY.*SUPABASE_SERVICE_ROLE_KEY/s);
   assert.doesNotMatch(manager, /queryAction/);
   assert.doesNotMatch(manager, /action\s*===\s*'migrate'/);
 });
@@ -38,6 +40,8 @@ test('manager route composes shared authorization and delivery boundaries', () =
   assert.match(notify, /authorizeNotificationRequest/);
   assert.match(notify, /from '\.\.\/server\/_notification-delivery\.js'/);
   assert.match(notify, /deliverMenuNotification/);
-  assert.match(notify, /from '\.\.\/server\/_supabase\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_auth\.js'/);
+  assert.match(notify, /from '\.\.\/server\/_request\.js'/);
   assert.doesNotMatch(notify, /serviceHeaders\s*\(/);
+  assert.doesNotMatch(notify, /SUPABASE_SERVICE_ROLE_KEY.*SUPABASE_SERVICE_ROLE_KEY/s);
 });
