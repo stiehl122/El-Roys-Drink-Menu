@@ -3,9 +3,17 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const ROOT_APP_PATH = path.join(ROOT_DIR, 'app.js');
+const LANDING_RUNTIME_SCRIPTS = [
+  'core/landing/model.js',
+  'core/landing/store.js',
+  'core/landing/data-service.js',
+  'core/landing/admin-workspace.js',
+  'core/landing/root-renderer.js',
+];
 const DEFAULT_RUNTIME_SCRIPTS = [
   'core/domain/constants.js',
   'core/domain/category-defaults.js',
+  'core/domain/featured-specials.js',
   'core/auth/auth-api.js',
   'core/auth/auth-session-service.js',
   'core/auth/auth-overlay-template.js',
@@ -26,6 +34,7 @@ const DEFAULT_RUNTIME_SCRIPTS = [
   'core/session/menu-session.js',
   'core/data/menu-state-loader.js',
   'core/session/poll-scheduler.js',
+  ...LANDING_RUNTIME_SCRIPTS,
   'routes/shared/public-route-core.js',
   'app.js',
 ];
@@ -347,6 +356,32 @@ function resolveRuntimeScriptPath(filePath) {
   return path.isAbsolute(filePath) ? filePath : path.join(ROOT_DIR, filePath);
 }
 
+function usesRootAppScript(scriptPath) {
+  return path.resolve(resolveRuntimeScriptPath(scriptPath)) === path.resolve(ROOT_APP_PATH);
+}
+
+function expandLandingRuntimeScripts(scriptPaths = [], overrides = {}) {
+  if (!Array.isArray(scriptPaths)) return scriptPaths;
+  if (Object.prototype.hasOwnProperty.call(overrides, '__HF_LANDING_MODULES__')) {
+    return scriptPaths.slice();
+  }
+
+  const appIndex = scriptPaths.findIndex(usesRootAppScript);
+  if (appIndex < 0) return scriptPaths.slice();
+
+  const resolvedScripts = new Set(scriptPaths.map(scriptPath => path.resolve(resolveRuntimeScriptPath(scriptPath))));
+  const missingLandingScripts = LANDING_RUNTIME_SCRIPTS.filter(scriptPath => (
+    !resolvedScripts.has(path.resolve(resolveRuntimeScriptPath(scriptPath)))
+  ));
+  if (!missingLandingScripts.length) return scriptPaths.slice();
+
+  return [
+    ...scriptPaths.slice(0, appIndex),
+    ...missingLandingScripts,
+    ...scriptPaths.slice(appIndex),
+  ];
+}
+
 function loadScriptsInOrder(scriptPaths = [], sandbox, options = {}) {
   const { stripInitRootApp = true } = options;
   if (!sandbox?.__vmContext) {
@@ -391,7 +426,7 @@ function loadRouteSandbox(routePath, overrides = {}) {
 
 function loadSandboxWithScripts(scriptPaths = [], overrides = {}, options = {}) {
   const sandbox = createSandbox(overrides);
-  return loadScriptsInOrder(scriptPaths, sandbox, options);
+  return loadScriptsInOrder(expandLandingRuntimeScripts(scriptPaths, overrides), sandbox, options);
 }
 
 module.exports = {

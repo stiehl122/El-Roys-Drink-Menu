@@ -148,3 +148,14 @@ test('landing safe fallback hides the section dot nav', () => {
   assert.equal(fallbackEl.hidden, true);
   assert.equal(dotNavEl.hidden, false);
 });
+
+test('landing restores saved archived filters after store sync', () => {
+  const sandbox = loadAppSandbox({ Intl });
+
+  sandbox.sessionStorage.setItem('hf_landing_admin_filters', JSON.stringify({
+    news: { showArchived: true },
+  }));
+  sandbox.syncLandingLegacyStateFromStore();
+
+  assert.equal(sandbox.getLandingSectionFilter('news').showArchived, true);
+});

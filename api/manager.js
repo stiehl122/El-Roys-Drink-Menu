@@ -9,10 +9,8 @@ import {
   readMenuAccessForUser,
   readProfile,
   requireMenuAccess,
-  requireRestaurantSpecialsAccess,
   requireRole,
 } from '../server/_auth.js';
-import { readRestaurantToolsPayload } from '../server/_restaurant-tools-read.js';
 import { readMenuHistoryForRequest } from '../server/_menu-history.js';
 import { saveSharedDraftCommand } from '../server/_menu-draft.js';
 import { saveLiveMenuCommand } from '../server/_menu-live.js';
@@ -20,22 +18,9 @@ import { readAuthorizedMenuActor } from '../server/_menu-write.js';
 import { previewMenuUpdateForMenu, publishMenuUpdateForMenu } from '../server/_menu-publish.js';
 import { authorizeNotificationRequest } from '../server/_notification-gateway.js';
 import { deliverMenuNotification } from '../server/_notification-delivery.js';
-import {
-  executeRestaurantSpecialsCommand,
-  parseSpecialsCommand,
-  respondWithSpecialsResult,
-} from '../server/_specials-command.js';
-import { getSupabaseServerConfig } from '../server/_supabase.js';
 import { lookupProductByBarcode } from '../server/_product-lookup.js';
 import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
-import { parseRequestBody, readAction, readQueryValue } from '../server/_request.js';
-
-const SPECIALS_ACTIONS = new Set(['ensure', 'add', 'remove', 'move', 'note', 'confirm']);
-
-function readIncludeFlags(req) {
-  const rawInclude = String(req?.query?.include || readQueryValue(req, 'include') || '').trim();
-  return rawInclude ? rawInclude.split(',').map(value => value.trim().toLowerCase()).filter(Boolean) : [];
-}
+import { parseRequestBody, readAction } from '../server/_request.js';
 
 function parsePublishBody(req) {
   const body = parseRequestBody(req);
@@ -75,19 +60,6 @@ export default async function handler(req, res) {
         ? (await readMenuAccessForUser(uid, { select: 'menu_id' })).map(row => row.menu_id)
         : [];
       const bundle = await readMenuStateBundle(menuId);
-      const includeFlags = readIncludeFlags(req);
-      let restaurantTools = null;
-      if (includeFlags.includes('restaurant-tools') && bundle?.menu?.restaurantId) {
-        try {
-          await requireRestaurantSpecialsAccess(uid, role, bundle.menu.restaurantId);
-          restaurantTools = await readRestaurantToolsPayload({
-            restaurantId: bundle.menu.restaurantId,
-            currentMenuId: menuId,
-          });
-        } catch (error) {
-          if (error?.status && error.status !== 403) throw error;
-        }
-      }
       return res.json(createMenuWorkspacePayload(bundle, {
         actor: {
           id: uid,
@@ -95,7 +67,6 @@ export default async function handler(req, res) {
           role,
           accessibleMenuIds,
         },
-        restaurantTools,
       }));
     }
 
@@ -108,8 +79,9 @@ export default async function handler(req, res) {
       case 'save_quietly':
       case 'preview_publish':
       case 'publish': {
-        const { body, menuId, action: bodyAction } = parsePublishBody(req);
+        const { body: publishBody, menuId, action: bodyAction } = parsePublishBody(req);
         if (!menuId) return res.status(400).json({ error: 'Missing menu_id' });
+        const hasLegacySelectedSections = Object.prototype.hasOwnProperty.call(publishBody || {}, 'selected_sections');
         const actor = await readAuthorizedMenuActor(req, menuId);
         const command = (bodyAction === 'preview' || action === 'preview_publish')
           ? previewMenuUpdateForMenu
@@ -117,31 +89,20 @@ export default async function handler(req, res) {
         const result = await command({
           actor,
           menuId,
-          mode: action === 'save_quietly' ? 'save' : String(body?.mode || '').trim(),
-          source: String(body?.source || '').trim(),
-          snapshot: body?.snapshot || {},
-          selectedChangeIds: Array.isArray(body?.selected_change_ids)
-            ? body.selected_change_ids
-            : (Array.isArray(body?.selected_group_ids) ? body.selected_group_ids : null),
-          legacySelectedSections: Array.isArray(body?.selected_sections) ? body.selected_sections : [],
-          expectedLiveRevision: body?.expected_live_revision ?? null,
-          expectedDraftRevision: body?.expected_draft_revision ?? null,
-          expectedNotificationRevision: body?.expected_notification_revision ?? null,
+          mode: action === 'save_quietly' ? 'save' : String(publishBody?.mode || '').trim(),
+          source: String(publishBody?.source || '').trim(),
+          snapshot: publishBody?.snapshot || {},
+          selectedChangeIds: Array.isArray(publishBody?.selected_change_ids)
+            ? publishBody.selected_change_ids
+            : (Array.isArray(publishBody?.selected_group_ids) ? publishBody.selected_group_ids : null),
+          legacySelectedSections: hasLegacySelectedSections
+            ? (Array.isArray(publishBody?.selected_sections) ? publishBody.selected_sections : [])
+            : null,
+          expectedLiveRevision: publishBody?.expected_live_revision ?? null,
+          expectedDraftRevision: publishBody?.expected_draft_revision ?? null,
+          expectedNotificationRevision: publishBody?.expected_notification_revision ?? null,
         });
         return res.status(200).json(result);
-      }
-      case 'specials': {
-        const caller = await requireRole(req, 'manager', 'admin');
-        const { sbUrl } = getSupabaseServerConfig();
-        const command = parseSpecialsCommand({
-          ...req,
-          body: {
-            ...(body || {}),
-            action: String(body?.specials_action || body?.specialsAction || body?.action || '').trim().toLowerCase(),
-          },
-        });
-        const result = await executeRestaurantSpecialsCommand({ sbUrl, caller, command });
-        return respondWithSpecialsResult(res, result);
       }
       case 'send_notification': {
         const payload = await authorizeNotificationRequest(req);
@@ -167,19 +128,6 @@ export default async function handler(req, res) {
         });
       }
       default:
-        if (SPECIALS_ACTIONS.has(action)) {
-          const caller = await requireRole(req, 'manager', 'admin');
-          const { sbUrl } = getSupabaseServerConfig();
-          const command = parseSpecialsCommand({
-            ...req,
-            body: {
-              ...(body || {}),
-              action,
-            },
-          });
-          const result = await executeRestaurantSpecialsCommand({ sbUrl, caller, command });
-          return respondWithSpecialsResult(res, result);
-        }
         return res.status(400).json({ error: 'Unsupported manager action' });
     }
   } catch (error) {

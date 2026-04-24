@@ -135,38 +135,6 @@ final class RestaurantToolsSession {
     }
   }
 
-  func saveFeaturedAction(
-    action: String,
-    itemId: String? = nil,
-    slotId: String? = nil,
-    note: String? = nil,
-    direction: Int? = nil
-  ) async {
-    isWorking = true
-    defer { isWorking = false }
-
-    do {
-      try await appModel.executeFeaturedAction(
-        action: action,
-        restaurantId: restaurant.id,
-        currentToolsMenus: toolsMenus,
-        itemId: itemId,
-        slotId: slotId,
-        note: note,
-        direction: direction
-      )
-      let payloads = try await appModel.loadRestaurantToolsPayloads(for: restaurant.id)
-      notice = nil
-      applyPayloads(payloads, syncHomeCache: true)
-    } catch {
-      notice = FeatureNotice(
-        tone: .danger,
-        title: "Updating Featured",
-        message: error.localizedDescription
-      )
-    }
-  }
-
   private func accessibleMenu(for menuID: String) -> MenuRecord? {
     appModel.accessibleMenus.first(where: { $0.id == menuID })
   }

@@ -2,6 +2,268 @@ import XCTest
 @testable import ElRoysManagerApp
 
 final class MenuDocumentTests: XCTestCase {
+  func testEditableDocumentEnsuresFeaturedSpecialsCategoryExistsAndDerivesEnabledItems() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+
+    XCTAssertEqual(document.visibleCategories.first?.key, EditableMenuDocument.featuredSpecialsKey)
+    XCTAssertEqual(document.category(for: EditableMenuDocument.featuredSpecialsKey)?.label, "Featured Specials")
+    XCTAssertTrue(document.featuredSpecialItems.isEmpty)
+  }
+
+  func testFeaturedSpecialItemsOnlyIncludePubliclyVisibleEnabledItemsFromFeaturedCategory() {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "star.fill",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "special-1", name: "Happy Hour Marg", featuredEnabled: true),
+          makeItem(id: "special-2", name: "Old Seasonal", featuredEnabled: false),
+          makeItem(
+            id: "special-3",
+            name: "Hidden Old Fashioned",
+            onMenu: false,
+            visibility: "off_menu",
+            featuredEnabled: true
+          ),
+          makeItem(
+            id: "special-4",
+            name: "Draft-only Daiquiri",
+            onMenu: false,
+            visibility: "public",
+            featuredEnabled: true
+          )
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [makeItem(id: "item-1", name: "Pilsner", featuredEnabled: true)]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["special-1"])
+  }
+
+  func testEditableDocumentNormalizesLegacySpecialCategoriesIntoCanonicalFeaturedSpecials() throws {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      ),
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "orange",
+        sub: "old",
+        placeholder: "legacy",
+        displayOrder: 1,
+        items: [makeItem(id: "legacy-1", name: "Legacy Marg")]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Seasonal Highlights",
+        icon: "",
+        color: "blue",
+        sub: "wrong",
+        placeholder: "wrong",
+        displayOrder: 2,
+        items: [makeItem(id: "special-1", name: "Happy Hour Marg", featuredEnabled: true)]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+    let featured = try XCTUnwrap(document.category(for: EditableMenuDocument.featuredSpecialsKey))
+
+    XCTAssertEqual(document.cats.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "beer"])
+    XCTAssertEqual(featured.id, "featured_specials")
+    XCTAssertEqual(featured.label, "Featured Specials")
+    XCTAssertEqual(featured.icon, "star.fill")
+    XCTAssertEqual(featured.items.map(\.id), ["legacy-1", "special-1"])
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-1", "special-1"])
+  }
+
+  func testEditableDocumentNormalizationDedupesMixedLegacyAndFeaturedItemsByID() throws {
+    let workspace = makeWorkspace(categories: [
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "shared-1", name: "Legacy Marg"),
+          makeItem(id: "legacy-only", name: "Legacy Only")
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [
+          makeItem(id: "shared-1", name: "Current Marg", featuredEnabled: false)
+        ]
+      )
+    ])
+
+    let document = EditableMenuDocument(workspace: workspace)
+    let featured = try XCTUnwrap(document.category(for: EditableMenuDocument.featuredSpecialsKey))
+    let sharedItem = try XCTUnwrap(featured.items.first(where: { $0.id == "shared-1" }))
+    let legacyOnlyItem = try XCTUnwrap(featured.items.first(where: { $0.id == "legacy-only" }))
+
+    XCTAssertEqual(Set(featured.items.map(\.id)), Set(["shared-1", "legacy-only"]))
+    XCTAssertEqual(sharedItem.name, "Current Marg")
+    XCTAssertFalse(sharedItem.featuredEnabled)
+    XCTAssertTrue(legacyOnlyItem.featuredEnabled)
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-only"])
+  }
+
+  func testEditableDocumentRuntimeNormalizationMigratesLegacyOfflineFeaturedDrafts() {
+    var document = EditableMenuDocument(workspace: makeWorkspace(categories: []))
+    document.cats = [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      ),
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [makeItem(id: "legacy-1", name: "Legacy Marg")]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Later Featured",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 2,
+        items: [makeItem(id: "special-1", name: "Happy Hour Marg", featuredEnabled: true)]
+      )
+    ]
+
+    document.normalizeIdentifiersForRuntime()
+
+    XCTAssertEqual(document.cats.map { $0.key }, [EditableMenuDocument.featuredSpecialsKey, "beer"])
+    XCTAssertEqual(document.featuredSpecialItems.map { $0.id }, ["legacy-1", "special-1"])
+    XCTAssertEqual(document.category(for: EditableMenuDocument.featuredSpecialsKey)?.id, "featured_specials")
+  }
+
+  func testEditableDocumentRuntimeNormalizationDedupesMixedLegacyAndFeaturedItemsByID() throws {
+    var document = EditableMenuDocument(workspace: makeWorkspace(categories: []))
+    document.cats = [
+      MenuCategoryPayload(
+        id: "legacy-specials",
+        menuId: "menu",
+        key: "special",
+        label: "Special",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [
+          makeItem(id: "shared-1", name: "Legacy Marg"),
+          makeItem(id: "legacy-only", name: "Legacy Only")
+        ]
+      ),
+      MenuCategoryPayload(
+        id: "featured",
+        menuId: "menu",
+        key: EditableMenuDocument.featuredSpecialsKey,
+        label: "Featured Specials",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 1,
+        items: [
+          makeItem(id: "shared-1", name: "Current Marg", featuredEnabled: false)
+        ]
+      )
+    ]
+
+    document.normalizeIdentifiersForRuntime()
+
+    let featured = try XCTUnwrap(document.category(for: EditableMenuDocument.featuredSpecialsKey))
+    let sharedItem = try XCTUnwrap(featured.items.first(where: { $0.id == "shared-1" }))
+
+    XCTAssertEqual(Set(featured.items.map(\.id)), Set(["shared-1", "legacy-only"]))
+    XCTAssertEqual(sharedItem.name, "Current Marg")
+    XCTAssertFalse(sharedItem.featuredEnabled)
+    XCTAssertEqual(document.featuredSpecialItems.map(\.id), ["legacy-only"])
+  }
+
   func testDeleteCategoryMovesItemsToOffMenuRecovery() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -23,7 +285,7 @@ final class MenuDocumentTests: XCTestCase {
     var document = EditableMenuDocument(workspace: workspace)
     document.deleteCategory(key: "wine")
 
-    XCTAssertTrue(document.visibleCategories.isEmpty)
+    XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey])
     XCTAssertEqual(document.uncategorizedItems.count, 1)
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
@@ -73,7 +335,7 @@ final class MenuDocumentTests: XCTestCase {
     var document = EditableMenuDocument(workspace: workspace)
     document.removeItemToOffMenu(itemID: "item-1", from: "beer")
 
-    XCTAssertEqual(document.visibleCategories.first?.items.count, 0)
+    XCTAssertEqual(document.category(for: "beer")?.items.count, 0)
     XCTAssertEqual(document.uncategorizedItems.count, 1)
     XCTAssertFalse(document.uncategorizedItems[0].onMenu)
   }
@@ -260,7 +522,10 @@ final class MenuDocumentTests: XCTestCase {
 
     let document = EditableMenuDocument(workspace: workspace)
 
-    XCTAssertEqual(document.cats.map { $0.key }, ["beer", "wine", EditableMenuDocument.uncategorizedKey])
+    XCTAssertEqual(
+      document.cats.map { $0.key },
+      [EditableMenuDocument.featuredSpecialsKey, "beer", "wine", EditableMenuDocument.uncategorizedKey]
+    )
     XCTAssertEqual(document.category(for: "beer")?.items.map { $0.id }, ["beer-1", "beer-2"])
     XCTAssertEqual(document.category(for: "wine")?.items.map { $0.id }, ["item-c", "item-a", "item-b"])
   }
@@ -334,7 +599,7 @@ final class MenuDocumentTests: XCTestCase {
     let payload = try JSONDecoder.backend.decode(MenuWorkspacePayload.self, from: data)
     let document = EditableMenuDocument(workspace: payload)
 
-    XCTAssertEqual(document.cats.map(\.key), ["beer", "seasonal"])
+    XCTAssertEqual(document.cats.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "beer", "seasonal"])
     XCTAssertEqual(document.category(for: "beer")?.items.map(\.id), ["beer-first", "beer-missing"])
   }
 
@@ -489,10 +754,10 @@ final class MenuDocumentTests: XCTestCase {
     ])
 
     var document = EditableMenuDocument(workspace: workspace)
-    document.moveVisibleCategories(from: IndexSet(integer: 0), to: 2)
+    document.moveVisibleCategories(from: IndexSet(integer: 1), to: 3)
 
-    XCTAssertEqual(document.visibleCategories.map(\.key), ["wine", "beer"])
-    XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1])
+    XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "wine", "beer"])
+    XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1, 2])
     XCTAssertEqual(document.cats.last?.key, EditableMenuDocument.uncategorizedKey)
   }
 
@@ -501,6 +766,7 @@ final class MenuDocumentTests: XCTestCase {
     let appSource = try String(contentsOf: appEntrySourceURL(), encoding: .utf8)
 
     XCTAssertTrue(toolsSource.contains("Manage Categories"))
+    XCTAssertTrue(toolsSource.contains("Edit Menu Items"))
     XCTAssertTrue(appSource.contains("case categoryTools(MenuRecord)"))
     XCTAssertTrue(appSource.contains("RestaurantCategoryManagementScreen"))
   }
@@ -612,6 +878,18 @@ final class MenuDocumentTests: XCTestCase {
     {
       "cats": [
         {
+          "id": "featured_specials",
+          "key": "featured_specials",
+          "label": "Featured Specials",
+          "items": [
+            {
+              "id": "special-1",
+              "name": "Happy Hour Marg",
+              "featured_enabled": true
+            }
+          ]
+        },
+        {
           "id": "cat-1",
           "key": "beer",
           "label": "Beer",
@@ -632,37 +910,6 @@ final class MenuDocumentTests: XCTestCase {
         "id": "leroys-lounge",
         "slug": "leroyslounge",
         "name": "Leroy's Lounge"
-      },
-      "restaurant_tools": {
-        "restaurant_id": "leroys-lounge",
-        "featured_groups": [
-          {
-            "id": "group-1",
-            "name": "Featured",
-            "slots": [
-              {
-                "id": "slot-1",
-                "item_id": "item-1",
-                "item": {
-                  "id": "item-1",
-                  "name": "Lager",
-                  "eightySixed": false
-                }
-              }
-            ]
-          }
-        ],
-        "sibling_catalog": [
-          {
-            "id": "sib-1",
-            "name": "Michelada",
-            "cat": "Beer",
-            "menu_id": "menu-food",
-            "menu_label": "Food",
-            "on_menu": false,
-            "visibility": "off_menu"
-          }
-        ]
       },
       "context": {
         "kind": "menu-workspace",
@@ -699,16 +946,79 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(payload.cats[0].color, "")
     XCTAssertEqual(payload.cats[0].sub, "")
     XCTAssertEqual(payload.cats[0].placeholder, "")
-    XCTAssertEqual(payload.cats[0].items[0].recipe, ["16oz pour"])
+    XCTAssertEqual(payload.cats.first(where: { $0.key == "beer" })?.items.first?.recipe, ["16oz pour"])
     XCTAssertEqual(payload.meta.lastSentCategories, [])
     XCTAssertEqual(payload.meta.lastSentFeatured, [])
     XCTAssertEqual(payload.workspace.sharedDraft.source, "")
     XCTAssertFalse(payload.workspace.permissions.canAdmin)
     XCTAssertFalse(payload.workspace.capabilities.includesRestaurantTools)
-    XCTAssertEqual(payload.restaurantTools?.featuredGroups[0].slots[0].item?.price, "")
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.menuLabel, "Food")
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.onMenu, false)
-    XCTAssertEqual(payload.restaurantTools?.siblingCatalog.first?.visibility, "off_menu")
+    XCTAssertEqual(payload.cats.first?.items.first?.featuredEnabled, true)
+    XCTAssertNil(payload.restaurantTools)
+  }
+
+  func testMenuItemPayloadDecodesFeaturedEnabledFromSnakeCase() throws {
+    let data = Data("""
+    {
+      "id": "special-1",
+      "name": "Happy Hour Marg",
+      "featured_enabled": true
+    }
+    """.utf8)
+
+    let item = try JSONDecoder.backend.decode(MenuItemPayload.self, from: data)
+
+    XCTAssertTrue(item.featuredEnabled)
+  }
+
+  func testPublicMenuPayloadDecodesFeaturedItemsInsteadOfFeaturedGroups() throws {
+    let data = Data("""
+    {
+      "cats": [
+        {
+          "id": "cat-1",
+          "key": "beer",
+          "label": "Beer",
+          "items": [
+            {
+              "id": "item-1",
+              "name": "Pilsner",
+              "price": "$8"
+            }
+          ]
+        }
+      ],
+      "meta": {},
+      "featured_items": [
+        {
+          "id": "special-1",
+          "name": "Happy Hour Marg",
+          "price": "$9",
+          "featured_enabled": true
+        }
+      ],
+      "context": {
+        "kind": "public-menu",
+        "menu": {
+          "id": "menu",
+          "slug": "drinks",
+          "name": "Drinks",
+          "type": "drinks",
+          "restaurant_id": "leroys-lounge"
+        }
+      },
+      "capabilities": {
+        "guest_readable": true,
+        "requires_auth": false,
+        "includes_draft_state": false,
+        "includes_notification_config": false
+      }
+    }
+    """.utf8)
+
+    let payload = try JSONDecoder.backend.decode(PublicMenuPayload.self, from: data)
+
+    XCTAssertEqual(payload.featuredItems.map(\.id), ["special-1"])
+    XCTAssertTrue(payload.featuredItems[0].featuredEnabled)
   }
 
   func testCategoryPayloadDefaultsUntappdEnabledToFalse() throws {
@@ -1056,7 +1366,7 @@ final class MenuDocumentTests: XCTestCase {
     model.deleteCategory(key: "beer")
 
     XCTAssertFalse(model.canEditCategories)
-    XCTAssertEqual(model.currentEditorDocument?.visibleCategories.count, 1)
+    XCTAssertEqual(model.currentEditorDocument?.visibleCategories.count, 2)
     XCTAssertEqual(model.currentEditorDocument?.category(for: "beer")?.label, "Beer")
   }
 
@@ -2467,6 +2777,7 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.itemRecord(for: "item-2")?.item.price, "$18")
     XCTAssertEqual(document.itemRecord(for: "item-2")?.item.desc, "")
     XCTAssertFalse(model.editorDirty)
+    XCTAssertNil(model.editorRefreshRequirement)
   }
 
   @MainActor
@@ -2759,7 +3070,6 @@ final class MenuDocumentTests: XCTestCase {
       liveSave: liveSaveClient,
       publish: publishClient,
       history: historyClient,
-      featuredTools: StubFeaturedToolsClient(),
       preview: StubPreviewClient(),
       productLookup: StubProductLookupClient()
     )
@@ -2772,7 +3082,8 @@ final class MenuDocumentTests: XCTestCase {
     desc: String = "",
     displayOrder: Int = 0,
     onMenu: Bool = true,
-    visibility: String = "public"
+    visibility: String = "public",
+    featuredEnabled: Bool = false
   ) -> MenuItemPayload {
     MenuItemPayload(
       id: id,
@@ -2786,7 +3097,8 @@ final class MenuDocumentTests: XCTestCase {
       visibility: visibility,
       upcharges: [],
       showDescription: true,
-      showRecipe: false
+      showRecipe: false,
+      featuredEnabled: featuredEnabled
     )
   }
 
@@ -3113,12 +3425,6 @@ private final class StubHistoryClient: HistoryClienting {
 
   func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload {
     payload
-  }
-}
-
-private final class StubFeaturedToolsClient: FeaturedToolsClienting {
-  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
-    throw TestError.message("Unused in this test")
   }
 }
 

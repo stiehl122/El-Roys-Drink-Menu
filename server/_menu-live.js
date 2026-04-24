@@ -20,6 +20,7 @@ import {
   readRevisionState,
 } from './_menu-write.js';
 import { assertCategoryGovernanceAllowed } from './_category-governance.js';
+import { prepareFeaturedCategoriesForPersistence } from './_featured-specials-persistence.js';
 
 const UNCATEGORIZED_ID = '__uncategorized__';
 
@@ -125,6 +126,9 @@ function normalizeItemRow(item, categoryId, displayOrder, { forceOffMenu = false
   const eightySixedRaw = Object.prototype.hasOwnProperty.call(row, 'eightySixed')
     ? row.eightySixed
     : row.is_eighty_sixed;
+  const featuredEnabledRaw = Object.prototype.hasOwnProperty.call(row, 'featuredEnabled')
+    ? row.featuredEnabled
+    : row.featured_enabled;
   const rawPrice = asString(row.price);
 
   return {
@@ -141,6 +145,7 @@ function normalizeItemRow(item, categoryId, displayOrder, { forceOffMenu = false
     upcharges: normalizeUpcharges(row.upcharges),
     show_description: showDescriptionRaw !== false,
     show_recipe: !!showRecipeRaw,
+    featured_enabled: featuredEnabledRaw === true,
     display_order: displayOrder,
   };
 }
@@ -162,7 +167,6 @@ function normalizeCategoryRows(menuId, categories = []) {
       sub: asString(row.sub),
       placeholder: asString(row.placeholder),
       untappd_enabled: row?.untappd_enabled === true || row?.untappdEnabled === true,
-      rawId: asString(row.id),
       items: asArray(row.items),
     });
   });
@@ -180,7 +184,6 @@ function normalizeCategoryRows(menuId, categories = []) {
     placeholder: category.placeholder,
     untappd_enabled: category.untappd_enabled === true,
     display_order: index,
-    id: category.rawId && !category.rawId.startsWith('local-') ? category.rawId : undefined,
   }));
 
   const uncategorizedRow = uncategorized
@@ -194,7 +197,6 @@ function normalizeCategoryRows(menuId, categories = []) {
         placeholder: uncategorized.placeholder,
         untappd_enabled: false,
         display_order: 9999,
-        id: uncategorized.rawId && !uncategorized.rawId.startsWith('local-') ? uncategorized.rawId : undefined,
       }
     : null;
 
@@ -218,7 +220,7 @@ async function readMenuAndCategories(menuId) {
   const headers = serviceHeaders();
   const [menuRows, categoryRows] = await Promise.all([
     fetchJsonOrThrow(
-      `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,archived&limit=1`,
+      `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,type,archived&limit=1`,
       { headers },
       'Failed to load menu'
     ),
@@ -255,7 +257,7 @@ async function upsertCategories(menuId, normalizedCategories, categoriesByKey) {
 
   const payload = rows.map(row => {
     const existing = categoriesByKey.get(row.key);
-    const resolvedId = row.id || existing?.id;
+    const resolvedId = existing?.id;
     return resolvedId ? { ...row, id: resolvedId } : row;
   });
 
@@ -472,7 +474,11 @@ export async function saveLiveMenuCommand(req) {
 
   const { categories, meta, restaurant } = extractSnapshot(payload);
   const { menu, categoriesByKey: existingByKey } = await readMenuAndCategories(menuId);
-  const normalizedCategories = normalizeCategoryRows(menuId, categories);
+  const preparedSnapshotCategories = prepareFeaturedCategoriesForPersistence(categories, {
+    menuId,
+    menuType: menu?.type || 'drinks',
+  }).categories;
+  const normalizedCategories = normalizeCategoryRows(menuId, preparedSnapshotCategories);
   if (!normalizedCategories.categoryRows.length && !normalizedCategories.uncategorizedCategory) {
     throw { status: 400, message: 'Snapshot payload must include cats[]' };
   }

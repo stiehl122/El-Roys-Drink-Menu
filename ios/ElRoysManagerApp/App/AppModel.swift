@@ -66,7 +66,6 @@ struct AppServices {
   var liveSave: any LiveSaveClienting
   var publish: any PublishClienting
   var history: any HistoryClienting
-  var featuredTools: any FeaturedToolsClienting
   var preview: any PreviewClienting
   var productLookup: any ProductLookupClienting
 
@@ -80,7 +79,6 @@ struct AppServices {
       liveSave: LiveSaveClient(environment: environment),
       publish: PublishClient(environment: environment),
       history: HistoryClient(environment: environment),
-      featuredTools: FeaturedToolsClient(environment: environment),
       preview: PreviewClient(environment: environment),
       productLookup: ProductLookupClient(environment: environment)
     )
@@ -795,35 +793,6 @@ final class AppModel {
     return try await operation(self)
   }
 
-  func executeFeaturedAction(
-    action: String,
-    restaurantId: String,
-    currentToolsMenus: [String: MenuWorkspacePayload],
-    itemId: String? = nil,
-    slotId: String? = nil,
-    note: String? = nil,
-    direction: Int? = nil
-  ) async throws {
-    guard let accessToken = authSession?.accessToken else {
-      throw BackendError.unauthorized
-    }
-    let canEditFeatured = currentToolsMenus.values.contains {
-      $0.restaurant?.id == restaurantId && ($0.workspace.capabilities.canManageRestaurantSpecials || $0.workspace.permissions.canEditRestaurantSpecials)
-    }
-    guard canEditFeatured else {
-      throw FeatureSessionOperationError.featuredUnavailable
-    }
-    try await services.featuredTools.mutate(
-      action: action,
-      restaurantId: restaurantId,
-      itemId: itemId,
-      slotId: slotId,
-      note: note,
-      direction: direction,
-      accessToken: accessToken
-    )
-  }
-
   func syncHomeRestaurantToolsCache(
     menus: [String: MenuWorkspacePayload],
     histories: [String: HistoryPayload]
@@ -836,34 +805,6 @@ final class AppModel {
     }
     homeDataVersion += 1
   }
-
-  func saveFeaturedAction(action: String, restaurantId: String, itemId: String? = nil, slotId: String? = nil, note: String? = nil, direction: Int? = nil) async {
-    guard let accessToken = authSession?.accessToken else { return }
-    let canEditFeatured = currentToolsMenus.values.contains {
-      $0.restaurant?.id == restaurantId && ($0.workspace.capabilities.canManageRestaurantSpecials || $0.workspace.permissions.canEditRestaurantSpecials)
-    }
-    guard canEditFeatured else {
-      notice = AppNotice(
-        tone: .warning,
-        title: "Unavailable",
-        message: "Featured tools are not enabled for this staff session."
-      )
-      return
-    }
-    await run("Updating Featured") { model in
-      try await model.services.featuredTools.mutate(
-        action: action,
-        restaurantId: restaurantId,
-        itemId: itemId,
-        slotId: slotId,
-        note: note,
-        direction: direction,
-        accessToken: accessToken
-      )
-      await model.loadRestaurantTools(for: restaurantId)
-    }
-  }
-
   private func restoreSession() async {
     do {
       var storedSession = try await sessionStore.loadSession(promptForBiometrics: true)
@@ -1263,7 +1204,6 @@ final class AppModel {
       fallback.context = remoteDocument.context
       fallback.meta = remoteDocument.meta
       fallback.restaurant = remoteDocument.restaurant
-      fallback.featuredGroups = remoteDocument.featuredGroups
       return fallback
     }
     return mergeDocuments(
@@ -1419,16 +1359,6 @@ final class AppModel {
   }
 }
 
-private enum FeatureSessionOperationError: LocalizedError {
-  case featuredUnavailable
-
-  var errorDescription: String? {
-    switch self {
-    case .featuredUnavailable:
-      return "Featured tools are not enabled for this staff session."
-    }
-  }
-}
 
 private struct InstalledEditorSessionState {
   var isWorking: Bool
@@ -1582,7 +1512,6 @@ private func mergeDocuments(
   merged.context = remote.context
   merged.meta = remote.meta
   merged.restaurant = remote.restaurant
-  merged.featuredGroups = remote.featuredGroups
   merged.normalizeIdentifiersForRuntime()
   return merged
 }

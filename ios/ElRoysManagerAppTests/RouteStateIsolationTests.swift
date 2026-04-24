@@ -167,56 +167,26 @@ final class UpchargeEditorTests: XCTestCase {
 
 @MainActor
 final class RestaurantToolsInventoryTests: XCTestCase {
-  func testFeaturedActionsRefreshSharedHomeRestaurantToolsCache() async throws {
-    let initialFeaturedItem = routeStateMakeItem(id: "item-initial", name: "Old Fashioned")
-    let updatedFeaturedItem = routeStateMakeItem(id: "item-updated", name: "Paper Plane")
-    let initialGroups = [
-      FeaturedGroup(
-        id: "group-1",
-        name: "Cocktails",
-        displayOrder: 0,
-        slots: [
-          FeaturedSlot(
-            id: "slot-1",
-            itemId: initialFeaturedItem.id,
-            sellNote: "",
-            displayOrder: 0,
-            confirmedAt: nil,
-            confirmedBy: nil,
-            item: initialFeaturedItem
-          )
-        ]
-      )
-    ]
-    let updatedGroups = [
-      FeaturedGroup(
-        id: "group-1",
-        name: "Cocktails",
-        displayOrder: 0,
-        slots: [
-          FeaturedSlot(
-            id: "slot-1",
-            itemId: updatedFeaturedItem.id,
-            sellNote: "",
-            displayOrder: 0,
-            confirmedAt: nil,
-            confirmedBy: nil,
-            item: updatedFeaturedItem
-          )
-        ]
-      )
-    ]
+  func testPruneRefreshesSharedHomeRestaurantToolsCache() async throws {
+    let offMenuCategory = routeStateMakeCategory(
+      id: "cat-off-menu",
+      menuId: "menu-food",
+      key: EditableMenuDocument.uncategorizedKey,
+      label: "Off Menu",
+      items: [
+        routeStateMakeItem(
+          id: "item-food-1",
+          name: "Secret Taco",
+          onMenu: false,
+          visibility: "off_menu"
+        )
+      ]
+    )
     let workspaceClient = RouteStateStubWorkspaceClient(
       payloads: [
         routeStateMakeWorkspace(
           menuId: "menu-drinks",
           type: "drinks",
-          restaurantTools: RestaurantToolsPayload(
-            restaurantId: "leroys-lounge",
-            featuredGroups: initialGroups,
-            siblingCatalog: [],
-            compatibility: nil
-          ),
           permissions: WorkspacePermissions(
             canManage: true,
             canAdmin: true,
@@ -237,12 +207,7 @@ final class RestaurantToolsInventoryTests: XCTestCase {
         routeStateMakeWorkspace(
           menuId: "menu-food",
           type: "food",
-          restaurantTools: RestaurantToolsPayload(
-            restaurantId: "leroys-lounge",
-            featuredGroups: [],
-            siblingCatalog: [],
-            compatibility: nil
-          ),
+          categories: [offMenuCategory],
           permissions: WorkspacePermissions(
             canManage: true,
             canAdmin: true,
@@ -262,14 +227,9 @@ final class RestaurantToolsInventoryTests: XCTestCase {
         )
       ]
     )
-    let featuredToolsClient = RouteStateStubFeaturedToolsClient()
-    featuredToolsClient.mutateHandler = { _, restaurantId, _, _, _, _ in
-      workspaceClient.applyFeaturedGroups(restaurantId: restaurantId, groups: updatedGroups)
-    }
     let services = routeStateMakeServices(
       workspaceClient: workspaceClient,
-      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
-      featuredToolsClient: featuredToolsClient
+      historyClient: RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload())
     )
     let appModel = AppModel(
       services: services,
@@ -283,17 +243,27 @@ final class RestaurantToolsInventoryTests: XCTestCase {
     await appModel.loadRestaurantTools(for: restaurant.id)
     let baselineVersion = appModel.homeDataVersion
     XCTAssertEqual(
-      appModel.currentToolsMenus["menu-drinks"]?.restaurantTools?.featuredGroups.first?.slots.first?.item?.name,
-      "Old Fashioned"
+      appModel.currentToolsMenus["menu-food"]?.cats
+        .first(where: { $0.key == EditableMenuDocument.uncategorizedKey })?
+        .items
+        .first?.name,
+      "Secret Taco"
     )
 
     let session = appModel.restaurantToolsSession(for: restaurant)
     await session.load()
-    await session.saveFeaturedAction(action: "confirm")
+    await session.prune(
+      itemID: "item-food-1",
+      fromMenuID: "menu-food",
+      categoryKey: EditableMenuDocument.uncategorizedKey
+    )
 
     XCTAssertEqual(
-      appModel.currentToolsMenus["menu-drinks"]?.restaurantTools?.featuredGroups.first?.slots.first?.item?.name,
-      "Paper Plane"
+      appModel.currentToolsMenus["menu-food"]?.cats
+        .first(where: { $0.key == EditableMenuDocument.uncategorizedKey })?
+        .items
+        .isEmpty,
+      true
     )
     XCTAssertGreaterThan(appModel.homeDataVersion, baselineVersion)
   }

@@ -170,7 +170,7 @@ body.route-restaurant.route-restaurant--elroy {
 
 #restaurant-site-wrapper .erc-brand-logo {
   display: block;
-  width: clamp(11rem, 22vw, 16rem);
+  width: clamp(4.75rem, 9vw, 6.25rem);
   height: auto;
 }
 
@@ -1008,7 +1008,7 @@ body.route-restaurant.route-restaurant--elroy {
   }
 
   #restaurant-site-wrapper .erc-brand-logo {
-    width: clamp(9.5rem, 42vw, 12rem);
+    width: clamp(3.7rem, 18vw, 4.6rem);
   }
 
   #restaurant-site-wrapper .erc-sister-link {

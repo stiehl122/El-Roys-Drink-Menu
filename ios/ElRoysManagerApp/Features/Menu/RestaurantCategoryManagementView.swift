@@ -15,13 +15,17 @@ struct RestaurantCategoryManagementScreen: View {
     session.menu.isFoodMenu ? AppPalette.jade : AppPalette.bloodOrange
   }
 
+  private func isProtectedCategory(_ category: MenuCategoryPayload) -> Bool {
+    category.key == EditableMenuDocument.featuredSpecialsKey
+  }
+
   var body: some View {
     ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 18) {
         AppSectionHeader(
           eyebrow: "Restaurant tools",
           title: "\(session.menu.displayTypeLabel) categories",
-          subtitle: "Add, rename, delete, and reorder categories without leaving the staff tools flow.",
+          subtitle: "Add and organize categories here. Featured Specials stays pinned first and is edited from the menu item flow.",
           tint: accent
         )
 
@@ -165,16 +169,33 @@ struct RestaurantCategoryManagementScreen: View {
         ForEach(categories) { category in
           HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-              Text(category.label)
-                .font(AppTypography.body(16, weight: .bold))
+              HStack(spacing: 8) {
+                Text(category.label)
+                  .font(AppTypography.body(16, weight: .bold))
+
+                if isProtectedCategory(category) {
+                  Text("Protected")
+                    .font(AppTypography.body(11, weight: .bold))
+                    .foregroundStyle(accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(accent.opacity(0.12), in: Capsule())
+                }
+              }
               Text("\(category.items.filter(\.onMenu).count) live items")
                 .font(AppTypography.body(12, weight: .medium))
                 .foregroundStyle(.secondary)
+
+              if isProtectedCategory(category) {
+                Text("Pinned first. Rename, delete, and reorder are disabled for this category.")
+                  .font(AppTypography.body(12, weight: .medium))
+                  .foregroundStyle(.secondary)
+              }
             }
 
             Spacer()
 
-            if !isReordering {
+            if !isReordering && !isProtectedCategory(category) {
               Button("Rename") {
                 renameTarget = category
                 renameText = category.label
@@ -191,7 +212,7 @@ struct RestaurantCategoryManagementScreen: View {
           }
           .listRowSeparator(.hidden)
           .listRowBackground(Color.clear)
-          .moveDisabled(!isReordering || !session.canEditCategories)
+          .moveDisabled(!isReordering || !session.canEditCategories || isProtectedCategory(category))
         }
         .onMove(perform: session.moveVisibleCategories)
       }

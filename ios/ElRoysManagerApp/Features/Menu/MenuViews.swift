@@ -183,7 +183,9 @@ struct MenuEditorScreen: View {
   }
 
   private func presentNewItem() {
-    if let firstCategoryKey = session.document?.visibleCategories.first?.key {
+    if let firstCategoryKey = session.document?.visibleCategories.first(where: {
+      $0.key != EditableMenuDocument.featuredSpecialsKey
+    })?.key ?? session.document?.visibleCategories.first?.key {
       editingDraft = EditableItemDraft(categoryKey: firstCategoryKey, isFoodMenu: session.menu.isFoodMenu)
       activeSheet = .itemEditor
     } else {
@@ -1242,6 +1244,7 @@ struct EditableItemDraft: Equatable {
   var isEightySixed = false
   var showDescription = true
   var showRecipe = false
+  var featuredEnabled = false
   var barcode = ""
   var keepAdding = false
   var isFoodMenu = false
@@ -1265,6 +1268,7 @@ struct EditableItemDraft: Equatable {
     isEightySixed = item.isEightySixed
     showDescription = item.showDescription
     showRecipe = item.showRecipe
+    featuredEnabled = item.featuredEnabled
     self.isFoodMenu = isFoodMenu
   }
 
@@ -1306,7 +1310,8 @@ struct EditableItemDraft: Equatable {
       visibility: trimmedCategoryKey == EditableMenuDocument.uncategorizedKey ? "off_menu" : "public",
       upcharges: normalizedUpcharges,
       showDescription: showDescription,
-      showRecipe: isFoodMenu ? false : showRecipe
+      showRecipe: isFoodMenu ? false : showRecipe,
+      featuredEnabled: trimmedCategoryKey == EditableMenuDocument.featuredSpecialsKey ? featuredEnabled : false
     )
   }
 }
@@ -1349,6 +1354,12 @@ private struct ItemEditorSheet: View {
           if !session.menu.isFoodMenu {
             Toggle("Show Recipe", isOn: $draft.showRecipe)
             TextField("Recipe", text: $draft.recipeText, axis: .vertical)
+          }
+        }
+
+        if draft.categoryKey == EditableMenuDocument.featuredSpecialsKey {
+          Section("Featured Strip") {
+            Toggle("Show in featured strip", isOn: $draft.featuredEnabled)
           }
         }
 

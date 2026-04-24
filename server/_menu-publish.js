@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import '../core/session/menu-publish-workflow.js';
 
-import { getRestaurantSpecialConfig } from './_auth.js';
 import {
   MAX_NOTIFICATION_TEXT_LENGTH,
   truncateNotificationText,
@@ -13,26 +12,28 @@ import {
   inferAuditSource,
   insertUpdateLog,
   normalizePersistentItemId,
-  patchMenuMetaForMenu,
   patchMenuMetaForMenuWithCompatibility,
   readMenuMeta,
   saveLiveMenuForMenu,
 } from './_menu-write.js';
-import {
-  getSupabaseServerConfig,
-  serviceHeaders,
-} from './_supabase.js';
-import {
-  getKnownMenuById,
-  readCurrentFeaturedIdsForRestaurant,
-} from './_menu-read.js';
+import { getKnownMenuById } from './_menu-read.js';
 import { assertCategoryGovernanceAllowed } from './_category-governance.js';
 import {
   buildCategoryQueueState,
+  normalizeLegacyFeaturedBaseline,
   normalizeName,
 } from './_menu-queue.js';
+import {
+  prepareFeaturedCategoriesForPersistence,
+  remapFeaturedSpecialsLastSentState,
+} from './_featured-specials-persistence.js';
 
 const PREVIEW_CONTRACT = 'menu-publish-preview.v2';
+
+function isFeaturedSpecialsSectionKey(sectionKey = '') {
+  const normalized = String(sectionKey || '').trim();
+  return normalized === 'featured_specials' || normalized === 'special';
+}
 
 function createMenuPublishError(status, message, extras = {}) {
   const error = new Error(message);
@@ -59,6 +60,7 @@ function snapshotLastSentState(snapshot = {}) {
       eightySixed: !!item.is_eighty_sixed,
       onMenu: item.on_menu !== false,
       visibility: item.visibility || 'public',
+      featuredEnabled: item.featured_enabled === true || item.featuredEnabled === true,
     })),
   ]));
 }
@@ -145,128 +147,19 @@ function buildPatchMessage(sections = [], { menuName = '', menuLink = '', now = 
   return lines.join('\n').trim();
 }
 
-async function readItemNamesByIds(itemIds = []) {
-  const uniqueIds = Array.from(new Set((itemIds || []).filter(Boolean)));
-  if (!uniqueIds.length) return new Map();
-
-  const { sbUrl } = getSupabaseServerConfig();
-  const params = new URLSearchParams();
-  params.set('select', 'id,name');
-  params.set('id', `in.(${uniqueIds.map(id => `"${String(id).replace(/"/g, '')}"`).join(',')})`);
-  const response = await fetch(`${sbUrl}/rest/v1/items?${params.toString()}`, { headers: serviceHeaders() });
-  if (!response.ok) return new Map();
-  const rows = await response.json();
-  return new Map((Array.isArray(rows) ? rows : []).map(row => [row.id, normalizeName(row?.name)]));
-}
-
-function createFeaturedChangeLine(groupId, section, kind, itemId, name) {
-  const normalizedName = normalizeName(name);
-  const text = kind === 'added'
-    ? `Added ${normalizedName}`
-    : `Removed ${normalizedName}`;
-  return {
-    id: `${groupId}::${kind}::${encodeURIComponent(normalizedName.toLowerCase())}`,
-    groupId,
-    kind,
-    text,
-    name: normalizedName,
-    itemId: String(itemId || ''),
-    sectionId: section.id,
-    sectionLabel: section.label,
-    icon: section.icon,
-    displayOrder: Number.isFinite(Number(section?.displayOrder))
-      ? Number(section.displayOrder)
-      : Number.MAX_SAFE_INTEGER,
-  };
-}
-
-async function buildFeaturedQueueState(knownMenu = null, meta = {}) {
-  const restaurantId = knownMenu?.restaurantId || '';
-  if (!restaurantId) {
-    return {
-      currentFeaturedIds: [],
-      groups: [],
-      sections: [],
-      notificationChanges: [],
-      diff: [],
-      unsentItemIds: [],
-    };
+function canonicalizeLegacySelectionSectionId(sectionId = '') {
+  const normalizedId = String(sectionId || '').trim();
+  if (!normalizedId) return '';
+  if (normalizedId === '__featured__' || normalizedId === 'special' || normalizedId === 'featured') {
+    return 'featured_specials';
   }
-
-  const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(restaurantId);
-  const lastSentFeaturedIds = Array.isArray(meta?.last_sent_featured)
-    ? meta.last_sent_featured.filter(Boolean)
-    : [];
-  const currentSet = new Set(currentFeaturedIds);
-  const lastSet = new Set(lastSentFeaturedIds);
-  const addedIds = currentFeaturedIds.filter(id => !lastSet.has(id));
-  const removedIds = lastSentFeaturedIds.filter(id => !currentSet.has(id));
-  if (!addedIds.length && !removedIds.length) {
-    return {
-      currentFeaturedIds,
-      groups: [],
-      sections: [],
-      notificationChanges: [],
-      diff: [],
-      unsentItemIds: [],
-    };
-  }
-
-  const config = getRestaurantSpecialConfig(restaurantId);
-  const namesById = await readItemNamesByIds([...addedIds, ...removedIds]);
-  const section = {
-    id: '__featured__',
-    icon: '⭐',
-    label: String(config?.name || 'Featured'),
-    displayOrder: Number.MAX_SAFE_INTEGER - 500,
-  };
-  const groups = [];
-
-  addedIds.forEach(itemId => {
-    const groupId = `${section.id}::added::${encodeURIComponent(String(itemId || '').trim())}`;
-    groups.push({
-      id: groupId,
-      kind: 'added',
-      selectable: true,
-      sectionId: section.id,
-      sectionLabel: section.label,
-      icon: section.icon,
-      itemId: String(itemId || ''),
-      lines: [createFeaturedChangeLine(groupId, section, 'added', itemId, namesById.get(itemId) || '(featured item)')],
-    });
-  });
-  removedIds.forEach(itemId => {
-    const groupId = `${section.id}::removed::${encodeURIComponent(String(itemId || '').trim())}`;
-    groups.push({
-      id: groupId,
-      kind: 'removed',
-      selectable: true,
-      sectionId: section.id,
-      sectionLabel: section.label,
-      icon: section.icon,
-      itemId: String(itemId || ''),
-      lines: [createFeaturedChangeLine(groupId, section, 'removed', itemId, namesById.get(itemId) || '(removed featured item)')],
-    });
-  });
-
-  const notificationChanges = groups.flatMap(group => group.lines);
-  const sections = groupNotificationChangesBySection(notificationChanges);
-  const diff = serializeNotificationSectionsForLog(sections);
-
-  return {
-    currentFeaturedIds,
-    groups,
-    sections,
-    notificationChanges,
-    diff,
-    unsentItemIds: [...addedIds],
-  };
+  return normalizedId;
 }
 
 function mapLegacySelectionToLineIds(legacySections = [], notificationChanges = []) {
   const byKey = new Set();
   (Array.isArray(legacySections) ? legacySections : []).forEach(section => {
-    const sectionId = String(section?.id || '').trim();
+    const sectionId = canonicalizeLegacySelectionSectionId(section?.id);
     if (!sectionId) return;
     (Array.isArray(section?.added) ? section.added : []).forEach(name => {
       byKey.add(`${sectionId}::added::${String(name || '').trim().toLowerCase()}`);
@@ -284,11 +177,11 @@ function mapLegacySelectionToLineIds(legacySections = [], notificationChanges = 
 
   if (!byKey.size) return [];
   return (notificationChanges || [])
-    .filter(change => byKey.has(`${change.sectionId}::${change.kind}::${String(change.name || '').trim().toLowerCase()}`))
+    .filter(change => byKey.has(`${canonicalizeLegacySelectionSectionId(change.sectionId)}::${change.kind}::${String(change.name || '').trim().toLowerCase()}`))
     .map(change => change.id);
 }
 
-function resolveSelection(preview, selectedChangeIds = null, legacySelectedSections = []) {
+function resolveSelection(preview, selectedChangeIds = null, legacySelectedSections = null) {
   const groups = Array.isArray(preview?.changeGroups) ? preview.changeGroups : [];
   const selectableGroups = groups.filter(group => group?.selectable);
   if (!selectableGroups.length) {
@@ -323,15 +216,13 @@ function resolveSelection(preview, selectedChangeIds = null, legacySelectedSecti
         const groupId = lineToGroupId.get(id);
         if (groupId) selectedSet.add(groupId);
       });
-  } else {
+  } else if (Array.isArray(legacySelectedSections)) {
+    selectedSet = new Set();
     const legacyLineIds = mapLegacySelectionToLineIds(legacySelectedSections, preview?.notificationChanges || []);
-    if (legacyLineIds.length) {
-      selectedSet = new Set();
-      legacyLineIds.forEach(lineId => {
-        const groupId = lineToGroupId.get(String(lineId || '').trim());
-        if (groupId) selectedSet.add(groupId);
-      });
-    }
+    legacyLineIds.forEach(lineId => {
+      const groupId = lineToGroupId.get(String(lineId || '').trim());
+      if (groupId) selectedSet.add(groupId);
+    });
   }
 
   if (!selectedSet) {
@@ -352,42 +243,51 @@ function resolveSelection(preview, selectedChangeIds = null, legacySelectedSecti
   };
 }
 
-function mergeQueueStates(categoryState = {}, featuredState = {}) {
-  const changeGroups = [
-    ...(Array.isArray(categoryState?.groups) ? categoryState.groups : []),
-    ...(Array.isArray(featuredState?.groups) ? featuredState.groups : []),
-  ];
-  const notificationChanges = changeGroups.flatMap(group => group.lines || []);
-  const sections = groupNotificationChangesBySection(notificationChanges);
-  const diff = serializeNotificationSectionsForLog(sections);
-  const unsentItemIds = Array.from(new Set([
-    ...(Array.isArray(categoryState?.unsentItemIds) ? categoryState.unsentItemIds : []),
-    ...(Array.isArray(featuredState?.unsentItemIds) ? featuredState.unsentItemIds : []),
-  ]));
-
-  return {
-    changeGroups,
-    notificationChanges,
-    sections,
-    diff,
-    unsentItemIds,
-  };
-}
-
 async function buildCanonicalPreviewForMenu({
   snapshot = {},
   meta = {},
   knownMenu = null,
 }) {
-  const lastSentState = meta?.last_sent_state && typeof meta.last_sent_state === 'object'
-    ? meta.last_sent_state
-    : {};
-  const categoryState = buildCategoryQueueState({
+  const snapshotHasFeaturedSpecials = Array.isArray(snapshot?.cats)
+    ? snapshot.cats.some(category => isFeaturedSpecialsSectionKey(category?.key))
+    : false;
+  const preparedSnapshotResult = prepareFeaturedCategoriesForPersistence(
+    Array.isArray(snapshot?.cats) ? snapshot.cats : [],
+    {
+      menuId: knownMenu?.id || '',
+      menuType: knownMenu?.type || 'drinks',
+    }
+  );
+  const queueSnapshot = {
+    ...snapshot,
+    cats: preparedSnapshotResult.categories,
+  };
+  const normalizedLastSentState = remapFeaturedSpecialsLastSentState(normalizeLegacyFeaturedBaseline({
     snapshot,
+    lastSentState: meta?.last_sent_state && typeof meta.last_sent_state === 'object'
+      ? meta.last_sent_state
+      : {},
+    lastSentFeatured: Array.isArray(meta?.last_sent_featured) ? meta.last_sent_featured : [],
+  }), preparedSnapshotResult.cloneIdMap);
+  const preservedFeaturedState = Object.fromEntries(
+    Object.entries(normalizedLastSentState).filter(([key]) => isFeaturedSpecialsSectionKey(key))
+  );
+  const lastSentState = snapshotHasFeaturedSpecials
+    ? normalizedLastSentState
+    : Object.fromEntries(
+        Object.entries(normalizedLastSentState).filter(([key]) => !isFeaturedSpecialsSectionKey(key))
+      );
+  const categoryState = buildCategoryQueueState({
+    snapshot: queueSnapshot,
     lastSentState,
   });
-  const featuredState = await buildFeaturedQueueState(knownMenu, meta);
-  const queueState = mergeQueueStates(categoryState, featuredState);
+  const queueState = {
+    changeGroups: Array.isArray(categoryState?.groups) ? categoryState.groups : [],
+    notificationChanges: Array.isArray(categoryState?.notificationChanges) ? categoryState.notificationChanges : [],
+    sections: Array.isArray(categoryState?.sections) ? categoryState.sections : [],
+    diff: Array.isArray(categoryState?.diff) ? categoryState.diff : [],
+    unsentItemIds: Array.isArray(categoryState?.unsentItemIds) ? categoryState.unsentItemIds : [],
+  };
   const previewContext = readSnapshotPreviewContext(snapshot);
   const hasNotificationChanges = queueState.changeGroups.length > 0;
   const hasSaveOnlyChanges = previewContext.saveOnlyChanges.length > 0;
@@ -423,9 +323,13 @@ async function buildCanonicalPreviewForMenu({
     metadata: {
       serverOwned: true,
       contract: PREVIEW_CONTRACT,
-      currentFeaturedIds: featuredState.currentFeaturedIds,
       unsentItemIds: queueState.unsentItemIds,
-      lastSentState: snapshotLastSentState(snapshot),
+      lastSentState: snapshotHasFeaturedSpecials
+        ? snapshotLastSentState(queueSnapshot)
+        : {
+            ...snapshotLastSentState(queueSnapshot),
+            ...preservedFeaturedState,
+          },
     },
   };
 }
@@ -438,7 +342,7 @@ function createWorkflowPatchMessage({
   return buildPatchMessage(sections, { menuName, menuLink });
 }
 
-function createWorkflowSelection(preview, selectedChangeIds = null, legacySelectedSections = []) {
+function createWorkflowSelection(preview, selectedChangeIds = null, legacySelectedSections = null) {
   const selection = resolveSelection(preview, selectedChangeIds, legacySelectedSections);
   return {
     selectedChangeIds: selection.selectedGroupIds,
@@ -457,23 +361,13 @@ function createServerMenuPublishPorts() {
           throw createMenuPublishError(400, 'Unsupported menu_id', { menuId });
         }
         const meta = await readMenuMeta(menuId);
-        const currentFeaturedIds = await readCurrentFeaturedIdsForRestaurant(knownMenu.restaurantId);
-        const siblingMenuIds = (getRestaurantSpecialConfig(knownMenu.restaurantId)?.menuIds || [])
-          .filter(candidateId => candidateId && candidateId !== menuId);
-        return { knownMenu, meta, currentFeaturedIds, siblingMenuIds };
+        return { knownMenu, meta };
       },
       async saveLiveMenu(input) {
         return saveLiveMenuForMenu(input);
       },
       async patchMeta({ menuId, patch, optionalFields = [] }) {
         return patchMenuMetaForMenuWithCompatibility(menuId, patch, { optionalFields });
-      },
-      async patchSiblingFeatured({ menuIds, featuredIds }) {
-        return Promise.all(
-          (Array.isArray(menuIds) ? menuIds : []).map(menuId => patchMenuMetaForMenu(menuId, {
-            last_sent_featured: featuredIds,
-          })),
-        );
       },
     },
     governance: {
@@ -493,8 +387,8 @@ function createServerMenuPublishPorts() {
     },
     preview: {
       buildCanonical: buildCanonicalPreviewForMenu,
-      resolveSelection({ preview, selectedChangeIds }) {
-        return createWorkflowSelection(preview, selectedChangeIds, []);
+      resolveSelection({ preview, selectedChangeIds, legacySelectedSections = null }) {
+        return createWorkflowSelection(preview, selectedChangeIds, legacySelectedSections);
       },
     },
     notifications: {
@@ -582,17 +476,29 @@ export async function previewMenuUpdateForMenu({
   };
 }
 
-export async function publishMenuUpdateForMenu({
-  actor,
-  menuId,
-  mode,
-  source,
-  snapshot = {},
-  selectedChangeIds = null,
-  expectedLiveRevision = null,
-  expectedDraftRevision = null,
-  expectedNotificationRevision = null,
-}) {
+export async function publishMenuUpdateForMenu(input = {}) {
+  const {
+    actor,
+    menuId,
+    mode,
+    source,
+    snapshot = {},
+    selectedChangeIds = null,
+    legacySelectedSections = null,
+    expectedLiveRevision = null,
+    expectedDraftRevision = null,
+    expectedNotificationRevision = null,
+  } = input;
+  const request = {
+    selectedChangeIds: Array.isArray(selectedChangeIds) ? selectedChangeIds : null,
+    expectedLiveRevision,
+    expectedDraftRevision,
+    expectedNotificationRevision,
+  };
+  if (Array.isArray(legacySelectedSections)) {
+    request.legacySelectedSections = legacySelectedSections;
+  }
+
   const workflow = createServerPublishWorkflow();
   const result = await workflow.execute({
     menuId,
@@ -600,12 +506,7 @@ export async function publishMenuUpdateForMenu({
     source,
     intent: mode === 'save' ? 'save' : (mode === 'send' ? 'send' : 'save-and-send'),
     snapshot: snapshot || {},
-    request: {
-      selectedChangeIds: Array.isArray(selectedChangeIds) ? selectedChangeIds : null,
-      expectedLiveRevision,
-      expectedDraftRevision,
-      expectedNotificationRevision,
-    },
+    request,
   });
 
   return {

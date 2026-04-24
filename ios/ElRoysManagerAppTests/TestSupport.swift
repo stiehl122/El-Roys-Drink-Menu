@@ -35,7 +35,8 @@ func routeStateMakeItem(
   visibility: String = "public",
   upcharges: [ItemUpcharge] = [],
   showDescription: Bool = true,
-  showRecipe: Bool = false
+  showRecipe: Bool = false,
+  featuredEnabled: Bool = false
 ) -> MenuItemPayload {
   MenuItemPayload(
     id: id,
@@ -49,7 +50,8 @@ func routeStateMakeItem(
     visibility: visibility,
     upcharges: upcharges,
     showDescription: showDescription,
-    showRecipe: showRecipe
+    showRecipe: showRecipe,
+    featuredEnabled: featuredEnabled
   )
 }
 
@@ -156,7 +158,7 @@ func routeStateMakePublicMenuPayload(menuId: String, type: String = "food") -> P
     cats: [],
     meta: routeStateMakeWorkspace(menuId: menuId, type: type).meta,
     restaurant: routeStateMakeRestaurantRecord(id: "rest-1", slug: "leroys-lounge"),
-    featuredGroups: [],
+    featuredItems: [],
     context: MenuContext(kind: "public-menu", menu: routeStateMakeMenuRecord(id: menuId, type: type)),
     capabilities: PublicMenuCapabilities(
       guestReadable: true,
@@ -198,13 +200,10 @@ func routeStateMakeServices(
   workspaceClient: WorkspaceClienting = RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
   publicMenuClient: PublicMenuClienting = RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
   historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
-  liveSaveClient: LiveSaveClienting? = nil,
-  featuredToolsClient: FeaturedToolsClienting? = nil
+  liveSaveClient: LiveSaveClienting? = nil
 ) -> AppServices {
   let resolvedLiveSaveClient = liveSaveClient
     ?? RouteStateStubLiveSaveClient(workspaceClient: workspaceClient as? RouteStateStubWorkspaceClient)
-  let resolvedFeaturedToolsClient = featuredToolsClient
-    ?? RouteStateStubFeaturedToolsClient()
   return AppServices(
     bootstrap: RouteStateStubBootstrapClient(),
     auth: RouteStateStubAuthClient(),
@@ -214,7 +213,6 @@ func routeStateMakeServices(
     liveSave: resolvedLiveSaveClient,
     publish: RouteStateStubPublishClient(),
     history: historyClient,
-    featuredTools: resolvedFeaturedToolsClient,
     preview: RouteStateStubPreviewClient(),
     productLookup: RouteStateStubProductLookupClient()
   )
@@ -442,18 +440,6 @@ final class RouteStateStubHistoryClient: HistoryClienting {
 
   func fetch(menuId: String, accessToken: String) async throws -> HistoryPayload {
     payload
-  }
-}
-
-final class RouteStateStubFeaturedToolsClient: FeaturedToolsClienting {
-  var mutateHandler: ((String, String, String?, String?, String?, Int?) -> Void)?
-
-  func mutate(action: String, restaurantId: String, itemId: String?, slotId: String?, note: String?, direction: Int?, accessToken: String) async throws {
-    if let mutateHandler {
-      mutateHandler(action, restaurantId, itemId, slotId, note, direction)
-      return
-    }
-    throw RouteStateTestError.message("Unused in this test")
   }
 }
 
