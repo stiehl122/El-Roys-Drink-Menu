@@ -255,19 +255,13 @@ async function upsertCategories(menuId, normalizedCategories, categoriesByKey) {
   };
   rows.push(uncategorizedSeed);
 
-  const payload = rows.map(row => {
-    const existing = categoriesByKey.get(row.key);
-    const resolvedId = existing?.id;
-    return resolvedId ? { ...row, id: resolvedId } : row;
-  });
-
   const response = await fetch(`${sbUrl}/rest/v1/categories?on_conflict=menu_id,key`, {
     method: 'POST',
     headers: serviceHeaders({
       'Content-Type': 'application/json',
       Prefer: 'resolution=merge-duplicates,return=minimal',
     }),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(rows),
   });
   if (!response.ok) {
     const errorPayload = await readJsonSafe(response);

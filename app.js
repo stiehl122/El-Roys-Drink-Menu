@@ -2493,8 +2493,8 @@ function getMenuSessionPorts() {
     async patchMenuDraftState(snapshot, savedAt) {
       return patchMenuDraftState(snapshot, savedAt);
     },
-    async requestPublishPreview() {
-      return requestPublishPreviewThroughApi();
+    async requestPublishPreview(options = {}) {
+      return requestPublishPreviewThroughApi(options);
     },
     async publishMenuUpdate(options = {}) {
       const providedPreview = options.preview?.sections ? options.preview : null;
@@ -2760,6 +2760,33 @@ function createLegacyMenuPublishService(sessionPorts, runtime = {}) {
         mode: 'save',
         notify: false,
       });
+    },
+
+    async prepare(options = {}) {
+      if (typeof sessionPorts.requestPublishPreview === 'function') {
+        const result = await sessionPorts.requestPublishPreview(options);
+        if (result?.preview?.sections) return result;
+        if (result?.payload?.preview?.sections) {
+          return {
+            ...result.payload,
+            ok: result.ok !== false && result.payload.ok !== false,
+            status: result.status,
+            preview: result.payload.preview,
+          };
+        }
+        if (result?.ok === false) {
+          return {
+            ...result,
+            userHandled: result.userHandled === true,
+            userMessage: result.userMessage || result.payload?.error || 'Preview is unavailable right now.',
+          };
+        }
+        return result || { ok: false, userMessage: 'Preview is unavailable right now.' };
+      }
+      return {
+        ok: true,
+        preview: buildPreview(),
+      };
     },
 
     async publishUpdate(options = {}) {
@@ -4828,14 +4855,16 @@ function buildPublishSnapshotPayload() {
 }
 
 async function requestPublishPreviewThroughApi() {
+  const options = arguments[0] || {};
   if (!MENU_ID || !getAuthorizedApiHeaders().Authorization) return { ok: false, fallbackable: false };
   const draftEnvelope = buildCurrentLocalDraftEnvelope();
   return postApiJson('/api/manager', {
     action: 'preview_publish',
     menu_id: MENU_ID,
     snapshot: buildPublishSnapshotPayload(),
-    expected_live_revision: menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null,
-    expected_notification_revision: draftEnvelope?.baseLastSentRevision ?? null,
+    expected_live_revision: options.expectedLiveRevision ?? (menuState._meta?.lastUpdatedTs ? Number(menuState._meta.lastUpdatedTs) : null),
+    expected_draft_revision: options.expectedDraftRevision ?? null,
+    expected_notification_revision: options.expectedNotificationRevision ?? (draftEnvelope?.baseLastSentRevision ?? null),
   }, {
     headers: getAuthorizedApiHeaders(),
   });

@@ -51,9 +51,33 @@
       };
     }
 
+    function normalizePreviewResult(result) {
+      if (!result) return getUnavailableResult('Preview is unavailable right now.');
+      if (result.preview?.sections) return result;
+      if (result.payload?.preview?.sections) {
+        return {
+          ...result.payload,
+          ok: result.ok !== false && result.payload.ok !== false,
+          status: result.status,
+          preview: result.payload.preview,
+        };
+      }
+      if (result.ok === false) {
+        return {
+          ...result,
+          userHandled: result.userHandled === true,
+          userMessage: result.userMessage || result.payload?.error || 'Preview is unavailable right now.',
+        };
+      }
+      return result;
+    }
+
     async function prepare(opts = {}) {
       if (facade && typeof facade.prepare === 'function') {
         return facade.prepare(opts);
+      }
+      if (typeof sessionPorts.requestPublishPreview === 'function') {
+        return normalizePreviewResult(await sessionPorts.requestPublishPreview(opts));
       }
       const fallback = getFallbackService();
       if (fallback && typeof fallback.prepare === 'function') {

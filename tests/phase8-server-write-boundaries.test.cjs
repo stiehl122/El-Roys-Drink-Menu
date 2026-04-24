@@ -522,8 +522,9 @@ test('saveLiveMenuCommand resolves DB category ids and persists featured_enabled
   const categoryPayload = JSON.parse(categoryPersistCall.options.body);
   assert.equal(categoryPayload.length, 2);
   assert.equal(categoryPayload[0].key, 'featured_specials');
-  assert.equal(categoryPayload[0].id, 'category-uuid-1');
-  assert.notEqual(categoryPayload[0].id, 'featured_specials');
+  assert.equal(Object.prototype.hasOwnProperty.call(categoryPayload[0], 'id'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(categoryPayload[1], 'id'), false);
+  assert.deepEqual(Object.keys(categoryPayload[0]).sort(), Object.keys(categoryPayload[1]).sort());
 
   const itemPersistCall = fetchCalls.find(call => call.url.endsWith('/rest/v1/items'));
   assert.ok(itemPersistCall, 'expected item persistence request');
