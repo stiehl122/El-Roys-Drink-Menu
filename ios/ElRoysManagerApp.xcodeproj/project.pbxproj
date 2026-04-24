@@ -478,6 +478,7 @@
 				ENABLE_DEBUG_DYLIB = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -586,6 +587,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -621,6 +623,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -744,6 +747,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "El Roy's Manager";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan drink and food item barcodes to prefill add-item fields.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Unlock the saved staff session before restoring manager access.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

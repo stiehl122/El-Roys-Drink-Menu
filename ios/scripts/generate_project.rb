@@ -111,6 +111,7 @@ app_target.build_configurations.each do |config|
   settings['INFOPLIST_KEY_NSCameraUsageDescription'] = 'Scan drink and food item barcodes to prefill add-item fields.'
   settings['INFOPLIST_KEY_NSFaceIDUsageDescription'] = 'Unlock the saved staff session before restoring manager access.'
   settings['INFOPLIST_KEY_CFBundleDisplayName'] = "El Roy's Manager"
+  settings['INFOPLIST_KEY_ITSAppUsesNonExemptEncryption'] = 'NO'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
   settings['DEVELOPMENT_TEAM'] = ''
   settings['APPEnvironmentName'] = config.name == 'Release' ? 'Production' : 'Preview'
