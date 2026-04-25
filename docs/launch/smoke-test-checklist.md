@@ -23,7 +23,8 @@
 - Admin signs in.
 - Admin can update landing draft without publishing live sections.
 - Admin can publish selected landing sections live.
-- Admin can update manager menu access without losing existing access on simulated failure.
+- Preview only: automated access atomicity test passes with a safe test account.
+- Production: no manager access regression is visible after deploy.
 
 ## iOS
 

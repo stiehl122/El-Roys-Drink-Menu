@@ -9,15 +9,17 @@
 5. Run iOS simulator tests:
    `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project ios/ElRoysManagerApp.xcodeproj -scheme ElRoysManagerApp -destination 'platform=iOS Simulator,name=iPhone 16' -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO test`.
 6. Confirm Supabase migrations planned for this release are applied to staging/preview first.
-7. Confirm backup exists before applying production migrations.
+7. Confirm every production migration is backward-compatible with the currently deployed production code. If not, split the work into expand/deploy/contract phases.
+8. Confirm backup exists before applying production migrations.
 
 ## Deploy
 
 1. Deploy to Vercel preview.
 2. Run `docs/launch/smoke-test-checklist.md` against preview.
-3. Apply Supabase production migrations.
+3. Apply only backward-compatible Supabase production migrations.
 4. Deploy to production.
 5. Run the same smoke checklist against production.
+6. Apply contract migrations only after the production deployment no longer depends on the old schema.
 
 ## Rollback
 

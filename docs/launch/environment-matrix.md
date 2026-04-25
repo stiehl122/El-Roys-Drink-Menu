@@ -2,7 +2,7 @@
 
 | Config item | Used by | Required? | Production source | Failure behavior | Validation |
 |---|---|---:|---|---|---|
-| `SUPABASE_URL` | Vercel API | Yes | Vercel env | API returns server misconfigured | `curl /api/auth?mode=bootstrap` |
+| `SUPABASE_URL` | Vercel API | Yes | Vercel env | API returns server misconfigured | `curl "$BASE_URL/api/auth?mode=bootstrap"` |
 | `SUPABASE_ANON_KEY` | Auth proxy/bootstrap | Yes | Vercel env | login/bootstrap fails | login smoke |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server data access | Yes | Vercel env | API returns server misconfigured | manager menu load smoke |
 | `VERCEL_ENV` | Preview badges/audit gating | Yes on Vercel | Vercel system env | preview/prod branching wrong | inspect footer badge |
