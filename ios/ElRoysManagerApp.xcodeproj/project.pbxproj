@@ -27,12 +27,13 @@
 		000000000000000000000053 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000052 /* RestaurantToolsView.swift */; };
 		000000000000000000000056 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000055 /* BarcodeScannerView.swift */; };
 		00000000000000000000005A /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000059 /* AppModels.swift */; };
-		00000000000000000000005D /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005C /* OfflineDraftStore.swift */; };
-		00000000000000000000005F /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005E /* SessionStore.swift */; };
-		000000000000000000000061 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000060 /* MenuDocumentTests.swift */; };
-		000000000000000000000063 /* RouteStateIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000062 /* RouteStateIsolationTests.swift */; };
-		000000000000000000000065 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000064 /* TestSupport.swift */; };
-		000000000000000000000067 /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000066 /* ElRoysManagerAppUITests.swift */; };
+		00000000000000000000005D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005C /* PrivacyInfo.xcprivacy */; };
+		000000000000000000000060 /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005F /* OfflineDraftStore.swift */; };
+		000000000000000000000062 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000061 /* SessionStore.swift */; };
+		000000000000000000000064 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000063 /* MenuDocumentTests.swift */; };
+		000000000000000000000066 /* RouteStateIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* RouteStateIsolationTests.swift */; };
+		000000000000000000000068 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000067 /* TestSupport.swift */; };
+		00000000000000000000006A /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000069 /* ElRoysManagerAppUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,12 +76,13 @@
 		000000000000000000000055 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
 		000000000000000000000057 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		000000000000000000000059 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
-		00000000000000000000005C /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
-		00000000000000000000005E /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
-		000000000000000000000060 /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
-		000000000000000000000062 /* RouteStateIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteStateIsolationTests.swift; sourceTree = "<group>"; };
-		000000000000000000000064 /* TestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
-		000000000000000000000066 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
+		00000000000000000000005C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		00000000000000000000005F /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
+		000000000000000000000061 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		000000000000000000000063 /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
+		000000000000000000000065 /* RouteStateIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteStateIsolationTests.swift; sourceTree = "<group>"; };
+		000000000000000000000067 /* TestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		000000000000000000000069 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,7 +152,8 @@
 				000000000000000000000039 /* Features */,
 				000000000000000000000057 /* Info.plist */,
 				000000000000000000000058 /* Models */,
-				00000000000000000000005B /* Storage */,
+				00000000000000000000005B /* Resources */,
+				00000000000000000000005E /* Storage */,
 			);
 			name = ElRoysManagerApp;
 			path = ElRoysManagerApp;
@@ -159,9 +162,9 @@
 		000000000000000000000009 /* ElRoysManagerAppTests */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000060 /* MenuDocumentTests.swift */,
-				000000000000000000000062 /* RouteStateIsolationTests.swift */,
-				000000000000000000000064 /* TestSupport.swift */,
+				000000000000000000000063 /* MenuDocumentTests.swift */,
+				000000000000000000000065 /* RouteStateIsolationTests.swift */,
+				000000000000000000000067 /* TestSupport.swift */,
 			);
 			name = ElRoysManagerAppTests;
 			path = ElRoysManagerAppTests;
@@ -170,7 +173,7 @@
 		00000000000000000000000A /* ElRoysManagerAppUITests */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000066 /* ElRoysManagerAppUITests.swift */,
+				000000000000000000000069 /* ElRoysManagerAppUITests.swift */,
 			);
 			name = ElRoysManagerAppUITests;
 			path = ElRoysManagerAppUITests;
@@ -303,11 +306,20 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
-		00000000000000000000005B /* Storage */ = {
+		00000000000000000000005B /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				00000000000000000000005C /* OfflineDraftStore.swift */,
-				00000000000000000000005E /* SessionStore.swift */,
+				00000000000000000000005C /* PrivacyInfo.xcprivacy */,
+			);
+			name = Resources;
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		00000000000000000000005E /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				00000000000000000000005F /* OfflineDraftStore.swift */,
+				000000000000000000000061 /* SessionStore.swift */,
 			);
 			name = Storage;
 			path = Storage;
@@ -419,6 +431,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000032 /* Assets.xcassets in Resources */,
+				00000000000000000000005D /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -459,8 +472,8 @@
 				000000000000000000000053 /* RestaurantToolsView.swift in Sources */,
 				000000000000000000000056 /* BarcodeScannerView.swift in Sources */,
 				00000000000000000000005A /* AppModels.swift in Sources */,
-				00000000000000000000005D /* OfflineDraftStore.swift in Sources */,
-				00000000000000000000005F /* SessionStore.swift in Sources */,
+				000000000000000000000060 /* OfflineDraftStore.swift in Sources */,
+				000000000000000000000062 /* SessionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -468,9 +481,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000000000000000000000061 /* MenuDocumentTests.swift in Sources */,
-				000000000000000000000063 /* RouteStateIsolationTests.swift in Sources */,
-				000000000000000000000065 /* TestSupport.swift in Sources */,
+				000000000000000000000064 /* MenuDocumentTests.swift in Sources */,
+				000000000000000000000066 /* RouteStateIsolationTests.swift in Sources */,
+				000000000000000000000068 /* TestSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -478,7 +491,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000000000000000000000067 /* ElRoysManagerAppUITests.swift in Sources */,
+				00000000000000000000006A /* ElRoysManagerAppUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

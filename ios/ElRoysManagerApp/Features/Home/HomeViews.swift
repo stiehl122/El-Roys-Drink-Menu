@@ -1,3 +1,4 @@
+import UIKit
 import SwiftUI
 
 // MARK: - Public entry points
@@ -309,6 +310,13 @@ private struct HomeHeader: View {
       .frame(maxWidth: .infinity, alignment: .leading)
 
       Menu {
+        Button("Request Account Deletion") {
+          if let url = URL(string: "https://el-roys-drink-menu.vercel.app/privacy.html#account-deletion") {
+            UIApplication.shared.open(url)
+          }
+        }
+        .accessibilityHint("Opens account deletion instructions for your staff account.")
+
         Button(role: .destructive) {
           onSignOut()
         } label: {

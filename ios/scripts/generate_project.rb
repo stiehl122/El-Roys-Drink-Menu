@@ -153,7 +153,7 @@ def add_tree(group, directory, target, resource_target: target)
     case ext
     when '.swift'
       target.source_build_phase.add_file_reference(file_ref, true)
-    when '.xcassets', '.plist', '.strings'
+    when '.xcassets', '.plist', '.strings', '.xcprivacy'
       next if entry == 'Info.plist'
 
       resource_target.resources_build_phase.add_file_reference(file_ref, true)
