@@ -5,11 +5,97 @@ require 'fileutils'
 require 'pathname'
 require 'xcodeproj'
 
+module DeterministicXcodeUUIDs
+  def generate_uuid
+    @deterministic_uuid_counter ||= 0
+
+    loop do
+      @deterministic_uuid_counter += 1
+      uuid = format('%024X', @deterministic_uuid_counter)
+      next if uuids.include?(uuid)
+
+      @generated_uuids << uuid if defined?(@generated_uuids) && @generated_uuids
+      return uuid
+    end
+  end
+end
+
+Xcodeproj::Project.prepend(DeterministicXcodeUUIDs)
+
 ROOT = Pathname.new(__dir__).join('..').expand_path
 PROJECT_PATH = ROOT.join('ElRoysManagerApp.xcodeproj')
 APP_DIR = ROOT.join('ElRoysManagerApp')
 TEST_DIR = ROOT.join('ElRoysManagerAppTests')
 UI_TEST_DIR = ROOT.join('ElRoysManagerAppUITests')
+INFO_PLIST_PATH = APP_DIR.join('Info.plist')
+
+INFO_PLIST_CONTENT = <<~PLIST
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  <plist version="1.0">
+  <dict>
+    <key>APPBaseURL</key>
+    <string>$(APPBaseURL)</string>
+    <key>APPEnvironmentName</key>
+    <string>$(APPEnvironmentName)</string>
+    <key>APPPublicOrigin</key>
+    <string>$(APPPublicOrigin)</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleDisplayName</key>
+    <string>El Roy's Manager</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>LSRequiresIPhoneOS</key>
+    <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Scan drink and food item barcodes to prefill add-item fields.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Unlock the saved staff session before restoring manager access.</string>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+      <key>UIApplicationSupportsMultipleScenes</key>
+      <true/>
+      <key>UISceneConfigurations</key>
+      <dict/>
+    </dict>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+      <string>UIInterfaceOrientationPortrait</string>
+      <string>UIInterfaceOrientationPortraitUpsideDown</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+      <string>UIInterfaceOrientationPortrait</string>
+      <string>UIInterfaceOrientationPortraitUpsideDown</string>
+      <string>UIInterfaceOrientationLandscapeLeft</string>
+      <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+  </dict>
+  </plist>
+PLIST
+
+File.write(INFO_PLIST_PATH, INFO_PLIST_CONTENT)
 
 FileUtils.rm_rf(PROJECT_PATH)
 FileUtils.rm_rf(ROOT.join('xcshareddata'))
@@ -68,6 +154,8 @@ def add_tree(group, directory, target, resource_target: target)
     when '.swift'
       target.source_build_phase.add_file_reference(file_ref, true)
     when '.xcassets', '.plist', '.strings'
+      next if entry == 'Info.plist'
+
       resource_target.resources_build_phase.add_file_reference(file_ref, true)
     end
   end
@@ -105,11 +193,16 @@ def apply_app_build_settings(config, bundle_id)
   settings['CURRENT_PROJECT_VERSION'] = '1'
   settings['MARKETING_VERSION'] = '0.1.0'
   settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
+  settings['GENERATE_INFOPLIST_FILE'] = 'NO'
+  settings['INFOPLIST_FILE'] = 'ElRoysManagerApp/Info.plist'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
   settings['DEVELOPMENT_TEAM'] = ENV.fetch('APPLE_DEVELOPMENT_TEAM', 'FCM3AK447F')
   settings['APPBaseURL'] = ENV.fetch('ELROYS_IOS_APP_BASE_URL', 'https://el-roys-drink-menu.vercel.app')
   settings['APPPublicOrigin'] = ENV.fetch('ELROYS_IOS_PUBLIC_ORIGIN', 'https://el-roys-drink-menu.vercel.app')
   settings['APPEnvironmentName'] = config.name == 'Release' ? 'Production' : 'Preview'
+  settings['INFOPLIST_KEY_APPBaseURL'] = settings['APPBaseURL']
+  settings['INFOPLIST_KEY_APPPublicOrigin'] = settings['APPPublicOrigin']
+  settings['INFOPLIST_KEY_APPEnvironmentName'] = settings['APPEnvironmentName']
 end
 
 ensure_debug_release_configurations!(project)
