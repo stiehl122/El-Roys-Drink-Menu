@@ -1,9 +1,21 @@
 import XCTest
 
 final class ElRoysManagerAppUITests: XCTestCase {
-  func testLaunchShowsStaffManager() throws {
+  func testLaunchShowsEntryPoint() throws {
     let app = XCUIApplication()
     app.launch()
-    XCTAssertTrue(app.staticTexts["Staff Manager"].waitForExistence(timeout: 5))
+
+    let deadline = Date().addingTimeInterval(8)
+    while Date() < deadline {
+      if app.buttons["Sign In"].exists ||
+        app.staticTexts["Sign In"].exists ||
+        app.navigationBars["Home"].exists {
+        return
+      }
+
+      RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+    }
+
+    XCTFail("Expected the app to launch into sign-in or an authenticated home screen.")
   }
 }

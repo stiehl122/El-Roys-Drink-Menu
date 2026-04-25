@@ -77,8 +77,12 @@ add_tree(app_group, APP_DIR.to_s, app_target)
 add_tree(tests_group, TEST_DIR.to_s, tests_target)
 add_tree(ui_tests_group, UI_TEST_DIR.to_s, ui_tests_target)
 
-project.add_build_configuration('Preview', :debug)
-[app_target, tests_target, ui_tests_target].each { |target| target.add_build_configuration('Preview', :debug) }
+def ensure_debug_release_configurations!(configurable)
+  names = configurable.build_configurations.map(&:name).sort
+  return if names == %w[Debug Release]
+
+  raise "#{configurable.display_name} must have exactly Debug and Release configurations, found #{names.join(', ')}"
+end
 
 def set_common_settings(configs, bundle_id:, product_name:)
   configs.each do |config|
@@ -95,12 +99,30 @@ def set_common_settings(configs, bundle_id:, product_name:)
   end
 end
 
+def apply_app_build_settings(config, bundle_id)
+  settings = config.build_settings
+  settings['PRODUCT_BUNDLE_IDENTIFIER'] = bundle_id
+  settings['CURRENT_PROJECT_VERSION'] = '1'
+  settings['MARKETING_VERSION'] = '0.1.0'
+  settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
+  settings['CODE_SIGN_STYLE'] = 'Automatic'
+  settings['DEVELOPMENT_TEAM'] = ENV.fetch('APPLE_DEVELOPMENT_TEAM', 'FCM3AK447F')
+  settings['APPBaseURL'] = ENV.fetch('ELROYS_IOS_APP_BASE_URL', 'https://el-roys-drink-menu.vercel.app')
+  settings['APPPublicOrigin'] = ENV.fetch('ELROYS_IOS_PUBLIC_ORIGIN', 'https://el-roys-drink-menu.vercel.app')
+  settings['APPEnvironmentName'] = config.name == 'Release' ? 'Production' : 'Preview'
+end
+
+ensure_debug_release_configurations!(project)
+[app_target, tests_target, ui_tests_target].each { |target| ensure_debug_release_configurations!(target) }
+
 set_common_settings(project.build_configurations, bundle_id: 'com.stiehl122.elroys.manager.project', product_name: 'ElRoysManagerApp')
 set_common_settings(app_target.build_configurations, bundle_id: 'com.stiehl122.elroys.manager', product_name: 'ElRoysManagerApp')
 set_common_settings(tests_target.build_configurations, bundle_id: 'com.stiehl122.elroys.manager.tests', product_name: 'ElRoysManagerAppTests')
 set_common_settings(ui_tests_target.build_configurations, bundle_id: 'com.stiehl122.elroys.manager.uitests', product_name: 'ElRoysManagerAppUITests')
 
 app_target.build_configurations.each do |config|
+  apply_app_build_settings(config, 'com.stiehl122.elroys.manager')
+
   settings = config.build_settings
   settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
   settings['INFOPLIST_KEY_UIApplicationSceneManifest_Generation'] = 'YES'
@@ -112,11 +134,6 @@ app_target.build_configurations.each do |config|
   settings['INFOPLIST_KEY_NSFaceIDUsageDescription'] = 'Unlock the saved staff session before restoring manager access.'
   settings['INFOPLIST_KEY_CFBundleDisplayName'] = "El Roy's Manager"
   settings['INFOPLIST_KEY_ITSAppUsesNonExemptEncryption'] = 'NO'
-  settings['CODE_SIGN_STYLE'] = 'Automatic'
-  settings['DEVELOPMENT_TEAM'] = ''
-  settings['APPEnvironmentName'] = config.name == 'Release' ? 'Production' : 'Preview'
-  settings['APPBaseURL'] = 'https://el-roys-drink-menu.vercel.app'
-  settings['APPPublicOrigin'] = 'https://el-roys-drink-menu.vercel.app'
 end
 
 tests_target.build_configurations.each do |config|
@@ -133,6 +150,12 @@ scheme.set_launch_target(app_target)
 scheme.add_build_target(app_target)
 scheme.add_test_target(tests_target)
 scheme.add_test_target(ui_tests_target)
+scheme.doc.root.attributes['LastUpgradeVersion'] = '2640'
+scheme.test_action.build_configuration = 'Debug'
+scheme.launch_action.build_configuration = 'Debug'
+scheme.analyze_action.build_configuration = 'Debug'
+scheme.profile_action.build_configuration = 'Release'
+scheme.archive_action.build_configuration = 'Release'
 scheme.save_as(PROJECT_PATH.to_s, 'ElRoysManagerApp', true)
 
 project.save
