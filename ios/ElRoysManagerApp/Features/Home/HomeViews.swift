@@ -51,6 +51,7 @@ struct RestaurantChooserView: View {
           HomeHeader(
             theme: theme,
             environment: model.environment,
+            onRequestAccountDeletion: { Task { await model.requestAccountDeletion() } },
             onSignOut: { model.signOut() }
           )
 
@@ -288,6 +289,7 @@ struct RestaurantHubView: View {
 private struct HomeHeader: View {
   let theme: HomeTheme
   let environment: AppEnvironment
+  let onRequestAccountDeletion: () -> Void
   let onSignOut: () -> Void
 
   var body: some View {
@@ -311,9 +313,12 @@ private struct HomeHeader: View {
 
       Menu {
         Button("Request Account Deletion") {
-          if let url = URL(string: "https://el-roys-drink-menu.vercel.app/privacy.html#account-deletion") {
-            UIApplication.shared.open(url)
-          }
+          onRequestAccountDeletion()
+        }
+        .accessibilityHint("Submits an account deletion request for your staff account.")
+
+        Button("Account Deletion Details") {
+          UIApplication.shared.open(accountDeletionURL)
         }
         .accessibilityHint("Opens account deletion instructions for your staff account.")
 
@@ -338,6 +343,15 @@ private struct HomeHeader: View {
     .padding(.horizontal, 16)
     .padding(.vertical, 14)
     .homeGlassChrome(tint: theme.chromeTint, cornerRadius: 20)
+  }
+
+  private var accountDeletionURL: URL {
+    var components = URLComponents(
+      url: environment.publicOrigin.appendingPathComponent("privacy.html"),
+      resolvingAgainstBaseURL: false
+    )
+    components?.fragment = "account-deletion"
+    return components?.url ?? environment.publicOrigin
   }
 }
 

@@ -106,10 +106,11 @@ export async function requireAuthenticatedUser(req) {
     headers: { Authorization: `Bearer ${token}`, apikey: sbService },
   });
   if (!userRes.ok) throw { status: 401, message: 'Invalid token' };
-  const { id: uid } = await userRes.json();
+  const user = await userRes.json();
+  const { id: uid } = user || {};
   if (!uid) throw { status: 401, message: 'Invalid token' };
 
-  return { uid, token, sbUrl, sbService };
+  return { uid, token, user, sbUrl, sbService };
 }
 
 export async function readProfile(uid, options = {}) {

@@ -28,6 +28,16 @@ function buildCompatibilityConfig() {
   };
 }
 
+function buildAccountDeletionRequestMetadata() {
+  const requestedAt = new Date().toISOString();
+  return {
+    account_deletion_requested: true,
+    account_deletion_requested_at: requestedAt,
+    account_deletion_request_source: 'ios-account-menu',
+    account_deletion_request_status: 'pending_admin_review',
+  };
+}
+
 function getLoopAuditConfig(mode = 'manager') {
   const normalizedMode = normalizeAuditMode(mode);
   const prefix = normalizedMode === 'admin' ? 'LOOP_ADMIN' : 'LOOP_MANAGER';
@@ -71,6 +81,30 @@ async function readSupabaseAuthJson(response, fallbackMessage) {
   throw {
     status: response.status || 500,
     message: payload?.error_description || payload?.msg || payload?.error || payload?.message || fallbackMessage,
+  };
+}
+
+async function requestAccountDeletion(req) {
+  const { uid, token, user } = await requireAuthenticatedUser(req);
+  const currentMetadata = user?.user_metadata && typeof user.user_metadata === 'object'
+    ? user.user_metadata
+    : {};
+  const metadata = buildAccountDeletionRequestMetadata();
+  await supabaseAuthRequest('auth/v1/user', {
+    method: 'PUT',
+    accessToken: token,
+    body: {
+      data: {
+        ...currentMetadata,
+        ...metadata,
+      },
+    },
+  }, 'Account deletion request failed.');
+  return {
+    ok: true,
+    userId: uid,
+    requestedAt: metadata.account_deletion_requested_at,
+    status: metadata.account_deletion_request_status,
   };
 }
 
@@ -203,6 +237,8 @@ export async function executeAuthAction(req) {
   switch (action) {
     case 'preview_audit_sign_in':
       return signInPreviewAuditUser(req);
+    case 'request_account_deletion':
+      return requestAccountDeletion(req);
     case 'sign_in':
       return supabaseAuthRequest('auth/v1/token?grant_type=password', {
         body: {

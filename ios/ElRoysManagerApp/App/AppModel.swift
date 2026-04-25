@@ -265,6 +265,21 @@ final class AppModel {
     }
   }
 
+  func requestAccountDeletion() async {
+    guard let accessToken = authSession?.accessToken else {
+      notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Sign in before requesting account deletion.")
+      return
+    }
+    await run("Requesting Deletion") { model in
+      try await model.services.auth.requestAccountDeletion(accessToken: accessToken)
+      model.notice = AppNotice(
+        tone: .success,
+        title: "Deletion Requested",
+        message: "Your account deletion request was recorded for administrator review."
+      )
+    }
+  }
+
   func signOut() {
     do {
       try sessionStore.clearSession()

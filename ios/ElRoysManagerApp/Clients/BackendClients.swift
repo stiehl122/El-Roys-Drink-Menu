@@ -41,6 +41,7 @@ protocol AuthClienting {
   func signUp(email: String, password: String, name: String) async throws -> AuthSession
   func refresh(session: AuthSession) async throws -> AuthSession
   func sendReset(email: String, redirectTo: URL) async throws
+  func requestAccountDeletion(accessToken: String) async throws
 }
 
 protocol WorkspaceClienting {
@@ -115,6 +116,12 @@ private struct AuthActionRequest: Encodable {
 
 private struct AuthResetResponse: Decodable {
   var ok: Bool?
+}
+
+private struct AccountDeletionRequestResponse: Decodable {
+  var ok: Bool?
+  var requestedAt: String?
+  var status: String?
 }
 
 private struct SignUpRequest: Encodable {
@@ -389,6 +396,15 @@ final class AuthClient: AuthClienting {
       path: "api/auth",
       method: .post,
       body: AuthActionRequest(action: "reset_password", email: email, password: nil, name: nil, refreshToken: nil, redirectTo: redirectTo.absoluteString, newPassword: nil)
+    )
+  }
+
+  func requestAccountDeletion(accessToken: String) async throws {
+    let _: AccountDeletionRequestResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      accessToken: accessToken,
+      body: AuthActionRequest(action: "request_account_deletion", email: nil, password: nil, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil)
     )
   }
 }

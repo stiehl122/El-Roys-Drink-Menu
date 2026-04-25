@@ -3411,6 +3411,10 @@ private final class StubAuthClient: AuthClienting {
   func sendReset(email: String, redirectTo: URL) async throws {
     throw TestError.message("Unused in this test")
   }
+
+  func requestAccountDeletion(accessToken: String) async throws {
+    throw TestError.message("Unused in this test")
+  }
 }
 
 private final class StubWorkspaceClient: WorkspaceClienting {
