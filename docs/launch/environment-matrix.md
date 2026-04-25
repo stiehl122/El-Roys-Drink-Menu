@@ -1,5 +1,8 @@
 # Environment Matrix
 
+Set `BASE_URL` to the preview or production origin before running URL checks, for example:
+`BASE_URL="https://<preview-or-production-origin>"`.
+
 | Config item | Used by | Required? | Production source | Failure behavior | Validation |
 |---|---|---:|---|---|---|
 | `SUPABASE_URL` | Vercel API | Yes | Vercel env | API returns server misconfigured | `curl "$BASE_URL/api/auth?mode=bootstrap"` |
