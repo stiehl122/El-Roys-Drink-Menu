@@ -196,9 +196,12 @@ def apply_app_build_settings(config, bundle_id)
   settings['GENERATE_INFOPLIST_FILE'] = 'NO'
   settings['INFOPLIST_FILE'] = 'ElRoysManagerApp/Info.plist'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
-  settings['DEVELOPMENT_TEAM'] = ENV.fetch('APPLE_DEVELOPMENT_TEAM', 'FCM3AK447F')
-  settings['APPBaseURL'] = ENV.fetch('ELROYS_IOS_APP_BASE_URL', 'https://el-roys-drink-menu.vercel.app')
-  settings['APPPublicOrigin'] = ENV.fetch('ELROYS_IOS_PUBLIC_ORIGIN', 'https://el-roys-drink-menu.vercel.app')
+  settings['APPLE_DEVELOPMENT_TEAM'] = 'FCM3AK447F'
+  settings['ELROYS_IOS_APP_BASE_URL'] = 'https://el-roys-drink-menu.vercel.app'
+  settings['ELROYS_IOS_PUBLIC_ORIGIN'] = 'https://el-roys-drink-menu.vercel.app'
+  settings['DEVELOPMENT_TEAM'] = '$(APPLE_DEVELOPMENT_TEAM)'
+  settings['APPBaseURL'] = '$(ELROYS_IOS_APP_BASE_URL)'
+  settings['APPPublicOrigin'] = '$(ELROYS_IOS_PUBLIC_ORIGIN)'
   settings['APPEnvironmentName'] = config.name == 'Release' ? 'Production' : 'Preview'
   settings['INFOPLIST_KEY_APPBaseURL'] = settings['APPBaseURL']
   settings['INFOPLIST_KEY_APPPublicOrigin'] = settings['APPPublicOrigin']
