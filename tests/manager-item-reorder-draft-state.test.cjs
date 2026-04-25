@@ -129,6 +129,37 @@ test('hydrateState canonicalizes item ties by id after display order', () => {
   );
 });
 
+test('hydrateState does not treat camel-case displayOrder as live ordering input', () => {
+  const sandbox = loadAppSandbox();
+
+  setState(sandbox, {
+    CATEGORY_DEFS: [],
+    menuState: {},
+  });
+
+  getState(sandbox, `
+    hydrateState({
+      cats: [{
+        id: 'cat-beer',
+        key: 'beer',
+        label: 'Beer',
+        display_order: 0,
+        items: [
+          { id: 'item-b', name: 'Bordeaux', displayOrder: 0, onMenu: true, visibility: 'public' },
+          { id: 'item-a', name: 'Albarino', displayOrder: 1, onMenu: true, visibility: 'public' },
+        ],
+      }],
+      meta: {},
+      restaurant: null,
+    })
+  `);
+
+  assert.deepEqual(
+    getState(sandbox, 'JSON.parse(JSON.stringify(menuState.beer.items.map(item => item.id)))'),
+    ['item-a', 'item-b'],
+  );
+});
+
 test('applyPersistedDraftState canonicalizes tied draft items without false dirty state', () => {
   const sandbox = loadAppSandbox();
   const canonicalItems = [

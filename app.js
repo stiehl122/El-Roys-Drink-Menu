@@ -4962,8 +4962,7 @@ function compareCanonicalCategoryOrder(left = {}, right = {}) {
 }
 
 function compareCanonicalItemOrder(left = {}, right = {}) {
-  const displayDelta = canonicalNumericDisplayOrder(left?.display_order ?? left?.displayOrder) -
-    canonicalNumericDisplayOrder(right?.display_order ?? right?.displayOrder);
+  const displayDelta = canonicalNumericDisplayOrder(left?.display_order) - canonicalNumericDisplayOrder(right?.display_order);
   if (displayDelta !== 0) return displayDelta;
 
   const idDelta = canonicalCompareText(left?.id, right?.id);
@@ -4996,6 +4995,40 @@ function compareDraftItemsForDirtyState(left = {}, right = {}) {
 
 function normalizeDraftItemsForDirtyState(items = []) {
   return (Array.isArray(items) ? items : []).slice().sort(compareDraftItemsForDirtyState);
+}
+
+function normalizeDraftDocumentSnapshotForDirtyState(snapshot = {}) {
+  const normalized = snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot)
+    ? cloneJsonCompatible(snapshot, {})
+    : {};
+  const context = normalized.context && typeof normalized.context === 'object' ? normalized.context : {};
+  const cats = normalizeFeaturedSpecialCategoriesForMenu(
+    Array.isArray(normalized.cats) ? normalized.cats : [],
+    context,
+  );
+
+  return {
+    context,
+    cats: sortCanonicalCategories(cats).map((category, categoryIndex) => ({
+      ...category,
+      display_order: category.key === UNCATEGORIZED_ID ? 9999 : categoryIndex,
+      items: normalizeDraftItemsForDirtyState(category.items).map((item, itemIndex) => {
+        const nextItem = { ...item };
+        delete nextItem.displayOrder;
+        delete nextItem.featuredEnabled;
+        delete nextItem.featured_enabled;
+        delete nextItem.display_order;
+        nextItem.featured_enabled = item.featured_enabled === true || item.featuredEnabled === true;
+        nextItem.display_order = itemIndex;
+        return nextItem;
+      }),
+    })),
+    meta: normalized.meta && typeof normalized.meta === 'object' ? normalized.meta : {},
+    restaurant: normalized.restaurant && typeof normalized.restaurant === 'object' ? normalized.restaurant : null,
+    save_only_changes: Array.isArray(normalized.save_only_changes)
+      ? normalized.save_only_changes
+      : (Array.isArray(normalized.saveOnlyChanges) ? normalized.saveOnlyChanges : []),
+  };
 }
 
 function normalizeFeaturedSpecialCategoriesForMenu(cats = [], menuContext = {}) {
@@ -5638,21 +5671,9 @@ function normalizeDraftDocumentSnapshot(snapshot = {}) {
 }
 
 function stripDraftDocumentForComparison(snapshot = {}) {
-  const normalized = normalizeDraftDocumentSnapshot(snapshot);
+  const normalized = normalizeDraftDocumentSnapshotForDirtyState(snapshot);
   return {
-    cats: normalized.cats.map(category => ({
-      ...category,
-      items: normalizeDraftItemsForDirtyState(category.items).map((item, itemIndex) => {
-        const nextItem = { ...item };
-        delete nextItem.displayOrder;
-        delete nextItem.featuredEnabled;
-        delete nextItem.featured_enabled;
-        delete nextItem.display_order;
-        nextItem.featured_enabled = item.featured_enabled === true || item.featuredEnabled === true;
-        nextItem.display_order = itemIndex;
-        return nextItem;
-      }),
-    })),
+    cats: normalized.cats,
     save_only_changes: normalized.save_only_changes,
   };
 }
