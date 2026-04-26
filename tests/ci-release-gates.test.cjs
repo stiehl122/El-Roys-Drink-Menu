@@ -31,13 +31,16 @@ test('launch gates workflow runs required web and server checks on Node 24', () 
   assert.match(workflow, /node --test tests\/\*\.test\.cjs tests\/boundaries\/\*\.test\.cjs/);
 });
 
-test('launch gates workflow runs unsigned iOS simulator tests on macOS', () => {
+test('launch gates workflow leaves iOS CI to Xcode Cloud', () => {
   const workflow = read('.github/workflows/launch-gates.yml');
+  const xcodeCloudDocs = read('docs/launch/xcode-cloud.md');
+  const releaseRunbook = read('docs/launch/release-runbook.md');
 
-  assert.match(workflow, /runs-on:\s*macos-/);
-  assert.match(workflow, /xcodebuild test/);
-  assert.match(workflow, /ios\/ElRoysManagerApp\.xcodeproj/);
-  assert.match(workflow, /-scheme ElRoysManagerApp/);
-  assert.match(workflow, /-destination ['"]platform=iOS Simulator,name=iPhone 16['"]/);
-  assert.match(workflow, /CODE_SIGNING_ALLOWED=NO/);
+  assert.doesNotMatch(workflow, /^\s*ios:/m);
+  assert.doesNotMatch(workflow, /runs-on:\s*macos-/);
+  assert.doesNotMatch(workflow, /xcodebuild test/);
+  assert.match(xcodeCloudDocs, /Xcode Cloud/);
+  assert.match(xcodeCloudDocs, /ElRoysManagerApp/);
+  assert.match(xcodeCloudDocs, /TestFlight/);
+  assert.match(releaseRunbook, /Xcode Cloud/);
 });

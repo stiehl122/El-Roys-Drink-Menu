@@ -6,17 +6,20 @@
 2. Run `node --check app.js`.
 3. Run `node scripts/check-html-script-order.cjs`.
 4. Run `node --test tests/*.test.cjs tests/boundaries/*.test.cjs`.
-5. Run iOS simulator tests:
+5. Confirm the latest Xcode Cloud workflow for `ElRoysManagerApp` is green on the release branch or commit.
+6. If Xcode Cloud is unavailable, run iOS simulator tests locally before releasing:
    `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project ios/ElRoysManagerApp.xcodeproj -scheme ElRoysManagerApp -destination 'platform=iOS Simulator,name=iPhone 16' -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO test`.
-6. Confirm Supabase migrations planned for this release are applied to staging/preview first.
-7. Confirm every production migration is backward-compatible with the currently deployed production code. If not, split the work into expand/deploy/contract phases.
-8. Confirm backup exists before applying production migrations.
+7. Confirm Supabase migrations planned for this release are applied to staging/preview first.
+8. Confirm every production migration is backward-compatible with the currently deployed production code. If not, split the work into expand/deploy/contract phases.
+9. Confirm backup exists before applying production migrations.
 
 ## CI Gates
 
-Before release, confirm the `Launch Gates` GitHub Actions workflow is green for the release branch or pull request. The workflow runs the web/server syntax, HTML script order, and Node test gates on Ubuntu with Node 20, plus the unsigned iOS simulator test gate on macOS.
+Before release, confirm the `Launch Gates` GitHub Actions workflow is green for the release branch or pull request. The workflow runs the web/server syntax, HTML script order, and Node test gates on Ubuntu with Node 24.
 
-Repository owners must enable GitHub Actions for the repo before relying on this gate. Owners should also decide whether branch protection should require `Launch Gates` before merging to `main` or `launch-readiness`, and should account for macOS runner minutes used by the iOS job.
+Repository owners must enable GitHub Actions for the repo before relying on this gate. Owners should also decide whether branch protection should require `Web and server checks` before merging to `main` or `launch-readiness`.
+
+iOS CI is owned by Xcode Cloud. Before merging or distributing a TestFlight build, confirm the Xcode Cloud workflow in `docs/launch/xcode-cloud.md` is green for the same branch or commit.
 
 ## Deploy
 
