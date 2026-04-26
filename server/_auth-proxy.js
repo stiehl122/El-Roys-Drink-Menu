@@ -188,7 +188,7 @@ export async function signInPreviewAuditUser(req) {
   if (!isPreviewRuntime()) {
     throw { status: 403, message: 'Preview audit session is only available on preview deployments.' };
   }
-  const body = parseRequestBody(req);
+  const body = await parseRequestBody(req);
   const requestedMode = normalizeAuditMode(body?.mode || readQueryValue(req, 'mode') || 'manager');
   const config = getLoopAuditConfig(requestedMode);
   if (!config.available) {
@@ -231,7 +231,7 @@ export async function signInPreviewAuditUser(req) {
 }
 
 export async function executeAuthAction(req) {
-  const body = parseRequestBody(req);
+  const body = await parseRequestBody(req);
   const action = readAction(req, body);
 
   switch (action) {

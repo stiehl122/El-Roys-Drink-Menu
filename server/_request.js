@@ -1,6 +1,6 @@
 export async function readRequestText(req, maxBytes = 1024 * 1024) {
   if (typeof req?.body === 'string') {
-    if (Buffer.byteLength(req.body) > maxBytes) throw new Error('Request body too large');
+    if (Buffer.byteLength(req.body) > maxBytes) throwRequestError(413, 'Request body too large');
     return req.body;
   }
 
@@ -10,7 +10,7 @@ export async function readRequestText(req, maxBytes = 1024 * 1024) {
     for await (const chunk of req) {
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       total += buffer.length;
-      if (total > maxBytes) throw new Error('Request body too large');
+      if (total > maxBytes) throwRequestError(413, 'Request body too large');
       chunks.push(buffer);
     }
     return Buffer.concat(chunks).toString('utf8');
@@ -33,33 +33,37 @@ function normalizeMaxBytes(value) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1024 * 1024;
 }
 
+function throwRequestError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  throw error;
+}
+
 export async function parseJsonBody(req, options = {}) {
+  if (req?.body && typeof req.body === 'object' && !Array.isArray(req.body) && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
   const maxBytes = normalizeMaxBytes(options.maxBytes || 1024 * 1024);
   const contentType = String(readHeaderValue(req?.headers, 'content-type'));
   const text = await readRequestText(req, maxBytes);
   if (!text.trim()) return {};
   if (!/^application\/json\b/i.test(contentType)) {
-    throw new Error('Content-Type must be application/json');
+    throwRequestError(415, 'Content-Type must be application/json');
   }
   try {
     return JSON.parse(text);
   } catch (_) {
-    throw new Error('Invalid JSON body');
+    throwRequestError(400, 'Invalid JSON body');
   }
 }
 
-export function parseRequestBody(req) {
-  const incoming = req?.body;
-  if (!incoming) return {};
-  if (typeof incoming === 'string') {
-    try {
-      const parsed = JSON.parse(incoming);
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch (_) {
-      throw { status: 400, message: 'Invalid JSON body' };
-    }
+export async function parseRequestBody(req, options = {}) {
+  const parsed = await parseJsonBody(req, options);
+  if (req && (typeof req.body === 'string' || typeof req[Symbol.asyncIterator] === 'function')) {
+    req.body = parsed;
   }
-  return incoming && typeof incoming === 'object' ? incoming : {};
+  return parsed;
 }
 
 export function readUrl(req) {

@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseJsonBody } = require('../server/_request.js');
+const { parseJsonBody, parseRequestBody } = require('../server/_request.js');
 
-function makeReq({ body = '', headers = {}, method = 'POST' } = {}) {
+function makeStreamReq({ body = '', headers = {}, method = 'POST' } = {}) {
   return {
     method,
     headers,
@@ -23,7 +23,7 @@ function makeStringBodyReq({ body = '', headers = {}, method = 'POST' } = {}) {
 test('parseJsonBody rejects oversized JSON bodies', async () => {
   const body = JSON.stringify({ value: 'x'.repeat(1024 * 1024 + 1) });
   await assert.rejects(
-    () => parseJsonBody(makeReq({
+    () => parseJsonBody(makeStreamReq({
       body,
       headers: { 'content-type': 'application/json' },
     }), { maxBytes: 1024 }),
@@ -33,7 +33,7 @@ test('parseJsonBody rejects oversized JSON bodies', async () => {
 
 test('parseJsonBody rejects non-json content types when body is present', async () => {
   await assert.rejects(
-    () => parseJsonBody(makeReq({
+    () => parseJsonBody(makeStreamReq({
       body: '{"ok":true}',
       headers: { 'content-type': 'text/plain' },
     })),
@@ -42,7 +42,7 @@ test('parseJsonBody rejects non-json content types when body is present', async 
 });
 
 test('parseJsonBody returns parsed JSON for valid bounded JSON body', async () => {
-  const parsed = await parseJsonBody(makeReq({
+  const parsed = await parseJsonBody(makeStreamReq({
     body: '{"ok":true}',
     headers: { 'content-type': 'application/json; charset=utf-8' },
   }));
@@ -50,7 +50,7 @@ test('parseJsonBody returns parsed JSON for valid bounded JSON body', async () =
 });
 
 test('parseJsonBody accepts case-insensitive content-type headers', async () => {
-  const parsed = await parseJsonBody(makeReq({
+  const parsed = await parseJsonBody(makeStreamReq({
     body: '{"ok":true}',
     headers: { 'CONTENT-TYPE': 'application/json; charset=utf-8' },
   }));
@@ -67,7 +67,7 @@ test('parseJsonBody returns parsed JSON from string request bodies', async () =>
 
 test('parseJsonBody rejects invalid JSON bodies', async () => {
   await assert.rejects(
-    () => parseJsonBody(makeReq({
+    () => parseJsonBody(makeStreamReq({
       body: '{"ok":',
       headers: { 'content-type': 'application/json' },
     })),
@@ -76,7 +76,7 @@ test('parseJsonBody rejects invalid JSON bodies', async () => {
 });
 
 test('parseJsonBody returns empty object for whitespace bodies', async () => {
-  const parsed = await parseJsonBody(makeReq({
+  const parsed = await parseJsonBody(makeStreamReq({
     body: '   \n\t  ',
     headers: { 'content-type': 'application/json' },
   }));
@@ -86,10 +86,65 @@ test('parseJsonBody returns empty object for whitespace bodies', async () => {
 test('parseJsonBody falls back to the default size limit for invalid maxBytes options', async () => {
   const body = JSON.stringify({ value: 'x'.repeat(1024 * 1024 + 1) });
   await assert.rejects(
-    () => parseJsonBody(makeReq({
+    () => parseJsonBody(makeStreamReq({
       body,
       headers: { 'content-type': 'application/json' },
     }), { maxBytes: 'not-a-number' }),
     /Request body too large/
+  );
+});
+
+test('parseJsonBody preserves pre-parsed object request bodies', async () => {
+  const body = { ok: true };
+  const parsed = await parseJsonBody(makeStringBodyReq({
+    body,
+    headers: { 'content-type': 'application/json' },
+  }));
+  assert.equal(parsed, body);
+});
+
+test('parseRequestBody caches parsed string request bodies for downstream consumers', async () => {
+  const req = makeStringBodyReq({
+    body: '{"action":"save_live"}',
+    headers: { 'content-type': 'application/json' },
+  });
+  const parsed = await parseRequestBody(req);
+  assert.deepEqual(parsed, { action: 'save_live' });
+  assert.equal(req.body, parsed);
+});
+
+test('parseRequestBody caches parsed stream request bodies for downstream consumers', async () => {
+  const req = makeStreamReq({
+    body: '{"action":"save_live"}',
+    headers: { 'content-type': 'application/json' },
+  });
+  const parsed = await parseRequestBody(req);
+  assert.deepEqual(parsed, { action: 'save_live' });
+  assert.equal(req.body, parsed);
+});
+
+test('parseJsonBody exposes request error status codes', async () => {
+  await assert.rejects(
+    () => parseJsonBody(makeStreamReq({
+      body: '{"ok":true}',
+      headers: { 'content-type': 'text/plain' },
+    })),
+    { status: 415, message: 'Content-Type must be application/json' }
+  );
+
+  await assert.rejects(
+    () => parseJsonBody(makeStreamReq({
+      body: '{"ok":',
+      headers: { 'content-type': 'application/json' },
+    })),
+    { status: 400, message: 'Invalid JSON body' }
+  );
+
+  await assert.rejects(
+    () => parseJsonBody(makeStreamReq({
+      body: '{"ok":true}',
+      headers: { 'content-type': 'application/json' },
+    }), { maxBytes: 1 }),
+    { status: 413, message: 'Request body too large' }
   );
 });
