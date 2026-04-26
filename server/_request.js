@@ -28,8 +28,13 @@ function readHeaderValue(headers, name) {
   return '';
 }
 
+function normalizeMaxBytes(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1024 * 1024;
+}
+
 export async function parseJsonBody(req, options = {}) {
-  const maxBytes = Number(options.maxBytes || 1024 * 1024);
+  const maxBytes = normalizeMaxBytes(options.maxBytes || 1024 * 1024);
   const contentType = String(readHeaderValue(req?.headers, 'content-type'));
   const text = await readRequestText(req, maxBytes);
   if (!text.trim()) return {};

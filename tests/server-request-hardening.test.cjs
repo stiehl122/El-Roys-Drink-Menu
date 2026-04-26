@@ -12,6 +12,14 @@ function makeReq({ body = '', headers = {}, method = 'POST' } = {}) {
   };
 }
 
+function makeStringBodyReq({ body = '', headers = {}, method = 'POST' } = {}) {
+  return {
+    method,
+    headers,
+    body,
+  };
+}
+
 test('parseJsonBody rejects oversized JSON bodies', async () => {
   const body = JSON.stringify({ value: 'x'.repeat(1024 * 1024 + 1) });
   await assert.rejects(
@@ -47,4 +55,41 @@ test('parseJsonBody accepts case-insensitive content-type headers', async () => 
     headers: { 'CONTENT-TYPE': 'application/json; charset=utf-8' },
   }));
   assert.deepEqual(parsed, { ok: true });
+});
+
+test('parseJsonBody returns parsed JSON from string request bodies', async () => {
+  const parsed = await parseJsonBody(makeStringBodyReq({
+    body: '{"ok":true}',
+    headers: { 'content-type': 'application/json' },
+  }));
+  assert.deepEqual(parsed, { ok: true });
+});
+
+test('parseJsonBody rejects invalid JSON bodies', async () => {
+  await assert.rejects(
+    () => parseJsonBody(makeReq({
+      body: '{"ok":',
+      headers: { 'content-type': 'application/json' },
+    })),
+    /Invalid JSON body/
+  );
+});
+
+test('parseJsonBody returns empty object for whitespace bodies', async () => {
+  const parsed = await parseJsonBody(makeReq({
+    body: '   \n\t  ',
+    headers: { 'content-type': 'application/json' },
+  }));
+  assert.deepEqual(parsed, {});
+});
+
+test('parseJsonBody falls back to the default size limit for invalid maxBytes options', async () => {
+  const body = JSON.stringify({ value: 'x'.repeat(1024 * 1024 + 1) });
+  await assert.rejects(
+    () => parseJsonBody(makeReq({
+      body,
+      headers: { 'content-type': 'application/json' },
+    }), { maxBytes: 'not-a-number' }),
+    /Request body too large/
+  );
 });
