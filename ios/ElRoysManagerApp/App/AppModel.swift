@@ -275,7 +275,7 @@ final class AppModel {
       model.notice = AppNotice(
         tone: .success,
         title: "Deletion Requested",
-        message: "Your account deletion request was recorded for administrator review."
+        message: "Your account deletion request was recorded for administrator review. Completion is handled by an administrator within 30 days."
       )
     }
   }

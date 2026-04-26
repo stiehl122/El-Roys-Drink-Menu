@@ -13,6 +13,8 @@ Set `BASE_URL` to the preview or production origin before running URL checks, fo
 | `LOOP_MANAGER_PASSWORD` | Preview audit only | Preview only | Vercel preview env | preview audit unavailable | preview sign-in smoke |
 | `LOOP_ADMIN_EMAIL` | Preview audit only | Preview only | Vercel preview env | preview audit unavailable | preview admin smoke |
 | `LOOP_ADMIN_PASSWORD` | Preview audit only | Preview only | Vercel preview env | preview audit unavailable | preview admin smoke |
+| Supabase Auth rate limits/password policy | Auth provider | Yes | Supabase dashboard | provider allows excessive attempts or weak passwords | owner verifies production Auth settings before launch |
+| Vercel Firewall/provider endpoint limits | `/api/auth` public auth actions | Yes | Vercel project/provider controls | public endpoints rely only on best-effort per-instance throttles | owner verifies production protection for public auth endpoints |
 | `GROUPME_BOT_ID` | Notifications | Optional | Vercel env | GroupMe sends skipped/fail | Send Update smoke |
 | `TWILIO_ACCOUNT_SID` | Notifications | Optional | Vercel env | SMS sends skipped/fail | Send Update smoke |
 | `TWILIO_AUTH_TOKEN` | Notifications | Optional | Vercel env | SMS sends skipped/fail | Send Update smoke |
@@ -27,3 +29,5 @@ Set `BASE_URL` to the preview or production origin before running URL checks, fo
 | `ELROYS_IOS_APP_BASE_URL` | iOS app build setting | Optional override | generated Xcode setting or `xcodebuild` override | app points to default prod | inspect `Info.plist` in built app |
 | `ELROYS_IOS_PUBLIC_ORIGIN` | iOS app build setting | Optional override | generated Xcode setting or `xcodebuild` override | public previews point to default prod | inspect `Info.plist` in built app |
 | `APPLE_DEVELOPMENT_TEAM` | iOS signing build setting | Yes for archive | generated Xcode setting or `xcodebuild` override | archive/signing fails | Xcode archive |
+
+Preview audit credentials must stay scoped to preview environments only. Do not add `LOOP_MANAGER_*` or `LOOP_ADMIN_*` values to production.

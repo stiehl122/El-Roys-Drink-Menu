@@ -796,6 +796,14 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(sheetSource.contains("Move To Off Menu"))
   }
 
+  func testAccountDeletionCopyStatesAdminCompletionTimeline() throws {
+    let appModelSource = try String(contentsOf: appModelSourceURL(), encoding: .utf8)
+    let homeSource = try String(contentsOf: homeViewsSourceURL(), encoding: .utf8)
+
+    XCTAssertTrue(appModelSource.contains("within 30 days"))
+    XCTAssertTrue(homeSource.contains("Account Deletion Details"))
+  }
+
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
     let rootURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -3342,6 +3350,20 @@ private func appModelsSourceURL(filePath: StaticString = #filePath) -> URL {
     .deletingLastPathComponent()
     .deletingLastPathComponent()
     .appendingPathComponent("ElRoysManagerApp/Models/AppModels.swift")
+}
+
+private func appModelSourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/App/AppModel.swift")
+}
+
+private func homeViewsSourceURL(filePath: StaticString = #filePath) -> URL {
+  URL(fileURLWithPath: "\(filePath)")
+    .deletingLastPathComponent()
+    .deletingLastPathComponent()
+    .appendingPathComponent("ElRoysManagerApp/Features/Home/HomeViews.swift")
 }
 
 private enum TestError: LocalizedError {

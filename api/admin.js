@@ -5,10 +5,12 @@ import {
 import { importNewsFromUrl, importReviewFromUrl } from '../server/_landing-import.js';
 import { readLandingPageState, saveLandingPageDraft } from '../server/_landing-page-state.js';
 import {
+  completeAccountDeletionRequest,
   readAdminCatalog,
   readAdminSettingsContext,
   readAdminReadiness,
   readAdminUsers,
+  readAccountDeletionRequests,
   updateAdminUser,
 } from '../server/_admin-read-models.js';
 import { parseRequestBody, readAction, readQueryValue } from '../server/_request.js';
@@ -46,6 +48,8 @@ export default async function handler(req, res) {
           return res.json(await readLandingPageState({ includeDraft: true }));
         case 'readiness':
           return res.json(await readAdminReadiness());
+        case 'account_deletion_requests':
+          return res.json(await readAccountDeletionRequests());
         default:
           return res.status(400).json({ error: 'Unsupported admin action' });
       }
@@ -77,6 +81,8 @@ export default async function handler(req, res) {
       case 'update_user':
         await updateAdminUser(req, body);
         return res.status(204).end();
+      case 'complete_account_deletion_request':
+        return res.json(await completeAccountDeletionRequest(body?.user_id || body?.userId, actor));
       default:
         return res.status(400).json({ error: 'Unsupported admin action' });
     }

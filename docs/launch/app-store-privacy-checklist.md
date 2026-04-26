@@ -14,4 +14,12 @@
 - Required-reason APIs: `UserDefaults` is declared as `NSPrivacyAccessedAPICategoryUserDefaults` with reason `CA92.1` for app-only persisted settings.
 - Collected data declared in manifest: staff name, staff email address, Supabase user ID, menu/user-generated content, and customer-support/account-deletion request data. All are linked to the user, used for app functionality, and not used for tracking.
 
-Before TestFlight/App Store submission, the project owner must confirm the administrator deletion process and complete App Store Connect privacy nutrition labels.
+## Owner Confirmation Required
+
+- [ ] For private TestFlight/internal use, confirm restaurant administrator support is the intended contact path.
+- [ ] Before any public App Store launch, choose production privacy/support contact channels if needed.
+- [ ] Confirm the account deletion completion SLA is accurate.
+- [ ] Complete App Store Connect privacy nutrition labels from this checklist.
+- [ ] Confirm admin completion should delete Supabase Auth users.
+
+Before public App Store submission, the project owner must confirm the administrator deletion process and complete App Store Connect privacy nutrition labels.

@@ -12,6 +12,12 @@
 7. Confirm every production migration is backward-compatible with the currently deployed production code. If not, split the work into expand/deploy/contract phases.
 8. Confirm backup exists before applying production migrations.
 
+## CI Gates
+
+Before release, confirm the `Launch Gates` GitHub Actions workflow is green for the release branch or pull request. The workflow runs the web/server syntax, HTML script order, and Node test gates on Ubuntu with Node 20, plus the unsigned iOS simulator test gate on macOS.
+
+Repository owners must enable GitHub Actions for the repo before relying on this gate. Owners should also decide whether branch protection should require `Launch Gates` before merging to `main` or `launch-readiness`, and should account for macOS runner minutes used by the iOS job.
+
 ## Deploy
 
 1. Deploy to Vercel preview.

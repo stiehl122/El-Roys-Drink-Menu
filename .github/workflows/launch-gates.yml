@@ -1,0 +1,48 @@
+name: Launch Gates
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  web-server:
+    name: Web and server checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check app syntax
+        run: node --check app.js
+
+      - name: Check server and shared module syntax
+        run: find api server core -name '*.js' -print0 | xargs -0 -n 1 node --check
+
+      - name: Check HTML script order
+        run: node scripts/check-html-script-order.cjs
+
+      - name: Run Node tests
+        run: node --test tests/*.test.cjs tests/boundaries/*.test.cjs
+
+  ios:
+    name: iOS simulator tests
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Run iOS tests
+        run: >
+          xcodebuild test
+          -project ios/ElRoysManagerApp.xcodeproj
+          -scheme ElRoysManagerApp
+          -destination 'platform=iOS Simulator,name=iPhone 16'
+          CODE_SIGNING_ALLOWED=NO

@@ -24,16 +24,48 @@ test('vercel config defines launch security headers', () => {
 
   const csp = headers.get('content-security-policy');
   assert.ok(csp, 'missing content-security-policy');
-  assert.match(csp, /default-src 'self'/);
-  assert.match(csp, /base-uri 'self'/);
-  assert.match(csp, /object-src 'none'/);
-  assert.match(csp, /frame-ancestors 'none'/);
-  assert.match(csp, /img-src 'self' data: https:/);
-  assert.match(csp, /font-src 'self' data:/);
-  assert.match(csp, /style-src 'self' 'unsafe-inline'/);
-  assert.match(csp, /script-src 'self' 'unsafe-inline'/);
-  assert.match(csp, /connect-src 'self' https:\/\/\*\.supabase\.co https:\/\/world\.openfoodfacts\.org https:\/\/api\.untappd\.com https:\/\/api\.groupme\.com https:\/\/api\.twilio\.com https:\/\/discord\.com https:\/\/discordapp\.com/);
-  assert.match(csp, /form-action 'self'/);
+  const cspDirectives = new Map(
+    csp.split(';').map(directive => directive.trim().split(/\s+/)).map(parts => [parts[0], parts.slice(1)])
+  );
+  assert.deepEqual(cspDirectives.get('default-src'), ["'self'"]);
+  assert.deepEqual(cspDirectives.get('base-uri'), ["'self'"]);
+  assert.deepEqual(cspDirectives.get('object-src'), ["'none'"]);
+  assert.deepEqual(cspDirectives.get('frame-ancestors'), ["'none'"]);
+  assert.deepEqual(cspDirectives.get('img-src'), ["'self'", 'data:', 'https:']);
+  assert.deepEqual(cspDirectives.get('font-src'), ["'self'", 'data:']);
+  assert.deepEqual(cspDirectives.get('style-src'), ["'self'", "'unsafe-inline'"]);
+  assert.deepEqual(cspDirectives.get('script-src'), ["'self'", "'unsafe-inline'"]);
+  assert.deepEqual(cspDirectives.get('connect-src'), [
+    "'self'",
+    'https://*.supabase.co',
+    'https://world.openfoodfacts.org',
+    'https://api.untappd.com',
+    'https://api.groupme.com',
+    'https://api.twilio.com',
+    'https://discord.com',
+    'https://discordapp.com'
+  ]);
+  assert.deepEqual(cspDirectives.get('form-action'), ["'self'"]);
+  assert.equal(cspDirectives.has('script-src-attr'), false, 'inline handler allowance should remain explicit in script-src');
+  assert.equal(
+    [...cspDirectives.values()].flat().includes("'unsafe-eval'"),
+    false,
+    'CSP must not allow unsafe eval'
+  );
+});
+
+test('vercel config preserves route rewrites', () => {
+  const config = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
+  assert.deepEqual(config.rewrites, [
+    { source: '/leroyslounge', destination: '/leroyslounge/index.html' },
+    { source: '/leroyslounge/', destination: '/leroyslounge/index.html' },
+    { source: '/elroyscantina', destination: '/elroyscantina/index.html' },
+    { source: '/elroyscantina/', destination: '/elroyscantina/index.html' },
+    { source: '/manager', destination: '/manager/index.html' },
+    { source: '/manager/', destination: '/manager/index.html' },
+    { source: '/admin', destination: '/admin/index.html' },
+    { source: '/admin/', destination: '/admin/index.html' }
+  ]);
 });
 
 test('public launch files exist', () => {

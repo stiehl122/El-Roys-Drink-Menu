@@ -26,6 +26,13 @@
 - Preview only: automated access atomicity test passes with a safe test account.
 - Production: no manager access regression is visible after deploy.
 
+## Auth Abuse Controls
+
+- Repeated auth attempts eventually return HTTP 429 with retry metadata.
+- Owner verifies production Supabase Auth rate limits and password policy.
+- Owner verifies Vercel Firewall or provider-level limits protect public auth endpoints; app-local throttles are best-effort per serverless instance only.
+- Preview audit sign-in secrets remain restricted to preview deployments only.
+
 ## iOS
 
 - App launches on simulator.

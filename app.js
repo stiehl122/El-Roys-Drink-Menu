@@ -18,13 +18,15 @@ const LS_KEYS = {
   menuCache:    'hf_menu_cache',
   menuDraftClientId: 'hf_menu_draft_client_id',
   lastUpdated:  'hf_last_updated_ts',
-  accessToken:  'hf_sb_access_token',
-  refreshToken: 'hf_sb_refresh_token',
-  expiresAt:    'hf_sb_expires_at',
   uid:          'hf_sb_uid',
   email:        'hf_sb_email',
   lsSchemaVersion: 'hf_ls_schema_version',
 };
+const LEGACY_AUTH_TOKEN_STORAGE_KEYS = [
+  'hf_sb_access_token',
+  'hf_sb_refresh_token',
+  'hf_sb_expires_at',
+];
 
 let BOT_ID        = '';
 let NOTIFICATIONS = null; // per-menu notification channel config from menu_meta.notifications
@@ -32,7 +34,7 @@ let MENU_ID   = localStorage.getItem(LS_KEYS.menuId)  || '';
 
 let SUPABASE_URL      = '';
 let SUPABASE_ANON_KEY = '';
-let currentUser = null; // { uid, email, name, accessToken, refreshToken, role, expiresAt }
+let currentUser = null; // { uid, email, name, accessToken, role, expiresAt }
 
 let isManagerMode = false;
 let isAdminMode   = false;
@@ -41,6 +43,7 @@ let _adminAllMenus      = [];
 let _adminSwitcherState = { notif: { restaurantId: '', menuId: '' } };
 let syncInterval  = null;
 let _tokenRefreshTimer = null;
+let _signOutCookiePromise = null;
 let _authScreen        = 'signin'; // 'signin' | 'signup' | 'forgot' | 'reset'
 let _recoverySessionData = null;   // set when app detects a Supabase recovery URL hash
 let _activeMenuName    = '';        // display name of the currently loaded menu
@@ -3366,9 +3369,6 @@ function buildAccessSessionModuleDeps() {
     getSupabaseConfig: () => ({ supabaseUrl: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY }),
     getStorageValue(key) {
       const map = {
-        accessToken: LS_KEYS.accessToken,
-        refreshToken: LS_KEYS.refreshToken,
-        expiresAt: LS_KEYS.expiresAt,
         uid: LS_KEYS.uid,
         email: LS_KEYS.email,
       };
@@ -3376,9 +3376,6 @@ function buildAccessSessionModuleDeps() {
     },
     clearStorageValue(key) {
       const map = {
-        accessToken: LS_KEYS.accessToken,
-        refreshToken: LS_KEYS.refreshToken,
-        expiresAt: LS_KEYS.expiresAt,
         uid: LS_KEYS.uid,
         email: LS_KEYS.email,
       };
@@ -3471,45 +3468,16 @@ function createAccessSessionService() {
 
     async restoreStoredSession() {
       if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return { restored: false, reason: 'not-configured' };
-      const storedAccess = localStorage.getItem(LS_KEYS.accessToken);
-      const storedRefresh = localStorage.getItem(LS_KEYS.refreshToken);
-      const storedExpiresAt = Number(localStorage.getItem(LS_KEYS.expiresAt) || 0);
-      const storedUid = localStorage.getItem(LS_KEYS.uid) || '';
-      const storedEmail = localStorage.getItem(LS_KEYS.email) || '';
-      if (!storedRefresh) return { restored: false, reason: 'no-refresh-token' };
-
-      if (storedAccess && storedExpiresAt > Date.now() + 120_000) {
-        try {
-          const profile = await resolveAuthenticatedSessionProfile(storedAccess);
-          currentUser = {
-            uid: storedUid,
-            email: storedEmail,
-            name: profile.name,
-            role: profile.role,
-            accessibleMenuIds: profile.accessibleMenuIds,
-            accessToken: storedAccess,
-            refreshToken: storedRefresh,
-            expiresAt: storedExpiresAt,
-          };
-          _scheduleTokenRefresh(storedExpiresAt);
-          applyRole(profile.role);
-          return { restored: true, source: 'stored-access', profile };
-        } catch (_) {
-          // fall through to refresh flow
-        }
-      }
 
       const refreshStoredSession = async () => {
-        const refresh = localStorage.getItem(LS_KEYS.refreshToken);
-        if (!refresh) throw new Error('no refresh token');
-        const data = await sbRefreshToken(refresh);
+        const data = await sbRefreshToken('');
         const session = await this.applyAuthenticatedSession(data);
         return { data, session };
       };
 
       try {
         const refreshed = await refreshStoredSession();
-        return { restored: true, source: 'refresh-token', ...refreshed };
+        return { restored: true, source: 'web-refresh', ...refreshed };
       } catch (error) {
         if (isTerminalAuthSessionError(error)) {
           clearStoredAuthSessionKeys();
@@ -4623,9 +4591,7 @@ function listStorageKeys(storage = localStorage) {
 
 function clearStoredAuthSessionKeys(storage = localStorage) {
   [
-    LS_KEYS.accessToken,
-    LS_KEYS.refreshToken,
-    LS_KEYS.expiresAt,
+    ...LEGACY_AUTH_TOKEN_STORAGE_KEYS,
     LS_KEYS.uid,
     LS_KEYS.email,
   ].forEach(key => storage.removeItem(key));
@@ -6909,6 +6875,7 @@ async function loadSupabaseConfig() {
 
 function migrateLocalStorage() {
   try {
+    LEGACY_AUTH_TOKEN_STORAGE_KEYS.forEach(key => localStorage.removeItem(key));
     if ((localStorage.getItem(LS_KEYS.lsSchemaVersion) || '0') >= '1') return;
 
     const OLD_CATS = {
@@ -7971,6 +7938,8 @@ function getAuthApiBoundary() {
   if (globalThis.__HF_AUTH_API__ && typeof globalThis.__HF_AUTH_API__ === 'object') {
     return globalThis.__HF_AUTH_API__;
   }
+  const readSessionPayload = response => readAuthApiPayload(response, 'Authentication failed.')
+    .then(payload => (payload?.session && typeof payload.session === 'object' ? payload.session : payload));
   return {
     signUp: ({ email = '', password = '', name = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
@@ -7980,13 +7949,30 @@ function getAuthApiBoundary() {
     signIn: ({ email = '', password = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'sign_in', email, password }),
-    }).then(response => readAuthApiPayload(response, 'Authentication failed.')),
-    refreshToken: ({ refreshToken = '' } = {}) => fetch('/api/auth', {
+      body: JSON.stringify({ action: 'web_sign_in', email, password }),
+    }).then(readSessionPayload),
+    adoptWebSession: (session = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'refresh', refresh_token: refreshToken }),
-    }).then(response => readAuthApiPayload(response, 'Session refresh failed.')),
+      body: JSON.stringify({
+        action: 'web_adopt_session',
+        access_token: session?.access_token || session?.accessToken || '',
+        refresh_token: session?.refresh_token || session?.refreshToken || '',
+        expires_in: session?.expires_in || session?.expiresIn || 3600,
+      }),
+    }).then(response => readAuthApiPayload(response, 'Failed to establish web session.'))
+      .then(payload => (payload?.session && typeof payload.session === 'object' ? payload.session : payload)),
+    refreshToken: () => fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'web_refresh' }),
+    }).then(response => readAuthApiPayload(response, 'Session refresh failed.'))
+      .then(payload => (payload?.session && typeof payload.session === 'object' ? payload.session : payload)),
+    signOutWebSession: () => fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'web_sign_out' }),
+    }).then(response => readAuthApiPayload(response, 'Sign-out failed.')),
     getProfile: ({ accessToken = '' } = {}) => fetch('/api/auth?mode=profile', {
       headers: { Authorization: `Bearer ${accessToken}` },
     }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
@@ -8016,11 +8002,21 @@ async function sbSignUp(email, password, name) {
 }
 
 async function sbSignIn(email, password) {
+  if (_signOutCookiePromise) await _signOutCookiePromise;
   return getAuthApiBoundary().signIn({
     supabaseUrl: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
     email,
     password,
+  });
+}
+
+async function adoptWebSession(session = {}) {
+  if (_signOutCookiePromise) await _signOutCookiePromise;
+  return getAuthApiBoundary().adoptWebSession({
+    supabaseUrl: SUPABASE_URL,
+    anonKey: SUPABASE_ANON_KEY,
+    ...session,
   });
 }
 
@@ -8113,6 +8109,23 @@ async function sbUpdatePassword(newPassword, accessToken) {
   });
 }
 
+async function signOutWebSessionBestEffort() {
+  if (_signOutCookiePromise) return _signOutCookiePromise;
+  const promise = (async () => {
+    try {
+      await getAuthApiBoundary().signOutWebSession?.();
+    } catch (_) {
+      // Local sign-out must continue even if cookie clearing cannot be confirmed.
+    }
+  })();
+  _signOutCookiePromise = promise;
+  try {
+    await promise;
+  } finally {
+    if (_signOutCookiePromise === promise) _signOutCookiePromise = null;
+  }
+}
+
 function _scheduleTokenRefresh(expiresAt) {
   if (!_authModuleDelegationStack.has('scheduleTokenRefresh')) {
     const boundary = getAuthModuleBoundary();
@@ -8127,15 +8140,11 @@ function _scheduleTokenRefresh(expiresAt) {
           setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
           setTimerRef: timer => { _tokenRefreshTimer = timer; },
           getCurrentUser: () => currentUser,
-          refreshToken: refreshToken => sbRefreshToken(refreshToken),
-          writeRefreshedTokens: ({ accessToken, refreshToken, expiresAt: nextExpiresAt }) => {
+          refreshToken: () => sbRefreshToken(''),
+          writeRefreshedTokens: ({ accessToken, expiresAt: nextExpiresAt }) => {
             if (!currentUser) return;
             currentUser.accessToken = accessToken;
-            currentUser.refreshToken = refreshToken;
             currentUser.expiresAt = nextExpiresAt;
-            lsSet(LS_KEYS.accessToken, currentUser.accessToken);
-            lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
-            lsSet(LS_KEYS.expiresAt, String(currentUser.expiresAt));
           },
           onRefreshFailure: error => {
             if (isTerminalAuthSessionError(error)) {
@@ -8158,14 +8167,10 @@ function _scheduleTokenRefresh(expiresAt) {
   _tokenRefreshTimer = setTimeout(async () => {
     if (!currentUser) return;
     try {
-      const data = await sbRefreshToken(currentUser.refreshToken);
+      const data = await sbRefreshToken('');
       const expiresIn = (data.expires_in || 3600) * 1000;
       currentUser.accessToken  = data.access_token;
-      currentUser.refreshToken = data.refresh_token;
       currentUser.expiresAt    = Date.now() + expiresIn;
-      lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
-      lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
-      lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
       _scheduleTokenRefresh(currentUser.expiresAt);
     } catch (error) {
       if (isTerminalAuthSessionError(error)) {
@@ -8189,9 +8194,6 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
           now: () => Date.now(),
           setCurrentUser: user => { currentUser = user; },
           writeStorage: user => {
-            lsSet(LS_KEYS.accessToken, user.accessToken);
-            lsSet(LS_KEYS.refreshToken, user.refreshToken);
-            lsSet(LS_KEYS.expiresAt, String(user.expiresAt));
             lsSet(LS_KEYS.uid, user.uid);
             lsSet(LS_KEYS.email, user.email);
           },
@@ -8209,12 +8211,9 @@ function _applySession(data, role, name, accessibleMenuIds = []) {
   currentUser = {
     uid: userId, email, name: name || '', role, accessibleMenuIds,
     accessToken:  data.access_token,
-    refreshToken: data.refresh_token,
+    refreshToken: '',
     expiresAt:    Date.now() + expiresIn,
   };
-  lsSet(LS_KEYS.accessToken,  currentUser.accessToken);
-  lsSet(LS_KEYS.refreshToken, currentUser.refreshToken);
-  lsSet(LS_KEYS.expiresAt,    String(currentUser.expiresAt));
   lsSet(LS_KEYS.uid,          userId);
   lsSet(LS_KEYS.email,        email);
   _scheduleTokenRefresh(currentUser.expiresAt);
@@ -9338,7 +9337,8 @@ async function handleResetPassword() {
   try {
     const recoveryData = _recoverySessionData;
     await sbUpdatePassword(password, recoveryData.access_token);
-    await getAccessSessionService().applyAuthenticatedSession(recoveryData, { closeOverlay: true });
+    const adoptedSession = await adoptWebSession(recoveryData);
+    await getAccessSessionService().applyAuthenticatedSession(adoptedSession, { closeOverlay: true });
     await _syncRequestedPageMode();
     showToast('Password updated. You are now signed in.', 'info');
   } catch(err) {
@@ -9352,6 +9352,7 @@ async function handleResetPassword() {
 
 function clearCurrentSessionState(options = {}) {
   const { syncRequestedPageMode = true, exitViewOnSettings = true } = options;
+  void signOutWebSessionBestEffort();
   const boundary = getAuthModuleBoundary();
   if (typeof boundary?.clearStoredSession === 'function') {
     boundary.clearStoredSession({
