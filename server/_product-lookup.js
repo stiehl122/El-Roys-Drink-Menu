@@ -1,3 +1,5 @@
+import { fetchWithTimeout, readResponseJsonWithTimeout } from './_fetch.js';
+
 function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
@@ -23,15 +25,16 @@ export async function lookupProductByBarcode(barcode = '') {
   const normalizedBarcode = cleanText(barcode).replace(/\s+/g, '');
   if (!normalizedBarcode) throw { status: 400, message: 'Enter a barcode first.' };
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(normalizedBarcode)}.json?fields=product_name,product_name_en,generic_name,generic_name_en,ingredients_text,ingredients_text_en,brands,quantity,packaging,packaging_text,status`,
-    { headers: { Accept: 'application/json' } }
+    { headers: { Accept: 'application/json' } },
+    { timeoutMs: 8000 }
   );
   if (!response.ok) {
     throw { status: 502, message: 'Open Food Facts is unavailable right now.' };
   }
 
-  const payload = await response.json().catch(() => null);
+  const payload = await readResponseJsonWithTimeout(response, { timeoutMs: 8000 }).catch(() => null);
   if (!payload || payload.status !== 1 || !payload.product) {
     throw { status: 404, message: 'No product was found for that barcode.' };
   }

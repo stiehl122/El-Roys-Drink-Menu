@@ -22,8 +22,8 @@ import { lookupProductByBarcode } from '../server/_product-lookup.js';
 import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
 import { parseRequestBody, readAction } from '../server/_request.js';
 
-function parsePublishBody(req) {
-  const body = parseRequestBody(req);
+async function parsePublishBody(req) {
+  const body = await parseRequestBody(req);
   return {
     body,
     menuId: String(body?.menu_id || parseMenuId(req) || '').trim(),
@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).end();
 
   try {
-    const body = req.method === 'POST' ? parseRequestBody(req) : null;
+    const body = req.method === 'POST' ? await parseRequestBody(req) : null;
     const action = readAction(req, body) || (req.method === 'GET' ? 'workspace' : '');
 
     if (req.method === 'GET') {
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
       case 'save_quietly':
       case 'preview_publish':
       case 'publish': {
-        const { body: publishBody, menuId, action: bodyAction } = parsePublishBody(req);
+        const { body: publishBody, menuId, action: bodyAction } = await parsePublishBody(req);
         if (!menuId) return res.status(400).json({ error: 'Missing menu_id' });
         const hasLegacySelectedSections = Object.prototype.hasOwnProperty.call(publishBody || {}, 'selected_sections');
         const actor = await readAuthorizedMenuActor(req, menuId);

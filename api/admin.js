@@ -51,7 +51,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const body = parseRequestBody(req);
+    const body = await parseRequestBody(req);
     const action = readAction(req, body);
 
     switch (action) {

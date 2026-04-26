@@ -1,4 +1,5 @@
 import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
+import { fetchWithTimeout } from './_fetch.js';
 
 function summarizeNotificationResults(results = {}) {
   const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
@@ -83,11 +84,11 @@ export async function deliverMenuNotification(menuId, safeText) {
   const gmBotId = envVal('groupme', 'env_key', 'GROUPME_BOT_ID');
   if (gmEnabled && gmBotId) {
     try {
-      const r = await fetch('https://api.groupme.com/v3/bots/post', {
+      const r = await fetchWithTimeout('https://api.groupme.com/v3/bots/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bot_id: gmBotId, text: safeText }),
-      });
+      }, { timeoutMs: 5000 });
       results.groupme = (r.ok || r.status === 202) ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.groupme = `error:${error.message}`;
@@ -114,14 +115,14 @@ export async function deliverMenuNotification(menuId, safeText) {
       for (const to of toNums) {
         try {
           const body = new URLSearchParams({ From: fromNum, To: to, Body: safeText });
-          const r = await fetch(apiUrl, {
+          const r = await fetchWithTimeout(apiUrl, {
             method: 'POST',
             headers: {
               Authorization: `Basic ${basicAuth}`,
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: body.toString(),
-          });
+          }, { timeoutMs: 5000 });
           if (!r.ok) errors.push(`${to}:${r.status}`);
         } catch (error) {
           errors.push(`${to}:${error.message}`);
@@ -137,11 +138,11 @@ export async function deliverMenuNotification(menuId, safeText) {
   const discWebhookUrl = envVal('discord', 'env_key', 'DISCORD_WEBHOOK_URL');
   if (discEnabled && discWebhookUrl) {
     try {
-      const r = await fetch(discWebhookUrl, {
+      const r = await fetchWithTimeout(discWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: safeText }),
-      });
+      }, { timeoutMs: 5000 });
       results.discord = r.ok ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.discord = `error:${error.message}`;
@@ -157,11 +158,11 @@ export async function deliverMenuNotification(menuId, safeText) {
       const headers = { 'Content-Type': 'application/json' };
       const secret = envVal('webhook', 'env_key_secret', 'GENERIC_WEBHOOK_SECRET');
       if (secret) headers['X-Webhook-Secret'] = secret;
-      const r = await fetch(whUrl, {
+      const r = await fetchWithTimeout(whUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({ text: safeText, menu_id: menuId }),
-      });
+      }, { timeoutMs: 5000 });
       results.webhook = r.ok ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.webhook = `error:${error.message}`;
