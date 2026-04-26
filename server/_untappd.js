@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './_fetch.js';
+import { fetchWithTimeout, readResponseJsonWithTimeout } from './_fetch.js';
 
 const UNTAPPD_BASE_URL = 'https://api.untappd.com/v4/';
 const SEARCH_LIMIT = 5;
@@ -153,7 +153,7 @@ async function readUntappdJson(url, userAgent) {
     throw { status: 502, message: 'Untappd is unavailable right now.' };
   }
 
-  return response.json().catch(() => null);
+  return readResponseJsonWithTimeout(response, { timeoutMs: 8000 }).catch(() => null);
 }
 
 function mapSearchResults(payload = {}) {

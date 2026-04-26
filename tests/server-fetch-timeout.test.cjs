@@ -1,6 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { fetchWithTimeout } = require('../server/_fetch.js');
+const {
+  fetchWithTimeout,
+  readResponseTextWithTimeout,
+} = require('../server/_fetch.js');
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 test('fetchWithTimeout aborts hung requests', async () => {
   const started = Date.now();
@@ -65,4 +72,40 @@ test('fetchWithTimeout forwards caller aborts to the fetch signal', async () => 
   assert.ok(receivedSignal);
   assert.notEqual(receivedSignal, callerController.signal);
   assert.equal(receivedSignal.aborted, true);
+});
+
+test('fetchWithTimeout cleans up timeout when fetchImpl throws synchronously', async () => {
+  const unhandled = [];
+  const onUnhandled = reason => {
+    unhandled.push(reason);
+  };
+
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await assert.rejects(
+      () => fetchWithTimeout('https://example.test/sync-fail', {}, {
+        timeoutMs: 10,
+        fetchImpl: () => {
+          throw new Error('sync fetch failure');
+        },
+      }),
+      /sync fetch failure/
+    );
+
+    await delay(30);
+    assert.deepEqual(unhandled, []);
+  } finally {
+    process.removeListener('unhandledRejection', onUnhandled);
+  }
+});
+
+test('readResponseTextWithTimeout rejects when the body read stalls', async () => {
+  const response = {
+    text: () => new Promise(() => {}),
+  };
+
+  await assert.rejects(
+    () => readResponseTextWithTimeout(response, { timeoutMs: 10 }),
+    /timed out/
+  );
 });

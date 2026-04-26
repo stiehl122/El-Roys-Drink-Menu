@@ -1,4 +1,4 @@
-import { fetchWithTimeout } from './_fetch.js';
+import { fetchWithTimeout, readResponseJsonWithTimeout } from './_fetch.js';
 
 function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -34,7 +34,7 @@ export async function lookupProductByBarcode(barcode = '') {
     throw { status: 502, message: 'Open Food Facts is unavailable right now.' };
   }
 
-  const payload = await response.json().catch(() => null);
+  const payload = await readResponseJsonWithTimeout(response, { timeoutMs: 8000 }).catch(() => null);
   if (!payload || payload.status !== 1 || !payload.product) {
     throw { status: 404, message: 'No product was found for that barcode.' };
   }

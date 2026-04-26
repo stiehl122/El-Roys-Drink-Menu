@@ -1,5 +1,5 @@
 import { isIP } from 'node:net';
-import { fetchWithTimeout } from './_fetch.js';
+import { fetchWithTimeout, readResponseTextWithTimeout } from './_fetch.js';
 
 function normalizeWhitespace(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -168,7 +168,7 @@ async function fetchRemoteHtml(url = '') {
       'accept': 'text/html,application/xhtml+xml',
     },
   }, { timeoutMs: 8000 });
-  const html = await response.text();
+  const html = await readResponseTextWithTimeout(response, { timeoutMs: 8000 });
   if (!response.ok) {
     throw new Error(`Remote source responded ${response.status}.`);
   }
