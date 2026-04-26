@@ -18,12 +18,13 @@ test('launch gates workflow runs on pull requests and pushes', () => {
   assert.doesNotMatch(workflow, /^\s*branches:/m);
 });
 
-test('launch gates workflow runs required web and server checks on Node 20', () => {
+test('launch gates workflow runs required web and server checks on Node 24', () => {
   const workflow = read('.github/workflows/launch-gates.yml');
 
   assert.match(workflow, /runs-on:\s*ubuntu-latest/);
-  assert.match(workflow, /actions\/setup-node@v4/);
-  assert.match(workflow, /node-version:\s*['"]20['"]/);
+  assert.match(workflow, /actions\/checkout@v5/);
+  assert.match(workflow, /actions\/setup-node@v5/);
+  assert.match(workflow, /node-version:\s*['"]24['"]/);
   assert.match(workflow, /node --check app\.js/);
   assert.match(workflow, /find api server core -name '\*\.js' -print0 \| xargs -0 -n 1 node --check/);
   assert.match(workflow, /node scripts\/check-html-script-order\.cjs/);
