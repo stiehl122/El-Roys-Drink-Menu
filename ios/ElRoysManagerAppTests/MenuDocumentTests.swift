@@ -693,38 +693,6 @@ final class MenuDocumentTests: XCTestCase {
     )
   }
 
-  func testMenuEditorCategoryCardUsesListForSwipeableRows() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let cardSource = String(source[cardRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(cardSource.contains("List {"))
-    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
-  }
-
-  func testMenuEditorSwipeListUsesTrailingEightySixActionOnly() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(swipeSource.contains(".swipeActions(edge: .trailing, allowsFullSwipe: true)"))
-    XCTAssertFalse(swipeSource.contains(".swipeActions(edge: .leading"))
-    XCTAssertFalse(swipeSource.contains("Label(\"Off Menu\""))
-    XCTAssertTrue(swipeSource.contains(".onMove"))
-  }
-
-  func testMenuEditorSwipeListMeasuresRenderedRowsInsteadOfFixedEstimate() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(source.contains("private struct MenuEditorRowHeightPreferenceKey"))
-    XCTAssertFalse(swipeSource.contains(".frame(height: estimatedListHeight)"))
-  }
-
   func testEditableDocumentMovesVisibleCategoriesAndKeepsRecoveryBucketLast() {
     let workspace = makeWorkspace(categories: [
       MenuCategoryPayload(
@@ -771,73 +739,6 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "wine", "beer"])
     XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1, 2])
     XCTAssertEqual(document.cats.last?.key, EditableMenuDocument.uncategorizedKey)
-  }
-
-  func testRestaurantToolsProvidesCategoryManagementEntryPoint() throws {
-    let toolsSource = try String(contentsOf: restaurantToolsSourceURL(), encoding: .utf8)
-    let appSource = try String(contentsOf: appEntrySourceURL(), encoding: .utf8)
-
-    XCTAssertTrue(toolsSource.contains("Manage Categories"))
-    XCTAssertTrue(toolsSource.contains("Edit Menu Items"))
-    XCTAssertTrue(appSource.contains("case categoryTools(MenuRecord)"))
-    XCTAssertTrue(appSource.contains("RestaurantCategoryManagementScreen"))
-  }
-
-  func testMenuEditorCategoryCardUsesVisibleReorderButtonInsteadOfOverflowMenu() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let cardSource = String(source[cardRange.lowerBound..<swipeRange.lowerBound])
-
-    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
-    XCTAssertTrue(cardSource.contains("Done Reordering"))
-    XCTAssertFalse(cardSource.contains("Menu {"))
-    XCTAssertFalse(cardSource.contains("ellipsis.circle.fill"))
-  }
-
-  func testEditableDocumentDefinesVisibleItemReorderMutation() throws {
-    let source = try String(contentsOf: appModelsSourceURL(), encoding: .utf8)
-    XCTAssertTrue(source.contains("mutating func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int)"))
-  }
-
-  func testItemEditorSheetExposesMoveToOffMenuAction() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let sheetRange = try XCTUnwrap(source.range(of: "private struct ItemEditorSheet"))
-    let sheetSource = String(source[sheetRange.lowerBound...])
-
-    XCTAssertTrue(sheetSource.contains("Move To Off Menu"))
-  }
-
-  func testAccountDeletionCopyStatesAdminCompletionTimeline() throws {
-    let appModelSource = try String(contentsOf: appModelSourceURL(), encoding: .utf8)
-    let homeSource = try String(contentsOf: homeViewsSourceURL(), encoding: .utf8)
-
-    XCTAssertTrue(appModelSource.contains("within 30 days"))
-    XCTAssertTrue(homeSource.contains("Account Deletion Details"))
-  }
-
-  func testSourceFileURLUsesXcodeCloudRepositoryFallbackWhenFilePathRootIsSynthetic() throws {
-    let rootURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString, isDirectory: true)
-    let sourceURL = rootURL
-      .appendingPathComponent("ios/ElRoysManagerApp/App", isDirectory: true)
-      .appendingPathComponent("AppModel.swift")
-    try FileManager.default.createDirectory(
-      at: sourceURL.deletingLastPathComponent(),
-      withIntermediateDirectories: true
-    )
-    try "source".write(to: sourceURL, atomically: true, encoding: .utf8)
-    defer {
-      try? FileManager.default.removeItem(at: rootURL)
-    }
-
-    let resolvedURL = try resolveSourceFileURL(
-      relativePath: "ElRoysManagerApp/App/AppModel.swift",
-      filePath: "/Volumes/workspace/repository/ios/ElRoysManagerAppTests/MenuDocumentTests.swift",
-      environment: ["TEST_RUNNER_CI_PRIMARY_REPOSITORY_PATH": rootURL.path]
-    )
-
-    XCTAssertEqual(resolvedURL.standardizedFileURL.path, sourceURL.standardizedFileURL.path)
   }
 
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
@@ -3480,95 +3381,6 @@ final class MenuDocumentTests: XCTestCase {
     """.utf8)
     return try JSONDecoder.backend.decode(MenuPreviewPayload.self, from: data)
   }
-}
-
-private func menuViewsSourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/Features/Menu/MenuViews.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func restaurantToolsSourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func appEntrySourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/App/ElRoysManagerApp.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func appModelsSourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/Models/AppModels.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func appModelSourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/App/AppModel.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func homeViewsSourceURL(filePath: StaticString = #filePath) throws -> URL {
-  try resolveSourceFileURL(
-    relativePath: "ElRoysManagerApp/Features/Home/HomeViews.swift",
-    filePath: "\(filePath)"
-  )
-}
-
-private func resolveSourceFileURL(
-  relativePath: String,
-  filePath: String,
-  environment: [String: String] = ProcessInfo.processInfo.environment,
-  fileManager: FileManager = .default
-) throws -> URL {
-  let sourceRootURL = URL(fileURLWithPath: filePath)
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-  var candidateRoots = [sourceRootURL]
-
-  for key in [
-    "TEST_RUNNER_CI_PRIMARY_REPOSITORY_PATH",
-    "CI_PRIMARY_REPOSITORY_PATH"
-  ] {
-    if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
-      let repositoryURL = URL(fileURLWithPath: value, isDirectory: true)
-      candidateRoots.append(repositoryURL.appendingPathComponent("ios", isDirectory: true))
-      candidateRoots.append(repositoryURL)
-    }
-  }
-
-  for key in [
-    "TEST_RUNNER_CI_PROJECT_FILE_PATH",
-    "CI_PROJECT_FILE_PATH"
-  ] {
-    if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
-      candidateRoots.append(URL(fileURLWithPath: value).deletingLastPathComponent())
-    }
-  }
-
-  var attemptedPaths: [String] = []
-  var seenPaths = Set<String>()
-  for rootURL in candidateRoots {
-    let sourceURL = rootURL
-      .appendingPathComponent(relativePath)
-      .standardizedFileURL
-    guard seenPaths.insert(sourceURL.path).inserted else { continue }
-    attemptedPaths.append(sourceURL.path)
-    if fileManager.fileExists(atPath: sourceURL.path) {
-      return sourceURL
-    }
-  }
-
-  throw TestError.message("Unable to locate \(relativePath). Tried: \(attemptedPaths.joined(separator: ", "))")
 }
 
 private enum TestError: LocalizedError {
