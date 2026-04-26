@@ -69,6 +69,39 @@ async function readStreamText(reader) {
   }
 }
 
+async function readStreamArrayBuffer(reader) {
+  const chunks = [];
+  let totalLength = 0;
+
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk?.done) break;
+      const value = chunk?.value;
+      if (value === undefined || value === null) continue;
+      const bytes = value instanceof Uint8Array
+        ? value
+        : new Uint8Array(value);
+      chunks.push(bytes);
+      totalLength += bytes.byteLength;
+    }
+  } finally {
+    try {
+      reader.releaseLock?.();
+    } catch (_) {
+      // Releasing can fail after cancellation; the reader has still been canceled.
+    }
+  }
+
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  chunks.forEach(chunk => {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  });
+  return combined.buffer;
+}
+
 async function fetchWithTimeout(url, options = {}, config = {}) {
   const timeoutMs = Number(config.timeoutMs || 8000);
   const fetchImpl = config.fetchImpl || fetch;
@@ -166,8 +199,32 @@ async function readResponseJsonWithTimeout(response, config = {}) {
   );
 }
 
+function readResponseArrayBufferWithTimeout(response, config = {}) {
+  const reader = response?.body?.getReader?.();
+  if (reader) {
+    return runWithTimeout(
+      () => readStreamArrayBuffer(reader),
+      {
+        ...config,
+        label: config.label || 'Response body',
+        onTimeout: () => cancelReader(reader),
+      }
+    );
+  }
+
+  return runWithTimeout(
+    () => response.arrayBuffer(),
+    {
+      ...config,
+      label: config.label || 'Response body',
+      onTimeout: () => cancelResponseBody(response),
+    }
+  );
+}
+
 module.exports = {
   fetchWithTimeout,
+  readResponseArrayBufferWithTimeout,
   readResponseJsonWithTimeout,
   readResponseTextWithTimeout,
 };
