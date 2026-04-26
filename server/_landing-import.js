@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { fetchWithTimeout } from './_fetch.js';
 
 function normalizeWhitespace(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
@@ -161,12 +162,12 @@ function pickJsonLdValue(nodes = [], typeName = '', getter = () => '') {
 }
 
 async function fetchRemoteHtml(url = '') {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       'user-agent': 'Mozilla/5.0 (compatible; ElRoysLandingImport/1.0; +https://el-roys-drink-menu.vercel.app)',
       'accept': 'text/html,application/xhtml+xml',
     },
-  });
+  }, { timeoutMs: 8000 });
   const html = await response.text();
   if (!response.ok) {
     throw new Error(`Remote source responded ${response.status}.`);
