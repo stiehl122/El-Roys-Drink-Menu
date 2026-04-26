@@ -41,6 +41,7 @@ protocol AuthClienting {
   func signUp(email: String, password: String, name: String) async throws -> AuthSession
   func refresh(session: AuthSession) async throws -> AuthSession
   func sendReset(email: String, redirectTo: URL) async throws
+  func requestAccountDeletion(accessToken: String) async throws
 }
 
 protocol WorkspaceClienting {
@@ -115,6 +116,12 @@ private struct AuthActionRequest: Encodable {
 
 private struct AuthResetResponse: Decodable {
   var ok: Bool?
+}
+
+private struct AccountDeletionRequestResponse: Decodable {
+  var ok: Bool?
+  var requestedAt: String?
+  var status: String?
 }
 
 private struct SignUpRequest: Encodable {
@@ -391,6 +398,15 @@ final class AuthClient: AuthClienting {
       body: AuthActionRequest(action: "reset_password", email: email, password: nil, name: nil, refreshToken: nil, redirectTo: redirectTo.absoluteString, newPassword: nil)
     )
   }
+
+  func requestAccountDeletion(accessToken: String) async throws {
+    let _: AccountDeletionRequestResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      accessToken: accessToken,
+      body: AuthActionRequest(action: "request_account_deletion", email: nil, password: nil, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil)
+    )
+  }
 }
 
 final class WorkspaceClient: WorkspaceClienting {
@@ -560,6 +576,9 @@ final class HistoryClient: HistoryClienting {
 }
 
 final class PreviewClient: PreviewClienting {
+  private static let leroysLoungeRestaurantID = "00000000-0000-0000-0000-000000000010"
+  private static let elRoysCantinaRestaurantID = "00000000-0000-0000-0000-000000000001"
+
   private let environment: AppEnvironment
 
   init(environment: AppEnvironment) {
@@ -567,7 +586,7 @@ final class PreviewClient: PreviewClienting {
   }
 
   func exactRouteURL(for menu: MenuRecord) -> URL {
-    let basePath = menu.restaurantId == "leroys-lounge" ? "/leroyslounge" : "/elroyscantina"
+    let basePath = Self.publicRoutePath(for: menu.restaurantId)
     guard var components = URLComponents(url: environment.publicOrigin.appendingPathComponent(basePath), resolvingAgainstBaseURL: false) else {
       return environment.publicOrigin
     }
@@ -575,6 +594,17 @@ final class PreviewClient: PreviewClienting {
       components.queryItems = [URLQueryItem(name: "menu", value: "drinks")]
     }
     return components.url ?? environment.publicOrigin
+  }
+
+  private static func publicRoutePath(for restaurantId: String) -> String {
+    switch restaurantId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case leroysLoungeRestaurantID, "leroys-lounge", "leroyslounge", "leroys_lounge":
+      return "/leroyslounge"
+    case elRoysCantinaRestaurantID, "el-roys-cantina", "elroys-cantina", "elroyscantina", "el_roys_cantina":
+      return "/elroyscantina"
+    default:
+      return "/elroyscantina"
+    }
   }
 }
 

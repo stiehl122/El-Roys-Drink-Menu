@@ -1,3 +1,9 @@
+import {
+  fetchWithTimeout,
+  readResponseArrayBufferWithTimeout,
+  readResponseTextWithTimeout,
+} from './_fetch.js';
+
 const GOOGLE_CSS_BASE = 'https://fonts.googleapis.com/css2';
 const FONTS_HOST = 'fonts.gstatic.com';
 
@@ -68,16 +74,16 @@ function assertAllowedFontUrl(rawUrl = '') {
 
 export async function proxyFontStylesheet({ set = '', font = '' } = {}) {
   const targetUrl = getFontCssUrl({ set, font });
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithTimeout(targetUrl, {
     headers: {
       'user-agent': 'Mozilla/5.0 (compatible; ElRoysFontProxy/1.0)',
       accept: 'text/css,*/*;q=0.1',
     },
-  });
+  }, { timeoutMs: 8000 });
   if (!response.ok) {
     throw { status: response.status || 502, message: 'Failed to load font stylesheet' };
   }
-  const css = await response.text();
+  const css = await readResponseTextWithTimeout(response, { timeoutMs: 8000 });
   return {
     body: rewriteFontCss(css),
     contentType: response.headers.get('content-type') || 'text/css; charset=utf-8',
@@ -87,15 +93,15 @@ export async function proxyFontStylesheet({ set = '', font = '' } = {}) {
 
 export async function proxyFontFile(url = '') {
   const targetUrl = assertAllowedFontUrl(url);
-  const response = await fetch(targetUrl, {
+  const response = await fetchWithTimeout(targetUrl, {
     headers: {
       'user-agent': 'Mozilla/5.0 (compatible; ElRoysFontProxy/1.0)',
     },
-  });
+  }, { timeoutMs: 8000 });
   if (!response.ok) {
     throw { status: response.status || 502, message: 'Failed to load font file' };
   }
-  const arrayBuffer = await response.arrayBuffer();
+  const arrayBuffer = await readResponseArrayBufferWithTimeout(response, { timeoutMs: 8000 });
   return {
     body: Buffer.from(arrayBuffer),
     contentType: response.headers.get('content-type') || 'font/woff2',

@@ -89,6 +89,7 @@ test('wave 4 revision guard returns structured 409 conflicts and tolerates empty
 test('wave 4 server modules harden actor authorization and check revisions before publish side effects', () => {
   const menuWrite = read('server/_menu-write.js');
   const menuPublish = read('server/_menu-publish.js');
+  const publishWorkflow = read('core/session/menu-publish-workflow.js');
   const adminSettings = read('server/_admin-settings.js');
 
   assert.match(menuWrite, /from '\.\/_auth\.js'/);
@@ -104,15 +105,17 @@ test('wave 4 server modules harden actor authorization and check revisions befor
 
   assert.match(menuPublish, /const currentRevisions = readRevisionState\(meta\)/);
   assert.match(menuPublish, /command: 'menu-publish\.v2'/);
-  assert.match(menuPublish, /assertExpectedRevision\(expectedLiveRevision, meta\?\.last_updated_ts \|\| null, 'live_revision', \{/);
-  assert.match(menuPublish, /const notificationBaselineRevision = expectedNotificationRevision \?\? expectedDraftRevision \?\? null;/);
-  assert.match(menuPublish, /assertExpectedRevision\(notificationBaselineRevision, meta\?\.last_sent_ts \|\| null, 'notification_revision', \{/);
-  const liveRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(expectedLiveRevision, meta?.last_updated_ts || null, 'live_revision', {");
-  const notificationRevisionCheckIndex = menuPublish.indexOf("assertExpectedRevision(notificationBaselineRevision, meta?.last_sent_ts || null, 'notification_revision', {");
-  const saveLiveIndex = menuPublish.indexOf('await saveLiveMenuForMenu({');
-  const notifyIndex = menuPublish.indexOf('await deliverMenuNotification(');
-  assert.ok(liveRevisionCheckIndex > -1 && liveRevisionCheckIndex < saveLiveIndex);
-  assert.ok(notificationRevisionCheckIndex > -1 && notificationRevisionCheckIndex < notifyIndex);
+  assert.match(menuPublish, /const normalizedDraftRevision = normalizeRevision\(expectedDraftRevision\)/);
+  assert.match(menuPublish, /const normalizedNotificationRevision = normalizeRevision\(expectedNotificationRevision\)/);
+  assert.match(menuPublish, /const notificationBaselineRevision = normalizedNotificationRevision \?\? normalizedDraftRevision;/);
+  assert.match(menuPublish, /assertExpectedRevision\(normalizedLiveRevision, currentRevisions\.live_revision, 'live_revision', conflictOptions\)/);
+  assert.match(menuPublish, /assertNoDraftRevisionConflict\(currentRevisions, normalizedDraftRevision, conflictOptions\)/);
+  assert.match(menuPublish, /assertNoNotificationRevisionConflict\(currentRevisions, notificationBaselineRevision, conflictOptions\)/);
+  const revisionCheckIndex = publishWorkflow.indexOf('const revisions = ports.governance.assertRevisions({');
+  const saveLiveIndex = publishWorkflow.indexOf('await ports.menus.saveLiveMenu({');
+  const notifyIndex = publishWorkflow.indexOf('await ports.notifications.deliver({');
+  assert.ok(revisionCheckIndex > -1 && revisionCheckIndex < saveLiveIndex);
+  assert.ok(revisionCheckIndex > -1 && revisionCheckIndex < notifyIndex);
 
   assert.match(adminSettings, /export async function authorizeAdminSettingsRequest\(req\)/);
   assert.match(adminSettings, /requireRole\(req, 'admin'\)/);

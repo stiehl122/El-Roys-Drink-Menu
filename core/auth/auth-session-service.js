@@ -21,7 +21,7 @@
       role,
       accessibleMenuIds,
       accessToken: data.access_token,
-      refreshToken: data.refresh_token,
+      refreshToken: '',
       expiresAt: now() + expiresIn,
     };
 
@@ -65,11 +65,10 @@
       const user = getCurrentUser();
       if (!user) return;
       try {
-        const data = await refreshToken(user.refreshToken);
+        const data = await refreshToken('');
         const nextExpiresAt = now() + ((data.expires_in || 3600) * 1000);
         writeRefreshedTokens({
           accessToken: data.access_token,
-          refreshToken: data.refresh_token,
           expiresAt: nextExpiresAt,
         });
         scheduleTokenRefreshImpl(nextExpiresAt, deps);
@@ -125,9 +124,7 @@
       : (callback => setTimeout(callback, retryDelayMs));
 
     async function restoreWithRefresh() {
-      const refresh = getStorageValue('refreshToken');
-      if (!refresh) throw new Error('no refresh token');
-      const data = await refreshToken(refresh);
+      const data = await refreshToken('');
       const session = await service.applyAuthenticatedSession(data);
       return { data, session };
     }
@@ -181,42 +178,11 @@
         const { supabaseUrl = '', anonKey = '' } = getSupabaseConfig();
         if (!supabaseUrl || !anonKey) return { restored: false, reason: 'not-configured' };
 
-        const storedAccess = getStorageValue('accessToken');
-        const storedRefresh = getStorageValue('refreshToken');
-        const storedExpiresAt = Number(getStorageValue('expiresAt') || 0);
-        const storedUid = getStorageValue('uid') || '';
-        const storedEmail = getStorageValue('email') || '';
-        if (!storedRefresh) return { restored: false, reason: 'no-refresh-token' };
-
-        if (storedAccess && storedExpiresAt > now() + 120_000) {
-          try {
-            const profile = await resolveSessionProfile(storedAccess);
-            deps.setCurrentUser?.({
-              uid: storedUid,
-              email: storedEmail,
-              name: profile.name,
-              role: profile.role,
-              accessibleMenuIds: profile.accessibleMenuIds,
-              accessToken: storedAccess,
-              refreshToken: storedRefresh,
-              expiresAt: storedExpiresAt,
-            });
-            deps.scheduleTokenRefresh?.(storedExpiresAt);
-            applyRole(profile.role);
-            return { restored: true, source: 'stored-access', profile };
-          } catch (_) {
-            // continue into refresh flow
-          }
-        }
-
         try {
           const refreshed = await restoreWithRefresh();
-          return { restored: true, source: 'refresh-token', ...refreshed };
+          return { restored: true, source: 'web-refresh', ...refreshed };
         } catch (error) {
           if (isTerminalAuthSessionError(error)) {
-            clearStorageValue('accessToken');
-            clearStorageValue('refreshToken');
-            clearStorageValue('expiresAt');
             clearStorageValue('uid');
             clearStorageValue('email');
             return { restored: false, reason: 'expired' };
@@ -227,9 +193,6 @@
               await service.syncRequestedPageMode();
             } catch (retryError) {
               if (!isTerminalAuthSessionError(retryError)) return;
-              clearStorageValue('accessToken');
-              clearStorageValue('refreshToken');
-              clearStorageValue('expiresAt');
               clearStorageValue('uid');
               clearStorageValue('email');
             }

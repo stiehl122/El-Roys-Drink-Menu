@@ -14,6 +14,33 @@ function sortKnownRestaurants(restaurants = []) {
   return restaurants.slice().sort((a, b) => knownOrder.indexOf(a.id) - knownOrder.indexOf(b.id));
 }
 
+function getUserMetadata(user) {
+  return user?.user_metadata && typeof user.user_metadata === 'object' ? user.user_metadata : {};
+}
+
+function isPendingAccountDeletionUser(user) {
+  const metadata = getUserMetadata(user);
+  return metadata.account_deletion_requested === true
+    && metadata.account_deletion_request_status === 'pending_admin_review';
+}
+
+async function fetchAuthAdminUser(sbUrl, sbService, encodedUserId) {
+  const response = await fetch(`${sbUrl}/auth/v1/admin/users/${encodedUserId}`, {
+    headers: serviceHeaders({
+      Accept: 'application/json',
+    }, sbService),
+  });
+  if (!response.ok) {
+    const payload = await readJsonSafe(response);
+    throw {
+      status: response.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to fetch auth user'),
+    };
+  }
+  const payload = await response.json();
+  return payload?.user && typeof payload.user === 'object' ? payload.user : payload;
+}
+
 export async function readAdminCatalog() {
   const { sbUrl } = getSupabaseServerConfig();
   const [restaurants, allMenus] = await Promise.all([
@@ -118,62 +145,177 @@ export async function readAdminUsers() {
   }));
 }
 
+export async function readAccountDeletionRequests() {
+  const { sbUrl, sbService } = getSupabaseServerConfig();
+  const perPage = 200;
+  const maxPages = 50;
+  const users = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const response = await fetch(`${sbUrl}/auth/v1/admin/users?per_page=${perPage}&page=${page}`, {
+      headers: serviceHeaders({
+        Accept: 'application/json',
+      }, sbService),
+    });
+    if (!response.ok) {
+      const payload = await readJsonSafe(response);
+      throw {
+        status: response.status || 500,
+        message: getApiErrorMessage(payload, 'Failed to read account deletion requests'),
+      };
+    }
+
+    const payload = await response.json();
+    const pageUsers = Array.isArray(payload?.users) ? payload.users : [];
+    users.push(...pageUsers);
+    if (pageUsers.length < perPage) break;
+    if (page === maxPages) {
+      throw {
+        status: 500,
+        message: 'Account deletion request pagination exceeded the safety limit',
+      };
+    }
+  }
+
+  const requests = users
+    .filter(user => getUserMetadata(user).account_deletion_requested === true)
+    .map(user => ({
+      userId: user.id,
+      email: user.email || '',
+      requestedAt: getUserMetadata(user).account_deletion_requested_at || '',
+      status: getUserMetadata(user).account_deletion_request_status || 'pending_admin_review',
+      source: getUserMetadata(user).account_deletion_request_source || '',
+    }))
+    .filter(request => request.status === 'pending_admin_review');
+
+  return { ok: true, requests };
+}
+
+export async function completeAccountDeletionRequest(userId, actor = null) {
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) throw { status: 400, message: 'Missing user id' };
+
+  const { sbUrl, sbService } = getSupabaseServerConfig();
+  const encodedUserId = encodeURIComponent(normalizedUserId);
+  const headers = serviceHeaders({
+    'Content-Type': 'application/json',
+  }, sbService);
+  const authUser = await fetchAuthAdminUser(sbUrl, sbService, encodedUserId);
+  if (!isPendingAccountDeletionUser(authUser)) {
+    throw {
+      status: 409,
+      message: 'User does not have a pending account deletion request',
+    };
+  }
+
+  const accessResponse = await fetch(`${sbUrl}/rest/v1/menu_access?user_id=eq.${encodedUserId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!accessResponse.ok) {
+    const payload = await readJsonSafe(accessResponse);
+    throw {
+      status: accessResponse.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to remove menu access'),
+    };
+  }
+
+  const profileResponse = await fetch(`${sbUrl}/rest/v1/profiles?id=eq.${encodedUserId}`, {
+    method: 'PATCH',
+    headers: serviceHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }, sbService),
+    body: JSON.stringify({ role: 'none' }),
+  });
+  if (!profileResponse.ok) {
+    const payload = await readJsonSafe(profileResponse);
+    throw {
+      status: profileResponse.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to disable user profile role'),
+    };
+  }
+
+  const completedAt = new Date().toISOString();
+  const userResponse = await fetch(`${sbUrl}/auth/v1/admin/users/${encodedUserId}`, {
+    method: 'DELETE',
+    headers,
+  });
+  if (!userResponse.ok) {
+    const payload = await readJsonSafe(userResponse);
+    throw {
+      status: userResponse.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to delete auth user'),
+    };
+  }
+
+  return {
+    ok: true,
+    userId: normalizedUserId,
+    status: 'deleted',
+    completedAt,
+  };
+}
+
 export async function updateAdminUser(req, payload = {}) {
   const { sbUrl, sbService } = getSupabaseServerConfig();
   const caller = await requireRole(req, 'admin');
   const { userId, role, name, menuAccess } = payload || {};
-  if (!userId) throw { status: 400, message: 'userId required' };
+  const normalizedUserId = String(userId || '').trim();
+  if (!normalizedUserId) throw { status: 400, message: 'userId required' };
 
-  if (role !== undefined && userId === caller.uid) {
+  if (role !== undefined && normalizedUserId === caller.uid) {
     throw { status: 400, message: 'Cannot change your own role' };
   }
 
-  const profileUpdate = {};
+  const hasRoleUpdate = role !== undefined;
+  const hasNameUpdate = name !== undefined;
+  const hasMenuAccessUpdate = Array.isArray(menuAccess);
+  let normalizedRole = null;
+  let normalizedMenuAccess = null;
   if (role !== undefined) {
-    if (!['none', 'manager', 'admin'].includes(role)) {
+    if (typeof role !== 'string') {
       throw { status: 400, message: 'Invalid role' };
     }
-    profileUpdate.role = role;
+    normalizedRole = String(role).trim();
+    if (!['none', 'manager', 'admin'].includes(normalizedRole)) {
+      throw { status: 400, message: 'Invalid role' };
+    }
   }
-  if (name !== undefined) {
-    profileUpdate.name = String(name).trim().slice(0, 100);
-  }
-
-  if (Object.keys(profileUpdate).length) {
-    const updateRes = await fetch(`${sbUrl}/rest/v1/profiles?id=eq.${userId}`, {
-      method: 'PATCH',
-      headers: serviceHeaders({
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      }, sbService),
-      body: JSON.stringify(profileUpdate),
-    });
-    if (!updateRes.ok) throw { status: 500, message: 'Failed to update profile' };
-  }
-
-  if (Array.isArray(menuAccess)) {
-    const deleteRes = await fetch(`${sbUrl}/rest/v1/menu_access?user_id=eq.${userId}`, {
-      method: 'DELETE',
-      headers: serviceHeaders({}, sbService),
-    });
-    if (!deleteRes.ok) throw { status: 500, message: 'Failed to update menu access' };
-
-    if (menuAccess.length) {
-      const rows = menuAccess.map(menuId => ({ user_id: userId, menu_id: menuId }));
-      const insertRes = await fetch(`${sbUrl}/rest/v1/menu_access`, {
-        method: 'POST',
-        headers: serviceHeaders({
-          'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
-        }, sbService),
-        body: JSON.stringify(rows),
-      });
-      if (!insertRes.ok) throw { status: 500, message: 'Failed to insert menu access' };
+  if (hasMenuAccessUpdate) {
+    normalizedMenuAccess = [];
+    for (const menuId of menuAccess) {
+      if (typeof menuId !== 'string' || !menuId.trim()) {
+        throw { status: 400, message: 'Invalid menu access' };
+      }
+      normalizedMenuAccess.push(menuId.trim());
     }
   }
 
-  if (!Object.keys(profileUpdate).length && !Array.isArray(menuAccess)) {
+  if (!hasRoleUpdate && !hasNameUpdate && !hasMenuAccessUpdate) {
     throw { status: 400, message: 'Nothing to update' };
+  }
+
+  const response = await fetch(`${sbUrl}/rest/v1/rpc/update_user_profile_and_menu_access`, {
+    method: 'POST',
+    headers: serviceHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    }, sbService),
+    body: JSON.stringify({
+      target_user_id: normalizedUserId,
+      target_full_name: hasNameUpdate ? String(name || '').trim().slice(0, 100) : null,
+      target_role: normalizedRole,
+      target_menu_ids: normalizedMenuAccess,
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = await readJsonSafe(response);
+    throw {
+      status: response.status || 500,
+      message: getApiErrorMessage(payload, 'Failed to update user access'),
+    };
   }
 
   return { ok: true };

@@ -15,8 +15,8 @@ test('phase 2 modules contain extracted lifecycle/publish/loader/poller implemen
   const loaderModule = read('core/data/menu-state-loader.js');
   const pollerModule = read('core/session/poll-scheduler.js');
 
-  assert.match(publishModule, /async\s+publishUpdate\s*\(/);
-  assert.match(publishModule, /async\s+saveDraft\s*\(/);
+  assert.match(publishModule, /async\s+function\s+publishUpdate\s*\(/);
+  assert.match(publishModule, /async\s+function\s+saveDraft\s*\(/);
   assert.match(lifecycleModule, /async\s+open\s*\(/);
   assert.match(lifecycleModule, /async\s+refresh\s*\(/);
   assert.match(loaderModule, /async\s+load\s*\(/);

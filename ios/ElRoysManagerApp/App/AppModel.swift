@@ -265,6 +265,21 @@ final class AppModel {
     }
   }
 
+  func requestAccountDeletion() async {
+    guard let accessToken = authSession?.accessToken else {
+      notice = AppNotice(tone: .warning, title: "Sign In Required", message: "Sign in before requesting account deletion.")
+      return
+    }
+    await run("Requesting Deletion") { model in
+      try await model.services.auth.requestAccountDeletion(accessToken: accessToken)
+      model.notice = AppNotice(
+        tone: .success,
+        title: "Deletion Requested",
+        message: "Your account deletion request was recorded for administrator review. Completion is handled by an administrator within 30 days."
+      )
+    }
+  }
+
   func signOut() {
     do {
       try sessionStore.clearSession()
@@ -555,6 +570,17 @@ final class AppModel {
         accessToken: accessToken,
         source: "ios_app"
       )
+      guard response.ok else {
+        let message = response.warningMessage?.nilIfBlank
+          ?? response.warnings?.first?.nilIfBlank
+          ?? response.successMessage?.nilIfBlank
+          ?? "Send Update blocked because notifications failed."
+        throw NSError(
+          domain: "ElRoysManagerApp.Publish",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: message]
+        )
+      }
       let hasNotificationChanges = preview?.hasNotificationChanges ?? false
       var title = "Saved"
       var message = "The live menu was saved without sending notifications."

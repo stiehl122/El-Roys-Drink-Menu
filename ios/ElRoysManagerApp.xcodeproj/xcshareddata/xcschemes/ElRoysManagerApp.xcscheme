@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "F00420BF53E89B7DF5BB49FC"
+               BlueprintIdentifier = "00000000000000000000000B"
                BuildableName = "ElRoysManagerApp.app"
                BlueprintName = "ElRoysManagerApp"
                ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F00420BF53E89B7DF5BB49FC"
+            BlueprintIdentifier = "00000000000000000000000B"
             BuildableName = "ElRoysManagerApp.app"
             BlueprintName = "ElRoysManagerApp"
             ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">
@@ -41,7 +41,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DF73788BC28E58015AC69D8F"
+               BlueprintIdentifier = "000000000000000000000016"
                BuildableName = "ElRoysManagerAppTests.xctest"
                BlueprintName = "ElRoysManagerAppTests"
                ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">
@@ -51,7 +51,7 @@
             skipped = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "CF7793BABFE63489116FF705"
+               BlueprintIdentifier = "00000000000000000000001F"
                BuildableName = "ElRoysManagerAppUITests.xctest"
                BlueprintName = "ElRoysManagerAppUITests"
                ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">
@@ -73,7 +73,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F00420BF53E89B7DF5BB49FC"
+            BlueprintIdentifier = "00000000000000000000000B"
             BuildableName = "ElRoysManagerApp.app"
             BlueprintName = "ElRoysManagerApp"
             ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">
@@ -90,7 +90,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "F00420BF53E89B7DF5BB49FC"
+            BlueprintIdentifier = "00000000000000000000000B"
             BuildableName = "ElRoysManagerApp.app"
             BlueprintName = "ElRoysManagerApp"
             ReferencedContainer = "container:ElRoysManagerApp.xcodeproj">

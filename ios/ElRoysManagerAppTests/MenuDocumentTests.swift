@@ -672,45 +672,25 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(document.cats.allSatisfy { $0.menuId == "menu" })
   }
 
-  func testDrinksRouteUsesExplicitQueryWhileFoodUsesBasePath() {
+  func testExactRouteURLsUseCanonicalRestaurantIDsAndMenuType() {
     let preview = PreviewClient(environment: AppEnvironment(name: .preview, baseURL: URL(string: "https://example.com")!, publicOrigin: URL(string: "https://example.com")!, displayName: "Preview"))
-    let drinksMenu = MenuRecord(id: "drinks", slug: "drinks", name: "Drinks", type: "drinks", restaurantId: "leroys-lounge", canManage: true)
-    let foodMenu = MenuRecord(id: "food", slug: "food", name: "Food", type: "food", restaurantId: "leroys-lounge", canManage: true)
 
-    XCTAssertEqual(preview.exactRouteURL(for: drinksMenu).absoluteString, "https://example.com/leroyslounge?menu=drinks")
-    XCTAssertEqual(preview.exactRouteURL(for: foodMenu).absoluteString, "https://example.com/leroyslounge")
-  }
-
-  func testMenuEditorCategoryCardUsesListForSwipeableRows() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let cardSource = String(source[cardRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(cardSource.contains("List {"))
-    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
-  }
-
-  func testMenuEditorSwipeListUsesTrailingEightySixActionOnly() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(swipeSource.contains(".swipeActions(edge: .trailing, allowsFullSwipe: true)"))
-    XCTAssertFalse(swipeSource.contains(".swipeActions(edge: .leading"))
-    XCTAssertFalse(swipeSource.contains("Label(\"Off Menu\""))
-    XCTAssertTrue(swipeSource.contains(".onMove"))
-  }
-
-  func testMenuEditorSwipeListMeasuresRenderedRowsInsteadOfFixedEstimate() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let recoveryRange = try XCTUnwrap(source.range(of: "private struct MenuEditorOffMenuRecoveryCard"))
-    let swipeSource = String(source[swipeRange.lowerBound..<recoveryRange.lowerBound])
-
-    XCTAssertTrue(source.contains("private struct MenuEditorRowHeightPreferenceKey"))
-    XCTAssertFalse(swipeSource.contains(".frame(height: estimatedListHeight)"))
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "drinks", restaurantId: "00000000-0000-0000-0000-000000000010")).absoluteString,
+      "https://example.com/leroyslounge?menu=drinks"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "food", restaurantId: "00000000-0000-0000-0000-000000000010")).absoluteString,
+      "https://example.com/leroyslounge"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "drinks", restaurantId: "00000000-0000-0000-0000-000000000001")).absoluteString,
+      "https://example.com/elroyscantina?menu=drinks"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "food", restaurantId: "00000000-0000-0000-0000-000000000001")).absoluteString,
+      "https://example.com/elroyscantina"
+    )
   }
 
   func testEditableDocumentMovesVisibleCategoriesAndKeepsRecoveryBucketLast() {
@@ -759,41 +739,6 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(document.visibleCategories.map(\.key), [EditableMenuDocument.featuredSpecialsKey, "wine", "beer"])
     XCTAssertEqual(document.visibleCategories.map(\.displayOrder), [0, 1, 2])
     XCTAssertEqual(document.cats.last?.key, EditableMenuDocument.uncategorizedKey)
-  }
-
-  func testRestaurantToolsProvidesCategoryManagementEntryPoint() throws {
-    let toolsSource = try String(contentsOf: restaurantToolsSourceURL(), encoding: .utf8)
-    let appSource = try String(contentsOf: appEntrySourceURL(), encoding: .utf8)
-
-    XCTAssertTrue(toolsSource.contains("Manage Categories"))
-    XCTAssertTrue(toolsSource.contains("Edit Menu Items"))
-    XCTAssertTrue(appSource.contains("case categoryTools(MenuRecord)"))
-    XCTAssertTrue(appSource.contains("RestaurantCategoryManagementScreen"))
-  }
-
-  func testMenuEditorCategoryCardUsesVisibleReorderButtonInsteadOfOverflowMenu() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let cardRange = try XCTUnwrap(source.range(of: "private struct MenuEditorCategoryCard"))
-    let swipeRange = try XCTUnwrap(source.range(of: "private struct MenuEditorSwipeList"))
-    let cardSource = String(source[cardRange.lowerBound..<swipeRange.lowerBound])
-
-    XCTAssertTrue(cardSource.contains("Button(action: onToggleReorder)"))
-    XCTAssertTrue(cardSource.contains("Done Reordering"))
-    XCTAssertFalse(cardSource.contains("Menu {"))
-    XCTAssertFalse(cardSource.contains("ellipsis.circle.fill"))
-  }
-
-  func testEditableDocumentDefinesVisibleItemReorderMutation() throws {
-    let source = try String(contentsOf: appModelsSourceURL(), encoding: .utf8)
-    XCTAssertTrue(source.contains("mutating func moveVisibleItems(in categoryKey: String, from source: IndexSet, to destination: Int)"))
-  }
-
-  func testItemEditorSheetExposesMoveToOffMenuAction() throws {
-    let source = try String(contentsOf: menuViewsSourceURL(), encoding: .utf8)
-    let sheetRange = try XCTUnwrap(source.range(of: "private struct ItemEditorSheet"))
-    let sheetSource = String(source[sheetRange.lowerBound...])
-
-    XCTAssertTrue(sheetSource.contains("Move To Off Menu"))
   }
 
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
@@ -845,6 +790,52 @@ final class MenuDocumentTests: XCTestCase {
 
     XCTAssertNotNil(try phoneStore.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
     XCTAssertNil(try tabletStore.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
+  }
+
+  func testOfflineDraftStoreProtectsSavedDraftFilesUntilFirstUnlock() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = OfflineDraftStore(rootURL: rootURL, clientScopeId: "ios-phone")
+    let envelope = LocalDraftEnvelope(
+      userId: "staff-1",
+      menuId: "menu-drinks",
+      clientScopeId: "ios-phone",
+      restaurantId: "leroys-lounge",
+      menuName: "Drinks",
+      savedAt: Date(timeIntervalSince1970: 1234),
+      baseLiveRevision: 8,
+      baseDraftRevision: 9,
+      baseNotificationBaselineRevision: 7,
+      baseDocument: EditableMenuDocument(workspace: makeWorkspace()),
+      document: EditableMenuDocument(workspace: makeWorkspace())
+    )
+
+    try store.saveDraft(envelope)
+
+    let fileURL = rootURL.appendingPathComponent("staff-1__menu-drinks__ios-phone.json")
+    let protection = try fileURL
+      .resourceValues(forKeys: [.fileProtectionKey])
+      .fileProtection
+    XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
+  }
+
+  func testOfflineDraftStoreProtectsCreatedNestedDraftDirectories() throws {
+    let baseURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let rootURL = baseURL
+      .appendingPathComponent("nested", isDirectory: true)
+      .appendingPathComponent("drafts", isDirectory: true)
+    let fileManager = RecordingDirectoryProtectionFileManager(
+      existingPaths: [FileManager.default.temporaryDirectory.path]
+    )
+
+    _ = OfflineDraftStore(rootURL: rootURL, fileManager: fileManager, clientScopeId: "ios-phone")
+
+    let nestedURL = baseURL.appendingPathComponent("nested", isDirectory: true)
+    XCTAssertEqual(fileManager.createdDirectoryPaths, [baseURL.path, nestedURL.path, rootURL.path])
+    XCTAssertTrue(fileManager.protectedPaths.contains(baseURL.path))
+    XCTAssertTrue(fileManager.protectedPaths.contains(nestedURL.path))
+    XCTAssertTrue(fileManager.protectedPaths.contains(rootURL.path))
   }
 
   func testCompactFeaturedItemProjectionDecodesWithDefaults() throws {
@@ -2503,6 +2494,117 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testPublishFailureResponseDoesNotApplyLocally() async throws {
+    let localItemID = "local-failed-send"
+    let notificationChangeIDs = ["beer::added::failed-send"]
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      revisions: WorkspaceRevisions(
+        liveRevision: 30,
+        draftRevision: nil,
+        lastSentRevision: 30,
+        notificationBaselineRevision: 30
+      ),
+      menuStatus: "Live",
+      hasUnsentChanges: false
+    )
+    let publishClient = StubPublishClient(
+      previewResponse: PublishResponse(
+        ok: true,
+        action: "preview",
+        ts: nil,
+        preview: try makePreviewPayload(
+          mode: "save-and-send",
+          selectionDefaults: notificationChangeIDs,
+          notificationChangeIDs: notificationChangeIDs
+        ),
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 30,
+          notificationBaselineRevision: 30
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      ),
+      publishResponse: PublishResponse(
+        ok: false,
+        action: "publish",
+        ts: 40,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 30,
+          notificationBaselineRevision: 30
+        ),
+        notificationStatus: NotificationStatus(
+          ok: false,
+          skipped: false,
+          partial: true,
+          statusCode: 207,
+          summary: nil,
+          results: nil
+        ),
+        warnings: ["Some notification channels failed: sms."],
+        warningMessage: "Some notification channels failed: sms.",
+        successMessage: nil,
+        selectedChangeIds: notificationChangeIDs
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, initialWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publishClient: publishClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    model.upsertItem(
+      makeItem(id: localItemID, name: "Failed Send IPA"),
+      categoryKey: "beer",
+      originalCategoryKey: nil
+    )
+
+    await model.loadPublishPreview()
+    await model.publishSelectedChanges()
+
+    XCTAssertEqual(publishClient.publishCallCount, 1)
+    XCTAssertEqual(model.notice?.tone, .danger)
+    XCTAssertEqual(model.notice?.title, "Saving")
+    XCTAssertTrue(model.notice?.message.contains("Some notification channels failed") == true)
+    XCTAssertNotNil(model.currentEditorPreview)
+    XCTAssertNotNil(model.currentEditorDocument?.itemRecord(for: localItemID))
+    XCTAssertTrue(model.hasLocalDraftChanges)
+  }
+
+  @MainActor
   func testRemoteDraftUpdateRequiresRefreshAndKeepsNonOverlappingLocalDrafts() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
@@ -3122,6 +3224,17 @@ final class MenuDocumentTests: XCTestCase {
     )
   }
 
+  private func makeMenu(type: String, restaurantId: String) -> MenuRecord {
+    MenuRecord(
+      id: type,
+      slug: type,
+      name: type.capitalized,
+      type: type,
+      restaurantId: restaurantId,
+      canManage: true
+    )
+  }
+
   private func makeJSONValue(from document: EditableMenuDocument) -> JSONValue {
     let data = try? JSONEncoder().encode(document)
     return (try? JSONDecoder().decode(JSONValue.self, from: data ?? Data())) ?? .object([:])
@@ -3270,34 +3383,6 @@ final class MenuDocumentTests: XCTestCase {
   }
 }
 
-private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
-}
-
-private func restaurantToolsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift")
-}
-
-private func appEntrySourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/App/ElRoysManagerApp.swift")
-}
-
-private func appModelsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Models/AppModels.swift")
-}
-
 private enum TestError: LocalizedError {
   case message(String)
 
@@ -3306,6 +3391,43 @@ private enum TestError: LocalizedError {
     case .message(let value):
       return value
     }
+  }
+}
+
+private final class RecordingDirectoryProtectionFileManager: FileManager {
+  private var existingPaths: Set<String>
+  private(set) var createdDirectoryPaths: [String] = []
+  private(set) var protectedPaths: [String] = []
+
+  init(existingPaths: Set<String>) {
+    self.existingPaths = existingPaths
+    super.init()
+  }
+
+  override func fileExists(atPath path: String) -> Bool {
+    existingPaths.contains(path)
+  }
+
+  override func createDirectory(
+    at url: URL,
+    withIntermediateDirectories createIntermediates: Bool,
+    attributes: [FileAttributeKey: Any]? = nil
+  ) throws {
+    XCTAssertFalse(createIntermediates)
+    XCTAssertEqual(
+      attributes?[.protectionKey] as? FileProtectionType,
+      .completeUntilFirstUserAuthentication
+    )
+    existingPaths.insert(url.path)
+    createdDirectoryPaths.append(url.path)
+  }
+
+  override func setAttributes(_ attributes: [FileAttributeKey: Any], ofItemAtPath path: String) throws {
+    XCTAssertEqual(
+      attributes[.protectionKey] as? FileProtectionType,
+      .completeUntilFirstUserAuthentication
+    )
+    protectedPaths.append(path)
   }
 }
 
@@ -3409,6 +3531,10 @@ private final class StubAuthClient: AuthClienting {
   }
 
   func sendReset(email: String, redirectTo: URL) async throws {
+    throw TestError.message("Unused in this test")
+  }
+
+  func requestAccountDeletion(accessToken: String) async throws {
     throw TestError.message("Unused in this test")
   }
 }

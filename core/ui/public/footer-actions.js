@@ -79,9 +79,16 @@
       const managerLink = state.links.find(link => link.key === 'manager') || null;
       const adminLink = state.links.find(link => link.key === 'admin') || null;
       const signOutLink = state.links.find(link => link.key === 'signout') || null;
+      const legalLinksHtml = `
+  <a class="footer-link" href="/privacy.html">Privacy</a>
+  <a class="footer-link" href="/terms.html">Terms</a>
+`;
 
       footerWraps.forEach(footerWrap => {
         footerWrap.style.display = state.signedIn || state.signIn ? '' : 'none';
+        if (!footerWrap.querySelector('[data-footer-legal-links]')) {
+          footerWrap.insertAdjacentHTML('afterbegin', `<span data-footer-legal-links>${legalLinksHtml}</span>`);
+        }
       });
       signInEls.forEach(signInEl => {
         signInEl.style.display = state.signIn ? '' : 'none';

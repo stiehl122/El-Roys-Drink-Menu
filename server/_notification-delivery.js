@@ -1,4 +1,5 @@
 import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
+import { fetchWithTimeout, readResponseJsonWithTimeout } from './_fetch.js';
 
 function summarizeNotificationResults(results = {}) {
   const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
@@ -23,6 +24,27 @@ function summarizeNotificationResults(results = {}) {
   };
 }
 
+function notificationConfigReadFailure() {
+  const results = {
+    config: 'error:notification_config_read_failed',
+  };
+  return {
+    status: 500,
+    results,
+    summary: summarizeNotificationResults(results),
+  };
+}
+
+async function readSupabaseRows(url, sbService) {
+  const response = await fetchWithTimeout(
+    url,
+    { headers: serviceHeaders({}, sbService) },
+    { timeoutMs: 5000 }
+  );
+  if (!response.ok) throw new Error('notification_config_read_failed');
+  return await readResponseJsonWithTimeout(response, { timeoutMs: 5000 });
+}
+
 export async function deliverMenuNotification(menuId, safeText) {
   let sbUrl;
   let sbService;
@@ -33,39 +55,30 @@ export async function deliverMenuNotification(menuId, safeText) {
   let notifConfig = {};
 
   try {
-    const r = await fetch(
+    const [meta] = await readSupabaseRows(
       `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menuId}&select=notifications`,
-      { headers: serviceHeaders({}, sbService) }
+      sbService
     );
-    if (r.ok) {
-      const [meta] = await r.json();
-      notifications = meta?.notifications || {};
-    }
+    notifications = meta?.notifications || {};
   } catch (_) {
-    notifications = {};
+    return notificationConfigReadFailure();
   }
 
   try {
-    const menuR = await fetch(
+    const [menu] = await readSupabaseRows(
       `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=restaurant_id`,
-      { headers: serviceHeaders({}, sbService) }
+      sbService
     );
-    if (menuR.ok) {
-      const [menu] = await menuR.json();
-      restaurantId = menu?.restaurant_id || null;
-    }
+    restaurantId = menu?.restaurant_id || null;
     if (restaurantId) {
-      const restR = await fetch(
+      const [rest] = await readSupabaseRows(
         `${sbUrl}/rest/v1/restaurants?id=eq.${restaurantId}&select=notifications_config`,
-        { headers: serviceHeaders({}, sbService) }
+        sbService
       );
-      if (restR.ok) {
-        const [rest] = await restR.json();
-        notifConfig = rest?.notifications_config || {};
-      }
+      notifConfig = rest?.notifications_config || {};
     }
   } catch (_) {
-    notifConfig = {};
+    return notificationConfigReadFailure();
   }
 
   const envVal = (channelKey, field, globalDefault) => {
@@ -83,11 +96,11 @@ export async function deliverMenuNotification(menuId, safeText) {
   const gmBotId = envVal('groupme', 'env_key', 'GROUPME_BOT_ID');
   if (gmEnabled && gmBotId) {
     try {
-      const r = await fetch('https://api.groupme.com/v3/bots/post', {
+      const r = await fetchWithTimeout('https://api.groupme.com/v3/bots/post', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bot_id: gmBotId, text: safeText }),
-      });
+      }, { timeoutMs: 5000 });
       results.groupme = (r.ok || r.status === 202) ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.groupme = `error:${error.message}`;
@@ -114,14 +127,14 @@ export async function deliverMenuNotification(menuId, safeText) {
       for (const to of toNums) {
         try {
           const body = new URLSearchParams({ From: fromNum, To: to, Body: safeText });
-          const r = await fetch(apiUrl, {
+          const r = await fetchWithTimeout(apiUrl, {
             method: 'POST',
             headers: {
               Authorization: `Basic ${basicAuth}`,
               'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: body.toString(),
-          });
+          }, { timeoutMs: 5000 });
           if (!r.ok) errors.push(`${to}:${r.status}`);
         } catch (error) {
           errors.push(`${to}:${error.message}`);
@@ -137,11 +150,11 @@ export async function deliverMenuNotification(menuId, safeText) {
   const discWebhookUrl = envVal('discord', 'env_key', 'DISCORD_WEBHOOK_URL');
   if (discEnabled && discWebhookUrl) {
     try {
-      const r = await fetch(discWebhookUrl, {
+      const r = await fetchWithTimeout(discWebhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: safeText }),
-      });
+      }, { timeoutMs: 5000 });
       results.discord = r.ok ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.discord = `error:${error.message}`;
@@ -157,11 +170,11 @@ export async function deliverMenuNotification(menuId, safeText) {
       const headers = { 'Content-Type': 'application/json' };
       const secret = envVal('webhook', 'env_key_secret', 'GENERIC_WEBHOOK_SECRET');
       if (secret) headers['X-Webhook-Secret'] = secret;
-      const r = await fetch(whUrl, {
+      const r = await fetchWithTimeout(whUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({ text: safeText, menu_id: menuId }),
-      });
+      }, { timeoutMs: 5000 });
       results.webhook = r.ok ? 'ok' : `error:${r.status}`;
     } catch (error) {
       results.webhook = `error:${error.message}`;

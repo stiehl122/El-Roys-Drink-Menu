@@ -1,0 +1,30 @@
+name: Launch Gates
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  web-server:
+    name: Web and server checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Check app syntax
+        run: node --check app.js
+
+      - name: Check server and shared module syntax
+        run: find api server core -name '*.js' -print0 | xargs -0 -n 1 node --check
+
+      - name: Check HTML script order
+        run: node scripts/check-html-script-order.cjs
+
+      - name: Run Node tests
+        run: node --test tests/*.test.cjs tests/boundaries/*.test.cjs

@@ -1029,28 +1029,23 @@ test('access session service restores sessions and resolves settings access', as
       sessionChanges.push(['refresh', refreshToken]);
       return {
         access_token: 'new-token',
-        refresh_token: 'new-refresh',
         expires_in: 3600,
         user: { id: 'user-1', email: 'taylor@example.com' },
       };
     },
   });
-  sandbox.localStorage.setItem('hf_sb_access_token', 'stored-token');
-  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
-  sandbox.localStorage.setItem('hf_sb_expires_at', String(Date.now() + 60 * 60 * 1000));
-  sandbox.localStorage.setItem('hf_sb_uid', 'user-1');
-  sandbox.localStorage.setItem('hf_sb_email', 'taylor@example.com');
 
   const service = sandbox.getAccessSessionService();
   const restored = await service.restoreStoredSession();
 
   assert.equal(restored.restored, true);
-  assert.equal(restored.source, 'stored-access');
+  assert.equal(restored.source, 'web-refresh');
   assert.equal(getState(sandbox, 'currentUser').name, 'Taylor');
   assert.equal(getState(sandbox, 'currentUser').role, 'manager');
   assert.equal(refreshCalls.length, 1);
   assert.equal(roleCalls[0], 'manager');
-  assert.equal(sessionChanges[0][0], 'profile');
+  assert.deepEqual(sessionChanges[0], ['refresh', '']);
+  assert.deepEqual(sessionChanges[1], ['profile', 'new-token']);
 
   sandbox.location.hash = '#type=recovery&access_token=recovery-token&refresh_token=recovery-refresh&expires_in=3600';
   const recovered = await service.handleRecoveryCallback();
@@ -1074,8 +1069,14 @@ test('access session service restores sessions and resolves settings access', as
   assert.equal(adminDecision.kind, 'admin-denied');
 });
 
-test('access session service restores stored access when profile verification is transiently unavailable', async () => {
-  const sandbox = loadAppSandbox();
+test('access session service schedules retry when cookie refresh is transiently unavailable', async () => {
+  const scheduledRetries = [];
+  const sandbox = loadAppSandbox({
+    setTimeout: (callback, delayMs) => {
+      scheduledRetries.push({ callback, delayMs });
+      return scheduledRetries.length;
+    },
+  });
   let refreshCalls = 0;
 
   setState(sandbox, {
@@ -1091,25 +1092,15 @@ test('access session service restores stored access when profile verification is
     },
   });
 
-  sandbox.localStorage.setItem('hf_sb_access_token', 'stored-token');
-  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
-  sandbox.localStorage.setItem('hf_sb_expires_at', String(Date.now() + 60 * 60 * 1000));
-  sandbox.localStorage.setItem('hf_sb_uid', 'user-1');
-  sandbox.localStorage.setItem('hf_sb_email', 'taylor@example.com');
-
   const service = sandbox.getAccessSessionService();
   const restored = await service.restoreStoredSession();
 
-  assert.equal(restored.restored, true);
-  assert.equal(restored.source, 'stored-access');
-  assert.equal(restored.profile.profileUnavailable, true);
-  assert.equal(restored.profile.role, 'none');
-  assert.equal(refreshCalls, 0);
-  assert.equal(getState(sandbox, 'currentUser.accessToken'), 'stored-token');
-  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'stored-refresh');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'stored-token');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'stored-refresh');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_uid'), 'user-1');
+  assert.equal(restored.restored, false);
+  assert.equal(restored.reason, 'retry-scheduled');
+  assert.equal(refreshCalls, 1);
+  assert.equal(scheduledRetries.length, 1);
+  assert.equal(scheduledRetries[0].delayMs, 2000);
+  assert.equal(getState(sandbox, 'currentUser'), null);
 });
 
 test('access session service applies sessions when profile verification is transiently unavailable', async () => {
@@ -1134,14 +1125,96 @@ test('access session service applies sessions when profile verification is trans
 
   assert.equal(session.profileUnavailable, true);
   assert.equal(getState(sandbox, 'currentUser.accessToken'), 'token-2');
-  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'refresh-2');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), '');
   assert.equal(getState(sandbox, 'currentUser.role'), 'none');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'token-2');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'refresh-2');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), null);
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), null);
 });
 
-test('access session service restores refreshed sessions when profile verification is transiently unavailable', async () => {
+test('reset password adopts recovery session into web cookies before applying signed-in state', async () => {
   const sandbox = loadAppSandbox();
+  const events = [];
+  sandbox.document.getElementById('reset-password').value = 'new-pass-123';
+  sandbox.document.getElementById('reset-confirm').value = 'new-pass-123';
+
+  setState(sandbox, {
+    _recoverySessionData: {
+      access_token: 'recovery-token',
+      refresh_token: 'recovery-refresh',
+      expires_in: 3600,
+    },
+    sbUpdatePassword: async (password, accessToken) => {
+      events.push(['update', password, accessToken]);
+    },
+    adoptWebSession: async session => {
+      events.push(['adopt', session.access_token, session.refresh_token]);
+      return {
+        access_token: session.access_token,
+        expires_in: session.expires_in,
+        user: { id: 'user-from-adopted-session', email: 'reset@example.com' },
+      };
+    },
+    getAccessSessionService: () => ({
+      applyAuthenticatedSession: async session => {
+        events.push(['apply', session.access_token, session.user?.id || '', session.user?.email || '']);
+        return { role: 'manager', profileUnavailable: false };
+      },
+    }),
+    _syncRequestedPageMode: async () => {
+      events.push(['sync']);
+    },
+    showToast: message => {
+      events.push(['toast', message]);
+    },
+  });
+
+  await sandbox.handleResetPassword();
+
+  assert.deepEqual(events, [
+    ['update', 'new-pass-123', 'recovery-token'],
+    ['adopt', 'recovery-token', 'recovery-refresh'],
+    ['apply', 'recovery-token', 'user-from-adopted-session', 'reset@example.com'],
+    ['sync'],
+    ['toast', 'Password updated. You are now signed in.'],
+  ]);
+  assert.equal(sandbox.document.getElementById('reset-error').textContent, '');
+});
+
+test('reset password surfaces recovery cookie adoption failures', async () => {
+  const sandbox = loadAppSandbox();
+  const events = [];
+  sandbox.document.getElementById('reset-password').value = 'new-pass-123';
+  sandbox.document.getElementById('reset-confirm').value = 'new-pass-123';
+
+  setState(sandbox, {
+    _recoverySessionData: {
+      access_token: 'recovery-token',
+      refresh_token: 'recovery-refresh',
+      expires_in: 3600,
+    },
+    sbUpdatePassword: async () => {
+      events.push('update');
+    },
+    adoptWebSession: async () => {
+      events.push('adopt');
+      throw new Error('Failed to establish web session.');
+    },
+    getAccessSessionService: () => ({
+      applyAuthenticatedSession: async () => {
+        events.push('apply');
+      },
+    }),
+  });
+
+  await sandbox.handleResetPassword();
+
+  assert.deepEqual(events, ['update', 'adopt']);
+  assert.equal(sandbox.document.getElementById('reset-error').textContent, 'Failed to establish web session.');
+});
+
+test('access session service restores cookie-refreshed sessions when profile verification is transiently unavailable', async () => {
+  const sandbox = loadAppSandbox();
+  const refreshCalls = [];
 
   setState(sandbox, {
     SUPABASE_URL: 'https://example.supabase.co',
@@ -1150,29 +1223,30 @@ test('access session service restores refreshed sessions when profile verificati
     sbGetProfile: async () => {
       throw { status: 500, message: 'profile unavailable' };
     },
-    sbRefreshToken: async () => ({
-      access_token: 'fresh-token',
-      refresh_token: 'fresh-refresh',
-      expires_in: 3600,
-      user: { id: 'user-3', email: 'alex@example.com' },
-    }),
+    sbRefreshToken: async refreshToken => {
+      refreshCalls.push(refreshToken);
+      return {
+        access_token: 'fresh-token',
+        expires_in: 3600,
+        user: { id: 'user-3', email: 'alex@example.com' },
+      };
+    },
   });
-
-  sandbox.localStorage.setItem('hf_sb_refresh_token', 'stored-refresh');
 
   const service = sandbox.getAccessSessionService();
   const restored = await service.restoreStoredSession();
 
   assert.equal(restored.restored, true);
-  assert.equal(restored.source, 'refresh-token');
+  assert.equal(restored.source, 'web-refresh');
   assert.equal(restored.session.profileUnavailable, true);
+  assert.deepEqual(refreshCalls, ['']);
   assert.equal(getState(sandbox, 'currentUser.accessToken'), 'fresh-token');
-  assert.equal(getState(sandbox, 'currentUser.refreshToken'), 'fresh-refresh');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'fresh-token');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'fresh-refresh');
+  assert.equal(getState(sandbox, 'currentUser.refreshToken'), '');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), null);
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), null);
 });
 
-test('migrateLocalStorage preserves auth session keys when legacy data is malformed', () => {
+test('migrateLocalStorage removes legacy Supabase token keys when legacy data is malformed', () => {
   const sandbox = loadAppSandbox();
   const quietConsole = { ...console, warn() {} };
   sandbox.console = quietConsole;
@@ -1188,8 +1262,9 @@ test('migrateLocalStorage preserves auth session keys when legacy data is malfor
 
   sandbox.migrateLocalStorage();
 
-  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), 'stored-token');
-  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), 'stored-refresh');
+  assert.equal(sandbox.localStorage.getItem('hf_sb_access_token'), null);
+  assert.equal(sandbox.localStorage.getItem('hf_sb_refresh_token'), null);
+  assert.equal(sandbox.localStorage.getItem('hf_sb_expires_at'), null);
   assert.equal(sandbox.localStorage.getItem('hf_sb_uid'), 'user-1');
   assert.equal(sandbox.localStorage.getItem('menuData'), null);
   assert.equal(sandbox.localStorage.getItem('lastUpdated'), null);

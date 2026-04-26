@@ -53,6 +53,11 @@
     return payload && typeof payload === 'object' ? payload : {};
   }
 
+  async function readAuthApiSessionPayload(response, fallbackMessage = 'Authentication failed.') {
+    const payload = await readAuthApiPayload(response, fallbackMessage);
+    return payload?.session && typeof payload.session === 'object' ? payload.session : payload;
+  }
+
   globalScope.__HF_AUTH_API__ = {
     async signUp({ email = '', password = '', name = '' } = {}) {
       const response = await fetch('/api/auth', {
@@ -67,18 +72,41 @@
       const response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'sign_in', email, password }),
+        body: JSON.stringify({ action: 'web_sign_in', email, password }),
       });
-      return readAuthApiPayload(response, 'Authentication failed.');
+      return readAuthApiSessionPayload(response, 'Authentication failed.');
     },
 
-    async refreshToken({ refreshToken = '' } = {}) {
+    async adoptWebSession(session = {}) {
       const response = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refresh', refresh_token: refreshToken }),
+        body: JSON.stringify({
+          action: 'web_adopt_session',
+          access_token: session?.access_token || session?.accessToken || '',
+          refresh_token: session?.refresh_token || session?.refreshToken || '',
+          expires_in: session?.expires_in || session?.expiresIn || 3600,
+        }),
       });
-      return readAuthApiPayload(response, 'Session refresh failed.');
+      return readAuthApiSessionPayload(response, 'Failed to establish web session.');
+    },
+
+    async refreshToken() {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'web_refresh' }),
+      });
+      return readAuthApiSessionPayload(response, 'Session refresh failed.');
+    },
+
+    async signOutWebSession() {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'web_sign_out' }),
+      });
+      return readAuthApiPayload(response, 'Sign-out failed.');
     },
 
     async getProfile({ accessToken = '' } = {}) {

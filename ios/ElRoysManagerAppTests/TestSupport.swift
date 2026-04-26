@@ -318,6 +318,10 @@ final class RouteStateStubAuthClient: AuthClienting {
   func sendReset(email: String, redirectTo: URL) async throws {
     throw RouteStateTestError.message("Unused in this test")
   }
+
+  func requestAccountDeletion(accessToken: String) async throws {
+    throw RouteStateTestError.message("Unused in this test")
+  }
 }
 
 final class RouteStateStubWorkspaceClient: WorkspaceClienting {

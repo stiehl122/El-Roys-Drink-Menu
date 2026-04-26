@@ -28,7 +28,7 @@ final class OfflineDraftStore: OfflineDraftStoring {
     decoder.dateDecodingStrategy = .iso8601
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true, attributes: nil)
+    try? Self.createProtectedDirectory(at: rootURL, fileManager: fileManager)
   }
 
   init(
@@ -42,7 +42,7 @@ final class OfflineDraftStore: OfflineDraftStoring {
     decoder.dateDecodingStrategy = .iso8601
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    try? fileManager.createDirectory(at: self.rootURL, withIntermediateDirectories: true, attributes: nil)
+    try? Self.createProtectedDirectory(at: self.rootURL, fileManager: fileManager)
   }
 
   func loadDraft(userId: String, menuId: String) throws -> LocalDraftEnvelope? {
@@ -71,7 +71,9 @@ final class OfflineDraftStore: OfflineDraftStoring {
     var scoped = envelope
     scoped.clientScopeId = clientScopeId
     let data = try encoder.encode(scoped)
-    try data.write(to: draftURL(userId: scoped.userId, menuId: scoped.menuId, clientScopeId: clientScopeId), options: .atomic)
+    let fileURL = draftURL(userId: scoped.userId, menuId: scoped.menuId, clientScopeId: clientScopeId)
+    try data.write(to: fileURL, options: .atomic)
+    try Self.protectItem(at: fileURL)
     try? FileManager.default.removeItem(at: legacyDraftURL(userId: scoped.userId, menuId: scoped.menuId))
   }
 
@@ -104,6 +106,39 @@ final class OfflineDraftStore: OfflineDraftStoring {
 
   private func sanitize(_ value: String) -> String {
     value.replacingOccurrences(of: "/", with: "_")
+  }
+
+  private static func protectItem(at url: URL, fileManager: FileManager = .default) throws {
+    try fileManager.setAttributes(
+      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+      ofItemAtPath: url.path
+    )
+  }
+
+  private static func createProtectedDirectory(at url: URL, fileManager: FileManager) throws {
+    let protectionAttributes: [FileAttributeKey: Any] = [
+      .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+    ]
+    var missingDirectories: [URL] = []
+    var currentURL = url
+
+    while !fileManager.fileExists(atPath: currentURL.path) {
+      missingDirectories.append(currentURL)
+      let parentURL = currentURL.deletingLastPathComponent()
+      guard parentURL.path != currentURL.path else { break }
+      currentURL = parentURL
+    }
+
+    for directoryURL in missingDirectories.reversed() {
+      try fileManager.createDirectory(
+        at: directoryURL,
+        withIntermediateDirectories: false,
+        attributes: protectionAttributes
+      )
+      try protectItem(at: directoryURL, fileManager: fileManager)
+    }
+
+    try protectItem(at: url, fileManager: fileManager)
   }
 
   private static func resolveClientScopeId(
