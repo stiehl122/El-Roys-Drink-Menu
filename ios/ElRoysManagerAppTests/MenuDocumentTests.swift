@@ -816,6 +816,30 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(homeSource.contains("Account Deletion Details"))
   }
 
+  func testSourceFileURLUsesXcodeCloudRepositoryFallbackWhenFilePathRootIsSynthetic() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let sourceURL = rootURL
+      .appendingPathComponent("ios/ElRoysManagerApp/App", isDirectory: true)
+      .appendingPathComponent("AppModel.swift")
+    try FileManager.default.createDirectory(
+      at: sourceURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try "source".write(to: sourceURL, atomically: true, encoding: .utf8)
+    defer {
+      try? FileManager.default.removeItem(at: rootURL)
+    }
+
+    let resolvedURL = try resolveSourceFileURL(
+      relativePath: "ElRoysManagerApp/App/AppModel.swift",
+      filePath: "/Volumes/workspace/repository/ios/ElRoysManagerAppTests/MenuDocumentTests.swift",
+      environment: ["TEST_RUNNER_CI_PRIMARY_REPOSITORY_PATH": rootURL.path]
+    )
+
+    XCTAssertEqual(resolvedURL.standardizedFileURL.path, sourceURL.standardizedFileURL.path)
+  }
+
   func testOfflineDraftStoreRoundTripsByUserAndMenu() throws {
     let rootURL = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -3458,46 +3482,93 @@ final class MenuDocumentTests: XCTestCase {
   }
 }
 
-private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
+private func menuViewsSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/Features/Menu/MenuViews.swift",
+    filePath: "\(filePath)"
+  )
 }
 
-private func restaurantToolsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift")
+private func restaurantToolsSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/Features/RestaurantTools/RestaurantToolsView.swift",
+    filePath: "\(filePath)"
+  )
 }
 
-private func appEntrySourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/App/ElRoysManagerApp.swift")
+private func appEntrySourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/App/ElRoysManagerApp.swift",
+    filePath: "\(filePath)"
+  )
 }
 
-private func appModelsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Models/AppModels.swift")
+private func appModelsSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/Models/AppModels.swift",
+    filePath: "\(filePath)"
+  )
 }
 
-private func appModelSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/App/AppModel.swift")
+private func appModelSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/App/AppModel.swift",
+    filePath: "\(filePath)"
+  )
 }
 
-private func homeViewsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
+private func homeViewsSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try resolveSourceFileURL(
+    relativePath: "ElRoysManagerApp/Features/Home/HomeViews.swift",
+    filePath: "\(filePath)"
+  )
+}
+
+private func resolveSourceFileURL(
+  relativePath: String,
+  filePath: String,
+  environment: [String: String] = ProcessInfo.processInfo.environment,
+  fileManager: FileManager = .default
+) throws -> URL {
+  let sourceRootURL = URL(fileURLWithPath: filePath)
     .deletingLastPathComponent()
     .deletingLastPathComponent()
-    .appendingPathComponent("ElRoysManagerApp/Features/Home/HomeViews.swift")
+  var candidateRoots = [sourceRootURL]
+
+  for key in [
+    "TEST_RUNNER_CI_PRIMARY_REPOSITORY_PATH",
+    "CI_PRIMARY_REPOSITORY_PATH"
+  ] {
+    if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+      let repositoryURL = URL(fileURLWithPath: value, isDirectory: true)
+      candidateRoots.append(repositoryURL.appendingPathComponent("ios", isDirectory: true))
+      candidateRoots.append(repositoryURL)
+    }
+  }
+
+  for key in [
+    "TEST_RUNNER_CI_PROJECT_FILE_PATH",
+    "CI_PROJECT_FILE_PATH"
+  ] {
+    if let value = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty {
+      candidateRoots.append(URL(fileURLWithPath: value).deletingLastPathComponent())
+    }
+  }
+
+  var attemptedPaths: [String] = []
+  var seenPaths = Set<String>()
+  for rootURL in candidateRoots {
+    let sourceURL = rootURL
+      .appendingPathComponent(relativePath)
+      .standardizedFileURL
+    guard seenPaths.insert(sourceURL.path).inserted else { continue }
+    attemptedPaths.append(sourceURL.path)
+    if fileManager.fileExists(atPath: sourceURL.path) {
+      return sourceURL
+    }
+  }
+
+  throw TestError.message("Unable to locate \(relativePath). Tried: \(attemptedPaths.joined(separator: ", "))")
 }
 
 private enum TestError: LocalizedError {
