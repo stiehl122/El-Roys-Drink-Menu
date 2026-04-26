@@ -493,7 +493,6 @@ private struct PublishPreviewActionButton: View {
 
   var body: some View {
     Group {
-      #if compiler(>=6.2)
       if #available(iOS 26.0, *) {
         Button(action: action) {
           label
@@ -501,45 +500,38 @@ private struct PublishPreviewActionButton: View {
         .buttonStyle(.glassProminent)
         .tint(accent)
       } else {
-        fallbackButton
+        Button(action: action) {
+          label
+        }
+        .buttonStyle(.plain)
+        .background {
+          let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+          shape
+            .fill(.thinMaterial)
+            .overlay {
+              LinearGradient(
+                colors: [
+                  accent.opacity(0.42),
+                  accent.opacity(0.22),
+                  accent.opacity(0.12)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+              .clipShape(shape)
+            }
+        }
+        .overlay {
+          RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .stroke(accent.opacity(0.36), lineWidth: 1)
+        }
+        .shadow(color: accent.opacity(0.2), radius: 18, y: 10)
       }
-      #else
-      fallbackButton
-      #endif
     }
     .disabled(!enabled)
     .opacity(enabled ? 1 : 0.5)
     .scaleEffect(enabled ? 1 : 0.98)
     .animation(AppMotion.snap, value: enabled)
-  }
-
-  private var fallbackButton: some View {
-    Button(action: action) {
-      label
-    }
-    .buttonStyle(.plain)
-    .background {
-      let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
-      shape
-        .fill(.thinMaterial)
-        .overlay {
-          LinearGradient(
-            colors: [
-              accent.opacity(0.42),
-              accent.opacity(0.22),
-              accent.opacity(0.12)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-          .clipShape(shape)
-        }
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: 24, style: .continuous)
-        .stroke(accent.opacity(0.36), lineWidth: 1)
-    }
-    .shadow(color: accent.opacity(0.2), radius: 18, y: 10)
   }
 
   private var label: some View {

@@ -49,30 +49,6 @@ enum AppTypography {
   }
 }
 
-struct AppGlassEffectContainer<Content: View>: View {
-  private let spacing: CGFloat
-  private let content: () -> Content
-
-  init(spacing: CGFloat, @ViewBuilder content: @escaping () -> Content) {
-    self.spacing = spacing
-    self.content = content
-  }
-
-  var body: some View {
-    #if compiler(>=6.2)
-    if #available(iOS 26.0, *) {
-      GlassEffectContainer(spacing: spacing) {
-        content()
-      }
-    } else {
-      content()
-    }
-    #else
-    content()
-    #endif
-  }
-}
-
 struct AppBackground: View {
   var body: some View {
     ZStack {
@@ -122,7 +98,6 @@ struct GlassCardModifier: ViewModifier {
       .padding(22)
       .background {
         ZStack {
-          #if compiler(>=6.2)
           if #available(iOS 26.0, *) {
             Color.clear
               .glassEffect(
@@ -130,7 +105,6 @@ struct GlassCardModifier: ViewModifier {
                 in: .rect(cornerRadius: cornerRadius)
               )
           }
-          #endif
 
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(tint.opacity(0.07))
@@ -179,7 +153,6 @@ struct FieldChromeModifier: ViewModifier {
     content
       .background {
         ZStack {
-          #if compiler(>=6.2)
           if #available(iOS 26.0, *) {
             Color.clear
               .glassEffect(
@@ -187,7 +160,6 @@ struct FieldChromeModifier: ViewModifier {
                 in: .rect(cornerRadius: cornerRadius)
               )
           }
-          #endif
 
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(tint.opacity(0.08))
@@ -358,7 +330,6 @@ struct AppIslandActionButton: View {
 
   var body: some View {
     Group {
-      #if compiler(>=6.2)
       if #available(iOS 26.0, *) {
         Button(action: action) {
           AppIslandButtonLabel(
@@ -370,28 +341,21 @@ struct AppIslandActionButton: View {
         .buttonStyle(.glassProminent)
         .tint(accent)
       } else {
-        fallbackButton
+        Button(action: action) {
+          AppIslandButtonLabel(
+            title: title,
+            subtitle: subtitle,
+            systemImage: systemImage
+          )
+        }
+        .buttonStyle(.plain)
+        .appPillChrome(accent: accent, filled: true)
       }
-      #else
-      fallbackButton
-      #endif
     }
     .disabled(!isEnabled)
     .opacity(isEnabled ? 1 : 0.55)
     .scaleEffect(isEnabled ? 1 : 0.992)
     .animation(AppMotion.snap, value: isEnabled)
-  }
-
-  private var fallbackButton: some View {
-    Button(action: action) {
-      AppIslandButtonLabel(
-        title: title,
-        subtitle: subtitle,
-        systemImage: systemImage
-      )
-    }
-    .buttonStyle(.plain)
-    .appPillChrome(accent: accent, filled: true)
   }
 }
 
