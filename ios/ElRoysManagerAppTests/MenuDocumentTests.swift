@@ -672,13 +672,25 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertTrue(document.cats.allSatisfy { $0.menuId == "menu" })
   }
 
-  func testDrinksRouteUsesExplicitQueryWhileFoodUsesBasePath() {
+  func testExactRouteURLsUseCanonicalRestaurantIDsAndMenuType() {
     let preview = PreviewClient(environment: AppEnvironment(name: .preview, baseURL: URL(string: "https://example.com")!, publicOrigin: URL(string: "https://example.com")!, displayName: "Preview"))
-    let drinksMenu = MenuRecord(id: "drinks", slug: "drinks", name: "Drinks", type: "drinks", restaurantId: "leroys-lounge", canManage: true)
-    let foodMenu = MenuRecord(id: "food", slug: "food", name: "Food", type: "food", restaurantId: "leroys-lounge", canManage: true)
 
-    XCTAssertEqual(preview.exactRouteURL(for: drinksMenu).absoluteString, "https://example.com/leroyslounge?menu=drinks")
-    XCTAssertEqual(preview.exactRouteURL(for: foodMenu).absoluteString, "https://example.com/leroyslounge")
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "drinks", restaurantId: "00000000-0000-0000-0000-000000000010")).absoluteString,
+      "https://example.com/leroyslounge?menu=drinks"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "food", restaurantId: "00000000-0000-0000-0000-000000000010")).absoluteString,
+      "https://example.com/leroyslounge"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "drinks", restaurantId: "00000000-0000-0000-0000-000000000001")).absoluteString,
+      "https://example.com/elroyscantina?menu=drinks"
+    )
+    XCTAssertEqual(
+      preview.exactRouteURL(for: makeMenu(type: "food", restaurantId: "00000000-0000-0000-0000-000000000001")).absoluteString,
+      "https://example.com/elroyscantina"
+    )
   }
 
   func testMenuEditorCategoryCardUsesListForSwipeableRows() throws {
@@ -3173,6 +3185,17 @@ final class MenuDocumentTests: XCTestCase {
         revisions: revisions
       ),
       capabilities: nil
+    )
+  }
+
+  private func makeMenu(type: String, restaurantId: String) -> MenuRecord {
+    MenuRecord(
+      id: type,
+      slug: type,
+      name: type.capitalized,
+      type: type,
+      restaurantId: restaurantId,
+      canManage: true
     )
   }
 

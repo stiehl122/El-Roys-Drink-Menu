@@ -74,12 +74,39 @@ test('public launch files exist', () => {
   }
 });
 
+test('robots and sitemap expose the public routes only', () => {
+  const origin = 'https://el-roys-drink-menu.vercel.app';
+  const publicUrls = [
+    `${origin}/`,
+    `${origin}/leroyslounge`,
+    `${origin}/elroyscantina`
+  ];
+
+  const robots = fs.readFileSync('robots.txt', 'utf8');
+  assert.match(robots, /^User-agent:\s*\*/m);
+  assert.match(robots, /^Allow:\s*\/$/m);
+  assert.match(robots, new RegExp(`^Sitemap:\\s*${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/sitemap\\.xml$`, 'm'));
+
+  const sitemap = fs.readFileSync('sitemap.xml', 'utf8');
+  const sitemapUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(match => match[1]);
+  assert.deepEqual(sitemapUrls, publicUrls);
+});
+
 test('public html shells include launch metadata', () => {
-  for (const file of ['index.html', 'leroyslounge/index.html', 'elroyscantina/index.html']) {
+  const pages = new Map([
+    ['index.html', 'https://el-roys-drink-menu.vercel.app/'],
+    ['leroyslounge/index.html', 'https://el-roys-drink-menu.vercel.app/leroyslounge'],
+    ['elroyscantina/index.html', 'https://el-roys-drink-menu.vercel.app/elroyscantina']
+  ]);
+
+  for (const [file, canonicalUrl] of pages) {
     const html = fs.readFileSync(file, 'utf8');
-    assert.match(html, /<meta name="description"/, `${file} missing meta description`);
-    assert.match(html, /<link rel="canonical"/, `${file} missing canonical link`);
-    assert.match(html, /<meta property="og:title"/, `${file} missing Open Graph title`);
-    assert.match(html, /<meta name="twitter:card"/, `${file} missing Twitter card`);
+    assert.match(html, /<meta\s+name="description"\s+content="[^"]+"/, `${file} missing meta description`);
+    assert.match(html, new RegExp(`<link\\s+rel="canonical"\\s+href="${canonicalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*/?>`), `${file} has the wrong canonical link`);
+    assert.match(html, /<meta\s+property="og:title"\s+content="[^"]+"\s*\/?>/, `${file} missing Open Graph title`);
+    assert.match(html, /<meta\s+property="og:description"\s+content="[^"]+"\s*\/?>/, `${file} missing Open Graph description`);
+    assert.match(html, /<meta\s+property="og:type"\s+content="website"\s*\/?>/, `${file} missing Open Graph type`);
+    assert.match(html, new RegExp(`<meta\\s+property="og:url"\\s+content="${canonicalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*/?>`), `${file} has the wrong Open Graph URL`);
+    assert.match(html, /<meta\s+name="twitter:card"\s+content="summary"\s*\/?>/, `${file} missing Twitter card`);
   }
 });

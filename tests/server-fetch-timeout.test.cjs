@@ -6,6 +6,43 @@ const {
   readResponseJsonWithTimeout,
   readResponseTextWithTimeout,
 } = require('../server/_fetch.js');
+const fs = require('node:fs');
+const path = require('node:path');
+const { pathToFileURL } = require('node:url');
+
+const ROOT = path.join(__dirname, '..');
+
+async function importNotificationDelivery() {
+  const moduleUrl = pathToFileURL(path.join(ROOT, 'server/_notification-delivery.js')).href;
+  return import(`${moduleUrl}?serverFetchTimeout=${Date.now()}-${Math.random()}`);
+}
+
+function jsonResponse(payload, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    async json() {
+      return payload;
+    },
+  };
+}
+
+async function withNotificationDeliveryEnv(fn) {
+  const originalFetch = global.fetch;
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalService = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  try {
+    return await fn();
+  } finally {
+    global.fetch = originalFetch;
+    process.env.SUPABASE_URL = originalUrl;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = originalService;
+  }
+}
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -221,4 +258,110 @@ test('readResponseArrayBufferWithTimeout cancels the active stream reader on tim
   );
 
   assert.equal(cancelCount, 1);
+});
+
+test('deliverMenuNotification fails closed when menu notification config read fails', async () => {
+  await withNotificationDeliveryEnv(async () => {
+    const { deliverMenuNotification } = await importNotificationDelivery();
+    global.fetch = async url => {
+      const href = String(url);
+      if (href.includes('/rest/v1/menu_meta?')) {
+        throw new Error('network unavailable');
+      }
+      throw new Error(`Unexpected fetch: ${href}`);
+    };
+
+    const result = await deliverMenuNotification('menu-1', 'Updated menu');
+
+    assert.equal(result.status, 500);
+    assert.equal(result.results.config, 'error:notification_config_read_failed');
+    assert.equal(result.summary.allSkipped, false);
+    assert.deepEqual(result.summary.failedChannels, ['config']);
+  });
+});
+
+test('deliverMenuNotification fails closed when restaurant notification config read hangs', async () => {
+  await withNotificationDeliveryEnv(async () => {
+    const originalSetTimeout = global.setTimeout;
+    const originalClearTimeout = global.clearTimeout;
+    global.setTimeout = (callback, ms, ...args) => originalSetTimeout(callback, Math.min(ms, 10), ...args);
+    global.clearTimeout = originalClearTimeout;
+
+    try {
+      const { deliverMenuNotification } = await importNotificationDelivery();
+      global.fetch = async url => {
+        const href = String(url);
+        if (href.includes('/rest/v1/menu_meta?')) {
+          return jsonResponse([{ notifications: { groupme: { enabled: true } } }]);
+        }
+        if (href.includes('/rest/v1/menus?')) {
+          return jsonResponse([{ restaurant_id: 'restaurant-1' }]);
+        }
+        if (href.includes('/rest/v1/restaurants?')) {
+          return new Promise(() => {});
+        }
+        throw new Error(`Unexpected fetch: ${href}`);
+      };
+
+      const result = await deliverMenuNotification('menu-1', 'Updated menu');
+
+      assert.equal(result.status, 500);
+      assert.equal(result.results.config, 'error:notification_config_read_failed');
+      assert.equal(result.summary.allSkipped, false);
+      assert.deepEqual(result.summary.failedChannels, ['config']);
+    } finally {
+      global.setTimeout = originalSetTimeout;
+      global.clearTimeout = originalClearTimeout;
+    }
+  });
+});
+
+test('deliverMenuNotification still returns all skipped when config reads succeed with no enabled channels', async () => {
+  await withNotificationDeliveryEnv(async () => {
+    const { deliverMenuNotification } = await importNotificationDelivery();
+    global.fetch = async url => {
+      const href = String(url);
+      if (href.includes('/rest/v1/menu_meta?')) {
+        return jsonResponse([{ notifications: {} }]);
+      }
+      if (href.includes('/rest/v1/menus?')) {
+        return jsonResponse([{ restaurant_id: 'restaurant-1' }]);
+      }
+      if (href.includes('/rest/v1/restaurants?')) {
+        return jsonResponse([{ notifications_config: {} }]);
+      }
+      throw new Error(`Unexpected fetch: ${href}`);
+    };
+
+    const result = await deliverMenuNotification('menu-1', 'Updated menu');
+
+    assert.equal(result.status, 202);
+    assert.equal(result.summary.allSkipped, true);
+    assert.deepEqual(result.results, {
+      groupme: 'skipped',
+      sms: 'skipped',
+      discord: 'skipped',
+      webhook: 'skipped',
+    });
+  });
+});
+
+test('external provider modules avoid raw unbounded fetch calls', () => {
+  const modules = [
+    'server/_product-lookup.js',
+    'server/_untappd.js',
+    'server/_notification-delivery.js',
+    'server/_landing-import.js',
+    'server/_font-proxy.js',
+  ];
+
+  const rawFetches = modules.flatMap(file => {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    return source
+      .split('\n')
+      .map((line, index) => ({ file, line: index + 1, source: line.trim() }))
+      .filter(entry => /\bfetch\s*\(/.test(entry.source) && !entry.source.includes('fetchWithTimeout('));
+  });
+
+  assert.deepEqual(rawFetches, []);
 });

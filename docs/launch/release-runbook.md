@@ -27,6 +27,12 @@ Repository owners must enable GitHub Actions for the repo before relying on this
 5. Run the same smoke checklist against production.
 6. Apply contract migrations only after the production deployment no longer depends on the old schema.
 
+## Post-Deploy Monitoring
+
+1. Confirm `/api/health` returns HTTP 200 after preview and production deploys.
+2. Treat `/api/health` returning HTTP 503 as a launch blocker until required Supabase env config and Supabase REST readiness are restored.
+3. Watch Vercel function logs for repeated health failures or Supabase readiness errors during the first post-deploy traffic window.
+
 ## Rollback
 
 1. Revert the Vercel deployment to the previous production deployment.

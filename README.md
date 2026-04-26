@@ -131,6 +131,7 @@ Optional notification variables:
 2. Set the environment variables.
 3. Deploy.
 4. Verify `/api/auth?mode=bootstrap` returns the server bootstrap payload.
+5. Verify `/api/health` returns HTTP 200 without exposing Supabase key values.
 
 Vercel is required for full functionality. Static-only hosting will not support authenticated writes, server-owned auth/bootstrap, role lookup, or notifications.
 

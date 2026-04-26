@@ -576,6 +576,9 @@ final class HistoryClient: HistoryClienting {
 }
 
 final class PreviewClient: PreviewClienting {
+  private static let leroysLoungeRestaurantID = "00000000-0000-0000-0000-000000000010"
+  private static let elRoysCantinaRestaurantID = "00000000-0000-0000-0000-000000000001"
+
   private let environment: AppEnvironment
 
   init(environment: AppEnvironment) {
@@ -583,7 +586,7 @@ final class PreviewClient: PreviewClienting {
   }
 
   func exactRouteURL(for menu: MenuRecord) -> URL {
-    let basePath = menu.restaurantId == "leroys-lounge" ? "/leroyslounge" : "/elroyscantina"
+    let basePath = Self.publicRoutePath(for: menu.restaurantId)
     guard var components = URLComponents(url: environment.publicOrigin.appendingPathComponent(basePath), resolvingAgainstBaseURL: false) else {
       return environment.publicOrigin
     }
@@ -591,6 +594,17 @@ final class PreviewClient: PreviewClienting {
       components.queryItems = [URLQueryItem(name: "menu", value: "drinks")]
     }
     return components.url ?? environment.publicOrigin
+  }
+
+  private static func publicRoutePath(for restaurantId: String) -> String {
+    switch restaurantId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+    case leroysLoungeRestaurantID, "leroys-lounge", "leroyslounge", "leroys_lounge":
+      return "/leroyslounge"
+    case elRoysCantinaRestaurantID, "el-roys-cantina", "elroys-cantina", "elroyscantina", "el_roys_cantina":
+      return "/elroyscantina"
+    default:
+      return "/elroyscantina"
+    }
   }
 }
 

@@ -105,6 +105,8 @@ test('restaurant route templates rely on footer staff sign-in only', () => {
 
   assert.equal(leroysRoute.includes('data-route-signin'), false, 'leroyslounge route template should not render top sign-in button');
   assert.equal(elroysRoute.includes('data-route-signin'), false, 'elroyscantina route template should not render top sign-in button');
+  assert.equal(leroysRoute.includes('data-auth-origin="route-header"'), false, 'leroyslounge route shell should not render header sign-in trigger');
+  assert.equal(elroysRoute.includes('data-auth-origin="route-header"'), false, 'elroyscantina route shell should not render header sign-in trigger');
   assert.equal(leroysRoute.includes('data-route-footer-signin'), true, 'leroyslounge route footer sign-in must remain');
   assert.equal(elroysRoute.includes('data-route-footer-signin'), true, 'elroyscantina route footer sign-in must remain');
 });

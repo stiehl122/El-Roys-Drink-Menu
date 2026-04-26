@@ -1,5 +1,5 @@
 import { getSupabaseServerConfig, serviceHeaders } from './_supabase.js';
-import { fetchWithTimeout } from './_fetch.js';
+import { fetchWithTimeout, readResponseJsonWithTimeout } from './_fetch.js';
 
 function summarizeNotificationResults(results = {}) {
   const entries = Object.entries(results || {}).filter(([channel]) => !!channel);
@@ -24,6 +24,27 @@ function summarizeNotificationResults(results = {}) {
   };
 }
 
+function notificationConfigReadFailure() {
+  const results = {
+    config: 'error:notification_config_read_failed',
+  };
+  return {
+    status: 500,
+    results,
+    summary: summarizeNotificationResults(results),
+  };
+}
+
+async function readSupabaseRows(url, sbService) {
+  const response = await fetchWithTimeout(
+    url,
+    { headers: serviceHeaders({}, sbService) },
+    { timeoutMs: 5000 }
+  );
+  if (!response.ok) throw new Error('notification_config_read_failed');
+  return await readResponseJsonWithTimeout(response, { timeoutMs: 5000 });
+}
+
 export async function deliverMenuNotification(menuId, safeText) {
   let sbUrl;
   let sbService;
@@ -34,39 +55,30 @@ export async function deliverMenuNotification(menuId, safeText) {
   let notifConfig = {};
 
   try {
-    const r = await fetch(
+    const [meta] = await readSupabaseRows(
       `${sbUrl}/rest/v1/menu_meta?menu_id=eq.${menuId}&select=notifications`,
-      { headers: serviceHeaders({}, sbService) }
+      sbService
     );
-    if (r.ok) {
-      const [meta] = await r.json();
-      notifications = meta?.notifications || {};
-    }
+    notifications = meta?.notifications || {};
   } catch (_) {
-    notifications = {};
+    return notificationConfigReadFailure();
   }
 
   try {
-    const menuR = await fetch(
+    const [menu] = await readSupabaseRows(
       `${sbUrl}/rest/v1/menus?id=eq.${menuId}&select=restaurant_id`,
-      { headers: serviceHeaders({}, sbService) }
+      sbService
     );
-    if (menuR.ok) {
-      const [menu] = await menuR.json();
-      restaurantId = menu?.restaurant_id || null;
-    }
+    restaurantId = menu?.restaurant_id || null;
     if (restaurantId) {
-      const restR = await fetch(
+      const [rest] = await readSupabaseRows(
         `${sbUrl}/rest/v1/restaurants?id=eq.${restaurantId}&select=notifications_config`,
-        { headers: serviceHeaders({}, sbService) }
+        sbService
       );
-      if (restR.ok) {
-        const [rest] = await restR.json();
-        notifConfig = rest?.notifications_config || {};
-      }
+      notifConfig = rest?.notifications_config || {};
     }
   } catch (_) {
-    notifConfig = {};
+    return notificationConfigReadFailure();
   }
 
   const envVal = (channelKey, field, globalDefault) => {

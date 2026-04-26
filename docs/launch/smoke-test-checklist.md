@@ -2,6 +2,7 @@
 
 ## Public Web
 
+- `/api/health` returns HTTP 200 and reports required Supabase config as configured without exposing secret values.
 - `/` loads without console errors.
 - `/leroyslounge` loads route-first and shows footer staff sign-in.
 - `/elroyscantina` loads route-first and shows footer staff sign-in.
