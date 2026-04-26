@@ -29,6 +29,7 @@ final class OfflineDraftStore: OfflineDraftStoring {
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     try? fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true, attributes: nil)
+    try? Self.protectItem(at: rootURL, fileManager: fileManager)
   }
 
   init(
@@ -43,6 +44,7 @@ final class OfflineDraftStore: OfflineDraftStoring {
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     try? fileManager.createDirectory(at: self.rootURL, withIntermediateDirectories: true, attributes: nil)
+    try? Self.protectItem(at: self.rootURL, fileManager: fileManager)
   }
 
   func loadDraft(userId: String, menuId: String) throws -> LocalDraftEnvelope? {
@@ -71,7 +73,9 @@ final class OfflineDraftStore: OfflineDraftStoring {
     var scoped = envelope
     scoped.clientScopeId = clientScopeId
     let data = try encoder.encode(scoped)
-    try data.write(to: draftURL(userId: scoped.userId, menuId: scoped.menuId, clientScopeId: clientScopeId), options: .atomic)
+    let fileURL = draftURL(userId: scoped.userId, menuId: scoped.menuId, clientScopeId: clientScopeId)
+    try data.write(to: fileURL, options: .atomic)
+    try Self.protectItem(at: fileURL)
     try? FileManager.default.removeItem(at: legacyDraftURL(userId: scoped.userId, menuId: scoped.menuId))
   }
 
@@ -104,6 +108,13 @@ final class OfflineDraftStore: OfflineDraftStoring {
 
   private func sanitize(_ value: String) -> String {
     value.replacingOccurrences(of: "/", with: "_")
+  }
+
+  private static func protectItem(at url: URL, fileManager: FileManager = .default) throws {
+    try fileManager.setAttributes(
+      [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+      ofItemAtPath: url.path
+    )
   }
 
   private static func resolveClientScopeId(

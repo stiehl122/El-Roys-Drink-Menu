@@ -847,6 +847,33 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertNil(try tabletStore.loadDraft(userId: "staff-1", menuId: "menu-drinks"))
   }
 
+  func testOfflineDraftStoreProtectsSavedDraftFilesUntilFirstUnlock() throws {
+    let rootURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = OfflineDraftStore(rootURL: rootURL, clientScopeId: "ios-phone")
+    let envelope = LocalDraftEnvelope(
+      userId: "staff-1",
+      menuId: "menu-drinks",
+      clientScopeId: "ios-phone",
+      restaurantId: "leroys-lounge",
+      menuName: "Drinks",
+      savedAt: Date(timeIntervalSince1970: 1234),
+      baseLiveRevision: 8,
+      baseDraftRevision: 9,
+      baseNotificationBaselineRevision: 7,
+      baseDocument: EditableMenuDocument(workspace: makeWorkspace()),
+      document: EditableMenuDocument(workspace: makeWorkspace())
+    )
+
+    try store.saveDraft(envelope)
+
+    let fileURL = rootURL.appendingPathComponent("staff-1__menu-drinks__ios-phone.json")
+    let protection = try fileURL
+      .resourceValues(forKeys: [.fileProtectionKey])
+      .fileProtection
+    XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
+  }
+
   func testCompactFeaturedItemProjectionDecodesWithDefaults() throws {
     let data = Data("""
     {
