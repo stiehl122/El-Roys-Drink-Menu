@@ -21,3 +21,48 @@ test('fetchWithTimeout clears timeout after success', async () => {
   });
   assert.equal(response.ok, true);
 });
+
+test('fetchWithTimeout aborts the fetch signal on timeout when caller supplied a signal', async () => {
+  const callerController = new AbortController();
+  let receivedSignal = null;
+
+  await assert.rejects(
+    () => fetchWithTimeout('https://example.invalid/hang', {
+      signal: callerController.signal,
+    }, {
+      timeoutMs: 10,
+      fetchImpl: (_url, options) => {
+        receivedSignal = options.signal;
+        return new Promise(() => {});
+      },
+    }),
+    /timed out/
+  );
+
+  assert.ok(receivedSignal);
+  assert.notEqual(receivedSignal, callerController.signal);
+  assert.equal(receivedSignal.aborted, true);
+  assert.equal(callerController.signal.aborted, false);
+});
+
+test('fetchWithTimeout forwards caller aborts to the fetch signal', async () => {
+  const callerController = new AbortController();
+  let receivedSignal = null;
+
+  const request = fetchWithTimeout('https://example.invalid/hang', {
+    signal: callerController.signal,
+  }, {
+    timeoutMs: 1000,
+    fetchImpl: (_url, options) => {
+      receivedSignal = options.signal;
+      return new Promise(() => {});
+    },
+  });
+
+  callerController.abort(new Error('caller stopped request'));
+
+  await assert.rejects(request, /caller stopped request/);
+  assert.ok(receivedSignal);
+  assert.notEqual(receivedSignal, callerController.signal);
+  assert.equal(receivedSignal.aborted, true);
+});
