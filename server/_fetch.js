@@ -13,6 +13,17 @@ function cancelResponseBody(response) {
   }
 }
 
+function cancelReader(reader) {
+  try {
+    const cancelResult = reader?.cancel?.();
+    if (cancelResult && typeof cancelResult.catch === 'function') {
+      cancelResult.catch(() => {});
+    }
+  } catch (_) {
+    // Best-effort cleanup only; the timeout error is the user-facing result.
+  }
+}
+
 async function runWithTimeout(operation, config = {}) {
   const timeoutMs = Number(config.timeoutMs || 8000);
   const label = config.label || 'Request';
@@ -32,6 +43,29 @@ async function runWithTimeout(operation, config = {}) {
     ]);
   } finally {
     clearTimeout(timeoutId);
+  }
+}
+
+async function readStreamText(reader) {
+  const decoder = new TextDecoder();
+  let text = '';
+
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk?.done) break;
+      const value = chunk?.value;
+      if (typeof value === 'string') text += value;
+      else if (value !== undefined && value !== null) text += decoder.decode(value, { stream: true });
+    }
+    text += decoder.decode();
+    return text;
+  } finally {
+    try {
+      reader.releaseLock?.();
+    } catch (_) {
+      // Releasing can fail after cancellation; the reader has still been canceled.
+    }
   }
 }
 
@@ -94,6 +128,18 @@ async function fetchWithTimeout(url, options = {}, config = {}) {
 }
 
 function readResponseTextWithTimeout(response, config = {}) {
+  const reader = response?.body?.getReader?.();
+  if (reader) {
+    return runWithTimeout(
+      () => readStreamText(reader),
+      {
+        ...config,
+        label: config.label || 'Response body',
+        onTimeout: () => cancelReader(reader),
+      }
+    );
+  }
+
   return runWithTimeout(
     () => response.text(),
     {
@@ -104,7 +150,12 @@ function readResponseTextWithTimeout(response, config = {}) {
   );
 }
 
-function readResponseJsonWithTimeout(response, config = {}) {
+async function readResponseJsonWithTimeout(response, config = {}) {
+  if (response?.body?.getReader) {
+    const text = await readResponseTextWithTimeout(response, config);
+    return JSON.parse(text);
+  }
+
   return runWithTimeout(
     () => response.json(),
     {

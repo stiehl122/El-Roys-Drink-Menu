@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   fetchWithTimeout,
+  readResponseJsonWithTimeout,
   readResponseTextWithTimeout,
 } = require('../server/_fetch.js');
 
@@ -107,5 +108,62 @@ test('readResponseTextWithTimeout rejects when the body read stalls', async () =
   await assert.rejects(
     () => readResponseTextWithTimeout(response, { timeoutMs: 10 }),
     /timed out/
+  );
+});
+
+test('readResponseTextWithTimeout cancels the active stream reader on timeout', async () => {
+  let cancelCount = 0;
+  const response = {
+    body: {
+      getReader() {
+        return {
+          read: () => new Promise(() => {}),
+          cancel() {
+            cancelCount += 1;
+            return Promise.resolve();
+          },
+          releaseLock() {},
+        };
+      },
+    },
+    text() {
+      throw new Error('text fallback should not be used for streams');
+    },
+  };
+
+  await assert.rejects(
+    () => readResponseTextWithTimeout(response, { timeoutMs: 10 }),
+    /timed out/
+  );
+
+  assert.equal(cancelCount, 1);
+});
+
+test('readResponseJsonWithTimeout parses JSON through the timeout-bound text reader', async () => {
+  const encoder = new TextEncoder();
+  let reads = 0;
+  const response = {
+    body: {
+      getReader() {
+        return {
+          async read() {
+            reads += 1;
+            if (reads === 1) return { done: false, value: encoder.encode('{"ok":') };
+            if (reads === 2) return { done: false, value: encoder.encode('true}') };
+            return { done: true };
+          },
+          cancel() {},
+          releaseLock() {},
+        };
+      },
+    },
+    json() {
+      throw new Error('json fallback should not be used for streams');
+    },
+  };
+
+  assert.deepEqual(
+    await readResponseJsonWithTimeout(response, { timeoutMs: 100 }),
+    { ok: true }
   );
 });
