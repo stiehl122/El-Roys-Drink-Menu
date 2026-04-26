@@ -2569,6 +2569,117 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testPublishFailureResponseDoesNotApplyLocally() async throws {
+    let localItemID = "local-failed-send"
+    let notificationChangeIDs = ["beer::added::failed-send"]
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      revisions: WorkspaceRevisions(
+        liveRevision: 30,
+        draftRevision: nil,
+        lastSentRevision: 30,
+        notificationBaselineRevision: 30
+      ),
+      menuStatus: "Live",
+      hasUnsentChanges: false
+    )
+    let publishClient = StubPublishClient(
+      previewResponse: PublishResponse(
+        ok: true,
+        action: "preview",
+        ts: nil,
+        preview: try makePreviewPayload(
+          mode: "save-and-send",
+          selectionDefaults: notificationChangeIDs,
+          notificationChangeIDs: notificationChangeIDs
+        ),
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 30,
+          notificationBaselineRevision: 30
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      ),
+      publishResponse: PublishResponse(
+        ok: false,
+        action: "publish",
+        ts: 40,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 30,
+          draftRevision: nil,
+          lastSentRevision: 30,
+          notificationBaselineRevision: 30
+        ),
+        notificationStatus: NotificationStatus(
+          ok: false,
+          skipped: false,
+          partial: true,
+          statusCode: 207,
+          summary: nil,
+          results: nil
+        ),
+        warnings: ["Some notification channels failed: sms."],
+        warningMessage: "Some notification channels failed: sms.",
+        successMessage: nil,
+        selectedChangeIds: notificationChangeIDs
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, initialWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publishClient: publishClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    model.upsertItem(
+      makeItem(id: localItemID, name: "Failed Send IPA"),
+      categoryKey: "beer",
+      originalCategoryKey: nil
+    )
+
+    await model.loadPublishPreview()
+    await model.publishSelectedChanges()
+
+    XCTAssertEqual(publishClient.publishCallCount, 1)
+    XCTAssertEqual(model.notice?.tone, .danger)
+    XCTAssertEqual(model.notice?.title, "Saving")
+    XCTAssertTrue(model.notice?.message.contains("Some notification channels failed") == true)
+    XCTAssertNotNil(model.currentEditorPreview)
+    XCTAssertNotNil(model.currentEditorDocument?.itemRecord(for: localItemID))
+    XCTAssertTrue(model.hasLocalDraftChanges)
+  }
+
+  @MainActor
   func testRemoteDraftUpdateRequiresRefreshAndKeepsNonOverlappingLocalDrafts() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()

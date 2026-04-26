@@ -570,6 +570,17 @@ final class AppModel {
         accessToken: accessToken,
         source: "ios_app"
       )
+      guard response.ok else {
+        let message = response.warningMessage?.nilIfBlank
+          ?? response.warnings?.first?.nilIfBlank
+          ?? response.successMessage?.nilIfBlank
+          ?? "Send Update blocked because notifications failed."
+        throw NSError(
+          domain: "ElRoysManagerApp.Publish",
+          code: 1,
+          userInfo: [NSLocalizedDescriptionKey: message]
+        )
+      }
       let hasNotificationChanges = preview?.hasNotificationChanges ?? false
       var title = "Saved"
       var message = "The live menu was saved without sending notifications."

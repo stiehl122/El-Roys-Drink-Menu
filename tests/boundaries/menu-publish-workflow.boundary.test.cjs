@@ -200,13 +200,18 @@ test('workflow execute advances queue baseline after successful send', async () 
   assert.ok(result.audit.loggedEvents.includes('send_notification'));
 });
 
-test('workflow advances queue baseline when notification delivery is partial', async () => {
+test('workflow blocks send update when notification delivery is partial', async () => {
+  const saveCalls = [];
   const patchCalls = [];
+  const auditCalls = [];
   const { createMenuPublishWorkflow } = await importWorkflow();
   const workflow = createMenuPublishWorkflow({
     ports: createPorts({
       menus: {
         ...createPorts().menus,
+        async saveLiveMenu(input) {
+          saveCalls.push(input);
+        },
         async patchMeta(input) {
           patchCalls.push(input);
           return { downgradedFields: [] };
@@ -222,6 +227,12 @@ test('workflow advances queue baseline when notification delivery is partial', a
           };
         },
       },
+      audit: {
+        async append(input) {
+          auditCalls.push(input);
+          return { downgradedFields: [] };
+        },
+      },
       format: {
         patchMessage() { return 'PATCH'; },
         warningSummary() { return ['Some notification channels failed: sms.']; },
@@ -231,21 +242,14 @@ test('workflow advances queue baseline when notification delivery is partial', a
 
   const result = await workflow.execute(createExecuteInput());
 
-  assert.equal(result.ok, true);
+  assert.equal(result.ok, false);
   assert.equal(result.notification.partial, true);
-  assert.equal(result.queue.baselineAdvanced, true);
+  assert.equal(result.queue.baselineAdvanced, false);
   assert.ok(result.userOutcome.warnings.some(message => message.includes('failed')));
-  assert.deepEqual(patchCalls[0].patch, {
-    last_updated_ts: 1000,
-    last_sent_ts: 1000,
-    last_sent_state: DEFAULT_LAST_SENT_STATE,
-    last_sent_categories: ['beer'],
-    draft_state: {},
-    draft_saved_ts: null,
-    draft_saved_by_user_id: null,
-    draft_saved_by_name: '',
-    draft_saved_source: '',
-  });
+  assert.equal(result.userOutcome.successMessage, '');
+  assert.equal(saveCalls.length, 0);
+  assert.equal(patchCalls.length, 0);
+  assert.ok(auditCalls.some(call => call.eventType === 'send_failed'));
 });
 
 test('workflow rejects unsupported intent before mutating state', async () => {

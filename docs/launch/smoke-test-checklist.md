@@ -3,6 +3,7 @@
 ## Public Web
 
 - `/api/health` returns HTTP 200 and reports required Supabase config as configured without exposing secret values.
+- Launch TODO: add an external uptime monitor for production `/api/health`; Vercel Monitoring is not currently configured.
 - `/` loads without console errors.
 - `/leroyslounge` loads route-first and shows footer staff sign-in.
 - `/elroyscantina` loads route-first and shows footer staff sign-in.

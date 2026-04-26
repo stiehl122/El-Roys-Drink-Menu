@@ -92,16 +92,6 @@
           ? preview.metadata.lastSentState
           : buildLastSentStateFromSnapshot(command.snapshot || {});
 
-        if (command.intent !== 'send') {
-          await ports.menus.saveLiveMenu({
-            menuId: command.menuId,
-            snapshot: command.snapshot || {},
-            actor: command.actor,
-            expectedLiveRevision: command.request?.expectedLiveRevision ?? null,
-          });
-          livePersisted = true;
-        }
-
         let notification = {
           attempted: false,
           delivered: false,
@@ -136,47 +126,88 @@
             message: 'Notification delivery failed or was partial. Changes were saved live without preserving a send queue.',
           }));
           auditEventTypes.push('send_failed');
-        } else {
-          if (command.intent === 'save') {
-            auditResults.push(await ports.audit.append({
-              menuId: command.menuId,
-              actor: command.actor,
-              source: command.source || '',
-              operationId,
-              eventType: 'quiet_save',
+          return {
+            ok: false,
+            ts,
+            operationId,
+            preview,
+            revisions,
+            livePersistence: {
+              attempted: command.intent !== 'send',
+              persisted: false,
+            },
+            queue: {
+              baselineAdvanced: false,
+              selectedChangeIds: selection.selectedChangeIds,
+              clearedChangeIds: selection.clearedChangeIds,
+              featuredSiblingMenusSynced: [],
+            },
+            audit: {
+              loggedEvents: auditEventTypes,
+              warnings: [],
+            },
+            notification,
+            userOutcome: {
+              successMessage: '',
+              warningMessage: warnings[0] || 'Send Update blocked because notifications failed.',
+              warnings,
+            },
+            compatibility: {
+              contract: 'menu-publish-workflow.v1',
+              downgradedFields: mergeDowngradedFields(...auditResults),
+            },
+          };
+        }
+
+        if (command.intent !== 'send') {
+          await ports.menus.saveLiveMenu({
+            menuId: command.menuId,
+            snapshot: command.snapshot || {},
+            actor: command.actor,
+            expectedLiveRevision: command.request?.expectedLiveRevision ?? null,
+          });
+          livePersisted = true;
+        }
+
+        if (command.intent === 'save') {
+          auditResults.push(await ports.audit.append({
+            menuId: command.menuId,
+            actor: command.actor,
+            source: command.source || '',
+            operationId,
+            eventType: 'quiet_save',
+            sections: selection.selectedSections,
+            message: preview.hasNotificationChanges ? 'Saved live without sending notifications.' : 'Saved live quietly.',
+          }));
+          auditEventTypes.push('quiet_save');
+        }
+        if (selection.selectedSections.length && notification.attempted && notification.delivered) {
+          auditResults.push(await ports.audit.append({
+            menuId: command.menuId,
+            actor: command.actor,
+            source: command.source || '',
+            operationId,
+            eventType: 'send_notification',
+            sections: selection.selectedSections,
+            message: ports.format.patchMessage({
               sections: selection.selectedSections,
-              message: preview.hasNotificationChanges ? 'Saved live without sending notifications.' : 'Saved live quietly.',
-            }));
-            auditEventTypes.push('quiet_save');
-          }
-          if (selection.selectedSections.length && notification.attempted && notification.delivered) {
-            auditResults.push(await ports.audit.append({
-              menuId: command.menuId,
-              actor: command.actor,
-              source: command.source || '',
-              operationId,
-              eventType: 'send_notification',
-              sections: selection.selectedSections,
-              message: ports.format.patchMessage({
-                sections: selection.selectedSections,
-                menuName: context.knownMenu?.name || '',
-                menuLink: String(context.meta?.notifications?.menu_url || '').trim(),
-              }) || 'Sent menu update notification.',
-            }));
-            auditEventTypes.push('send_notification');
-          }
-          if (selection.clearedSections.length) {
-            auditResults.push(await ports.audit.append({
-              menuId: command.menuId,
-              actor: command.actor,
-              source: command.source || '',
-              operationId,
-              eventType: 'clear_without_send',
-              sections: selection.clearedSections,
-              message: `Cleared ${selection.clearedSections.reduce((count, section) => count + ((section.changes || []).length), 0)} queued line(s) without sending.`,
-            }));
-            auditEventTypes.push('clear_without_send');
-          }
+              menuName: context.knownMenu?.name || '',
+              menuLink: String(context.meta?.notifications?.menu_url || '').trim(),
+            }) || 'Sent menu update notification.',
+          }));
+          auditEventTypes.push('send_notification');
+        }
+        if (selection.clearedSections.length) {
+          auditResults.push(await ports.audit.append({
+            menuId: command.menuId,
+            actor: command.actor,
+            source: command.source || '',
+            operationId,
+            eventType: 'clear_without_send',
+            sections: selection.clearedSections,
+            message: `Cleared ${selection.clearedSections.reduce((count, section) => count + ((section.changes || []).length), 0)} queued line(s) without sending.`,
+          }));
+          auditEventTypes.push('clear_without_send');
         }
 
         baselineAdvanced = true;
