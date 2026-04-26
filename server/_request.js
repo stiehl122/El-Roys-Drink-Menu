@@ -19,9 +19,18 @@ export async function readRequestText(req, maxBytes = 1024 * 1024) {
   return '';
 }
 
+function readHeaderValue(headers, name) {
+  if (!headers || typeof headers !== 'object') return '';
+  const target = String(name || '').toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (String(key).toLowerCase() === target) return value;
+  }
+  return '';
+}
+
 export async function parseJsonBody(req, options = {}) {
   const maxBytes = Number(options.maxBytes || 1024 * 1024);
-  const contentType = String(req?.headers?.['content-type'] || req?.headers?.['Content-Type'] || '');
+  const contentType = String(readHeaderValue(req?.headers, 'content-type'));
   const text = await readRequestText(req, maxBytes);
   if (!text.trim()) return {};
   if (!/^application\/json\b/i.test(contentType)) {

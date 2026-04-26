@@ -40,3 +40,11 @@ test('parseJsonBody returns parsed JSON for valid bounded JSON body', async () =
   }));
   assert.deepEqual(parsed, { ok: true });
 });
+
+test('parseJsonBody accepts case-insensitive content-type headers', async () => {
+  const parsed = await parseJsonBody(makeReq({
+    body: '{"ok":true}',
+    headers: { 'CONTENT-TYPE': 'application/json; charset=utf-8' },
+  }));
+  assert.deepEqual(parsed, { ok: true });
+});
