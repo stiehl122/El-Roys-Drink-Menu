@@ -35,3 +35,19 @@ test('vercel config defines launch security headers', () => {
   assert.match(csp, /connect-src 'self' https:\/\/\*\.supabase\.co https:\/\/world\.openfoodfacts\.org https:\/\/api\.untappd\.com https:\/\/api\.groupme\.com https:\/\/api\.twilio\.com https:\/\/discord\.com https:\/\/discordapp\.com/);
   assert.match(csp, /form-action 'self'/);
 });
+
+test('public launch files exist', () => {
+  for (const file of ['robots.txt', 'sitemap.xml', '404.html', '500.html']) {
+    assert.ok(fs.existsSync(file), `${file} must exist before launch`);
+  }
+});
+
+test('public html shells include launch metadata', () => {
+  for (const file of ['index.html', 'leroyslounge/index.html', 'elroyscantina/index.html']) {
+    const html = fs.readFileSync(file, 'utf8');
+    assert.match(html, /<meta name="description"/, `${file} missing meta description`);
+    assert.match(html, /<link rel="canonical"/, `${file} missing canonical link`);
+    assert.match(html, /<meta property="og:title"/, `${file} missing Open Graph title`);
+    assert.match(html, /<meta name="twitter:card"/, `${file} missing Twitter card`);
+  }
+});
