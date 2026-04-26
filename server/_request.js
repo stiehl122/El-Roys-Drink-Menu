@@ -1,3 +1,39 @@
+export async function readRequestText(req, maxBytes = 1024 * 1024) {
+  if (typeof req?.body === 'string') {
+    if (Buffer.byteLength(req.body) > maxBytes) throw new Error('Request body too large');
+    return req.body;
+  }
+
+  if (typeof req?.[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    let total = 0;
+    for await (const chunk of req) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      total += buffer.length;
+      if (total > maxBytes) throw new Error('Request body too large');
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  }
+
+  return '';
+}
+
+export async function parseJsonBody(req, options = {}) {
+  const maxBytes = Number(options.maxBytes || 1024 * 1024);
+  const contentType = String(req?.headers?.['content-type'] || req?.headers?.['Content-Type'] || '');
+  const text = await readRequestText(req, maxBytes);
+  if (!text.trim()) return {};
+  if (!/^application\/json\b/i.test(contentType)) {
+    throw new Error('Content-Type must be application/json');
+  }
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    throw new Error('Invalid JSON body');
+  }
+}
+
 export function parseRequestBody(req) {
   const incoming = req?.body;
   if (!incoming) return {};
@@ -32,3 +68,5 @@ export function readAction(req, body = null) {
   const value = fromBody || readQueryValue(req, 'action') || readQueryValue(req, 'mode') || '';
   return String(value || '').trim().toLowerCase();
 }
+
+export const getRequestUrl = readUrl;
