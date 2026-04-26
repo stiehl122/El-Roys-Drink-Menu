@@ -874,6 +874,25 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
   }
 
+  func testOfflineDraftStoreProtectsCreatedNestedDraftDirectories() throws {
+    let baseURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let rootURL = baseURL
+      .appendingPathComponent("nested", isDirectory: true)
+      .appendingPathComponent("drafts", isDirectory: true)
+    let fileManager = RecordingDirectoryProtectionFileManager(
+      existingPaths: [FileManager.default.temporaryDirectory.path]
+    )
+
+    _ = OfflineDraftStore(rootURL: rootURL, fileManager: fileManager, clientScopeId: "ios-phone")
+
+    let nestedURL = baseURL.appendingPathComponent("nested", isDirectory: true)
+    XCTAssertEqual(fileManager.createdDirectoryPaths, [baseURL.path, nestedURL.path, rootURL.path])
+    XCTAssertTrue(fileManager.protectedPaths.contains(baseURL.path))
+    XCTAssertTrue(fileManager.protectedPaths.contains(nestedURL.path))
+    XCTAssertTrue(fileManager.protectedPaths.contains(rootURL.path))
+  }
+
   func testCompactFeaturedItemProjectionDecodesWithDefaults() throws {
     let data = Data("""
     {
@@ -3333,6 +3352,43 @@ private enum TestError: LocalizedError {
     case .message(let value):
       return value
     }
+  }
+}
+
+private final class RecordingDirectoryProtectionFileManager: FileManager {
+  private var existingPaths: Set<String>
+  private(set) var createdDirectoryPaths: [String] = []
+  private(set) var protectedPaths: [String] = []
+
+  init(existingPaths: Set<String>) {
+    self.existingPaths = existingPaths
+    super.init()
+  }
+
+  override func fileExists(atPath path: String) -> Bool {
+    existingPaths.contains(path)
+  }
+
+  override func createDirectory(
+    at url: URL,
+    withIntermediateDirectories createIntermediates: Bool,
+    attributes: [FileAttributeKey: Any]? = nil
+  ) throws {
+    XCTAssertFalse(createIntermediates)
+    XCTAssertEqual(
+      attributes?[.protectionKey] as? FileProtectionType,
+      .completeUntilFirstUserAuthentication
+    )
+    existingPaths.insert(url.path)
+    createdDirectoryPaths.append(url.path)
+  }
+
+  override func setAttributes(_ attributes: [FileAttributeKey: Any], ofItemAtPath path: String) throws {
+    XCTAssertEqual(
+      attributes[.protectionKey] as? FileProtectionType,
+      .completeUntilFirstUserAuthentication
+    )
+    protectedPaths.append(path)
   }
 }
 
