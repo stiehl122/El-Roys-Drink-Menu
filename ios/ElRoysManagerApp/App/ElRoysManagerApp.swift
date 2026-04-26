@@ -139,15 +139,7 @@ private struct LaunchDeck: View {
       }
 
       Group {
-        if #available(iOS 26.0, *) {
-          GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-              capsule(title: "Staff sign-in", tint: AppPalette.sage)
-              capsule(title: "Live menu tools", tint: AppPalette.cobalt)
-              capsule(title: "Preview routes", tint: AppPalette.brand)
-            }
-          }
-        } else {
+        AppGlassEffectContainer(spacing: 10) {
           HStack(spacing: 10) {
             capsule(title: "Staff sign-in", tint: AppPalette.sage)
             capsule(title: "Live menu tools", tint: AppPalette.cobalt)

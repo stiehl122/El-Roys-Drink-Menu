@@ -63,15 +63,7 @@ struct AuthGateView: View {
       )
 
       Group {
-        if #available(iOS 26.0, *) {
-          GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-              detailPill(title: "Keychain session", tint: AppPalette.cobalt)
-              detailPill(title: "Native editor", tint: AppPalette.brass)
-              detailPill(title: "Live preview", tint: AppPalette.brand)
-            }
-          }
-        } else {
+        AppGlassEffectContainer(spacing: 10) {
           HStack(spacing: 10) {
             detailPill(title: "Keychain session", tint: AppPalette.cobalt)
             detailPill(title: "Native editor", tint: AppPalette.brass)

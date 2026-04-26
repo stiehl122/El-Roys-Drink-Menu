@@ -991,14 +991,7 @@ private struct HomeBottomNav: View {
 
   @ViewBuilder
   private var bottomBarLayout: some View {
-    if #available(iOS 26.0, *) {
-      GlassEffectContainer(spacing: 14) {
-        HStack(spacing: 14) {
-          bottomTabCluster
-          qrButton
-        }
-      }
-    } else {
+    AppGlassEffectContainer(spacing: 14) {
       HStack(spacing: 14) {
         bottomTabCluster
         qrButton
