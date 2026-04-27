@@ -191,6 +191,41 @@ test('confirm and add more keeps the modal open, resets the draft, and remembers
   assert.match(modalHost.innerHTML, /Confirm &amp; Add More/);
 });
 
+test('add item modal shows a clear done action after Confirm & Add More', () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('name', 'Audit Margarita');
+  sandbox.updateAddItemModalField('categoryId', 'cocktails');
+  sandbox.updateAddItemModalField('price', '9');
+  sandbox.confirmAddItemModal({ addMore: true });
+
+  assert.match(modalHost.textContent || modalHost.innerHTML, /Item added/i);
+  assert.match(
+    modalHost.innerHTML,
+    /data-add-item-action="done-review"/,
+    'Expected a Done action so users can return to the save dock.'
+  );
+});
+
+test('closing add item modal clears the add-more success state', () => {
+  const sandbox = loadAppSandbox();
+  const { modalHost } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+
+  sandbox.openAddItemModal();
+  sandbox.updateAddItemModalField('name', 'Audit Margarita');
+  sandbox.updateAddItemModalField('categoryId', 'cocktails');
+  sandbox.confirmAddItemModal({ addMore: true });
+  sandbox.closeAddItemModal();
+  sandbox.openAddItemModal();
+
+  assert.doesNotMatch(modalHost.innerHTML, /Item added/i);
+  assert.doesNotMatch(modalHost.innerHTML, /data-add-item-action="done-review"/);
+});
+
 test('add item modal includes Featured Specials as a standard category option', () => {
   const sandbox = loadAppSandbox();
   setState(sandbox, {

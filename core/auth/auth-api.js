@@ -110,6 +110,10 @@
     },
 
     async getProfile({ accessToken = '' } = {}) {
+      if (!accessToken) {
+        return { ok: false, profile: null, reason: 'missing-token' };
+      }
+
       const response = await fetch('/api/auth?mode=profile', {
         headers: { Authorization: `Bearer ${accessToken}` },
       });

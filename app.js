@@ -626,6 +626,7 @@ function createAddItemModalState(overrides = {}) {
     manualBarcode: '',
     scanState: 'idle',
     scannerService: null,
+    lastAddedName: '',
     untappd: createAddItemModalUntappdState(),
     ...overrides,
   };
@@ -1244,6 +1245,7 @@ function getAddItemModalViewState() {
     manualBarcode: _addItemModalState.manualBarcode || '',
     scanState: _addItemModalState.scanState || 'idle',
     scanUnsupported: _addItemModalState.scanState === 'unsupported',
+    lastAddedName: _addItemModalState.lastAddedName || '',
     untappd: {
       pending: !!untappd.pending,
       query: untappd.query || '',
@@ -1669,6 +1671,12 @@ function renderAddItemModal(options = {}) {
     untappd.includeBrewery
   );
   const canConfirm = !!fields.name.trim() && !!fields.categoryId && !view.duplicateWarning;
+  const successHtml = view.lastAddedName
+    ? `
+      <div class="manager-inline-status" role="status">
+        Item added: ${escHtml(view.lastAddedName)}
+      </div>`
+    : '';
   const modalSubtitle = isScanMode
     ? 'Scan a barcode to prefill item details, or use manual UPC lookup when camera scanning is unavailable.'
     : (MENU_TYPE === 'food'
@@ -1843,13 +1851,14 @@ function renderAddItemModal(options = {}) {
   const modalActionsHtml = isScanMode
     ? `
       <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
+        <button type="button" class="btn-cancel" data-add-item-action="cancel" onclick="closeAddItemModal()">Cancel</button>
       </div>`
     : `
       <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
-        <button type="button" class="btn-secondary" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal({ addMore: true })">Confirm &amp; Add More</button>
-        <button type="button" class="btn-confirm" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal()">Confirm</button>
+        <button type="button" class="btn-cancel" data-add-item-action="cancel" onclick="closeAddItemModal()">Cancel</button>
+        ${view.lastAddedName ? '<button type="button" class="manager-secondary-action" data-add-item-action="done-review" onclick="closeAddItemModal()">Done</button>' : ''}
+        <button type="button" class="btn-secondary" data-add-item-action="add-more" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal({ addMore: true })">Confirm &amp; Add More</button>
+        <button type="button" class="btn-confirm" data-add-item-action="confirm" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal()">Confirm</button>
       </div>`;
 
   host.innerHTML = `
@@ -1858,6 +1867,7 @@ function renderAddItemModal(options = {}) {
         <h2 id="add-item-modal-title">Add Item(s)</h2>
         <div class="modal-sub">${escHtml(modalSubtitle)}</div>
         ${modeToggleHtml}
+        ${successHtml}
         ${view.duplicateWarning ? `<div class="add-item-modal-warning" role="alert">${escHtml(view.duplicateWarning)}</div>` : ''}
         ${isScanMode ? scanBodyHtml : manualBodyHtml}
         ${modalActionsHtml}
@@ -2009,6 +2019,7 @@ function confirmAddItemModal(options = {}) {
       entryMode: reopenMode,
       fields: createAddItemModalFields({ categoryId: _lastAddItemCategoryId }),
       scanState: reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? 'starting' : 'idle',
+      lastAddedName: item.name,
     });
     renderAddItemModal(reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? {} : { focusFieldId: 'add-item-name-input' });
     if (reopenMode === ADD_ITEM_MODAL_SCAN_MODE) {
@@ -2205,6 +2216,14 @@ function isSettingsPage() {
   return _appPageMode === 'manager' || _appPageMode === 'admin';
 }
 
+function isManagerRoute() {
+  return _appPageMode === 'manager';
+}
+
+function isAdminRoute() {
+  return _appPageMode === 'admin';
+}
+
 function getDefaultPublicPath() {
   if (RESTAURANT_ID && SITE_PATHS[RESTAURANT_ID]) return SITE_PATHS[RESTAURANT_ID];
   if (_siteRestaurant?.id && SITE_PATHS[_siteRestaurant.id]) return SITE_PATHS[_siteRestaurant.id];
@@ -2291,6 +2310,33 @@ function getAdminHrefForMenuId(menuId) {
   const url = new URL(SHARED_PAGE_PATHS.admin, window.location.origin);
   url.searchParams.set('menu', menu.slug);
   return `${url.pathname}${url.search}`;
+}
+
+function syncResolvedMenuAddressBar(resolvedMenu) {
+  if (!resolvedMenu || typeof window === 'undefined' || !window.history) {
+    return;
+  }
+
+  const currentSearch = window.location?.search || '';
+  const managerPath = getManagerHrefForMenuId(resolvedMenu.id);
+  const adminPath = getAdminHrefForMenuId(resolvedMenu.id);
+  const publicHref = getPublicHrefForMenuId(resolvedMenu.id);
+
+  let targetHref = publicHref;
+  if (isManagerRoute()) {
+    targetHref = managerPath;
+  } else if (isAdminRoute()) {
+    targetHref = adminPath;
+  }
+
+  if (currentSearch.includes('audit=')) {
+    targetHref += targetHref.includes('?') ? '&audit=1' : '?audit=1';
+  }
+
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (targetHref && targetHref !== currentHref) {
+    window.history.replaceState({}, '', new URL(targetHref, window.location.origin).toString());
+  }
 }
 
 function navigateToPage(path) {
@@ -4386,11 +4432,7 @@ async function sbResolveMenu() {
       MENU_ID = menu.id;
       if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
       lsSet(LS_KEYS.menuId, MENU_ID);
-      const publicHref = getPublicHrefForMenuId(menu.id);
-      const currentHref = `${window.location.pathname}${window.location.search}`;
-      if (publicHref && publicHref !== currentHref) {
-        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-      }
+      syncResolvedMenuAddressBar(menu);
       return;
     }
     const invalidSlug = rawSlug || slug;
@@ -4417,11 +4459,7 @@ async function sbResolveMenu() {
         return;
       }
       if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
-      const publicHref = getPublicHrefForMenuId(MENU_ID);
-      const currentHref = `${window.location.pathname}${window.location.search}`;
-      if (publicHref && publicHref !== currentHref) {
-        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-      }
+      syncResolvedMenuAddressBar(menu);
     } else {
       _clearActiveMenuContext({ clearCache: true });
     }
@@ -7973,10 +8011,16 @@ function getAuthApiBoundary() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'web_sign_out' }),
     }).then(response => readAuthApiPayload(response, 'Sign-out failed.')),
-    getProfile: ({ accessToken = '' } = {}) => fetch('/api/auth?mode=profile', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
-      .then(payload => extractProfileFromBootstrap(payload || {})),
+    getProfile: ({ accessToken = '' } = {}) => {
+      if (!accessToken) {
+        return Promise.resolve({ ok: false, profile: null, reason: 'missing-token' });
+      }
+
+      return fetch('/api/auth?mode=profile', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
+        .then(payload => extractProfileFromBootstrap(payload || {}));
+    },
     resetPasswordForEmail: ({ email = '', redirectTo = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

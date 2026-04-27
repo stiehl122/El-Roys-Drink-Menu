@@ -1498,6 +1498,19 @@ test('sbResolveMenu treats ?menu=drinks as restaurant-relative public state', as
   assert.deepEqual(replaceCalls, []);
 });
 
+test('manager route resolution preserves manager URL instead of public route', () => {
+  const source = read('app.js');
+  assert.match(source, /function syncResolvedMenuAddressBar/);
+  assert.match(source, /managerPath = getManagerHrefForMenuId\(resolvedMenu\.id\)/);
+  assert.doesNotMatch(source, /history\.replaceState\(\{\}, '', publicHref\)/);
+});
+
+test('admin route resolution preserves admin URL instead of public route', () => {
+  const source = read('app.js');
+  assert.match(source, /adminPath = getAdminHrefForMenuId\(resolvedMenu\.id\)/);
+  assert.match(source, /isAdminRoute\(\)/);
+});
+
 test('selectMenu uses replaceState with the canonical public menu url', () => {
   const sandbox = loadAppSandbox();
   const menus = getState(sandbox, 'MENUS');

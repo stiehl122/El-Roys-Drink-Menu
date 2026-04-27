@@ -88,7 +88,7 @@ struct AuthGateView: View {
       AppEyebrow(title: "Credentials", tint: AppPalette.cobalt)
 
       fieldGroup(title: "Staff email", systemImage: "envelope.open") {
-        TextField("manager@elroys.example", text: $model.email)
+        TextField("Email", text: $model.email)
           .keyboardType(.emailAddress)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
@@ -101,7 +101,7 @@ struct AuthGateView: View {
 
       if model.authMode != .reset {
         fieldGroup(title: "Password", systemImage: "lock") {
-          SecureField("••••••••", text: $model.password)
+          SecureField("Password", text: $model.password)
             .font(AppTypography.body(16, weight: .medium))
             .foregroundStyle(AppPalette.ink)
             .padding(.horizontal, 16)

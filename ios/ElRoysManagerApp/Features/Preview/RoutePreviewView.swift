@@ -1,9 +1,16 @@
 import SwiftUI
 import WebKit
 
+private enum WebPreviewLoadState: Equatable {
+  case loading
+  case loaded
+  case failed(String)
+}
+
 struct RoutePreviewScreen: View {
   let menu: MenuRecord
   let url: URL
+  @State private var loadState: WebPreviewLoadState = .loading
 
   var body: some View {
     VStack(spacing: 18) {
@@ -20,9 +27,10 @@ struct RoutePreviewScreen: View {
         RoundedRectangle(cornerRadius: 28, style: .continuous)
           .fill(.white.opacity(0.55))
           .padding(6)
-        WebPreview(url: url)
+        WebPreview(url: url, loadState: $loadState)
           .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
           .padding(6)
+        previewLoadStateOverlay
       }
       .padding(.horizontal, 20)
       .padding(.bottom, 18)
@@ -60,15 +68,41 @@ struct RoutePreviewScreen: View {
     }
     .appGlassCard(tint: AppPalette.cobalt, cornerRadius: 34)
   }
+
+  @ViewBuilder
+  private var previewLoadStateOverlay: some View {
+    switch loadState {
+    case .loading:
+      ProgressView("Loading preview")
+        .padding()
+    case .loaded:
+      EmptyView()
+    case .failed:
+      VStack(spacing: 8) {
+        Text("Preview unavailable")
+          .font(.headline)
+        Text("Check the network connection and try again.")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+      }
+      .padding()
+    }
+  }
 }
 
 private struct WebPreview: UIViewRepresentable {
   let url: URL
+  @Binding var loadState: WebPreviewLoadState
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(loadState: $loadState)
+  }
 
   func makeUIView(context: Context) -> WKWebView {
     let configuration = WKWebViewConfiguration()
     configuration.defaultWebpagePreferences.allowsContentJavaScript = true
     let webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.navigationDelegate = context.coordinator
     webView.scrollView.contentInsetAdjustmentBehavior = .never
     webView.isOpaque = false
     webView.backgroundColor = .clear
@@ -79,7 +113,28 @@ private struct WebPreview: UIViewRepresentable {
 
   func updateUIView(_ webView: WKWebView, context: Context) {
     if webView.url != url {
+      loadState = .loading
       webView.load(URLRequest(url: url))
+    }
+  }
+
+  final class Coordinator: NSObject, WKNavigationDelegate {
+    @Binding private var loadState: WebPreviewLoadState
+
+    init(loadState: Binding<WebPreviewLoadState>) {
+      _loadState = loadState
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+      loadState = .loaded
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+      loadState = .failed(error.localizedDescription)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+      loadState = .failed(error.localizedDescription)
     }
   }
 }
