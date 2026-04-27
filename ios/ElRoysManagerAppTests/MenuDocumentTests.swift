@@ -3000,11 +3000,22 @@ final class MenuDocumentTests: XCTestCase {
       ),
       hasUnsentChanges: false
     )
-    let savedDocument = EditableMenuDocument(workspace: cleanWorkspace)
+    let preSaveWorkspace = makeWorkspace(
+      categories: savedCategories,
+      meta: MenuMetaPayload(lastUpdatedTs: 22, lastSentTs: 10),
+      revisions: WorkspaceRevisions(
+        liveRevision: 22,
+        draftRevision: 22,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      hasUnsentChanges: false
+    )
+    let preSaveDocument = EditableMenuDocument(workspace: preSaveWorkspace)
     let staleDraftMeta = MenuMetaPayload(
       lastUpdatedTs: 44,
       lastSentTs: 10,
-      draftState: makeJSONValue(from: savedDocument),
+      draftState: makeJSONValue(from: preSaveDocument),
       draftSavedTs: 55,
       draftSavedByUserId: "staff-1",
       draftSavedByName: "Alex",

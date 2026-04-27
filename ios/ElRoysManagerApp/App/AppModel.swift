@@ -1284,14 +1284,19 @@ final class AppModel {
     let liveDocument = EditableMenuDocument(workspace: echoWorkspace)
     guard let liveData = try? documentData(for: liveDocument),
           liveData == currentData else { return nil }
-    if sharedDraftDocumentDiffersFromCurrent(workspace, currentData: currentData) {
+    if sharedDraftContentDiffersFromCurrent(
+      workspace,
+      currentDocument: currentEditorDocument,
+      currentData: currentData
+    ) {
       return nil
     }
     return (echoWorkspace, liveDocument)
   }
 
-  private func sharedDraftDocumentDiffersFromCurrent(
+  private func sharedDraftContentDiffersFromCurrent(
     _ workspace: MenuWorkspacePayload,
+    currentDocument: EditableMenuDocument,
     currentData: Data
   ) -> Bool {
     let hasDraftMarkers = workspace.workspace.hasSharedDraft
@@ -1301,11 +1306,18 @@ final class AppModel {
       || workspace.meta.draftSavedTs != nil
     guard hasDraftMarkers,
           let draftState = workspace.meta.draftState,
-          let draftDocument = decodeEditorDocument(from: draftState),
+          var draftDocument = decodeEditorDocument(from: draftState),
           let draftData = try? documentData(for: draftDocument) else {
       return false
     }
-    return draftData != currentData
+    if draftData == currentData {
+      return false
+    }
+    draftDocument.meta = currentDocument.meta
+    guard let normalizedDraftData = try? documentData(for: draftDocument) else {
+      return true
+    }
+    return normalizedDraftData != currentData
   }
 
   private func clearSharedDraftMarkers(in workspace: inout MenuWorkspacePayload) {
