@@ -44,3 +44,22 @@ test('launch gates workflow leaves iOS CI to Xcode Cloud', () => {
   assert.match(xcodeCloudDocs, /TestFlight/);
   assert.match(releaseRunbook, /Xcode Cloud/);
 });
+
+test('iOS launch gate only waits for Xcode Cloud when ios files change', () => {
+  const workflow = read('.github/workflows/ios-launch-gate.yml');
+
+  assert.match(workflow, /^name:\s*iOS Launch Gate$/m);
+  assert.match(workflow, /^\s*pull_request:/m);
+  assert.match(workflow, /^\s*push:/m);
+  assert.match(workflow, /name:\s*Xcode Cloud Gate/);
+  assert.match(workflow, /pulls\/\$\{\{ github\.event\.pull_request\.number \}\}\/files/);
+  assert.match(workflow, /grep -q '\^ios\/'/);
+  assert.match(workflow, /if:\s*steps\.changes\.outputs\.ios_changed == 'false'/);
+  assert.match(workflow, /No ios\/ changes; Xcode Cloud is not required\./);
+  assert.match(workflow, /if:\s*steps\.changes\.outputs\.ios_changed == 'true'/);
+  assert.match(workflow, /XCODE_CONTEXT:\s*ElRoysManagerApp \| Branch Protection/);
+  assert.match(workflow, /commits\/\$SHA\/status/);
+  assert.match(workflow, /case "\$state" in/);
+  assert.match(workflow, /success\)/);
+  assert.match(workflow, /failure\|error\)/);
+});
