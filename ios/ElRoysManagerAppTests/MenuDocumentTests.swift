@@ -1684,7 +1684,7 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
-  func testLiveSaveRebaselinesAndAdvancesQueueState() async throws {
+  func testLiveSaveRebaselinesAndClearsDraftAndQueueState() async throws {
     let offlineStore = TestOfflineDraftStore()
     let sessionStore = TestSessionStore()
     let baseWorkspace = makeWorkspace(categories: [
@@ -1764,12 +1764,19 @@ final class MenuDocumentTests: XCTestCase {
 
     XCTAssertFalse(model.editorDirty)
     XCTAssertFalse(model.editorHasLiveChanges)
-    XCTAssertTrue(model.hasServerUnsentChanges)
+    XCTAssertFalse(model.hasServerUnsentChanges)
     XCTAssertFalse(model.canSaveLiveRemotely)
+    XCTAssertFalse(model.canLoadPublishPreview)
     XCTAssertEqual(liveSaveClient.saveCallCount, 1)
     XCTAssertEqual(liveSaveClient.lastExpectedLiveRevision, 10)
     XCTAssertEqual(liveSaveClient.lastExpectedDraftRevision, 22)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
+    XCTAssertNil(model.currentEditorWorkspace?.workspace.revisions.draftRevision)
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasSharedDraft ?? true)
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.sharedDraft.exists ?? true)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.hasUnsentChanges, false)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftState)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftSavedTs)
     XCTAssertNil(offlineStore.draft)
     XCTAssertEqual(model.notice?.title, "Saved")
   }
@@ -2847,6 +2854,74 @@ final class MenuDocumentTests: XCTestCase {
     await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
 
     XCTAssertNil(model.editorRefreshRequirement)
+  }
+
+  @MainActor
+  func testRemoteCheckAdoptsMatchingCleanOwnSaveEcho() async throws {
+    let meta = MenuMetaPayload(lastUpdatedTs: 44, lastSentTs: 10)
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "House Pilsner")]
+        )
+      ],
+      meta: meta,
+      revisions: WorkspaceRevisions(
+        liveRevision: 10,
+        draftRevision: nil,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      hasUnsentChanges: false
+    )
+    let echoedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: meta,
+      revisions: WorkspaceRevisions(
+        liveRevision: 44,
+        draftRevision: nil,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      hasUnsentChanges: false
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [initialWorkspace, echoedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 10)
+
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertNil(model.editorRefreshRequirement)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
+    XCTAssertNil(model.currentEditorWorkspace?.workspace.revisions.draftRevision)
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasSharedDraft ?? true)
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertFalse(model.editorHasLiveChanges)
   }
 
   @MainActor
