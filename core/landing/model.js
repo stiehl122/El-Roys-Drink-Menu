@@ -31,7 +31,7 @@
     const restaurantTimeZone = domainConstants.RESTAURANT_TIME_ZONE || fallbackConstants.RESTAURANT_TIME_ZONE;
     const appVersion = domainConstants.APP_VERSION || fallbackConstants.APP_VERSION || '';
     const landingPageStateId = 'root';
-    const landingSectionOrder = ['overview', 'hours', 'events', 'news', 'reviews'];
+    const landingSectionOrder = ['overview', 'hours'];
     const landingDayOrder = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
     const landingDayLabels = {
       mon: 'Monday',
@@ -169,11 +169,7 @@
     }
 
     function getDefaultFilters() {
-      return {
-        events: { showArchived: false },
-        news: { showArchived: false },
-        reviews: { showArchived: false },
-      };
+      return {};
     }
 
     function createDefaultRecord() {
@@ -268,11 +264,7 @@
     function normalizeFilters(rawFilters) {
       const filters = rawFilters && typeof rawFilters === 'object' ? rawFilters : {};
       const defaults = getDefaultFilters();
-      return {
-        events: { ...defaults.events, showArchived: !!(filters.events && filters.events.showArchived) },
-        news: { ...defaults.news, showArchived: !!(filters.news && filters.news.showArchived) },
-        reviews: { ...defaults.reviews, showArchived: !!(filters.reviews && filters.reviews.showArchived) },
-      };
+      return {};
     }
 
     function normalizeEventItem(rawItem) {
@@ -953,9 +945,6 @@
         LANDING_PAGE_SECTION_LABELS: {
           overview: 'Overview',
           hours: 'Hours',
-          events: 'Events',
-          news: 'News',
-          reviews: 'Reviews',
         },
         LANDING_DAY_ORDER: landingDayOrder.slice(),
         LANDING_DAY_LABELS: cloneJsonCompatible(landingDayLabels, landingDayLabels),

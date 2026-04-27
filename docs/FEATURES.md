@@ -72,9 +72,8 @@ Use it to answer three questions:
 
 | Capability | Web | iOS | Future-Client Target | Notes |
 | --- | --- | --- | --- | --- |
-| Shared dual-restaurant landing page | Full | None | Public clients | `/` includes the restaurant chooser plus live content sections. |
+| Shared dual-restaurant landing page | Full | None | Public clients | `/` includes the restaurant chooser, live status, weekly hours, and restaurant comparison. |
 | Landing live hours | Full | None | Public clients | Web landing shows live hero status plus weekly hours for both restaurants. |
-| Landing events, news, and reviews | Full | None | Public clients | Web-only today; managed through the admin landing CMS. |
 | Public menu content rendering | Full | Full | Public clients | Both clients can render categories, descriptions, prices, featured items, and visible 86'd state. |
 | In-restaurant Food/Drinks switching | Full | Full | Public clients | Web does it in route-owned pages; iOS does it in the native public-menu screen. |
 | Cross-restaurant navigation | Full | Partial | Public clients | Web supports route-to-route switching in public chrome; iOS switches restaurants from the authenticated home hub, not a public landing page. |
@@ -130,7 +129,6 @@ Use it to answer three questions:
 | Admin console shell | Full | None | Admin clients | iOS explicitly remains web-only for admin work today. |
 | Fixed restaurant/menu overview | Full | None | Admin clients | Web admin reflects the fixed two-restaurant/four-menu model. |
 | Landing page CMS | Full | None | Admin clients | Web admin can save drafts and publish selected landing sections live. |
-| Landing news/events/reviews editorial workflows | Full | None | Admin clients | Includes imports, manual event authoring, repair flows, and archive handling. |
 | Notification channel toggles | Full | None | Admin clients | Web admin configures GroupMe, Twilio SMS, Discord, and generic webhook delivery. |
 | Notification credential-key mapping | Full | None | Admin clients | Web admin maps per-restaurant env-key names without storing raw secrets in the client. |
 | Browser-side menu URL override | Full | None | Admin clients | Explicitly web-only today. |

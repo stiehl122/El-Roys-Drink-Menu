@@ -2,7 +2,6 @@ import {
   authorizeAdminSettingsRequest,
   executeAdminSettingsAction,
 } from '../server/_admin-settings.js';
-import { importNewsFromUrl, importReviewFromUrl } from '../server/_landing-import.js';
 import { readLandingPageState, saveLandingPageDraft } from '../server/_landing-page-state.js';
 import {
   completeAccountDeletionRequest,
@@ -74,10 +73,6 @@ export default async function handler(req, res) {
         });
         return res.json({ ok: true, action, record: result });
       }
-      case 'import_news':
-        return res.json(await importNewsFromUrl(body?.url || ''));
-      case 'import_review':
-        return res.json(await importReviewFromUrl(body?.url || ''));
       case 'update_user':
         await updateAdminUser(req, body);
         return res.status(204).end();
