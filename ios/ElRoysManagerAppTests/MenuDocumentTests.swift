@@ -2859,23 +2859,25 @@ final class MenuDocumentTests: XCTestCase {
   @MainActor
   func testRemoteCheckAdoptsMatchingCleanOwnSaveEcho() async throws {
     let notificationChangeIDs = ["beer::changed::item-1"]
-    let meta = MenuMetaPayload(lastUpdatedTs: 44, lastSentTs: 10)
-    let initialWorkspace = makeWorkspace(
-      categories: [
-        MenuCategoryPayload(
-          id: "beer",
-          menuId: "menu",
-          key: "beer",
-          label: "Beer",
-          icon: "",
-          color: "",
-          sub: "",
-          placeholder: "",
-          displayOrder: 0,
-          items: [makeItem(id: "item-1", name: "House Pilsner")]
-        )
-      ],
-      meta: meta,
+    let liveMeta = MenuMetaPayload(lastUpdatedTs: 10, lastSentTs: 10)
+    let savedMeta = MenuMetaPayload(lastUpdatedTs: 44, lastSentTs: 10)
+    let liveCategories = [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "Pilsner")]
+      )
+    ]
+    let baseWorkspace = makeWorkspace(
+      categories: liveCategories,
+      meta: liveMeta,
       revisions: WorkspaceRevisions(
         liveRevision: 10,
         draftRevision: nil,
@@ -2884,9 +2886,41 @@ final class MenuDocumentTests: XCTestCase {
       ),
       hasUnsentChanges: false
     )
+    var savedDocument = EditableMenuDocument(workspace: baseWorkspace)
+    guard var savedBeer = savedDocument.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded item")
+      return
+    }
+    savedBeer.name = "House Pilsner"
+    savedDocument.upsertItem(savedBeer, categoryKey: "beer", originalCategoryKey: "beer")
+    savedDocument.meta = savedMeta
+
+    let initialWorkspace = makeWorkspace(
+      categories: liveCategories,
+      meta: MenuMetaPayload(
+        lastUpdatedTs: 10,
+        lastSentTs: 10,
+        draftState: makeJSONValue(from: savedDocument),
+        draftSavedTs: 22
+      ),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 22,
+        savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
+        source: "ios_app"
+      ),
+      revisions: WorkspaceRevisions(
+        liveRevision: 10,
+        draftRevision: 22,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      hasUnsentChanges: false
+    )
     let echoedWorkspace = makeWorkspace(
-      categories: initialWorkspace.cats,
-      meta: meta,
+      categories: savedDocument.cats,
+      meta: savedMeta,
       revisions: WorkspaceRevisions(
         liveRevision: 44,
         draftRevision: nil,
@@ -2922,6 +2956,7 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertNotNil(model.currentEditorPreview)
     XCTAssertEqual(model.selectedPreviewChangeIDs, Set(notificationChangeIDs))
     XCTAssertFalse(model.editorDirty)
+    XCTAssertTrue(model.editorHasLiveChanges)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 10)
 
     await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)

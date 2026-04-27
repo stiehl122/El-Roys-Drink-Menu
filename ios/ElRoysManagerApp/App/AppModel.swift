@@ -465,12 +465,14 @@ final class AppModel {
       if !editorDirty,
          workspace.workspace.revisions.draftRevision == nil,
          workspace.workspace.hasSharedDraft == false,
-         fetchedServerDocumentMatchesCurrentEditor(workspace) {
+         let fetchedServerDocument = matchingFetchedServerDocument(workspace) {
         currentEditorWorkspace = workspace
-        editorHasServerUnsentChanges = serverHasUnsentChanges(in: workspace)
-        editorRefreshRequirement = nil
-        currentEditorPreview = nil
-        selectedPreviewChangeIDs = []
+        currentEditorDocument = fetchedServerDocument
+        rebaselineCurrentEditorToServer(
+          liveDocument: fetchedServerDocument,
+          serverDocument: fetchedServerDocument,
+          revisions: workspace.workspace.revisions
+        )
         return
       }
       let history: HistoryPayload?
@@ -1274,13 +1276,14 @@ final class AppModel {
     return try JSONDecoder().decode(EditableMenuDocument.self, from: liveBaselineDocumentData)
   }
 
-  private func fetchedServerDocumentMatchesCurrentEditor(_ workspace: MenuWorkspacePayload) -> Bool {
+  private func matchingFetchedServerDocument(_ workspace: MenuWorkspacePayload) -> EditableMenuDocument? {
     guard let currentEditorDocument,
-          let currentData = try? documentData(for: currentEditorDocument) else { return false }
+          let currentData = try? documentData(for: currentEditorDocument) else { return nil }
     let liveDocument = EditableMenuDocument(workspace: workspace)
     let serverDocument = serverWorkspaceDocument(from: workspace, liveDocument: liveDocument)
-    guard let serverData = try? documentData(for: serverDocument) else { return false }
-    return serverData == currentData
+    guard let serverData = try? documentData(for: serverDocument),
+          serverData == currentData else { return nil }
+    return serverDocument
   }
 
   private func isDocumentDirty(_ document: EditableMenuDocument) -> Bool {
