@@ -469,6 +469,8 @@ final class AppModel {
         currentEditorWorkspace = workspace
         editorHasServerUnsentChanges = serverHasUnsentChanges(in: workspace)
         editorRefreshRequirement = nil
+        currentEditorPreview = nil
+        selectedPreviewChangeIDs = []
         return
       }
       let history: HistoryPayload?

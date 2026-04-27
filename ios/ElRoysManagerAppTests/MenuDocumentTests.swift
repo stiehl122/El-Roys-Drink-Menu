@@ -2858,6 +2858,7 @@ final class MenuDocumentTests: XCTestCase {
 
   @MainActor
   func testRemoteCheckAdoptsMatchingCleanOwnSaveEcho() async throws {
+    let notificationChangeIDs = ["beer::changed::item-1"]
     let meta = MenuMetaPayload(lastUpdatedTs: 44, lastSentTs: 10)
     let initialWorkspace = makeWorkspace(
       categories: [
@@ -2911,6 +2912,15 @@ final class MenuDocumentTests: XCTestCase {
     model.authSession = makeAuthSession()
 
     await model.loadEditor(menuId: "menu")
+    model.currentEditorPreview = try makePreviewPayload(
+      mode: "save-and-send",
+      selectionDefaults: notificationChangeIDs,
+      notificationChangeIDs: notificationChangeIDs
+    )
+    model.selectedPreviewChangeIDs = Set(notificationChangeIDs)
+
+    XCTAssertNotNil(model.currentEditorPreview)
+    XCTAssertEqual(model.selectedPreviewChangeIDs, Set(notificationChangeIDs))
     XCTAssertFalse(model.editorDirty)
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 10)
 
@@ -2920,6 +2930,8 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
     XCTAssertNil(model.currentEditorWorkspace?.workspace.revisions.draftRevision)
     XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasSharedDraft ?? true)
+    XCTAssertNil(model.currentEditorPreview)
+    XCTAssertTrue(model.selectedPreviewChangeIDs.isEmpty)
     XCTAssertFalse(model.editorDirty)
     XCTAssertFalse(model.editorHasLiveChanges)
   }
