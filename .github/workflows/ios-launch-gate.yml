@@ -29,22 +29,29 @@ jobs:
           set -euo pipefail
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            files="$(gh api --paginate \
-              repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files \
-              --jq '.[].filename')"
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            files="$(git diff --name-only "$base...$head")"
+            ios_sha="$(git log -n 1 --format=%H "$base..$head" -- ios/ || true)"
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
 
             if [ "$before" = "0000000000000000000000000000000000000000" ]; then
               files="$(git diff-tree --no-commit-id --name-only -r "$after")"
+              ios_sha="$(git log -n 1 --format=%H "$after" -- ios/ || true)"
             else
               files="$(git diff --name-only "$before" "$after")"
+              ios_sha="$(git log -n 1 --format=%H "$before..$after" -- ios/ || true)"
             fi
           fi
 
           if printf '%s\n' "$files" | grep -q '^ios/'; then
+            if [ -z "$ios_sha" ]; then
+              ios_sha="${head:-${after:-}}"
+            fi
             echo "ios_changed=true" >> "$GITHUB_OUTPUT"
+            echo "ios_sha=$ios_sha" >> "$GITHUB_OUTPUT"
           else
             echo "ios_changed=false" >> "$GITHUB_OUTPUT"
           fi
@@ -58,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           XCODE_CONTEXT: ElRoysManagerApp | Branch Protection
-          SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          SHA: ${{ steps.changes.outputs.ios_sha }}
         run: |
           set -euo pipefail
 
@@ -68,10 +75,10 @@ jobs:
           deadline=$((SECONDS + 3600))
 
           while [ "$SECONDS" -lt "$deadline" ]; do
-            state="$(gh api repos/${{ github.repository }}/commits/$SHA/status \
-              --jq --arg context "$XCODE_CONTEXT" '
+            state="$(XCODE_CONTEXT="$XCODE_CONTEXT" gh api repos/${{ github.repository }}/commits/$SHA/status \
+              --jq '
                 .statuses
-                | map(select(.context == $context))
+                | map(select(.context == env.XCODE_CONTEXT))
                 | sort_by(.updated_at)
                 | last
                 | .state // "missing"
