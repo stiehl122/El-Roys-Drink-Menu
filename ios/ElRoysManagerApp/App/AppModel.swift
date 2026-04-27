@@ -463,15 +463,13 @@ final class AppModel {
       guard workspace.workspace.revisions != currentWorkspace.workspace.revisions else { return }
       let localDraft = currentLocalDraftEnvelope()
       if !editorDirty,
-         workspace.workspace.revisions.draftRevision == nil,
-         workspace.workspace.hasSharedDraft == false,
-         let fetchedServerDocument = matchingFetchedServerDocument(workspace) {
-        currentEditorWorkspace = workspace
-        currentEditorDocument = fetchedServerDocument
+         let echoBaseline = matchingFetchedLiveEchoBaseline(workspace) {
+        currentEditorWorkspace = echoBaseline.workspace
+        currentEditorDocument = echoBaseline.document
         rebaselineCurrentEditorToServer(
-          liveDocument: fetchedServerDocument,
-          serverDocument: fetchedServerDocument,
-          revisions: workspace.workspace.revisions
+          liveDocument: echoBaseline.document,
+          serverDocument: echoBaseline.document,
+          revisions: echoBaseline.workspace.workspace.revisions
         )
         return
       }
@@ -1276,14 +1274,50 @@ final class AppModel {
     return try JSONDecoder().decode(EditableMenuDocument.self, from: liveBaselineDocumentData)
   }
 
-  private func matchingFetchedServerDocument(_ workspace: MenuWorkspacePayload) -> EditableMenuDocument? {
+  private func matchingFetchedLiveEchoBaseline(
+    _ workspace: MenuWorkspacePayload
+  ) -> (workspace: MenuWorkspacePayload, document: EditableMenuDocument)? {
     guard let currentEditorDocument,
           let currentData = try? documentData(for: currentEditorDocument) else { return nil }
-    let liveDocument = EditableMenuDocument(workspace: workspace)
-    let serverDocument = serverWorkspaceDocument(from: workspace, liveDocument: liveDocument)
-    guard let serverData = try? documentData(for: serverDocument),
-          serverData == currentData else { return nil }
-    return serverDocument
+    var echoWorkspace = workspace
+    clearSharedDraftMarkers(in: &echoWorkspace)
+    let liveDocument = EditableMenuDocument(workspace: echoWorkspace)
+    guard let liveData = try? documentData(for: liveDocument),
+          liveData == currentData else { return nil }
+    if sharedDraftDocumentDiffersFromCurrent(workspace, currentData: currentData) {
+      return nil
+    }
+    return (echoWorkspace, liveDocument)
+  }
+
+  private func sharedDraftDocumentDiffersFromCurrent(
+    _ workspace: MenuWorkspacePayload,
+    currentData: Data
+  ) -> Bool {
+    let hasDraftMarkers = workspace.workspace.hasSharedDraft
+      || workspace.workspace.sharedDraft.exists
+      || workspace.workspace.revisions.draftRevision != nil
+      || workspace.meta.draftState != nil
+      || workspace.meta.draftSavedTs != nil
+    guard hasDraftMarkers,
+          let draftState = workspace.meta.draftState,
+          let draftDocument = decodeEditorDocument(from: draftState),
+          let draftData = try? documentData(for: draftDocument) else {
+      return false
+    }
+    return draftData != currentData
+  }
+
+  private func clearSharedDraftMarkers(in workspace: inout MenuWorkspacePayload) {
+    workspace.workspace.hasSharedDraft = false
+    workspace.workspace.sharedDraft = SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
+    workspace.workspace.revisions.draftRevision = nil
+    workspace.workspace.menuStatus = "Live"
+    workspace.meta.draftState = nil
+    workspace.meta.draftSavedTs = nil
+    workspace.meta.draftSavedByUserId = nil
+    workspace.meta.draftSavedByName = nil
+    workspace.meta.draftSavedSource = nil
   }
 
   private func isDocumentDirty(_ document: EditableMenuDocument) -> Bool {

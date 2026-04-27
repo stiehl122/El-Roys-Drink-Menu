@@ -2972,6 +2972,110 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testRemoteCheckAdoptsMatchingOwnSaveEchoWithStaleSharedDraftMetadata() async throws {
+    let notificationChangeIDs = ["beer::changed::item-1"]
+    let savedMeta = MenuMetaPayload(lastUpdatedTs: 44, lastSentTs: 10)
+    let savedCategories = [
+      MenuCategoryPayload(
+        id: "beer",
+        menuId: "menu",
+        key: "beer",
+        label: "Beer",
+        icon: "",
+        color: "",
+        sub: "",
+        placeholder: "",
+        displayOrder: 0,
+        items: [makeItem(id: "item-1", name: "House Pilsner")]
+      )
+    ]
+    let cleanWorkspace = makeWorkspace(
+      categories: savedCategories,
+      meta: savedMeta,
+      revisions: WorkspaceRevisions(
+        liveRevision: 44,
+        draftRevision: nil,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      hasUnsentChanges: false
+    )
+    let savedDocument = EditableMenuDocument(workspace: cleanWorkspace)
+    let staleDraftMeta = MenuMetaPayload(
+      lastUpdatedTs: 44,
+      lastSentTs: 10,
+      draftState: makeJSONValue(from: savedDocument),
+      draftSavedTs: 55,
+      draftSavedByUserId: "staff-1",
+      draftSavedByName: "Alex",
+      draftSavedSource: "ios_app"
+    )
+    let echoedWorkspace = makeWorkspace(
+      categories: savedCategories,
+      meta: staleDraftMeta,
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 55,
+        savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
+        source: "ios_app"
+      ),
+      revisions: WorkspaceRevisions(
+        liveRevision: 55,
+        draftRevision: 55,
+        lastSentRevision: 10,
+        notificationBaselineRevision: 10
+      ),
+      menuStatus: "Drafting",
+      hasUnsentChanges: false
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [cleanWorkspace, echoedWorkspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload())
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    model.currentEditorPreview = try makePreviewPayload(
+      mode: "save-and-send",
+      selectionDefaults: notificationChangeIDs,
+      notificationChangeIDs: notificationChangeIDs
+    )
+    model.selectedPreviewChangeIDs = Set(notificationChangeIDs)
+
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertFalse(model.editorHasLiveChanges)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 44)
+
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertNil(model.editorRefreshRequirement)
+    XCTAssertEqual(model.currentEditorWorkspace?.workspace.revisions.liveRevision, 55)
+    XCTAssertNil(model.currentEditorWorkspace?.workspace.revisions.draftRevision)
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasSharedDraft ?? true)
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.sharedDraft.exists ?? true)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftState)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftSavedTs)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftSavedByUserId)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftSavedByName)
+    XCTAssertNil(model.currentEditorWorkspace?.meta.draftSavedSource)
+    XCTAssertNil(model.currentEditorPreview)
+    XCTAssertTrue(model.selectedPreviewChangeIDs.isEmpty)
+    XCTAssertFalse(model.editorDirty)
+    XCTAssertFalse(model.editorHasLiveChanges)
+  }
+
+  @MainActor
   func testRemoteQueueOnlyUpdateClassifiesAsQueueState() async throws {
     let initialWorkspace = makeWorkspace(
       categories: [
