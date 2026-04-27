@@ -462,11 +462,12 @@ final class AppModel {
       guard let currentWorkspace = currentEditorWorkspace else { return }
       guard workspace.workspace.revisions != currentWorkspace.workspace.revisions else { return }
       let localDraft = currentLocalDraftEnvelope()
-      currentEditorWorkspace = workspace
-      editorHasServerUnsentChanges = serverHasUnsentChanges(in: workspace)
       if !editorDirty,
-         currentEditorWorkspace?.workspace.revisions.draftRevision == nil,
-         currentEditorWorkspace?.workspace.hasSharedDraft == false {
+         workspace.workspace.revisions.draftRevision == nil,
+         workspace.workspace.hasSharedDraft == false,
+         fetchedServerDocumentMatchesCurrentEditor(workspace) {
+        currentEditorWorkspace = workspace
+        editorHasServerUnsentChanges = serverHasUnsentChanges(in: workspace)
         editorRefreshRequirement = nil
         return
       }
@@ -656,8 +657,7 @@ final class AppModel {
       )
       model.adoptSuccessfulLiveSaveBaseline(
         document: currentDocument,
-        response: response,
-        sentNotifications: false
+        response: response
       )
       model.notice = AppNotice(tone: .success, title: "Saved", message: "The live menu was updated without sending notifications.")
     }
@@ -1084,8 +1084,7 @@ final class AppModel {
 
   private func adoptSuccessfulLiveSaveBaseline(
     document: EditableMenuDocument,
-    response: PublishResponse,
-    sentNotifications _: Bool
+    response: PublishResponse
   ) {
     guard var workspace = currentEditorWorkspace else { return }
 
@@ -1108,9 +1107,7 @@ final class AppModel {
     workspace.workspace.revisions = nextRevisions
     workspace.workspace.hasSharedDraft = false
     workspace.workspace.sharedDraft = SharedDraftInfo(exists: false, savedAt: nil, savedBy: nil, source: "")
-    if workspace.workspace.hasUnsentChanges == true {
-      workspace.workspace.hasUnsentChanges = false
-    }
+    workspace.workspace.hasUnsentChanges = false
     workspace.meta.draftState = nil
     workspace.meta.draftSavedTs = nil
     workspace.meta.draftSavedByUserId = nil
@@ -1273,6 +1270,15 @@ final class AppModel {
   private func currentLiveBaselineDocument() throws -> EditableMenuDocument? {
     guard let liveBaselineDocumentData else { return nil }
     return try JSONDecoder().decode(EditableMenuDocument.self, from: liveBaselineDocumentData)
+  }
+
+  private func fetchedServerDocumentMatchesCurrentEditor(_ workspace: MenuWorkspacePayload) -> Bool {
+    guard let currentEditorDocument,
+          let currentData = try? documentData(for: currentEditorDocument) else { return false }
+    let liveDocument = EditableMenuDocument(workspace: workspace)
+    let serverDocument = serverWorkspaceDocument(from: workspace, liveDocument: liveDocument)
+    guard let serverData = try? documentData(for: serverDocument) else { return false }
+    return serverData == currentData
   }
 
   private func isDocumentDirty(_ document: EditableMenuDocument) -> Bool {
