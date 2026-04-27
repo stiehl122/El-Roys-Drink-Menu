@@ -1775,6 +1775,105 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testSuccessfulLiveSaveClearsRemoteUpdateAndOfflineDraftState() async throws {
+    let offlineStore = TestOfflineDraftStore()
+    let sessionStore = TestSessionStore()
+    let workspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(
+        lastUpdatedTs: 10,
+        lastSentTs: 41,
+        draftSavedTs: 22,
+        draftSavedByUserId: "staff-1",
+        draftSavedByName: "Alex",
+        draftSavedSource: "ios_app"
+      ),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 22,
+        savedBy: SharedDraftSavedBy(id: "staff-1", name: "Alex"),
+        source: "ios_app"
+      ),
+      revisions: WorkspaceRevisions(
+        liveRevision: 10,
+        draftRevision: 22,
+        lastSentRevision: 41,
+        notificationBaselineRevision: 41
+      ),
+      hasUnsentChanges: true
+    )
+    let liveSaveClient = StubLiveSaveClient(
+      response: PublishResponse(
+        ok: true,
+        action: nil,
+        ts: 1_776_000_000_000,
+        preview: nil,
+        currentRevisions: WorkspaceRevisions(
+          liveRevision: 42,
+          draftRevision: nil,
+          lastSentRevision: 41,
+          notificationBaselineRevision: 41
+        ),
+        notificationStatus: nil,
+        warnings: nil,
+        warningMessage: nil,
+        successMessage: nil,
+        selectedChangeIds: nil
+      )
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: StubWorkspaceClient(payloads: [workspace]),
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        liveSaveClient: liveSaveClient
+      ),
+      sessionStore: sessionStore,
+      offlineDraftStore: offlineStore
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    guard var beer = model.currentEditorDocument?.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded item")
+      return
+    }
+    beer.desc = "AUDIT SAVE CLEAN STATE"
+    model.upsertItem(beer, categoryKey: "beer", originalCategoryKey: "beer")
+
+    XCTAssertTrue(model.editorDirty)
+    XCTAssertNotNil(try offlineStore.loadDraft(userId: model.authSession?.userID ?? "", menuId: "menu"))
+
+    await model.saveLiveMenu()
+
+    XCTAssertFalse(model.editorDirty, "Successful live save should clear local dirty state.")
+    XCTAssertNil(model.editorRefreshRequirement, "Successful live save should not require a refresh of the same user's save.")
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasSharedDraft ?? true, "Successful live save should clear shared draft flags.")
+    XCTAssertNil(model.currentEditorWorkspace?.workspace.revisions.draftRevision, "Successful live save should clear stale draft revision.")
+    XCTAssertFalse(model.currentEditorWorkspace?.workspace.hasUnsentChanges ?? true, "Quiet live save should not keep the UI in an unsent/conflict state.")
+    XCTAssertNil(try offlineStore.loadDraft(userId: model.authSession?.userID ?? "", menuId: "menu"), "Successful live save should remove stale offline draft data.")
+  }
+
+  @MainActor
   func testLiveSaveIgnoresStaleDraftRevisionWhenNoSharedDraftExists() async throws {
     let sessionStore = TestSessionStore()
     let workspace = makeWorkspace(
