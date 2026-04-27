@@ -1,0 +1,102 @@
+name: iOS Launch Gate
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+  checks: read
+  statuses: read
+  pull-requests: read
+
+jobs:
+  xcode-cloud-gate:
+    name: Xcode Cloud Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect iOS changes
+        id: changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files="$(gh api --paginate \
+              repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files \
+              --jq '.[].filename')"
+          else
+            before="${{ github.event.before }}"
+            after="${{ github.sha }}"
+
+            if [ "$before" = "0000000000000000000000000000000000000000" ]; then
+              files="$(git diff-tree --no-commit-id --name-only -r "$after")"
+            else
+              files="$(git diff --name-only "$before" "$after")"
+            fi
+          fi
+
+          if printf '%s\n' "$files" | grep -q '^ios/'; then
+            echo "ios_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ios_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pass when no iOS files changed
+        if: steps.changes.outputs.ios_changed == 'false'
+        run: echo "No ios/ changes; Xcode Cloud is not required."
+
+      - name: Wait for Xcode Cloud
+        if: steps.changes.outputs.ios_changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XCODE_CONTEXT: ElRoysManagerApp | Branch Protection
+          SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          echo "ios/ changed; waiting for Xcode Cloud status: $XCODE_CONTEXT"
+          echo "Commit: $SHA"
+
+          deadline=$((SECONDS + 3600))
+
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            state="$(gh api repos/${{ github.repository }}/commits/$SHA/status \
+              --jq --arg context "$XCODE_CONTEXT" '
+                .statuses
+                | map(select(.context == $context))
+                | sort_by(.updated_at)
+                | last
+                | .state // "missing"
+              ')"
+
+            echo "Xcode Cloud state: $state"
+
+            case "$state" in
+              success)
+                echo "Xcode Cloud passed."
+                exit 0
+                ;;
+              failure|error)
+                echo "Xcode Cloud failed."
+                exit 1
+                ;;
+              pending|missing)
+                sleep 30
+                ;;
+              *)
+                echo "Unexpected Xcode Cloud state: $state"
+                sleep 30
+                ;;
+            esac
+          done
+
+          echo "Timed out waiting for Xcode Cloud."
+          exit 1

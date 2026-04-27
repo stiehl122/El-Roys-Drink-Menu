@@ -2351,8 +2351,10 @@ test('runtime workspace and history boundaries avoid deleted restaurant-tools in
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });
 
-test('admin route delegates landing parsing through a non-api helper module', () => {
+test('admin route no longer exposes landing editorial import actions', () => {
   const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'admin.js'), 'utf8');
-  assert.match(importSource, /from '\.\.\/server\/_landing-import\.js'/);
-  assert.doesNotMatch(importSource, /from '\.\/_landing-import\.js'/);
+  assert.doesNotMatch(importSource, /from ['"]\.\.\/server\/_landing-import\.js['"]/);
+  assert.doesNotMatch(importSource, /from ['"]\.\/_landing-import\.js['"]/);
+  assert.doesNotMatch(importSource, /case ['"]import_news['"]/);
+  assert.doesNotMatch(importSource, /case ['"]import_review['"]/);
 });
