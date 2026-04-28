@@ -108,6 +108,7 @@ private final class LabelTextCaptureViewController: UIViewController, AVCaptureP
   private var configured = false
   private var isRequestingAccess = false
   private var isCapturingPhoto = false
+  private var didReportCaptureFailure = false
   private var lastCaptureToken = 0
 
   var onCapture: ((UIImage) -> Void)?
@@ -204,6 +205,7 @@ private final class LabelTextCaptureViewController: UIViewController, AVCaptureP
     guard !isCapturingPhoto else { return }
 
     isCapturingPhoto = true
+    didReportCaptureFailure = false
     let settings = AVCapturePhotoSettings()
     photoOutput.capturePhoto(with: settings, delegate: self)
   }
@@ -273,24 +275,44 @@ private final class LabelTextCaptureViewController: UIViewController, AVCaptureP
     }
   }
 
+  private func reportCaptureFailedIfNeeded() {
+    guard !didReportCaptureFailure else { return }
+    didReportCaptureFailure = true
+    reportCaptureFailed()
+  }
+
   func photoOutput(
     _ output: AVCapturePhotoOutput,
     didFinishProcessingPhoto photo: AVCapturePhoto,
     error: Error?
   ) {
-    isCapturingPhoto = false
-
     guard
       error == nil,
       let data = photo.fileDataRepresentation(),
       let image = UIImage(data: data)
     else {
-      reportCaptureFailed()
+      sessionQueue.async { [weak self] in
+        self?.reportCaptureFailedIfNeeded()
+      }
       return
     }
 
     DispatchQueue.main.async { [onCapture] in
       onCapture?(image)
+    }
+  }
+
+  func photoOutput(
+    _ output: AVCapturePhotoOutput,
+    didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
+    error: Error?
+  ) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      if error != nil {
+        self.reportCaptureFailedIfNeeded()
+      }
+      self.isCapturingPhoto = false
     }
   }
 }
