@@ -76,6 +76,12 @@
 
 #restaurant-site-wrapper .ll-board-topbar {
   position: relative;
+  top: auto;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 #restaurant-site-wrapper .ll-wall-sign-wrap {
@@ -627,6 +633,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 96px;
   min-height: 36px;
   padding: 7px 12px;
   border: 1px solid rgba(182, 132, 56, 0.34);
@@ -636,6 +643,8 @@
   text-decoration: none;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+  line-height: 1.05;
+  white-space: nowrap;
   cursor: pointer;
 }
 
