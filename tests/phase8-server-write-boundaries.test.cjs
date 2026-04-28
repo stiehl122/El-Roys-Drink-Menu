@@ -642,6 +642,159 @@ test('saveLiveMenuCommand clones featured_specials items when they reuse a base 
   assert.equal(featuredItem.featured_enabled, true);
 });
 
+test('saveLiveMenuCommand does not persist admin-owned notifications or restaurant design from manager payloads', async () => {
+  process.env.SUPABASE_URL = 'https://example.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const module = await importApiModule('server/_menu-live.js');
+  const originalFetch = global.fetch;
+  const fetchCalls = [];
+  const menuId = '00000000-0000-0000-0000-000000000020';
+
+  function ok(payload) {
+    return {
+      ok: true,
+      async json() {
+        return payload;
+      },
+    };
+  }
+
+  global.fetch = async (url, options = {}) => {
+    const href = String(url);
+    fetchCalls.push({ url: href, options });
+
+    if (href.includes('/auth/v1/user')) {
+      return ok({ id: 'user-1' });
+    }
+
+    if (href.includes('/rest/v1/profiles?id=eq.user-1&select=role,name')) {
+      return ok([{ role: 'manager', name: 'Manager Tester' }]);
+    }
+
+    if (href.includes(`/rest/v1/menu_access?user_id=eq.user-1&menu_id=in.(${menuId})&select=menu_id`)) {
+      return ok([{ menu_id: menuId }]);
+    }
+
+    if (href.includes(`/rest/v1/menu_meta?menu_id=eq.${menuId}&select=*&limit=1`)) {
+      return ok([{ last_updated_ts: 10, draft_saved_ts: null, last_sent_ts: null }]);
+    }
+
+    if (href.includes(`/rest/v1/menus?id=eq.${menuId}&select=id,name,slug,type,restaurant_id,archived&limit=1`)) {
+      return ok([{
+        id: menuId,
+        name: 'Drinks',
+        slug: 'drinks',
+        restaurant_id: '00000000-0000-0000-0000-000000000010',
+        type: 'drinks',
+        archived: false,
+      }]);
+    }
+
+    if (href.includes(`/rest/v1/menus?id=eq.${menuId}&select=id,restaurant_id,type,archived&limit=1`)) {
+      return ok([{
+        id: menuId,
+        restaurant_id: '00000000-0000-0000-0000-000000000010',
+        type: 'drinks',
+        archived: false,
+      }]);
+    }
+
+    if (href.includes(`/rest/v1/categories?menu_id=eq.${menuId}&select=*,items(*)&order=display_order.asc`)) {
+      return ok([
+        { id: 'cocktails-cat', key: 'cocktails', label: 'Cocktails', items: [] },
+        { id: 'uncategorized-uuid-1', key: '__uncategorized__', label: 'Uncategorized', items: [] },
+      ]);
+    }
+
+    if (href.includes(`/rest/v1/categories?menu_id=eq.${menuId}&select=id,key`)) {
+      return ok([
+        { id: 'cocktails-cat', key: 'cocktails' },
+        { id: 'uncategorized-uuid-1', key: '__uncategorized__' },
+      ]);
+    }
+
+    if (href.includes('/rest/v1/featured_groups?canonical_id=eq.leroyslounge-specials&select=id&limit=1')) {
+      return ok([]);
+    }
+
+    if (href.includes('/categories?on_conflict=')) {
+      return ok([]);
+    }
+
+    if (href.endsWith('/rest/v1/items')) {
+      return ok([]);
+    }
+
+    if (href.includes('/menu_meta?on_conflict=menu_id')) {
+      return ok([]);
+    }
+
+    if (
+      href.includes('/rest/v1/restaurants?id=eq.') &&
+      href.includes('&select=id,name,slug,design,use_custom_design&limit=1')
+    ) {
+      return ok([{
+        id: '00000000-0000-0000-0000-000000000010',
+        name: 'Leroy\'s Lounge',
+        slug: 'leroyslounge',
+        design: {},
+        use_custom_design: false,
+      }]);
+    }
+
+    if (href.includes('/rest/v1/restaurants?id=eq.') && options.method === 'PATCH') {
+      throw new Error(`Unexpected restaurant design persistence: ${href}`);
+    }
+
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    const result = await module.saveLiveMenuCommand({
+      headers: { authorization: 'Bearer test-token' },
+      body: {
+        menu_id: menuId,
+        snapshot: {
+          cats: [{
+            id: 'cocktails',
+            key: 'cocktails',
+            label: 'Cocktails',
+            items: [{ id: 'item-1', name: 'House Marg' }],
+          }],
+          meta: {
+            bot_id: 'legacy-bot-id',
+            notifications: {
+              groupme: { enabled: false },
+              sms: { enabled: true },
+            },
+          },
+          restaurant: {
+            id: '00000000-0000-0000-0000-000000000010',
+            design: { primaryColor: '#ff00ff' },
+            use_custom_design: true,
+          },
+        },
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.compatibility.restaurantDesignUpdated, false);
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  const metaPersistCall = fetchCalls.find(call => call.url.includes('/menu_meta?on_conflict=menu_id'));
+  assert.ok(metaPersistCall, 'expected menu metadata persistence request');
+  const metaPayload = JSON.parse(metaPersistCall.options.body);
+  assert.equal(metaPayload.bot_id, 'legacy-bot-id');
+  assert.equal(Object.prototype.hasOwnProperty.call(metaPayload, 'notifications'), false);
+  assert.equal(fetchCalls.some(call => (
+    call.url.includes('/rest/v1/restaurants?id=eq.') &&
+    call.options.method === 'PATCH'
+  )), false);
+});
+
 test('publish service boundary prefers the server-owned publish command when provided', async () => {
   const sandbox = loadAppSandbox();
   let publishCalls = 0;
