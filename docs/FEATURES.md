@@ -96,7 +96,7 @@ Use it to answer three questions:
 | Remote change detection and conflict refresh | Full | Full | Staff editor clients | Both clients detect remote changes and force review/reload when needed. |
 | Recent change history | Full | Full | Staff editor clients | Web has manager recent changes/history views; iOS surfaces recent updates in home and restaurant tools. |
 | Add items manually | Full | Full | Staff editor clients | Both can create new items from the editor. |
-| Barcode scan and product lookup | Full | Full | Staff editor clients | Both support barcode-driven item entry plus product lookup. |
+| Barcode scan and product lookup | Full | Full | Staff editor clients | Both support barcode-driven item entry plus product lookup; iOS additionally supports drinks-only captured-image label selection with Apple-native swipe text selection before prefilling local add-item drafts. |
 | Edit item name | Full | Full | Staff editor clients | Present in both clients. |
 | Edit price | Full | Full | Staff editor clients | Present in both clients. |
 | Edit descriptions | Full | Full | Staff editor clients | Guest-facing descriptions can be edited in both clients. |

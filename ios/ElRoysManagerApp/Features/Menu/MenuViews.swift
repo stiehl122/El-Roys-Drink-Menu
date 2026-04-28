@@ -1323,7 +1323,15 @@ private struct ItemEditorSheet: View {
   @Bindable var session: MenuEditorSession
   @Binding var draft: EditableItemDraft
   @Environment(\.dismiss) private var dismiss
-  @State private var showingScanner = false
+  @State private var showingBarcodeScanner = false
+  @State private var showingLabelTextScanner = false
+  @State private var pendingTextSelection: ScannerTextSelection?
+  @State private var showingTextApplyDialog = false
+  @State private var scannerLookupInFlight = false
+
+  private var supportsLabelText: Bool {
+    MenuCameraFeaturePolicy.supportsLabelText(isFoodMenu: session.menu.isFoodMenu)
+  }
 
   var body: some View {
     NavigationStack {
@@ -1383,23 +1391,31 @@ private struct ItemEditorSheet: View {
           }
         }
 
-        Section("Barcode + Lookup") {
+        Section("Scan + Lookup") {
           TextField("UPC", text: $draft.barcode)
             .keyboardType(.numberPad)
+
           Button("Scan Barcode") {
-            showingScanner = true
+            showingBarcodeScanner = true
           }
+
+          if supportsLabelText {
+            Button("Scan Label Text") {
+              showingLabelTextScanner = true
+            }
+
+            Text("Capture the label, then swipe-select the exact text you want to apply.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
+
+          if scannerLookupInFlight {
+            ProgressView("Looking up product...")
+          }
+
           Button("Lookup Product") {
-            Task {
-              do {
-                let result = try await session.lookupBarcode(draft.barcode)
-                draft.name = result.name
-                if draft.description.isEmpty {
-                  draft.description = result.description
-                }
-              } catch {
-                session.notice = AppNotice(tone: .warning, title: "Lookup Failed", message: error.localizedDescription)
-              }
+            Task { @MainActor in
+              await lookupBarcode(draft.barcode)
             }
           }
         }
@@ -1418,10 +1434,36 @@ private struct ItemEditorSheet: View {
         }
       }
     }
-    .sheet(isPresented: $showingScanner) {
+    .sheet(isPresented: $showingBarcodeScanner) {
       BarcodeScannerSheet { code in
-        draft.barcode = code
+        applyScannedBarcode(code)
       }
+    }
+    .sheet(isPresented: $showingLabelTextScanner) {
+      LabelTextCaptureSheet { selection in
+        pendingTextSelection = selection
+        showingTextApplyDialog = true
+      }
+    }
+    .confirmationDialog(
+      "Use Scanned Text",
+      isPresented: $showingTextApplyDialog,
+      presenting: pendingTextSelection
+    ) { selection in
+      Button(TextScanApplyAction.useAsName.rawValue) {
+        applyTextSelection(.useAsName, selection: selection)
+      }
+      Button(TextScanApplyAction.appendDescription.rawValue) {
+        applyTextSelection(.appendDescription, selection: selection)
+      }
+      Button(TextScanApplyAction.useBoth.rawValue) {
+        applyTextSelection(.useBoth, selection: selection)
+      }
+      Button("Cancel", role: .cancel) {
+        pendingTextSelection = nil
+      }
+    } message: { selection in
+      Text(selection.text)
     }
   }
 
@@ -1449,6 +1491,73 @@ private struct ItemEditorSheet: View {
     guard let item = makeItem(categoryKey: sourceCategoryKey, validateDuplicateName: false) else { return }
     session.moveItemToOffMenu(item, from: sourceCategoryKey)
     dismiss()
+  }
+
+  private func applyScannedBarcode(_ barcode: String) {
+    let patch = ScannerResultNormalizer.barcodeSelection(payload: barcode)
+    applyPatch(patch)
+
+    guard patch.shouldAutoLookupBarcode, let normalizedBarcode = patch.barcode else { return }
+
+    Task { @MainActor in
+      await lookupBarcode(normalizedBarcode)
+    }
+  }
+
+  @MainActor
+  private func lookupBarcode(_ barcode: String) async {
+    let normalizedBarcode = barcode.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !normalizedBarcode.isEmpty else {
+      session.notice = AppNotice(
+        tone: .warning,
+        title: "Barcode Required",
+        message: "Enter or scan a UPC before looking up a product."
+      )
+      return
+    }
+
+    scannerLookupInFlight = true
+    defer { scannerLookupInFlight = false }
+
+    do {
+      let result = try await session.lookupBarcode(normalizedBarcode)
+      let lookupPatch = ScannerResultNormalizer.productLookupPatch(
+        result: result,
+        existingDescription: draft.description
+      )
+      applyPatch(lookupPatch)
+    } catch {
+      session.notice = AppNotice(
+        tone: .warning,
+        title: "Lookup Failed",
+        message: error.localizedDescription
+      )
+    }
+  }
+
+  private func applyTextSelection(
+    _ action: TextScanApplyAction,
+    selection: ScannerTextSelection
+  ) {
+    let patch = ScannerResultNormalizer.textSelection(
+      selection,
+      action: action,
+      existingDescription: draft.description
+    )
+    applyPatch(patch)
+    pendingTextSelection = nil
+  }
+
+  private func applyPatch(_ patch: ScannerDraftPatch) {
+    if let barcode = patch.barcode {
+      draft.barcode = barcode
+    }
+    if let name = patch.name {
+      draft.name = name
+    }
+    if let description = patch.description {
+      draft.description = description
+    }
   }
 
   private func makeItem(categoryKey: String, validateDuplicateName: Bool = true) -> MenuItemPayload? {
