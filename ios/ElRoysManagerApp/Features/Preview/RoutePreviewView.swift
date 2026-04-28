@@ -26,8 +26,8 @@ struct RoutePreviewScreen: View {
       SafariRoutePreview(url: url)
         .ignoresSafeArea()
     }
-      .navigationTitle(menu.displayTypeLabel)
-      .navigationBarTitleDisplayMode(.inline)
+    .navigationTitle(menu.displayTypeLabel)
+    .navigationBarTitleDisplayMode(.inline)
   }
 }
 

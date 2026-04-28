@@ -120,3 +120,11 @@ test('iOS exact route preview uses SFSafariViewController instead of embedded WK
   assert.doesNotMatch(routePreview, /import WebKit/);
   assert.doesNotMatch(routePreview, /WKWebView/);
 });
+
+test('iOS login screen does not show demo credentials in production copy', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Auth/AuthViews.swift');
+  assert.doesNotMatch(source, /manager@elroys\.example/);
+  assert.doesNotMatch(source, /••••••••/);
+  assert.match(source, /TextField\("Email", text: \$model\.email\)/);
+  assert.match(source, /SecureField\("Password", text: \$model\.password\)/);
+});

@@ -1,6 +1,8 @@
 import UIKit
 import SwiftUI
 
+private let homeBottomNavigationClearance: CGFloat = 132
+
 // MARK: - Public entry points
 
 struct RestaurantChooserView: View {
@@ -104,7 +106,7 @@ struct RestaurantChooserView: View {
             theme: theme
           )
 
-          Color.clear.frame(height: 18)
+          Color.clear.frame(height: homeBottomNavigationClearance)
         }
         .padding(.horizontal, 20)
         .padding(.top, 14)

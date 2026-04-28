@@ -1498,6 +1498,19 @@ test('sbResolveMenu treats ?menu=drinks as restaurant-relative public state', as
   assert.deepEqual(replaceCalls, []);
 });
 
+test('manager route resolution preserves manager URL instead of public route', () => {
+  const source = read('app.js');
+  assert.match(source, /function syncResolvedMenuAddressBar/);
+  assert.match(source, /managerPath = getManagerHrefForMenuId\(resolvedMenu\.id\)/);
+  assert.doesNotMatch(source, /history\.replaceState\(\{\}, '', publicHref\)/);
+});
+
+test('admin route resolution preserves admin URL instead of public route', () => {
+  const source = read('app.js');
+  assert.match(source, /adminPath = getAdminHrefForMenuId\(resolvedMenu\.id\)/);
+  assert.match(source, /isAdminRoute\(\)/);
+});
+
 test('selectMenu uses replaceState with the canonical public menu url', () => {
   const sandbox = loadAppSandbox();
   const menus = getState(sandbox, 'MENUS');
@@ -2338,8 +2351,10 @@ test('runtime workspace and history boundaries avoid deleted restaurant-tools in
   assert.doesNotMatch(appSource, /rest\/v1\/update_log/);
 });
 
-test('admin route delegates landing parsing through a non-api helper module', () => {
+test('admin route no longer exposes landing editorial import actions', () => {
   const importSource = fs.readFileSync(path.join(__dirname, '..', 'api', 'admin.js'), 'utf8');
-  assert.match(importSource, /from '\.\.\/server\/_landing-import\.js'/);
-  assert.doesNotMatch(importSource, /from '\.\/_landing-import\.js'/);
+  assert.doesNotMatch(importSource, /from ['"]\.\.\/server\/_landing-import\.js['"]/);
+  assert.doesNotMatch(importSource, /from ['"]\.\/_landing-import\.js['"]/);
+  assert.doesNotMatch(importSource, /case ['"]import_news['"]/);
+  assert.doesNotMatch(importSource, /case ['"]import_review['"]/);
 });

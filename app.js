@@ -138,13 +138,10 @@ const SHARED_PAGE_PATHS = DOMAIN_CONSTANTS.SHARED_PAGE_PATHS || FALLBACK_DOMAIN_
 const RESTAURANT_TIME_ZONE = DOMAIN_CONSTANTS.RESTAURANT_TIME_ZONE || FALLBACK_DOMAIN_CONSTANTS.RESTAURANT_TIME_ZONE || 'America/Detroit';
 const REDIRECT_NOTICE_KEY = 'hf_redirect_notice';
 const LANDING_PAGE_STATE_ID = 'root';
-const LANDING_PAGE_SECTION_ORDER = ['overview', 'hours', 'events', 'news', 'reviews'];
+const LANDING_PAGE_SECTION_ORDER = ['overview', 'hours'];
 const LANDING_PAGE_SECTION_LABELS = {
   overview: 'Overview',
   hours: 'Hours',
-  events: 'Events',
-  news: 'News',
-  reviews: 'Reviews',
 };
 const LANDING_DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const LANDING_DAY_LABELS = {
@@ -626,6 +623,7 @@ function createAddItemModalState(overrides = {}) {
     manualBarcode: '',
     scanState: 'idle',
     scannerService: null,
+    lastAddedName: '',
     untappd: createAddItemModalUntappdState(),
     ...overrides,
   };
@@ -1244,6 +1242,7 @@ function getAddItemModalViewState() {
     manualBarcode: _addItemModalState.manualBarcode || '',
     scanState: _addItemModalState.scanState || 'idle',
     scanUnsupported: _addItemModalState.scanState === 'unsupported',
+    lastAddedName: _addItemModalState.lastAddedName || '',
     untappd: {
       pending: !!untappd.pending,
       query: untappd.query || '',
@@ -1669,6 +1668,12 @@ function renderAddItemModal(options = {}) {
     untappd.includeBrewery
   );
   const canConfirm = !!fields.name.trim() && !!fields.categoryId && !view.duplicateWarning;
+  const successHtml = view.lastAddedName
+    ? `
+      <div class="manager-inline-status" role="status">
+        Item added: ${escHtml(view.lastAddedName)}
+      </div>`
+    : '';
   const modalSubtitle = isScanMode
     ? 'Scan a barcode to prefill item details, or use manual UPC lookup when camera scanning is unavailable.'
     : (MENU_TYPE === 'food'
@@ -1843,13 +1848,14 @@ function renderAddItemModal(options = {}) {
   const modalActionsHtml = isScanMode
     ? `
       <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
+        <button type="button" class="btn-cancel" data-add-item-action="cancel" onclick="closeAddItemModal()">Cancel</button>
       </div>`
     : `
       <div class="modal-actions">
-        <button type="button" class="btn-cancel" onclick="closeAddItemModal()">Cancel</button>
-        <button type="button" class="btn-secondary" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal({ addMore: true })">Confirm &amp; Add More</button>
-        <button type="button" class="btn-confirm" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal()">Confirm</button>
+        <button type="button" class="btn-cancel" data-add-item-action="cancel" onclick="closeAddItemModal()">Cancel</button>
+        ${view.lastAddedName ? '<button type="button" class="manager-secondary-action" data-add-item-action="done-review" onclick="closeAddItemModal()">Done</button>' : ''}
+        <button type="button" class="btn-secondary" data-add-item-action="add-more" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal({ addMore: true })">Confirm &amp; Add More</button>
+        <button type="button" class="btn-confirm" data-add-item-action="confirm" ${canConfirm ? '' : 'disabled'} onclick="confirmAddItemModal()">Confirm</button>
       </div>`;
 
   host.innerHTML = `
@@ -1858,6 +1864,7 @@ function renderAddItemModal(options = {}) {
         <h2 id="add-item-modal-title">Add Item(s)</h2>
         <div class="modal-sub">${escHtml(modalSubtitle)}</div>
         ${modeToggleHtml}
+        ${successHtml}
         ${view.duplicateWarning ? `<div class="add-item-modal-warning" role="alert">${escHtml(view.duplicateWarning)}</div>` : ''}
         ${isScanMode ? scanBodyHtml : manualBodyHtml}
         ${modalActionsHtml}
@@ -2009,6 +2016,7 @@ function confirmAddItemModal(options = {}) {
       entryMode: reopenMode,
       fields: createAddItemModalFields({ categoryId: _lastAddItemCategoryId }),
       scanState: reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? 'starting' : 'idle',
+      lastAddedName: item.name,
     });
     renderAddItemModal(reopenMode === ADD_ITEM_MODAL_SCAN_MODE ? {} : { focusFieldId: 'add-item-name-input' });
     if (reopenMode === ADD_ITEM_MODAL_SCAN_MODE) {
@@ -2205,6 +2213,14 @@ function isSettingsPage() {
   return _appPageMode === 'manager' || _appPageMode === 'admin';
 }
 
+function isManagerRoute() {
+  return _appPageMode === 'manager';
+}
+
+function isAdminRoute() {
+  return _appPageMode === 'admin';
+}
+
 function getDefaultPublicPath() {
   if (RESTAURANT_ID && SITE_PATHS[RESTAURANT_ID]) return SITE_PATHS[RESTAURANT_ID];
   if (_siteRestaurant?.id && SITE_PATHS[_siteRestaurant.id]) return SITE_PATHS[_siteRestaurant.id];
@@ -2291,6 +2307,33 @@ function getAdminHrefForMenuId(menuId) {
   const url = new URL(SHARED_PAGE_PATHS.admin, window.location.origin);
   url.searchParams.set('menu', menu.slug);
   return `${url.pathname}${url.search}`;
+}
+
+function syncResolvedMenuAddressBar(resolvedMenu) {
+  if (!resolvedMenu || typeof window === 'undefined' || !window.history) {
+    return;
+  }
+
+  const currentSearch = window.location?.search || '';
+  const managerPath = getManagerHrefForMenuId(resolvedMenu.id);
+  const adminPath = getAdminHrefForMenuId(resolvedMenu.id);
+  const publicHref = getPublicHrefForMenuId(resolvedMenu.id);
+
+  let targetHref = publicHref;
+  if (isManagerRoute()) {
+    targetHref = managerPath;
+  } else if (isAdminRoute()) {
+    targetHref = adminPath;
+  }
+
+  if (currentSearch.includes('audit=')) {
+    targetHref += targetHref.includes('?') ? '&audit=1' : '?audit=1';
+  }
+
+  const currentHref = `${window.location.pathname}${window.location.search}`;
+  if (targetHref && targetHref !== currentHref) {
+    window.history.replaceState({}, '', new URL(targetHref, window.location.origin).toString());
+  }
 }
 
 function navigateToPage(path) {
@@ -4120,12 +4163,6 @@ function getLandingAdminWorkspaceService() {
     syncLegacyStateFromStore: () => syncLandingLegacyStateFromStore(),
     getSectionFilter: sectionId => getLandingSectionFilter(sectionId),
     getVisibleItems: (items, showArchived) => getLandingVisibleItems(items, showArchived),
-    sortEvents: items => sortLandingEvents(items),
-    sortNews: items => sortLandingNews(items),
-    sortReviews: items => sortLandingReviews(items),
-    renderEventCardHtml: (item, liveSection) => renderLandingEventCardHtml(item, liveSection),
-    renderNewsCardHtml: (item, liveSection) => renderLandingNewsCardHtml(item, liveSection),
-    renderReviewCardHtml: (item, restaurantId, liveItems) => renderLandingReviewCardHtml(item, restaurantId, liveItems),
     renderHoursRowsHtml: (section, restaurantId, restaurantLabel) => renderLandingHoursRowsHtml(section, restaurantId, restaurantLabel),
     knownRestaurants: () => knownLandingRestaurants(),
     restaurants: RESTAURANTS,
@@ -4138,9 +4175,6 @@ function getLandingAdminWorkspaceService() {
     renderRootPage: record => renderLandingRootPage(record),
     createDefaultRecord: () => createDefaultLandingPageRecord(),
     normalizeRecord: record => normalizeLandingPageRecord(record),
-    validateEventsSection: section => validateLandingEventsSection(section),
-    validateNewsSection: section => validateLandingNewsSection(section),
-    validateReviewsSection: section => validateLandingReviewsSection(section),
     getHoursSectionValidation: record => getLandingSectionValidation('hours', record),
     sectionOrder: LANDING_PAGE_SECTION_ORDER,
     setPanelBadge: (sectionId, validation) => setLandingPanelBadge(sectionId, validation),
@@ -4149,26 +4183,9 @@ function getLandingAdminWorkspaceService() {
     createDefaultHoursRestaurant: () => createDefaultLandingHoursRestaurant(),
     createDefaultDay: () => createDefaultLandingDay(),
     normalizeDay: day => normalizeLandingDay(day),
-    landingImportStatusImported: LANDING_IMPORT_STATUS_IMPORTED,
-    landingImportStatusPartial: LANDING_IMPORT_STATUS_PARTIAL,
-    landingImportStatusFailed: LANDING_IMPORT_STATUS_FAILED,
     setSectionFilter: (sectionId, key, value) => setLandingSectionFilter(sectionId, key, value),
-    setTimeout,
-    postApiJson: (url, body, options = {}) => postApiJson(url, body, options),
-    getAuthorizedApiHeaders: () => getAuthorizedApiHeaders(),
-    getCurrentUser: () => currentUser,
   });
   return _landingAdminWorkspaceService;
-}
-
-function renderLandingEventsPanel(record = _landingPageState) {
-  return getLandingAdminWorkspaceService().renderEventsPanel(record);
-}
-function renderLandingNewsPanel(record = _landingPageState) {
-  return getLandingAdminWorkspaceService().renderNewsPanel(record);
-}
-function renderLandingReviewsPanel(record = _landingPageState) {
-  return getLandingAdminWorkspaceService().renderReviewsPanel(record);
 }
 
 function renderLandingOverview(record = _landingPageState) {
@@ -4231,7 +4248,6 @@ function getLandingRootRendererService() {
     document,
     escHtml,
     restaurants: RESTAURANTS,
-    setReviewCarouselHandlerName: 'setLandingReviewCarouselIndex',
     hasRootShell: () => hasLandingRootShell(),
     syncLegacyStateFromStore: () => syncLandingLegacyStateFromStore(),
   });
@@ -4239,21 +4255,6 @@ function getLandingRootRendererService() {
 }
 function setLandingRootSectionVisible(sectionId = '', visible = true) {
   return getLandingRootRendererService().setSectionVisible(sectionId, visible);
-}
-function renderLandingRootEvents(section = {}) {
-  return getLandingRootRendererService().renderRootEvents(section);
-}
-function renderLandingRootNews(section = {}) {
-  return getLandingRootRendererService().renderRootNews(section);
-}
-function renderLandingRootReviews(section = {}) {
-  return getLandingRootRendererService().renderRootReviews(section);
-}
-function setLandingReviewCarouselIndex(nextIndex = 0) {
-  return getLandingRootRendererService().setReviewCarouselIndex(nextIndex);
-}
-function stepLandingReviewCarousel(direction = 1) {
-  return getLandingRootRendererService().stepReviewCarousel(direction);
 }
 function renderLandingRootHours(section = {}) {
   return getLandingRootRendererService().renderRootHours(section);
@@ -4267,10 +4268,6 @@ function renderLandingRootPage(record = _landingPageState) {
 
 async function initLandingRootPage() {
   if (!hasLandingRootShell()) return;
-  const prevButton = document.getElementById('landing-reviews-prev');
-  const nextButton = document.getElementById('landing-reviews-next');
-  if (prevButton) prevButton.onclick = () => stepLandingReviewCarousel(-1);
-  if (nextButton) nextButton.onclick = () => stepLandingReviewCarousel(1);
   try {
     const record = await ensureLandingPageStateLoaded();
     renderLandingRootPage(record);
@@ -4298,47 +4295,8 @@ function setLandingHoursField(restaurantId, dayKey, field, value) {
 function updateLandingDraftRecord(mutator = () => {}, options = {}) {
   return getLandingAdminWorkspaceService().updateDraftRecord(mutator, options);
 }
-function addLandingEventDraft() {
-  return getLandingAdminWorkspaceService().addEventDraft();
-}
-function updateLandingEventField(itemId = '', field = '', value = '') {
-  return getLandingAdminWorkspaceService().updateEventField(itemId, field, value);
-}
-function toggleLandingEventArchived(itemId = '', archived = false) {
-  return getLandingAdminWorkspaceService().toggleEventArchived(itemId, archived);
-}
-function updateLandingNewsField(itemId = '', field = '', value = '') {
-  return getLandingAdminWorkspaceService().updateNewsField(itemId, field, value);
-}
-function toggleLandingNewsArchived(itemId = '', archived = false) {
-  return getLandingAdminWorkspaceService().toggleNewsArchived(itemId, archived);
-}
-function updateLandingReviewField(restaurantId = '', itemId = '', field = '', value = '') {
-  return getLandingAdminWorkspaceService().updateReviewField(restaurantId, itemId, field, value);
-}
-function toggleLandingReviewArchived(restaurantId = '', itemId = '', archived = false) {
-  return getLandingAdminWorkspaceService().toggleReviewArchived(restaurantId, itemId, archived);
-}
 function toggleLandingSectionArchivedFilter(sectionId = '', checked = false) {
   return getLandingAdminWorkspaceService().toggleSectionArchivedFilter(sectionId, checked);
-}
-function handleLandingNewsImportPaste() {
-  return getLandingAdminWorkspaceService().handleNewsImportPaste();
-}
-function handleLandingReviewImportPaste(restaurantId = '') {
-  return getLandingAdminWorkspaceService().handleReviewImportPaste(restaurantId);
-}
-async function importLandingNewsDraft() {
-  return getLandingAdminWorkspaceService().importNewsDraft();
-}
-async function refreshLandingNewsItem(itemId = '') {
-  return getLandingAdminWorkspaceService().refreshNewsItem(itemId);
-}
-async function importLandingReviewDraft(restaurantId = '') {
-  return getLandingAdminWorkspaceService().importReviewDraft(restaurantId);
-}
-async function refreshLandingReviewItem(restaurantId = '', itemId = '') {
-  return getLandingAdminWorkspaceService().refreshReviewItem(restaurantId, itemId);
 }
 
 async function saveLandingPageDraft() {
@@ -4386,11 +4344,7 @@ async function sbResolveMenu() {
       MENU_ID = menu.id;
       if (setActiveMenuContext(menu.name || '', menu.type || 'drinks', menu.restaurant_id || '') === false) return;
       lsSet(LS_KEYS.menuId, MENU_ID);
-      const publicHref = getPublicHrefForMenuId(menu.id);
-      const currentHref = `${window.location.pathname}${window.location.search}`;
-      if (publicHref && publicHref !== currentHref) {
-        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-      }
+      syncResolvedMenuAddressBar(menu);
       return;
     }
     const invalidSlug = rawSlug || slug;
@@ -4417,11 +4371,7 @@ async function sbResolveMenu() {
         return;
       }
       if (setActiveMenuContext(menu.name || '', menu.type || MENU_TYPE, menu.restaurant_id || RESTAURANT_ID) === false) return;
-      const publicHref = getPublicHrefForMenuId(MENU_ID);
-      const currentHref = `${window.location.pathname}${window.location.search}`;
-      if (publicHref && publicHref !== currentHref) {
-        history.replaceState({}, '', new URL(publicHref, window.location.origin).toString());
-      }
+      syncResolvedMenuAddressBar(menu);
     } else {
       _clearActiveMenuContext({ clearCache: true });
     }
@@ -7973,10 +7923,16 @@ function getAuthApiBoundary() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'web_sign_out' }),
     }).then(response => readAuthApiPayload(response, 'Sign-out failed.')),
-    getProfile: ({ accessToken = '' } = {}) => fetch('/api/auth?mode=profile', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
-      .then(payload => extractProfileFromBootstrap(payload || {})),
+    getProfile: ({ accessToken = '' } = {}) => {
+      if (!accessToken) {
+        return Promise.resolve({ ok: false, profile: null, reason: 'missing-token' });
+      }
+
+      return fetch('/api/auth?mode=profile', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }).then(response => readAuthApiPayload(response, 'Failed to load profile.'))
+        .then(payload => extractProfileFromBootstrap(payload || {}));
+    },
     resetPasswordForEmail: ({ email = '', redirectTo = '' } = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
