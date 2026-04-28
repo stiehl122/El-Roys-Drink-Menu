@@ -34,36 +34,21 @@ final class LabelTextScannerSourceTests: XCTestCase {
   }
 }
 
-private func labelCaptureSourceURL(filePath: StaticString = #filePath) -> URL {
-  try! repositoryRootURL(filePath: filePath)
-    .appendingPathComponent("ios")
-    .appendingPathComponent("ElRoysManagerApp/Features/Scanner/LabelTextCaptureSheet.swift")
+private func labelCaptureSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try sourceContractFixtureURL(named: "LabelTextCaptureSheet.swift", extension: "txt")
 }
 
-private func imageSelectionSourceURL(filePath: StaticString = #filePath) -> URL {
-  try! repositoryRootURL(filePath: filePath)
-    .appendingPathComponent("ios")
-    .appendingPathComponent("ElRoysManagerApp/Features/Scanner/ImageTextSelectionSheet.swift")
+private func imageSelectionSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try sourceContractFixtureURL(named: "ImageTextSelectionSheet.swift", extension: "txt")
 }
 
-private func projectGeneratorSourceURL(filePath: StaticString = #filePath) -> URL {
-  try! repositoryRootURL(filePath: filePath)
-    .appendingPathComponent("ios/scripts/generate_project.rb")
+private func projectGeneratorSourceURL(filePath: StaticString = #filePath) throws -> URL {
+  try sourceContractFixtureURL(named: "generate_project.rb", extension: "txt")
 }
 
-private func repositoryRootURL(filePath: StaticString = #filePath) throws -> URL {
-  let fileManager = FileManager.default
-  var current = URL(fileURLWithPath: "\(filePath)").deletingLastPathComponent()
-
-  while current.path != current.deletingLastPathComponent().path {
-    let generator = current.appendingPathComponent("ios/scripts/generate_project.rb")
-    let features = current.appendingPathComponent("docs/FEATURES.md")
-    if fileManager.fileExists(atPath: generator.path),
-       fileManager.fileExists(atPath: features.path) {
-      return current
-    }
-    current.deleteLastPathComponent()
-  }
-
-  throw CocoaError(.fileNoSuchFile)
+private func sourceContractFixtureURL(named name: String, extension fileExtension: String) throws -> URL {
+  try XCTUnwrap(
+    Bundle(for: LabelTextScannerSourceTests.self).url(forResource: name, withExtension: fileExtension),
+    "Missing source contract fixture: \(name).\(fileExtension)"
+  )
 }
