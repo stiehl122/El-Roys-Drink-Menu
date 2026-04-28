@@ -19,9 +19,35 @@ struct PublicMenuScreen: View {
   }
 
   var body: some View {
+    let presentation = RestaurantPresentation.resolve(restaurant: restaurant)
     let session = selectedSession
 
-    ScrollView(showsIndicators: false) {
+    Group {
+      if presentation.isLeroys {
+        LeroysPublicMenuView(
+          restaurant: restaurant,
+          selectedType: $selectedType,
+          menuForType: menuForType,
+          sessionForMenu: sessionForMenu,
+          presentation: presentation,
+          options: menuTypeOptions
+        )
+      } else {
+        standardBody
+      }
+    }
+    .navigationTitle(restaurant.name)
+    .navigationBarTitleDisplayMode(.inline)
+    .task(id: session?.menu.id) {
+      guard let session else { return }
+      await session.load()
+    }
+  }
+
+  private var standardBody: some View {
+    let session = selectedSession
+
+    return ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 22) {
         heroCard
           .appEntryReveal()
@@ -54,12 +80,6 @@ struct PublicMenuScreen: View {
       .padding(.horizontal, 24)
       .padding(.top, 24)
       .padding(.bottom, 24)
-    }
-    .navigationTitle(restaurant.name)
-    .navigationBarTitleDisplayMode(.inline)
-    .task(id: session?.menu.id) {
-      guard let session else { return }
-      await session.load()
     }
   }
 
@@ -134,6 +154,10 @@ struct PublicMenuScreen: View {
   private var selectedSession: PublicMenuSession? {
     selectedMenu.map(sessionForMenu)
   }
+
+  private var menuTypeOptions: [String] {
+    RestaurantPresentation.resolve(restaurant: restaurant).orderedMenuTypes
+  }
 }
 
 private struct FeaturedItemsSection: View {
@@ -199,7 +223,7 @@ private struct PublicMenuItemRow: View {
               .foregroundStyle(AppPalette.ink)
               .strikethrough(item.isEightySixed)
             if item.isEightySixed {
-              Text("86'D")
+              Text(RestaurantPresentation.standard.publicSoldOutLabel)
                 .font(AppTypography.micro(9, weight: .bold))
                 .tracking(1.4)
                 .padding(.vertical, 5)
@@ -232,5 +256,286 @@ private struct PublicMenuItemRow: View {
     }
     .padding(15)
     .appFieldChrome(tint: accent, cornerRadius: 22)
+  }
+}
+
+private struct LeroysPublicMenuView: View {
+  let restaurant: RestaurantRecord
+  @Binding var selectedType: String
+  let menuForType: (String) -> MenuRecord?
+  let sessionForMenu: (MenuRecord) -> PublicMenuSession
+  let presentation: RestaurantPresentation
+  let options: [String]
+
+  private var selectedMenu: MenuRecord? {
+    menuForType(selectedType)
+  }
+
+  private var selectedSession: PublicMenuSession? {
+    selectedMenu.map(sessionForMenu)
+  }
+
+  var body: some View {
+    let session = selectedSession
+
+    ScrollView(showsIndicators: false) {
+      VStack(alignment: .leading, spacing: 18) {
+        LeroysPublicMenuHero(
+          selectedType: $selectedType,
+          options: options,
+          previewMenu: selectedMenu
+        )
+        .appEntryReveal()
+
+        if let notice = session?.notice {
+          StatusBanner(tone: notice.tone, title: notice.title, message: notice.message)
+            .appEntryReveal(delay: 0.05)
+        }
+
+        if let payload = session?.payload {
+          if presentation.showsFeaturedSpecials(selectedType: selectedType),
+             !payload.featuredItems.isEmpty {
+            LeroysSpecialsSlip(
+              items: payload.featuredItems,
+              soldOutLabel: presentation.publicSoldOutLabel
+            )
+              .appEntryReveal(delay: 0.08)
+          }
+
+          ForEach(Array(payload.cats.enumerated()), id: \.element.id) { index, category in
+            LeroysMenuCategoryCard(
+              category: category,
+              soldOutLabel: presentation.publicSoldOutLabel
+            )
+            .appEntryReveal(delay: 0.12 + (Double(index) * 0.035))
+          }
+        } else {
+          AppLoadingCard(
+            title: "Loading Leroy's menu",
+            subtitle: "Pulling the latest posted board.",
+            tint: LeroysPalette.brass
+          )
+          .appEntryReveal(delay: 0.08)
+        }
+
+        Color.clear.frame(height: 24)
+      }
+      .padding(.horizontal, 20)
+      .padding(.top, 20)
+      .padding(.bottom, 24)
+    }
+    .background {
+      LeroysChalkboardBackground()
+    }
+  }
+}
+
+private struct LeroysPublicMenuHero: View {
+  @Binding var selectedType: String
+  let options: [String]
+  let previewMenu: MenuRecord?
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      Image("LeroysHeroSign")
+        .resizable()
+        .scaledToFit()
+        .frame(maxWidth: 280)
+        .accessibilityLabel("Leroy's Lounge")
+
+      HStack(spacing: 8) {
+        ForEach(options, id: \.self) { type in
+          let isSelected = selectedType == type
+          Button {
+            withAnimation(AppMotion.snap) {
+              selectedType = type
+            }
+          } label: {
+            Text(type.uppercased())
+              .font(.system(size: 13, weight: .bold, design: .monospaced))
+              .tracking(2.2)
+              .foregroundStyle(isSelected ? LeroysPalette.deepWalnut : LeroysPalette.chalkCream)
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 13)
+              .background(
+                isSelected ? LeroysPalette.nicotineCream : LeroysPalette.board,
+                in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+              )
+              .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                  .stroke(LeroysPalette.brass.opacity(isSelected ? 0.72 : 0.34), lineWidth: 1)
+              }
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("\(type.capitalized) menu")
+          .accessibilityValue(isSelected ? "Selected" : "Not selected")
+          .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+      }
+
+      if let previewMenu {
+        NavigationLink(value: AppDestination.routePreview(previewMenu)) {
+          AppIslandButtonLabel(
+            title: "Open exact route preview",
+            subtitle: "Verify Leroy's deployed route before publishing or sharing.",
+            systemImage: "arrow.up.right"
+          )
+        }
+        .buttonStyle(.plain)
+        .appPillChrome(accent: LeroysPalette.brass, filled: true)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .leroysPostedCard(borderOpacity: 0.52)
+  }
+}
+
+private struct LeroysSpecialsSlip: View {
+  let items: [MenuItemPayload]
+  let soldOutLabel: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("TONIGHT'S SPECIAL")
+        .font(.system(size: 11, weight: .black, design: .monospaced))
+        .tracking(2.1)
+        .foregroundStyle(LeroysPalette.paperInk.opacity(0.78))
+
+      ForEach(items) { item in
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+          HStack(spacing: 8) {
+            Text(item.name)
+              .font(.system(size: 18, weight: .black, design: .serif))
+              .foregroundStyle(LeroysPalette.paperInk)
+              .strikethrough(item.isEightySixed)
+
+            if item.isEightySixed {
+              Text(soldOutLabel.uppercased())
+                .font(.system(size: 8, weight: .black, design: .monospaced))
+                .tracking(1.2)
+                .padding(.vertical, 3)
+                .padding(.horizontal, 6)
+                .background(
+                  LeroysPalette.fadedBeerRed.opacity(0.14),
+                  in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
+                .overlay {
+                  RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(LeroysPalette.fadedBeerRed.opacity(0.45), lineWidth: 1)
+                }
+                .foregroundStyle(LeroysPalette.fadedBeerRed)
+            }
+          }
+          Spacer(minLength: 10)
+          if !item.price.isEmpty {
+            Text(item.price)
+              .font(.system(size: 15, weight: .bold, design: .serif))
+              .foregroundStyle(LeroysPalette.paperInk)
+          }
+        }
+        if item.showDescription, !item.desc.isEmpty {
+          Text(item.desc)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(LeroysPalette.paperInk.opacity(0.72))
+        }
+      }
+    }
+    .padding(16)
+    .background(LeroysPalette.paper, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .rotationEffect(.degrees(-0.6))
+    .shadow(color: .black.opacity(0.22), radius: 12, y: 6)
+  }
+}
+
+private struct LeroysMenuCategoryCard: View {
+  let category: MenuCategoryPayload
+  let soldOutLabel: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(category.label.uppercased())
+          .font(.system(size: 23, weight: .black, design: .serif))
+          .tracking(1.2)
+          .foregroundStyle(LeroysPalette.brass)
+        if !category.sub.isEmpty {
+          Text(category.sub)
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .foregroundStyle(LeroysPalette.chalkCream.opacity(0.72))
+        }
+      }
+
+      Rectangle()
+        .fill(LeroysPalette.brass.opacity(0.55))
+        .frame(height: 1.5)
+
+      ForEach(category.items.filter(\.onMenu)) { item in
+        LeroysMenuItemRow(item: item, soldOutLabel: soldOutLabel)
+      }
+    }
+    .leroysPostedCard()
+  }
+}
+
+private struct LeroysMenuItemRow: View {
+  let item: MenuItemPayload
+  let soldOutLabel: String
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .firstTextBaseline, spacing: 12) {
+        VStack(alignment: .leading, spacing: 5) {
+          HStack(spacing: 8) {
+            Text(item.name)
+              .font(.system(size: 17, weight: .bold, design: .serif))
+              .foregroundStyle(LeroysPalette.chalkCream)
+              .strikethrough(item.isEightySixed, color: LeroysPalette.fadedBeerRed)
+
+            if item.isEightySixed {
+              Text(soldOutLabel.uppercased())
+                .font(.system(size: 9, weight: .black, design: .monospaced))
+                .tracking(1.4)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 7)
+                .background(
+                  LeroysPalette.fadedBeerRed.opacity(0.24),
+                  in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
+                .overlay {
+                  RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(LeroysPalette.fadedBeerRed.opacity(0.68), lineWidth: 1)
+                }
+                .foregroundStyle(LeroysPalette.chalkCream)
+            }
+          }
+
+          if item.showDescription, !item.desc.isEmpty {
+            Text(item.desc)
+              .font(.system(size: 13, weight: .semibold, design: .rounded))
+              .foregroundStyle(LeroysPalette.chalkCream.opacity(0.68))
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+
+        Spacer(minLength: 12)
+
+        Text(item.price.isEmpty ? "--" : item.price)
+          .font(.system(size: 15, weight: .black, design: .serif))
+          .foregroundStyle(LeroysPalette.brass)
+      }
+
+      if item.showRecipe, !item.recipe.isEmpty {
+        Text(item.recipe.joined(separator: " • "))
+          .font(.system(size: 12, weight: .semibold, design: .rounded))
+          .foregroundStyle(LeroysPalette.brass.opacity(0.82))
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .padding(.vertical, 10)
+    .overlay(alignment: .bottom) {
+      Rectangle()
+        .fill(LeroysPalette.chalkCream.opacity(0.14))
+        .frame(height: 1)
+    }
   }
 }
