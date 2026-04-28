@@ -72,7 +72,7 @@ enum RestaurantPresentation: Equatable {
       "leroys-lounge",
       "leroyslounge",
       "leroys_lounge",
-      "00000000-0000-0000-0000-000000000002"
+      "00000000-0000-0000-0000-000000000010"
     ])
 
     if leroysTokens.contains(normalizedSlug) || leroysTokens.contains(normalizedID) {

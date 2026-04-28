@@ -282,7 +282,8 @@ private struct LeroysPublicMenuView: View {
       VStack(alignment: .leading, spacing: 18) {
         LeroysPublicMenuHero(
           selectedType: $selectedType,
-          options: options
+          options: options,
+          previewMenu: selectedMenu
         )
         .appEntryReveal()
 
@@ -332,6 +333,7 @@ private struct LeroysPublicMenuView: View {
 private struct LeroysPublicMenuHero: View {
   @Binding var selectedType: String
   let options: [String]
+  let previewMenu: MenuRecord?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -369,6 +371,18 @@ private struct LeroysPublicMenuHero: View {
           .accessibilityValue(isSelected ? "Selected" : "Not selected")
           .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
+      }
+
+      if let previewMenu {
+        NavigationLink(value: AppDestination.routePreview(previewMenu)) {
+          AppIslandButtonLabel(
+            title: "Open exact route preview",
+            subtitle: "Verify Leroy's deployed route before publishing or sharing.",
+            systemImage: "arrow.up.right"
+          )
+        }
+        .buttonStyle(.plain)
+        .appPillChrome(accent: LeroysPalette.brass, filled: true)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)

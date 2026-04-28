@@ -5,10 +5,27 @@ struct RoutePreviewScreen: View {
   let menu: MenuRecord
   let url: URL
   @Environment(\.dismiss) private var dismiss
+  @State private var isPresentingSafari = false
 
   var body: some View {
-    SafariRoutePreview(url: url)
-      .ignoresSafeArea()
+    VStack(spacing: 14) {
+      ProgressView()
+        .tint(AppPalette.brand)
+      Text("Opening exact route preview")
+        .font(AppTypography.body(15, weight: .semibold))
+        .foregroundStyle(AppPalette.espresso)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .background(AppBackground())
+    .onAppear {
+      isPresentingSafari = true
+    }
+    .sheet(isPresented: $isPresentingSafari, onDismiss: {
+      dismiss()
+    }) {
+      SafariRoutePreview(url: url)
+        .ignoresSafeArea()
+    }
       .navigationTitle(menu.displayTypeLabel)
       .navigationBarTitleDisplayMode(.inline)
   }
