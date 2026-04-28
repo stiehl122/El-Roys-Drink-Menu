@@ -94,15 +94,19 @@
   }
 
   function buildWeeklySpecialHtml(item) {
+    const is86 = !!item?.eightySixed;
     const desc = item?.showDescription === false ? '' : String(item?.desc || '').trim();
     const price = normalizedPrice(item);
-    return `<article class="ll-wall-specials-strip" aria-labelledby="ll-weekly-special-title">
+    return `<article class="ll-wall-specials-strip${is86 ? ' is-sold-out' : ''}" aria-labelledby="ll-weekly-special-title">
       <div>
         <p class="ll-wall-strip-kicker">Weekly Special</p>
         <h2 id="ll-weekly-special-title">${esc(item?.name || LEROYS_SPECIAL_EMPTY)}</h2>
       </div>
       ${desc ? `<p>${esc(desc)}</p>` : '<p></p>'}
-      ${price ? `<strong class="ll-wall-special-price">${esc(price)}</strong>` : ''}
+      <div class="ll-wall-special-side">
+        ${is86 ? '<span class="ll-wall-sold-out sold-out">Sold Out</span>' : ''}
+        ${price ? `<strong class="ll-wall-special-price">${esc(price)}</strong>` : ''}
+      </div>
     </article>`;
   }
 

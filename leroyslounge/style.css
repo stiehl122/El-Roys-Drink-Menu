@@ -369,6 +369,19 @@
   text-align: right;
 }
 
+#restaurant-site-wrapper .ll-wall-special-side {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-self: end;
+}
+
+#restaurant-site-wrapper .ll-wall-specials-strip.is-sold-out h2 {
+  text-decoration: line-through;
+  text-decoration-color: rgba(180, 53, 36, 0.9);
+  text-decoration-thickness: 3px;
+}
+
 #restaurant-site-wrapper .ll-wall-category {
   display: grid;
   gap: 0;
@@ -854,6 +867,7 @@
     gap: 8px;
   }
 
+  #restaurant-site-wrapper .ll-wall-special-side,
   #restaurant-site-wrapper .ll-wall-item-side,
   #restaurant-site-wrapper .ll-wall-price,
   #restaurant-site-wrapper .ll-wall-sold-out {

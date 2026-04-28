@@ -2010,6 +2010,65 @@ test('public route contract and route renderers register and hydrate both restau
   }
 });
 
+test("leroy's food weekly special keeps sold-out treatment", () => {
+  const sandbox = loadAppSandbox();
+  setupRouteDom(sandbox, 'll');
+  loadScript(path.join(__dirname, '..', 'leroyslounge', 'app.js'), sandbox);
+
+  const renderer = sandbox.__publicRouteRenderer;
+  assert.ok(renderer, 'leroy renderer did not register');
+
+  const contract = {
+    snapshot: {
+      activeMenuName: "Leroy's Lounge Food",
+      appVersion: getState(sandbox, 'APP_VERSION'),
+      canEditRestaurantSpecials: false,
+      categoryDefs: [{ id: 'burgers', title: 'Burgers', icon: '' }],
+      currentUser: null,
+      featuredItems: [{
+        id: 'special-86',
+        name: 'Fried Bologna Special',
+        price: '$9',
+        visibility: 'public',
+        onMenu: true,
+        eightySixed: true,
+        desc: 'Sold through for the week',
+        showDescription: true,
+      }],
+      isPreview: false,
+      knownMenus: [],
+      lastUpdatedTs: '1712705100000',
+      menuId: '00000000-0000-0000-0000-000000000020',
+      menuState: makeMenuState({ burgers: [] }),
+      menuType: 'food',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      siteRestaurant: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge" },
+    },
+    helpers: {
+      escHtml: value => String(value || ''),
+      formatUpdatedAt: () => 'Thu, Apr 9 at 7:25 PM',
+      getMenuTypeLabel: value => String(value || ''),
+    },
+    actions: {
+      closeDropdowns() {},
+      canManageMenu() {
+        return false;
+      },
+      openManager() {},
+      openAdmin() {},
+      switchMenu: async () => ({ ok: true }),
+    },
+  };
+
+  assert.equal(renderer.boot(contract), true);
+  assert.equal(renderer.render(contract), true);
+
+  const featuredWrap = sandbox.document.getElementById('ll-route-specials');
+  assert.match(featuredWrap.innerHTML, /Fried Bologna Special/);
+  assert.match(featuredWrap.innerHTML, /is-sold-out/);
+  assert.match(featuredWrap.innerHTML, />Sold Out</);
+});
+
 test('public staff footer state exposes sign-in and quiet utility links by role', () => {
   const sandbox = loadAppSandbox();
 
