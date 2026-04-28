@@ -30,7 +30,7 @@ test('entry shells reference ELROYSTEMPLOGO instead of HFLOGO', () => {
   });
 });
 
-test("El Roy's route header/footer and Leroy's jump button use temp logo artwork", () => {
+test("El Roy's route branding and Leroy's wall footer action stay wired correctly", () => {
   const cantinaHtml = read('elroyscantina/index.html');
   const cantinaCss = read('elroyscantina/style.css');
   const leroysHtml = read('leroyslounge/index.html');
@@ -40,8 +40,8 @@ test("El Roy's route header/footer and Leroy's jump button use temp logo artwork
   assert.match(cantinaHtml, /class="erc-footer-logo"[\s\S]*src="\/ELROYSTEMPLOGO\.png"/);
   assert.match(cantinaCss, /\.erc-brand-logo/);
   assert.match(cantinaCss, /\.erc-footer-logo/);
-  assert.match(leroysHtml, /class="ll-board-jump-link"[\s\S]*<img[\s\S]*src="\/ELROYSTEMPLOGO\.png"/);
-  assert.match(leroysCss, /\.ll-board-jump-logo/);
+  assert.match(leroysHtml, /class="ll-wall-footer-action"[\s\S]*href="\/elroyscantina"[\s\S]*>El Roy's<\/a>/);
+  assert.match(leroysCss, /\.ll-wall-footer-action/);
 });
 
 test('ELROYSTEMPLOGO assets exist for web and iOS app icons', () => {

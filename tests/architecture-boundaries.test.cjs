@@ -19,7 +19,7 @@ function read(relativePath) {
 
 function setupRouteDom(sandbox, prefix) {
   const doc = sandbox.document;
-  const pageClass = prefix === 'll' ? '.ll-board-page' : '.erc-page';
+  const pageClass = prefix === 'll' ? '.ll-wall-page' : '.erc-page';
   const templateId = prefix === 'll' ? 'leroy-route-template' : 'elroy-route-template';
   const menuNameId = prefix === 'll' ? 'll-route-menu-name' : null;
   const statusTsId = prefix === 'll' ? 'll-route-status-timestamp' : 'erc-route-status-timestamp';
@@ -2011,12 +2011,75 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
-    assert.match(featuredWrap.innerHTML, /House Margarita 1/);
-    assert.match(featuredWrap.innerHTML, /House Margarita 5/);
+    if (routeCase.prefix === 'll') {
+      assert.equal(featuredWrap.innerHTML, '');
+    } else {
+      assert.match(featuredWrap.innerHTML, /House Margarita 1/);
+      assert.match(featuredWrap.innerHTML, /House Margarita 5/);
+    }
     assert.equal(page.classList.contains('is-mobile-expanded'), false);
     assert.equal(page.classList.contains('is-mobile-compact'), false);
     assert.equal(page.classList.contains('is-near-top'), false);
   }
+});
+
+test("leroy's food weekly special keeps sold-out treatment", () => {
+  const sandbox = loadAppSandbox();
+  setupRouteDom(sandbox, 'll');
+  loadScript(path.join(__dirname, '..', 'leroyslounge', 'app.js'), sandbox);
+
+  const renderer = sandbox.__publicRouteRenderer;
+  assert.ok(renderer, 'leroy renderer did not register');
+
+  const contract = {
+    snapshot: {
+      activeMenuName: "Leroy's Lounge Food",
+      appVersion: getState(sandbox, 'APP_VERSION'),
+      canEditRestaurantSpecials: false,
+      categoryDefs: [{ id: 'burgers', title: 'Burgers', icon: '' }],
+      currentUser: null,
+      featuredItems: [{
+        id: 'special-86',
+        name: 'Fried Bologna Special',
+        price: '$9',
+        visibility: 'public',
+        onMenu: true,
+        eightySixed: true,
+        desc: 'Sold through for the week',
+        showDescription: true,
+      }],
+      isPreview: false,
+      knownMenus: [],
+      lastUpdatedTs: '1712705100000',
+      menuId: '00000000-0000-0000-0000-000000000020',
+      menuState: makeMenuState({ burgers: [] }),
+      menuType: 'food',
+      restaurantId: '00000000-0000-0000-0000-000000000010',
+      siteRestaurant: { id: '00000000-0000-0000-0000-000000000010', name: "Leroy's Lounge" },
+    },
+    helpers: {
+      escHtml: value => String(value || ''),
+      formatUpdatedAt: () => 'Thu, Apr 9 at 7:25 PM',
+      getMenuTypeLabel: value => String(value || ''),
+    },
+    actions: {
+      closeDropdowns() {},
+      canManageMenu() {
+        return false;
+      },
+      openManager() {},
+      openAdmin() {},
+      switchMenu: async () => ({ ok: true }),
+    },
+  };
+
+  assert.equal(renderer.boot(contract), true);
+  assert.equal(renderer.render(contract), true);
+
+  const featuredWrap = sandbox.document.getElementById('ll-route-specials');
+  assert.match(featuredWrap.innerHTML, /Fried Bologna Special/);
+  assert.match(featuredWrap.innerHTML, /is-sold-out/);
+  assert.match(featuredWrap.innerHTML, />Sold Out</);
 });
 
 test('public staff footer state exposes sign-in and quiet utility links by role', () => {
