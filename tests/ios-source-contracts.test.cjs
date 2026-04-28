@@ -81,6 +81,16 @@ test('iOS login screen does not show demo credentials in production copy', () =>
   assert.match(source, /SecureField\("Password", text: \$model\.password\)/);
 });
 
+test('iOS launch smoke test uses deterministic anonymous bootstrap', () => {
+  const appModel = read('ios/ElRoysManagerApp/App/AppModel.swift');
+  const uiTest = read('ios/ElRoysManagerAppUITests/ElRoysManagerAppUITests.swift');
+
+  assert.match(uiTest, /app\.launchArguments\.append\("--ui-testing"\)/);
+  assert.match(appModel, /ProcessInfo\.processInfo\.arguments\.contains\("--ui-testing"\)/);
+  assert.match(appModel, /bootstrap = \.uiTestingAnonymous/);
+  assert.match(appModel, /isLaunching = false/);
+});
+
 test('iOS home screen reserves explicit clearance for bottom navigation', () => {
   const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
   assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);
