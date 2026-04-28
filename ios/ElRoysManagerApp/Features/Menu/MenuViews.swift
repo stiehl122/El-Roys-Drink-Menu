@@ -1327,10 +1327,15 @@ private struct ItemEditorSheet: View {
   @State private var showingLabelTextScanner = false
   @State private var pendingTextSelection: ScannerTextSelection?
   @State private var showingTextApplyDialog = false
-  @State private var scannerLookupInFlight = false
+  @State private var latestScannerLookupID = 0
+  @State private var activeScannerLookupIDs: Set<Int> = []
 
   private var supportsLabelText: Bool {
     MenuCameraFeaturePolicy.supportsLabelText(isFoodMenu: session.menu.isFoodMenu)
+  }
+
+  private var scannerLookupInFlight: Bool {
+    !activeScannerLookupIDs.isEmpty
   }
 
   var body: some View {
@@ -1427,7 +1432,7 @@ private struct ItemEditorSheet: View {
       .navigationTitle(draft.itemID == nil ? "Add Item" : "Edit Item")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Close") { dismiss() }
+          Button("Close") { close() }
         }
         ToolbarItem(placement: .confirmationAction) {
           Button("Save") { save() }
@@ -1465,10 +1470,19 @@ private struct ItemEditorSheet: View {
     } message: { selection in
       Text(selection.text)
     }
+    .onDisappear {
+      invalidateScannerLookups()
+    }
+  }
+
+  private func close() {
+    invalidateScannerLookups()
+    dismiss()
   }
 
   private func save() {
     guard let item = makeItem(categoryKey: draft.categoryKey) else { return }
+    invalidateScannerLookups()
     session.upsertItem(item, categoryKey: draft.categoryKey, originalCategoryKey: draft.originalCategoryKey)
 
     if draft.keepAdding {
@@ -1485,10 +1499,12 @@ private struct ItemEditorSheet: View {
   private func moveToOffMenu() {
     let sourceCategoryKey = draft.originalCategoryKey ?? draft.categoryKey
     guard sourceCategoryKey != EditableMenuDocument.uncategorizedKey else {
+      invalidateScannerLookups()
       dismiss()
       return
     }
     guard let item = makeItem(categoryKey: sourceCategoryKey, validateDuplicateName: false) else { return }
+    invalidateScannerLookups()
     session.moveItemToOffMenu(item, from: sourceCategoryKey)
     dismiss()
   }
@@ -1516,23 +1532,40 @@ private struct ItemEditorSheet: View {
       return
     }
 
-    scannerLookupInFlight = true
-    defer { scannerLookupInFlight = false }
+    latestScannerLookupID += 1
+    let lookupID = latestScannerLookupID
+    let expectedBarcode = normalizedBarcode
+    activeScannerLookupIDs.insert(lookupID)
+    defer { activeScannerLookupIDs.remove(lookupID) }
 
     do {
       let result = try await session.lookupBarcode(normalizedBarcode)
+      guard isCurrentScannerLookup(id: lookupID, expectedBarcode: expectedBarcode) else { return }
+
       let lookupPatch = ScannerResultNormalizer.productLookupPatch(
         result: result,
         existingDescription: draft.description
       )
       applyPatch(lookupPatch)
     } catch {
+      guard isCurrentScannerLookup(id: lookupID, expectedBarcode: expectedBarcode) else { return }
+
       session.notice = AppNotice(
         tone: .warning,
         title: "Lookup Failed",
         message: error.localizedDescription
       )
     }
+  }
+
+  private func isCurrentScannerLookup(id: Int, expectedBarcode: String) -> Bool {
+    id == latestScannerLookupID
+      && draft.barcode.trimmingCharacters(in: .whitespacesAndNewlines) == expectedBarcode
+  }
+
+  private func invalidateScannerLookups() {
+    latestScannerLookupID += 1
+    activeScannerLookupIDs.removeAll()
   }
 
   private func applyTextSelection(
