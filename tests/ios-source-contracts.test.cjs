@@ -72,3 +72,51 @@ test('iOS source contracts preserve reorder mutation and account deletion copy',
   assert.match(appModel, /within 30 days/);
   assert.match(homeViews, /Account Deletion Details/);
 });
+
+test('iOS Leroy theme resolver owns restaurant-specific public presentation rules', () => {
+  const design = read('ios/ElRoysManagerApp/Design/Glass.swift');
+
+  assert.match(design, /enum RestaurantPresentation/);
+  assert.match(design, /case leroys/);
+  assert.match(design, /case standard/);
+  assert.match(design, /static func resolve\(restaurant:/);
+  assert.match(design, /static func resolve\(menu:/);
+  assert.match(design, /var publicSoldOutLabel: String/);
+  assert.match(design, /return "Sold Out"/);
+  assert.match(design, /func showsFeaturedSpecials\(selectedType: String\) -> Bool/);
+  assert.match(design, /selectedType\.lowercased\(\) == "food"/);
+  assert.match(design, /var orderedMenuTypes: \[String\]/);
+  assert.match(design, /\["food", "drinks"\]/);
+});
+
+test('iOS Leroy home removes decorative dock and uses hero sign background assets', () => {
+  const homeViews = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+
+  assert.doesNotMatch(homeViews, /\.safeAreaInset\(edge:\s*\.bottom\)\s*\{\s*HomeBottomNav/);
+  assert.doesNotMatch(homeViews, /private struct HomeBottomNav/);
+  assert.doesNotMatch(homeViews, /qrcode\.viewfinder/);
+  assert.match(homeViews, /Image\("LeroysHeroSign"\)/);
+  assert.match(homeViews, /Image\("LeroysWallBackground"\)/);
+  assert.match(homeViews, /RestaurantPresentation\.resolve\(restaurant:/);
+  assert.match(homeViews, /presentation\.orderedMenuTypes/);
+});
+
+test('iOS Leroy public menu is themed, food-first, and uses guest sold-out language', () => {
+  const publicViews = read('ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift');
+
+  assert.match(publicViews, /RestaurantPresentation\.resolve\(restaurant:\s*restaurant\)/);
+  assert.match(publicViews, /LeroysPublicMenuView/);
+  assert.match(publicViews, /LeroysSpecialsSlip/);
+  assert.match(publicViews, /presentation\.showsFeaturedSpecials\(selectedType:/);
+  assert.match(publicViews, /presentation\.publicSoldOutLabel/);
+  assert.doesNotMatch(publicViews, /Text\("86'D"\)/);
+});
+
+test('iOS exact route preview uses SFSafariViewController instead of embedded WKWebView', () => {
+  const routePreview = read('ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift');
+
+  assert.match(routePreview, /import SafariServices/);
+  assert.match(routePreview, /SFSafariViewController/);
+  assert.doesNotMatch(routePreview, /import WebKit/);
+  assert.doesNotMatch(routePreview, /WKWebView/);
+});
