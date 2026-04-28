@@ -294,7 +294,10 @@ private struct LeroysPublicMenuView: View {
         if let payload = session?.payload {
           if presentation.showsFeaturedSpecials(selectedType: selectedType),
              !payload.featuredItems.isEmpty {
-            LeroysSpecialsSlip(items: payload.featuredItems)
+            LeroysSpecialsSlip(
+              items: payload.featuredItems,
+              soldOutLabel: presentation.publicSoldOutLabel
+            )
               .appEntryReveal(delay: 0.08)
           }
 
@@ -362,6 +365,9 @@ private struct LeroysPublicMenuHero: View {
               }
           }
           .buttonStyle(.plain)
+          .accessibilityLabel("\(type.capitalized) menu")
+          .accessibilityValue(isSelected ? "Selected" : "Not selected")
+          .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
       }
     }
@@ -372,6 +378,7 @@ private struct LeroysPublicMenuHero: View {
 
 private struct LeroysSpecialsSlip: View {
   let items: [MenuItemPayload]
+  let soldOutLabel: String
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -380,12 +387,31 @@ private struct LeroysSpecialsSlip: View {
         .tracking(2.1)
         .foregroundStyle(LeroysPalette.paperInk.opacity(0.78))
 
-      ForEach(items.prefix(2)) { item in
+      ForEach(items) { item in
         HStack(alignment: .firstTextBaseline, spacing: 10) {
-          Text(item.name)
-            .font(.system(size: 18, weight: .black, design: .serif))
-            .foregroundStyle(LeroysPalette.paperInk)
-            .strikethrough(item.isEightySixed)
+          HStack(spacing: 8) {
+            Text(item.name)
+              .font(.system(size: 18, weight: .black, design: .serif))
+              .foregroundStyle(LeroysPalette.paperInk)
+              .strikethrough(item.isEightySixed)
+
+            if item.isEightySixed {
+              Text(soldOutLabel.uppercased())
+                .font(.system(size: 8, weight: .black, design: .monospaced))
+                .tracking(1.2)
+                .padding(.vertical, 3)
+                .padding(.horizontal, 6)
+                .background(
+                  LeroysPalette.fadedBeerRed.opacity(0.14),
+                  in: RoundedRectangle(cornerRadius: 5, style: .continuous)
+                )
+                .overlay {
+                  RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(LeroysPalette.fadedBeerRed.opacity(0.45), lineWidth: 1)
+                }
+                .foregroundStyle(LeroysPalette.fadedBeerRed)
+            }
+          }
           Spacer(minLength: 10)
           if !item.price.isEmpty {
             Text(item.price)
