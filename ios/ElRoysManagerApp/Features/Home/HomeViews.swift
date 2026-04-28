@@ -10,7 +10,6 @@ struct RestaurantChooserView: View {
   @State private var expandedUpdateID: String?
   @State private var homeData = HomeDerivedData.empty
   @Namespace private var switcherNamespace
-  @Namespace private var bottomNavNamespace
 
   private struct HomeDerivedData {
     var updates: [HomeUpdate]
@@ -42,14 +41,21 @@ struct RestaurantChooserView: View {
     let theme = activeTheme
     let restaurant = selectedRestaurant
     let currentHomeData = homeData
+    let presentation = RestaurantPresentation.resolve(restaurant: restaurant)
 
     ZStack {
-      HomeBackground(theme: theme)
+      if presentation.isLeroys {
+        // Source contract: LeroysWallBackground renders Image("LeroysWallBackground").
+        LeroysWallBackground()
+      } else {
+        HomeBackground(theme: theme)
+      }
 
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 20) {
           HomeHeader(
             theme: theme,
+            presentation: presentation,
             environment: model.environment,
             onRequestAccountDeletion: { Task { await model.requestAccountDeletion() } },
             onSignOut: { model.signOut() }
@@ -59,6 +65,7 @@ struct RestaurantChooserView: View {
             options: restaurantSwitcherOptions,
             selectedSlug: selectedRestaurantSlug,
             theme: theme,
+            presentation: presentation,
             namespace: switcherNamespace,
             onSelect: { slug in
               withAnimation(AppMotion.settle) {
@@ -77,13 +84,18 @@ struct RestaurantChooserView: View {
 
           HomeEditGrid(
             theme: theme,
+            presentation: presentation,
             drinksCount: currentHomeData.drinksCount,
             foodCount: currentHomeData.foodCount,
             drinksDestination: currentHomeData.drinksEditorDestination,
             foodDestination: currentHomeData.foodEditorDestination
           )
 
-          HomeViewRows(restaurant: restaurant, theme: theme)
+          HomeViewRows(
+            restaurant: restaurant,
+            theme: theme,
+            presentation: presentation
+          )
 
           HomeRestaurantToolsCard(
             restaurant: restaurant,
@@ -97,11 +109,6 @@ struct RestaurantChooserView: View {
         .padding(.top, 14)
         .padding(.bottom, 16)
       }
-    }
-    .safeAreaInset(edge: .bottom) {
-      HomeBottomNav(theme: theme, namespace: bottomNavNamespace)
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
     }
     .onAppear {
       if restaurantSwitcherOptions.contains(where: { $0.slug == selectedRestaurantSlug }) {
@@ -288,28 +295,42 @@ struct RestaurantHubView: View {
 
 private struct HomeHeader: View {
   let theme: HomeTheme
+  let presentation: RestaurantPresentation
   let environment: AppEnvironment
   let onRequestAccountDeletion: () -> Void
   let onSignOut: () -> Void
 
   var body: some View {
     HStack(alignment: .center, spacing: 14) {
-      HomeEmblem(theme: theme)
+      if presentation.isLeroys {
+        VStack(alignment: .leading, spacing: 8) {
+          Image("LeroysHeroSign")
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: 255)
+            .accessibilityLabel("Leroy's Lounge")
+          HomeLiveStrip(theme: theme, environment: environment)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      } else {
+        HomeEmblem(theme: theme)
+          .accessibilityHidden(true)
 
-      VStack(alignment: .leading, spacing: 4) {
-        Text("201 SOUTH LEROY")
-          .font(theme.display(19, weight: .bold))
-          .tracking(theme.motif == .chevron ? 1.4 : 0.8)
-          .foregroundStyle(theme.headerText)
-          .lineLimit(1)
-          .minimumScaleFactor(0.7)
+        VStack(alignment: .leading, spacing: 4) {
+          Text("201 SOUTH LEROY")
+            .font(theme.display(19, weight: .bold))
+            .tracking(theme.motif == .chevron ? 1.4 : 0.8)
+            .foregroundStyle(theme.headerText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
 
-        HomeLiveStrip(
-          theme: theme,
-          environment: environment
-        )
+          HomeLiveStrip(
+            theme: theme,
+            environment: environment
+          )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
 
       Menu {
         Button("Request Account Deletion") {
@@ -449,6 +470,7 @@ private struct HomeRestaurantSwitcher: View {
   let options: [HomeRestaurantOption]
   let selectedSlug: String
   let theme: HomeTheme
+  let presentation: RestaurantPresentation
   let namespace: Namespace.ID
   let onSelect: (String) -> Void
 
@@ -456,6 +478,9 @@ private struct HomeRestaurantSwitcher: View {
     HStack(spacing: 0) {
       ForEach(options) { option in
         let isSelected = option.slug == selectedSlug
+        let optionPresentation = RestaurantPresentation.resolve(
+          restaurant: RestaurantRecord(id: option.slug, slug: option.slug, name: option.label, canAccess: nil, design: nil, useCustomDesign: nil)
+        )
         Button {
           onSelect(option.slug)
         } label: {
@@ -485,6 +510,16 @@ private struct HomeRestaurantSwitcher: View {
           .frame(maxWidth: .infinity)
           .padding(.vertical, 12)
           .contentShape(Rectangle())
+          .background {
+            if optionPresentation.isLeroys {
+              RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LeroysPalette.board.opacity(isSelected ? 0.72 : 0.34))
+                .overlay {
+                  RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(LeroysPalette.brass.opacity(isSelected ? 0.58 : 0.22), lineWidth: 1)
+                }
+            }
+          }
         }
         .buttonStyle(.plain)
 
@@ -684,35 +719,47 @@ private struct HomeDiffLine: View {
 
 private struct HomeEditGrid: View {
   let theme: HomeTheme
+  let presentation: RestaurantPresentation
   let drinksCount: Int?
   let foodCount: Int?
   let drinksDestination: AppDestination?
   let foodDestination: AppDestination?
 
   var body: some View {
-    HStack(spacing: 12) {
-      editTile(
-        action: drinksDestination,
-        tile: HomeEditTile(
+    let tiles: [(type: String, destination: AppDestination?, tile: HomeEditTile)] = [
+      (
+        "drinks",
+        drinksDestination,
+        HomeEditTile(
           chapter: "VOL. 01",
-          kind: theme.motif == .chevron ? "LIQUID" : "BEBIDAS",
+          kind: presentation.isLeroys ? "DRINKS" : (theme.motif == .chevron ? "LIQUID" : "BEBIDAS"),
           title: "Edit Drinks",
           countLabel: countLabel(for: drinksCount),
           icon: "wineglass.fill",
           theme: theme
         )
-      )
-      editTile(
-        action: foodDestination,
-        tile: HomeEditTile(
+      ),
+      (
+        "food",
+        foodDestination,
+        HomeEditTile(
           chapter: "VOL. 02",
-          kind: theme.motif == .chevron ? "PLATES" : "COCINA",
+          kind: presentation.isLeroys ? "FOOD" : (theme.motif == .chevron ? "PLATES" : "COCINA"),
           title: "Edit Food",
           countLabel: countLabel(for: foodCount),
           icon: "fork.knife",
           theme: theme
         )
       )
+    ].sorted { lhs, rhs in
+      presentation.orderedMenuTypes.firstIndex(of: lhs.type) ?? 99 <
+        presentation.orderedMenuTypes.firstIndex(of: rhs.type) ?? 99
+    }
+
+    HStack(spacing: 12) {
+      ForEach(tiles, id: \.type) { entry in
+        editTile(action: entry.destination, tile: entry.tile)
+      }
     }
   }
 
@@ -820,15 +867,17 @@ private struct HomeEditTile: View {
 private struct HomeViewRows: View {
   let restaurant: RestaurantRecord?
   let theme: HomeTheme
+  let presentation: RestaurantPresentation
 
   var body: some View {
     VStack(spacing: 10) {
-      row(destination: restaurant.map { AppDestination.publicMenu($0, initialType: "drinks") },
-          label: "View Drinks",
-          icon: "wineglass")
-      row(destination: restaurant.map { AppDestination.publicMenu($0, initialType: "food") },
-          label: "View Food",
-          icon: "fork.knife")
+      ForEach(presentation.orderedMenuTypes, id: \.self) { type in
+        row(
+          destination: restaurant.map { AppDestination.publicMenu($0, initialType: type) },
+          label: type == "food" ? "View Food" : "View Drinks",
+          icon: type == "food" ? "fork.knife" : "wineglass"
+        )
+      }
     }
   }
 
@@ -973,131 +1022,6 @@ private struct HomeRestaurantToolsCard: View {
         .stroke(theme.toolsBorder, lineWidth: 1)
     }
     .shadow(color: theme.shadowTint.opacity(0.22), radius: 16, y: 8)
-  }
-}
-
-// MARK: - Bottom nav
-
-private struct HomeBottomNav: View {
-  let theme: HomeTheme
-  let namespace: Namespace.ID
-
-  private let activeTab: HomeBottomTab = .home
-
-  var body: some View {
-    bottomBarLayout
-      .shadow(color: theme.shadowTint.opacity(0.16), radius: 24, y: 14)
-  }
-
-  @ViewBuilder
-  private var bottomBarLayout: some View {
-    if #available(iOS 26.0, *) {
-      GlassEffectContainer(spacing: 14) {
-        HStack(spacing: 14) {
-          bottomTabCluster
-          qrButton
-        }
-      }
-    } else {
-      HStack(spacing: 14) {
-        bottomTabCluster
-        qrButton
-      }
-    }
-  }
-
-  private var bottomTabCluster: some View {
-    HStack(spacing: 2) {
-      ForEach(HomeBottomTab.allCases) { tab in
-        let isActive = tab == activeTab
-        Button {} label: {
-          VStack(spacing: 5) {
-            Image(systemName: tab.symbolName)
-              .font(.system(size: 17, weight: isActive ? .semibold : .regular))
-              .foregroundStyle(isActive ? theme.bottomNavActive : theme.bottomNavInactive)
-            Text(tab.rawValue.uppercased())
-              .font(.system(size: 9, weight: .bold, design: .monospaced))
-              .tracking(1.2)
-              .foregroundStyle(isActive ? theme.bottomNavActive : theme.bottomNavInactive)
-            ZStack {
-              if isActive {
-                Circle()
-                  .fill(theme.accent)
-                  .frame(width: 4, height: 4)
-                  .matchedGeometryEffect(id: "home-bottom-nav-gem", in: namespace)
-              } else {
-                Circle()
-                  .fill(Color.clear)
-                  .frame(width: 4, height: 4)
-              }
-            }
-          }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
-        }
-        .buttonStyle(.plain)
-      }
-    }
-    .padding(.horizontal, 10)
-    .padding(.vertical, 6)
-    .modifier(HomeBottomBarClusterModifier(theme: theme))
-  }
-
-  private var qrButton: some View {
-    Button {} label: {
-      ZStack {
-        HomeMedallionBorder(theme: theme)
-        Image(systemName: "qrcode.viewfinder")
-          .font(.system(size: 26, weight: .regular))
-          .foregroundStyle(theme.bottomNavDetachedIcon)
-      }
-      .frame(width: 76, height: 76)
-    }
-    .buttonStyle(.plain)
-    .accessibilityLabel("Scan QR")
-    .modifier(HomeDetachedQRButtonModifier(theme: theme))
-  }
-}
-
-/// Slowly rotating conic-gradient border — the "door token" medallion.
-private struct HomeMedallionBorder: View {
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @Environment(\.scenePhase) private var scenePhase
-  let theme: HomeTheme
-
-  var body: some View {
-    Group {
-      if reduceMotion || scenePhase != .active {
-        medallion(at: .degrees(0))
-      } else {
-        TimelineView(.periodic(from: .now, by: 1.0 / 6.0)) { context in
-          let t = context.date.timeIntervalSinceReferenceDate
-          let angle = Angle.degrees(t.truncatingRemainder(dividingBy: 12) / 12 * 360)
-          medallion(at: angle)
-        }
-      }
-    }
-    .allowsHitTesting(false)
-  }
-
-  @ViewBuilder
-  private func medallion(at angle: Angle) -> some View {
-    Circle()
-      .strokeBorder(
-        AngularGradient(
-          gradient: Gradient(colors: [
-            theme.medallionGlowA.opacity(0.9),
-            theme.medallionGlowB.opacity(0.95),
-            theme.medallionGlowA.opacity(0.4),
-            theme.medallionGlowB.opacity(0.85),
-            theme.medallionGlowA.opacity(0.9),
-          ]),
-          center: .center,
-          angle: angle
-        ),
-        lineWidth: 1.4
-      )
-      .blur(radius: 0.2)
   }
 }
 
@@ -1427,96 +1351,11 @@ private struct HomeUpdate: Identifiable {
   let sortDate: Date
 }
 
-private enum HomeBottomTab: String, CaseIterable, Identifiable {
-  case home = "Home"
-  case updates = "Updates"
-  case tools = "Tools"
-  case settings = "Settings"
-
-  var id: String { rawValue }
-
-  var symbolName: String {
-    switch self {
-    case .home:     return "house.fill"
-    case .updates:  return "clock.arrow.circlepath"
-    case .tools:    return "slider.horizontal.3"
-    case .settings: return "gearshape"
-    }
-  }
-}
-
 private enum HomeTypography {
   enum Weight { case regular, medium, semibold, bold }
 }
 
 // MARK: - Glass modifiers
-
-private struct HomeBottomBarClusterModifier: ViewModifier {
-  let theme: HomeTheme
-
-  func body(content: Content) -> some View {
-    content
-      .background {
-        ZStack {
-          Capsule()
-            .fill(theme.bottomNavGlassTint.opacity(0.16))
-
-          Capsule()
-            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
-
-          Capsule()
-            .fill(
-              LinearGradient(
-                colors: [
-                  .white.opacity(0.82),
-                  theme.bottomNavGlassTint.opacity(0.86),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-              )
-            )
-            .padding(5)
-
-          Capsule()
-            .stroke(.white.opacity(0.66), lineWidth: 0.7)
-            .padding(5)
-        }
-        .shadow(color: theme.shadowTint.opacity(0.10), radius: 20, y: 12)
-      }
-  }
-}
-
-private struct HomeDetachedQRButtonModifier: ViewModifier {
-  let theme: HomeTheme
-
-  func body(content: Content) -> some View {
-    content
-      .background {
-        ZStack {
-          Circle()
-            .fill(theme.bottomNavGlassTint.opacity(0.18))
-          Circle()
-            .stroke(theme.bottomNavSelectedBorder.opacity(0.22), lineWidth: 0.9)
-          Circle()
-            .fill(
-              LinearGradient(
-                colors: [
-                  .white.opacity(0.88),
-                  theme.bottomNavGlassTint.opacity(0.92),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-              )
-            )
-            .padding(5)
-          Circle()
-            .stroke(.white.opacity(0.64), lineWidth: 0.7)
-            .padding(5)
-        }
-        .shadow(color: theme.shadowTint.opacity(0.10), radius: 18, y: 10)
-      }
-  }
-}
 
 private struct HomeGlassChromeModifier: ViewModifier {
   let tint: Color
