@@ -159,3 +159,17 @@ test('landing ignores legacy archived editorial filters after store sync', () =>
 
   assert.equal(sandbox.getLandingSectionFilter('news').showArchived, false);
 });
+
+test('root landing exposes direct drinks and food links for both restaurants', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'styles/root-landing.css'), 'utf8');
+
+  assert.match(html, /href="\/leroyslounge\?menu=drinks">Drinks/);
+  assert.match(html, /href="\/leroyslounge">Food/);
+  assert.match(html, /href="\/elroyscantina\?menu=drinks">Drinks/);
+  assert.match(html, /href="\/elroyscantina">Food/);
+  assert.match(html, /aria-label="Leroy's Lounge menus"/);
+  assert.match(html, /aria-label="El Roy's Cantina menus"/);
+  assert.match(css, /\.landing-hero-actions/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+});

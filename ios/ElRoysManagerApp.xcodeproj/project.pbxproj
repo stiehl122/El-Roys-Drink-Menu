@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 46;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -16,24 +16,25 @@
 		000000000000000000000035 /* BackendClients.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000034 /* BackendClients.swift */; };
 		000000000000000000000038 /* Glass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000037 /* Glass.swift */; };
 		00000000000000000000003C /* AuthViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003B /* AuthViews.swift */; };
-		00000000000000000000003F /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003E /* HomeViews.swift */; };
-		000000000000000000000042 /* MenuEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000041 /* MenuEditorSession.swift */; };
-		000000000000000000000044 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000043 /* MenuViews.swift */; };
-		000000000000000000000046 /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000045 /* RestaurantCategoryManagementView.swift */; };
-		000000000000000000000049 /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000048 /* RoutePreviewView.swift */; };
-		00000000000000000000004C /* PublicMenuSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004B /* PublicMenuSession.swift */; };
-		00000000000000000000004E /* PublicMenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004D /* PublicMenuViews.swift */; };
-		000000000000000000000051 /* RestaurantToolsSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000050 /* RestaurantToolsSession.swift */; };
-		000000000000000000000053 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000052 /* RestaurantToolsView.swift */; };
-		000000000000000000000056 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000055 /* BarcodeScannerView.swift */; };
-		00000000000000000000005A /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000059 /* AppModels.swift */; };
-		00000000000000000000005D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005C /* PrivacyInfo.xcprivacy */; };
-		000000000000000000000060 /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005F /* OfflineDraftStore.swift */; };
-		000000000000000000000062 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000061 /* SessionStore.swift */; };
-		000000000000000000000064 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000063 /* MenuDocumentTests.swift */; };
-		000000000000000000000066 /* RouteStateIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* RouteStateIsolationTests.swift */; };
-		000000000000000000000068 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000067 /* TestSupport.swift */; };
-		00000000000000000000006A /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000069 /* ElRoysManagerAppUITests.swift */; };
+		00000000000000000000003F /* CalendarReminderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000003E /* CalendarReminderService.swift */; };
+		000000000000000000000041 /* HomeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000040 /* HomeViews.swift */; };
+		000000000000000000000044 /* MenuEditorSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000043 /* MenuEditorSession.swift */; };
+		000000000000000000000046 /* MenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000045 /* MenuViews.swift */; };
+		000000000000000000000048 /* RestaurantCategoryManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000047 /* RestaurantCategoryManagementView.swift */; };
+		00000000000000000000004B /* RoutePreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004A /* RoutePreviewView.swift */; };
+		00000000000000000000004E /* PublicMenuSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004D /* PublicMenuSession.swift */; };
+		000000000000000000000050 /* PublicMenuViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000004F /* PublicMenuViews.swift */; };
+		000000000000000000000053 /* RestaurantToolsSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000052 /* RestaurantToolsSession.swift */; };
+		000000000000000000000055 /* RestaurantToolsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000054 /* RestaurantToolsView.swift */; };
+		000000000000000000000058 /* BarcodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000057 /* BarcodeScannerView.swift */; };
+		00000000000000000000005C /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005B /* AppModels.swift */; };
+		00000000000000000000005F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000005E /* PrivacyInfo.xcprivacy */; };
+		000000000000000000000062 /* OfflineDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000061 /* OfflineDraftStore.swift */; };
+		000000000000000000000064 /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000063 /* SessionStore.swift */; };
+		000000000000000000000066 /* MenuDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000065 /* MenuDocumentTests.swift */; };
+		000000000000000000000068 /* RouteStateIsolationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000067 /* RouteStateIsolationTests.swift */; };
+		00000000000000000000006A /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000069 /* TestSupport.swift */; };
+		00000000000000000000006C /* ElRoysManagerAppUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00000000000000000000006B /* ElRoysManagerAppUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,25 +65,26 @@
 		000000000000000000000034 /* BackendClients.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackendClients.swift; sourceTree = "<group>"; };
 		000000000000000000000037 /* Glass.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Glass.swift; sourceTree = "<group>"; };
 		00000000000000000000003B /* AuthViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AuthViews.swift; sourceTree = "<group>"; };
-		00000000000000000000003E /* HomeViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
-		000000000000000000000041 /* MenuEditorSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuEditorSession.swift; sourceTree = "<group>"; };
-		000000000000000000000043 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
-		000000000000000000000045 /* RestaurantCategoryManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantCategoryManagementView.swift; sourceTree = "<group>"; };
-		000000000000000000000048 /* RoutePreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
-		00000000000000000000004B /* PublicMenuSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuSession.swift; sourceTree = "<group>"; };
-		00000000000000000000004D /* PublicMenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuViews.swift; sourceTree = "<group>"; };
-		000000000000000000000050 /* RestaurantToolsSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsSession.swift; sourceTree = "<group>"; };
-		000000000000000000000052 /* RestaurantToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsView.swift; sourceTree = "<group>"; };
-		000000000000000000000055 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
-		000000000000000000000057 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		000000000000000000000059 /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
-		00000000000000000000005C /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		00000000000000000000005F /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
-		000000000000000000000061 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
-		000000000000000000000063 /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
-		000000000000000000000065 /* RouteStateIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteStateIsolationTests.swift; sourceTree = "<group>"; };
-		000000000000000000000067 /* TestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
-		000000000000000000000069 /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
+		00000000000000000000003E /* CalendarReminderService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CalendarReminderService.swift; sourceTree = "<group>"; };
+		000000000000000000000040 /* HomeViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeViews.swift; sourceTree = "<group>"; };
+		000000000000000000000043 /* MenuEditorSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuEditorSession.swift; sourceTree = "<group>"; };
+		000000000000000000000045 /* MenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuViews.swift; sourceTree = "<group>"; };
+		000000000000000000000047 /* RestaurantCategoryManagementView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantCategoryManagementView.swift; sourceTree = "<group>"; };
+		00000000000000000000004A /* RoutePreviewView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RoutePreviewView.swift; sourceTree = "<group>"; };
+		00000000000000000000004D /* PublicMenuSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuSession.swift; sourceTree = "<group>"; };
+		00000000000000000000004F /* PublicMenuViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicMenuViews.swift; sourceTree = "<group>"; };
+		000000000000000000000052 /* RestaurantToolsSession.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsSession.swift; sourceTree = "<group>"; };
+		000000000000000000000054 /* RestaurantToolsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RestaurantToolsView.swift; sourceTree = "<group>"; };
+		000000000000000000000057 /* BarcodeScannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BarcodeScannerView.swift; sourceTree = "<group>"; };
+		000000000000000000000059 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		00000000000000000000005B /* AppModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		00000000000000000000005E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		000000000000000000000061 /* OfflineDraftStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OfflineDraftStore.swift; sourceTree = "<group>"; };
+		000000000000000000000063 /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		000000000000000000000065 /* MenuDocumentTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuDocumentTests.swift; sourceTree = "<group>"; };
+		000000000000000000000067 /* RouteStateIsolationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RouteStateIsolationTests.swift; sourceTree = "<group>"; };
+		000000000000000000000069 /* TestSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		00000000000000000000006B /* ElRoysManagerAppUITests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ElRoysManagerAppUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,29 +152,32 @@
 				000000000000000000000033 /* Clients */,
 				000000000000000000000036 /* Design */,
 				000000000000000000000039 /* Features */,
-				000000000000000000000057 /* Info.plist */,
-				000000000000000000000058 /* Models */,
-				00000000000000000000005B /* Resources */,
-				00000000000000000000005E /* Storage */,
+				000000000000000000000059 /* Info.plist */,
+				00000000000000000000005A /* Models */,
+				00000000000000000000005D /* Resources */,
+				000000000000000000000060 /* Storage */,
 			);
+			name = ElRoysManagerApp;
 			path = ElRoysManagerApp;
 			sourceTree = "<group>";
 		};
 		000000000000000000000009 /* ElRoysManagerAppTests */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000063 /* MenuDocumentTests.swift */,
-				000000000000000000000065 /* RouteStateIsolationTests.swift */,
-				000000000000000000000067 /* TestSupport.swift */,
+				000000000000000000000065 /* MenuDocumentTests.swift */,
+				000000000000000000000067 /* RouteStateIsolationTests.swift */,
+				000000000000000000000069 /* TestSupport.swift */,
 			);
+			name = ElRoysManagerAppTests;
 			path = ElRoysManagerAppTests;
 			sourceTree = "<group>";
 		};
 		00000000000000000000000A /* ElRoysManagerAppUITests */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000069 /* ElRoysManagerAppUITests.swift */,
+				00000000000000000000006B /* ElRoysManagerAppUITests.swift */,
 			);
+			name = ElRoysManagerAppUITests;
 			path = ElRoysManagerAppUITests;
 			sourceTree = "<group>";
 		};
@@ -190,6 +195,7 @@
 				00000000000000000000002D /* AppModel.swift */,
 				00000000000000000000002F /* ElRoysManagerApp.swift */,
 			);
+			name = App;
 			path = App;
 			sourceTree = "<group>";
 		};
@@ -198,6 +204,7 @@
 			children = (
 				000000000000000000000034 /* BackendClients.swift */,
 			);
+			name = Clients;
 			path = Clients;
 			sourceTree = "<group>";
 		};
@@ -206,6 +213,7 @@
 			children = (
 				000000000000000000000037 /* Glass.swift */,
 			);
+			name = Design;
 			path = Design;
 			sourceTree = "<group>";
 		};
@@ -214,12 +222,13 @@
 			children = (
 				00000000000000000000003A /* Auth */,
 				00000000000000000000003D /* Home */,
-				000000000000000000000040 /* Menu */,
-				000000000000000000000047 /* Preview */,
-				00000000000000000000004A /* Public */,
-				00000000000000000000004F /* RestaurantTools */,
-				000000000000000000000054 /* Scanner */,
+				000000000000000000000042 /* Menu */,
+				000000000000000000000049 /* Preview */,
+				00000000000000000000004C /* Public */,
+				000000000000000000000051 /* RestaurantTools */,
+				000000000000000000000056 /* Scanner */,
 			);
+			name = Features;
 			path = Features;
 			sourceTree = "<group>";
 		};
@@ -228,83 +237,94 @@
 			children = (
 				00000000000000000000003B /* AuthViews.swift */,
 			);
+			name = Auth;
 			path = Auth;
 			sourceTree = "<group>";
 		};
 		00000000000000000000003D /* Home */ = {
 			isa = PBXGroup;
 			children = (
-				00000000000000000000003E /* HomeViews.swift */,
+				00000000000000000000003E /* CalendarReminderService.swift */,
+				000000000000000000000040 /* HomeViews.swift */,
 			);
+			name = Home;
 			path = Home;
 			sourceTree = "<group>";
 		};
-		000000000000000000000040 /* Menu */ = {
+		000000000000000000000042 /* Menu */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000041 /* MenuEditorSession.swift */,
-				000000000000000000000043 /* MenuViews.swift */,
-				000000000000000000000045 /* RestaurantCategoryManagementView.swift */,
+				000000000000000000000043 /* MenuEditorSession.swift */,
+				000000000000000000000045 /* MenuViews.swift */,
+				000000000000000000000047 /* RestaurantCategoryManagementView.swift */,
 			);
+			name = Menu;
 			path = Menu;
 			sourceTree = "<group>";
 		};
-		000000000000000000000047 /* Preview */ = {
+		000000000000000000000049 /* Preview */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000048 /* RoutePreviewView.swift */,
+				00000000000000000000004A /* RoutePreviewView.swift */,
 			);
+			name = Preview;
 			path = Preview;
 			sourceTree = "<group>";
 		};
-		00000000000000000000004A /* Public */ = {
+		00000000000000000000004C /* Public */ = {
 			isa = PBXGroup;
 			children = (
-				00000000000000000000004B /* PublicMenuSession.swift */,
-				00000000000000000000004D /* PublicMenuViews.swift */,
+				00000000000000000000004D /* PublicMenuSession.swift */,
+				00000000000000000000004F /* PublicMenuViews.swift */,
 			);
+			name = Public;
 			path = Public;
 			sourceTree = "<group>";
 		};
-		00000000000000000000004F /* RestaurantTools */ = {
+		000000000000000000000051 /* RestaurantTools */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000050 /* RestaurantToolsSession.swift */,
-				000000000000000000000052 /* RestaurantToolsView.swift */,
+				000000000000000000000052 /* RestaurantToolsSession.swift */,
+				000000000000000000000054 /* RestaurantToolsView.swift */,
 			);
+			name = RestaurantTools;
 			path = RestaurantTools;
 			sourceTree = "<group>";
 		};
-		000000000000000000000054 /* Scanner */ = {
+		000000000000000000000056 /* Scanner */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000055 /* BarcodeScannerView.swift */,
+				000000000000000000000057 /* BarcodeScannerView.swift */,
 			);
+			name = Scanner;
 			path = Scanner;
 			sourceTree = "<group>";
 		};
-		000000000000000000000058 /* Models */ = {
+		00000000000000000000005A /* Models */ = {
 			isa = PBXGroup;
 			children = (
-				000000000000000000000059 /* AppModels.swift */,
+				00000000000000000000005B /* AppModels.swift */,
 			);
+			name = Models;
 			path = Models;
 			sourceTree = "<group>";
 		};
-		00000000000000000000005B /* Resources */ = {
+		00000000000000000000005D /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				00000000000000000000005C /* PrivacyInfo.xcprivacy */,
+				00000000000000000000005E /* PrivacyInfo.xcprivacy */,
 			);
+			name = Resources;
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		00000000000000000000005E /* Storage */ = {
+		000000000000000000000060 /* Storage */ = {
 			isa = PBXGroup;
 			children = (
-				00000000000000000000005F /* OfflineDraftStore.swift */,
-				000000000000000000000061 /* SessionStore.swift */,
+				000000000000000000000061 /* OfflineDraftStore.swift */,
+				000000000000000000000063 /* SessionStore.swift */,
 			);
+			name = Storage;
 			path = Storage;
 			sourceTree = "<group>";
 		};
@@ -370,9 +390,8 @@
 		000000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1600;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					00000000000000000000000B = {
 						CreatedOnToolsVersion = 26.3;
@@ -396,6 +415,8 @@
 				Base,
 			);
 			mainGroup = 000000000000000000000002;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 77;
 			productRefGroup = 000000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -413,7 +434,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				000000000000000000000032 /* Assets.xcassets in Resources */,
-				00000000000000000000005D /* PrivacyInfo.xcprivacy in Resources */,
+				00000000000000000000005F /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -443,19 +464,20 @@
 				000000000000000000000035 /* BackendClients.swift in Sources */,
 				000000000000000000000038 /* Glass.swift in Sources */,
 				00000000000000000000003C /* AuthViews.swift in Sources */,
-				00000000000000000000003F /* HomeViews.swift in Sources */,
-				000000000000000000000042 /* MenuEditorSession.swift in Sources */,
-				000000000000000000000044 /* MenuViews.swift in Sources */,
-				000000000000000000000046 /* RestaurantCategoryManagementView.swift in Sources */,
-				000000000000000000000049 /* RoutePreviewView.swift in Sources */,
-				00000000000000000000004C /* PublicMenuSession.swift in Sources */,
-				00000000000000000000004E /* PublicMenuViews.swift in Sources */,
-				000000000000000000000051 /* RestaurantToolsSession.swift in Sources */,
-				000000000000000000000053 /* RestaurantToolsView.swift in Sources */,
-				000000000000000000000056 /* BarcodeScannerView.swift in Sources */,
-				00000000000000000000005A /* AppModels.swift in Sources */,
-				000000000000000000000060 /* OfflineDraftStore.swift in Sources */,
-				000000000000000000000062 /* SessionStore.swift in Sources */,
+				00000000000000000000003F /* CalendarReminderService.swift in Sources */,
+				000000000000000000000041 /* HomeViews.swift in Sources */,
+				000000000000000000000044 /* MenuEditorSession.swift in Sources */,
+				000000000000000000000046 /* MenuViews.swift in Sources */,
+				000000000000000000000048 /* RestaurantCategoryManagementView.swift in Sources */,
+				00000000000000000000004B /* RoutePreviewView.swift in Sources */,
+				00000000000000000000004E /* PublicMenuSession.swift in Sources */,
+				000000000000000000000050 /* PublicMenuViews.swift in Sources */,
+				000000000000000000000053 /* RestaurantToolsSession.swift in Sources */,
+				000000000000000000000055 /* RestaurantToolsView.swift in Sources */,
+				000000000000000000000058 /* BarcodeScannerView.swift in Sources */,
+				00000000000000000000005C /* AppModels.swift in Sources */,
+				000000000000000000000062 /* OfflineDraftStore.swift in Sources */,
+				000000000000000000000064 /* SessionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -463,9 +485,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				000000000000000000000064 /* MenuDocumentTests.swift in Sources */,
-				000000000000000000000066 /* RouteStateIsolationTests.swift in Sources */,
-				000000000000000000000068 /* TestSupport.swift in Sources */,
+				000000000000000000000066 /* MenuDocumentTests.swift in Sources */,
+				000000000000000000000068 /* RouteStateIsolationTests.swift in Sources */,
+				00000000000000000000006A /* TestSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -473,7 +495,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				00000000000000000000006A /* ElRoysManagerAppUITests.swift in Sources */,
+				00000000000000000000006C /* ElRoysManagerAppUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -499,7 +521,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -531,11 +552,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -558,7 +577,6 @@
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
 				PRODUCT_NAME = ElRoysManagerApp;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -571,7 +589,6 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
@@ -603,11 +620,9 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -623,7 +638,6 @@
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.project;
 				PRODUCT_NAME = ElRoysManagerApp;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
@@ -644,7 +658,6 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "$(APPLE_DEVELOPMENT_TEAM)";
 				ELROYS_IOS_APP_BASE_URL = "https://el-roys-drink-menu.vercel.app";
 				ELROYS_IOS_PUBLIC_ORIGIN = "https://el-roys-drink-menu.vercel.app";
@@ -663,10 +676,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
@@ -689,7 +699,6 @@
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "$(APPLE_DEVELOPMENT_TEAM)";
 				ELROYS_IOS_APP_BASE_URL = "https://el-roys-drink-menu.vercel.app";
 				ELROYS_IOS_PUBLIC_ORIGIN = "https://el-roys-drink-menu.vercel.app";
@@ -708,10 +717,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager;
 				PRODUCT_NAME = ElRoysManagerApp;
@@ -726,17 +732,12 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
 				PRODUCT_NAME = ElRoysManagerAppTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -750,17 +751,12 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.tests;
 				PRODUCT_NAME = ElRoysManagerAppTests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -772,17 +768,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.uitests;
 				PRODUCT_NAME = ElRoysManagerAppUITests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -795,17 +786,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CLANG_ENABLE_OBJC_WEAK = NO;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = FCM3AK447F;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.stiehl122.elroys.manager.uitests;
 				PRODUCT_NAME = ElRoysManagerAppUITests;
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

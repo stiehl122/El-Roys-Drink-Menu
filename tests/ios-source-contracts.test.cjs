@@ -95,3 +95,23 @@ test('iOS exact route preview has loading and error states', () => {
   assert.match(source, /makeCoordinator\(\)/);
   assert.match(source, /webView\(_ webView: WKWebView, didFail/);
 });
+
+test('iOS home menu review reminders use EventKit with permission fallbacks', () => {
+  const service = read('ios/ElRoysManagerApp/Features/Home/CalendarReminderService.swift');
+  const homeViews = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const plist = read('ios/ElRoysManagerApp/Info.plist');
+
+  assert.match(service, /import EventKit/);
+  assert.match(service, /requestFullAccessToEvents/);
+  assert.doesNotMatch(service, /requestAccess\(to: \.event\)/);
+  assert.match(service, /CalendarReminderError\.accessDenied|case accessDenied/);
+  assert.match(service, /defaultCalendarForNewEvents/);
+  assert.match(service, /eventStore\.save/);
+
+  assert.match(homeViews, /HomeCalendarReminderCard/);
+  assert.match(homeViews, /calendar\.badge\.clock/);
+  assert.match(homeViews, /Add menu review calendar reminder/);
+
+  assert.match(plist, /NSCalendarsFullAccessUsageDescription/);
+  assert.match(plist, /NSCalendarsUsageDescription/);
+});

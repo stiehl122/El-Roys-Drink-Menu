@@ -157,6 +157,7 @@ clients unless the platform needs them.
 - Native public-menu reader inside the authenticated app
 - Embedded `WKWebView` exact-route preview
 - Native camera barcode scanner sheet with manual UPC fallback
+- EventKit calendar reminder creation for staff menu-review follow-up
 
 ## Highest Current Parity Gaps
 

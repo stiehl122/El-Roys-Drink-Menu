@@ -64,6 +64,10 @@ INFO_PLIST_CONTENT = <<~PLIST
     <true/>
     <key>NSCameraUsageDescription</key>
     <string>Scan drink and food item barcodes to prefill add-item fields.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Add staff menu review reminders to your calendar.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Add staff menu review reminders to your calendar.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Unlock the saved staff session before restoring manager access.</string>
     <key>UIApplicationSceneManifest</key>

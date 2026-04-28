@@ -36,6 +36,7 @@
     const userChipSelector = adapter.userChipSelector || '[data-route-user-chip]';
     const emptyCategoriesHtml = adapter.emptyCategoriesHtml || '<p>Nothing on the menu yet.</p>';
     const loadingSpecialsHtml = adapter.loadingSpecialsHtml || '<p>Loading specials…</p>';
+    const statusAnnouncerId = adapter.statusAnnouncerId || 'route-menu-status-announcer';
 
     function getMenusForRoute(sharedState) {
       const restaurantId = sharedState.siteRestaurant?.id || sharedState.restaurantId || '';
@@ -54,6 +55,32 @@
         return adapter.buildMenuSwitchPlaceholder(sharedState);
       }
       return '<section aria-hidden="true"><p>Loading menu…</p></section>';
+    }
+
+    function ensureStatusAnnouncer() {
+      let announcer = documentRef.getElementById(statusAnnouncerId);
+      if (announcer) return announcer;
+      announcer = documentRef.createElement('div');
+      announcer.id = statusAnnouncerId;
+      announcer.setAttribute('role', 'status');
+      announcer.setAttribute('aria-live', 'polite');
+      announcer.setAttribute('aria-atomic', 'true');
+      announcer.style.position = 'absolute';
+      announcer.style.width = '1px';
+      announcer.style.height = '1px';
+      announcer.style.padding = '0';
+      announcer.style.margin = '-1px';
+      announcer.style.overflow = 'hidden';
+      announcer.style.clip = 'rect(0 0 0 0)';
+      announcer.style.whiteSpace = 'nowrap';
+      announcer.style.border = '0';
+      (documentRef.body || documentRef.documentElement)?.appendChild(announcer);
+      return announcer;
+    }
+
+    function announceRouteStatus(message = '') {
+      const announcer = ensureStatusAnnouncer();
+      if (announcer) announcer.textContent = message;
     }
 
     function setRouteMenuSwitchState(sharedState, targetType) {
@@ -75,6 +102,7 @@
       });
 
       if (sections) sections.innerHTML = buildMenuSwitchPlaceholder(sharedState);
+      announceRouteStatus(`Loading ${targetMenuType || 'selected'} menu.`);
     }
 
     function clearRouteMenuSwitchState() {
@@ -232,6 +260,7 @@
         const menuNameEl = documentRef.getElementById(menuNameId);
         if (menuNameEl) menuNameEl.textContent = sharedState.activeMenuName || menuNameFallback;
       }
+      announceRouteStatus(`${sharedState.activeMenuName || menuNameFallback || 'Menu'} loaded.`);
 
       const statusTsEl = statusTimestampId ? documentRef.getElementById(statusTimestampId) : null;
       if (statusTsEl) statusTsEl.textContent = timestamp;
