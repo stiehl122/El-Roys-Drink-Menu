@@ -47,7 +47,7 @@ struct PublicMenuScreen: View {
   private var standardBody: some View {
     let session = selectedSession
 
-    ScrollView(showsIndicators: false) {
+    return ScrollView(showsIndicators: false) {
       VStack(alignment: .leading, spacing: 22) {
         heroCard
           .appEntryReveal()
