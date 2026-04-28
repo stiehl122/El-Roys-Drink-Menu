@@ -1,5 +1,7 @@
 .agents/
 .claude/
+.github/
+.superpowers/
 .vercel/
 design-loop/
 docs/
@@ -13,9 +15,11 @@ ux-investigation/
 .playwright-cli/
 .playwright-mcp/
 output/
+prototypes/
 screenshots/
 *.log
 .DS_Store
+.gitignore
 AGENTS.md
 CLAUDE.md
 CLAUDE.local.md
