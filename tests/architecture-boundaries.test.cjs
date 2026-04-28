@@ -19,7 +19,7 @@ function read(relativePath) {
 
 function setupRouteDom(sandbox, prefix) {
   const doc = sandbox.document;
-  const pageClass = prefix === 'll' ? '.ll-board-page' : '.erc-page';
+  const pageClass = prefix === 'll' ? '.ll-wall-page' : '.erc-page';
   const templateId = prefix === 'll' ? 'leroy-route-template' : 'elroy-route-template';
   const menuNameId = prefix === 'll' ? 'll-route-menu-name' : null;
   const statusTsId = prefix === 'll' ? 'll-route-status-timestamp' : 'erc-route-status-timestamp';
@@ -1998,8 +1998,12 @@ test('public route contract and route renderers register and hydrate both restau
     assert.match(footerVersion.innerHTML, /PREVIEW/);
     assert.equal(footerTimestamp.textContent, 'Thu, Apr 9 at 7:25 PM');
     if (menuNameEl) assert.equal(menuNameEl.textContent, routeCase.menuName);
-    assert.match(featuredWrap.innerHTML, /House Margarita 1/);
-    assert.match(featuredWrap.innerHTML, /House Margarita 5/);
+    if (routeCase.prefix === 'll') {
+      assert.equal(featuredWrap.innerHTML, '');
+    } else {
+      assert.match(featuredWrap.innerHTML, /House Margarita 1/);
+      assert.match(featuredWrap.innerHTML, /House Margarita 5/);
+    }
     assert.equal(page.classList.contains('is-mobile-expanded'), false);
     assert.equal(page.classList.contains('is-mobile-compact'), false);
     assert.equal(page.classList.contains('is-near-top'), false);

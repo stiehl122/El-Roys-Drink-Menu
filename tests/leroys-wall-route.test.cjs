@@ -34,8 +34,8 @@ test("leroy's wall route references approved production assets and links", () =>
   assert.match(css, /url\(["']?\/assets\/leroys-lounge\/wall\/leroys-wall-background\.png["']?\)/);
   assert.match(html, /class="ll-wall-brand-link"[\s\S]*href="\/"/);
   assert.match(html, /src="\/assets\/leroys-lounge\/wall\/leroys-horizontal-wood-sign\.png"/);
-  assert.match(html, /href="\/elroyscantina\?menu=drinks"[\s\S]*class="ll-wall-note-link"/);
-  assert.match(html, /href="https:\/\/www\.michiganlottery\.com\/resources\/pull-tabs-prizes-remaining"[\s\S]*class="ll-wall-pull-tabs-link"/);
+  assert.match(html, /<a\b(?=[^>]*\bclass="[^"]*\bll-wall-note-link\b[^"]*")(?=[^>]*\bhref="\/elroyscantina\?menu=drinks")[^>]*>/);
+  assert.match(html, /<a\b(?=[^>]*\bclass="[^"]*\bll-wall-pull-tabs-link\b[^"]*")(?=[^>]*\bhref="https:\/\/www\.michiganlottery\.com\/resources\/pull-tabs-prizes-remaining")[^>]*>/);
 });
 
 test("leroy's wall route keeps public footer and auth boundaries", () => {
@@ -60,7 +60,7 @@ test("leroy's route adapter renders wall menu states", () => {
   assert.match(source, /function\s+isFoodMenu\s*\(/);
   assert.match(source, /function\s+buildWeeklySpecialHtml\s*\(/);
   assert.match(source, /function\s+buildEmptyWeeklySpecialHtml\s*\(/);
-  assert.match(source, /sharedState\.menuType\s*!==\s*'food'/);
+  assert.match(source, /if\s*\(\s*!isFoodMenu\(sharedState\)\s*\)\s*return\s+'';/);
   assert.match(source, /class="ll-wall-special-price"/);
   assert.match(source, />Sold Out</);
   assert.match(source, /emptyCategoriesHtml:\s*'<p class="ll-wall-empty">Nothing on the menu yet.<\/p>'/);
