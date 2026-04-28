@@ -1,1328 +1,875 @@
 @import url('/api/public?action=font_css&set=leroys-route');
 
-html {
-  background: rgb(125 127 124 / 1);
-}
-
-body.route-restaurant.route-restaurant--leroy {
-  background: rgb(125 127 124 / 1);
-}
-
 #restaurant-site-wrapper {
-  --ll-safe-top: env(safe-area-inset-top, 0px);
-  --ll-safe-right: env(safe-area-inset-right, 0px);
-  --ll-safe-bottom: env(safe-area-inset-bottom, 0px);
-  --ll-safe-left: env(safe-area-inset-left, 0px);
-  --ll-board-surface: rgb(125 127 124 / 1);
-  --ll-board-slat: rgb(125 127 124 / 1);
-  --ll-board-slat-shadow: rgb(0 0 0 / 0.1);
-  --ll-board-ink: rgb(17 24 39 / 1);
-  --ll-board-ink-soft: rgb(17 24 39 / 0.92);
-  --ll-board-red: rgb(211 11 11 / 1);
-  --ll-board-red-deep: rgb(125 6 6 / 1);
-  --ll-board-accent: rgb(250 189 0 / 1);
-  --ll-board-shell: rgb(19 19 19 / 1);
-  --ll-board-shell-soft: rgb(65 0 0 / 0.3);
-  --ll-board-dropdown: rgb(42 42 42 / 1);
-  --ll-board-dropdown-line: rgb(53 53 53 / 1);
-  --ll-board-frame: rgb(65 0 0 / 0.95);
-  --ll-board-section-surface: rgb(255 255 255 / 0.2);
-  --ll-board-section-surface-strong: rgb(255 255 255 / 0.3);
-  --ll-board-section-border: rgb(65 0 0 / 0.14);
-  --ll-board-section-rule: rgb(65 0 0 / 0.22);
-  --ll-board-section-shadow: 0 18px 34px rgb(65 0 0 / 0.08);
-  --ll-board-board-glaze: rgb(255 255 255 / 0.16);
-  --ll-board-stamp-border: rgb(255 255 255 / 0.3);
-  --ll-board-action-border: rgb(255 255 255 / 0.2);
-  --ll-board-action-text: rgb(255 255 255 / 0.96);
-  --ll-board-action-text-soft: rgb(255 239 214 / 0.82);
-  --ll-board-action-hover: rgb(255 228 175 / 0.98);
-  --ll-board-action-hover-border: rgb(255 228 175 / 0.5);
-  --ll-board-action-shadow: rgb(255 255 255 / 0.3);
-  --ll-board-action-shadow-strong: rgb(252 211 77 / 0.5);
-  --ll-board-glow: rgb(255 0 0 / 0.4);
-  --ll-board-panel-shadow: 0 4px 12px rgb(0 0 0 / 0.6);
-  --ll-board-shadow-inset: inset 0 0 10px rgb(0 0 0 / 0.8);
-  --ll-board-text-shadow: 1px 1px 0 rgb(255 255 255 / 0.2), 0.5px 0.5px 1px rgb(0 0 0 / 0.4);
-  --ll-board-description: rgb(17 24 39 / 0.92);
+  --ll-wall-black: #080504;
+  --ll-wall-brown: #20120a;
+  --ll-wall-board: #16110d;
+  --ll-wall-paper: #e9d4a7;
+  --ll-wall-paper-dim: #c6a975;
+  --ll-wall-ink: #f4e0b7;
+  --ll-wall-ink-muted: rgba(244, 224, 183, 0.72);
+  --ll-wall-brass: #b68438;
+  --ll-wall-red: #b43524;
+  --ll-wall-shadow: rgba(0, 0, 0, 0.58);
+  --ll-wall-sans: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --ll-wall-slab: "Roboto Slab", Georgia, serif;
+  --ll-wall-stencil: "Stardos Stencil", "Roboto Slab", Georgia, serif;
 }
 
-#restaurant-site-wrapper .ll-board-page {
-  /* Light-theme vars must live on .ll-board-page so they outweigh the
-     duplicate block in the shared style.css at the same specificity
-     (style.css ~L345). Dark-mode values are set at the bottom of this
-     file inside the prefers-color-scheme media query. */
-  --ll-board-bg: rgb(125 127 124 / 1);
-  --ll-board-frame: rgb(65 0 0 / 0.95);
-  --ll-board-line: rgb(17 24 39 / 0.28);
-  --ll-board-ink: rgb(17 24 39 / 1);
-  --ll-board-ink-muted: rgb(17 24 39 / 0.72);
-  --ll-board-red: rgb(211 11 11 / 1);
-  --ll-board-red-dark: rgb(125 6 6 / 1);
-  --ll-board-pill-bg: rgb(17 24 39 / 0.08);
-  --ll-board-pill-border: rgb(17 24 39 / 0.22);
-  color-scheme: light;
+#restaurant-site-wrapper .ll-wall-page {
+  position: relative;
   min-height: 100vh;
-  min-height: 100dvh;
-  background: var(--ll-board-surface);
-  color: var(--ll-board-ink);
-  font-family: 'Work Sans', sans-serif;
-  display: flex;
-  flex-direction: column;
+  overflow-x: hidden;
+  padding: clamp(10px, 2vw, 18px) 14px 14px;
+  color: var(--ll-wall-ink);
+  font-family: var(--ll-wall-sans);
+  background:
+    radial-gradient(circle at 52% 12%, rgba(211, 105, 31, 0.12), transparent 24rem),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.42), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.42)),
+    url("/assets/leroys-lounge/wall/leroys-wall-background.png") center/cover no-repeat,
+    repeating-linear-gradient(90deg, #190d07 0 8px, #241309 8px 52px, #1c0f08 52px 58px);
 }
 
-#restaurant-site-wrapper .ll-skip-link {
+#restaurant-site-wrapper .ll-wall-page::before,
+#restaurant-site-wrapper .ll-wall-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+#restaurant-site-wrapper .ll-wall-page::before {
+  opacity: 0.14;
+  background:
+    repeating-linear-gradient(0deg, transparent 0 5px, rgba(255, 255, 255, 0.08) 5px 6px),
+    repeating-linear-gradient(90deg, transparent 0 29px, rgba(0, 0, 0, 0.26) 29px 31px);
+  mix-blend-mode: soft-light;
+}
+
+#restaurant-site-wrapper .ll-wall-page::after {
+  background: radial-gradient(circle at 50% 58%, transparent 0 42%, rgba(0, 0, 0, 0.58) 100%);
+}
+
+#restaurant-site-wrapper .ll-skip-link,
+#restaurant-site-wrapper .ll-visually-hidden {
   position: absolute;
-  top: calc(0.75rem + var(--ll-safe-top));
-  left: calc(0.75rem + var(--ll-safe-left));
-  z-index: 80;
-  padding: 0.6rem 0.9rem;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 0.96);
-  color: var(--ll-board-ink);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-decoration: none;
-  text-transform: uppercase;
-  transform: translateY(-150%);
-  transition: transform 0.2s ease;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-#restaurant-site-wrapper .ll-skip-link:focus-visible {
-  transform: translateY(0);
-  outline: 2px solid rgb(17 24 39 / 0.7);
-  outline-offset: 2px;
+#restaurant-site-wrapper .ll-skip-link:focus {
+  z-index: 20;
+  width: auto;
+  height: auto;
+  clip: auto;
+  left: 16px;
+  top: 16px;
+  padding: 10px 12px;
+  background: #fff2cf;
+  color: #130b07;
 }
 
 #restaurant-site-wrapper .ll-board-topbar {
   position: relative;
-  z-index: 20;
-  isolation: isolate;
+}
+
+#restaurant-site-wrapper .ll-wall-sign-wrap {
+  z-index: 1;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(110px, 0.34fr) minmax(260px, 520px) minmax(120px, 0.38fr);
   align-items: center;
-  gap: 1rem;
-  width: 100%;
-  padding: calc(1rem + var(--ll-safe-top)) calc(2rem + var(--ll-safe-right)) 1rem calc(2rem + var(--ll-safe-left));
-  transition: padding 0.28s ease, gap 0.28s ease, box-shadow 0.28s ease, background-color 0.28s ease;
-}
-
-#restaurant-site-wrapper .neon-header-full {
-  background-color: var(--ll-board-red);
-  overflow: visible;
-  box-shadow:
-    0 5px 25px var(--ll-board-glow),
-    inset 0 0 15px var(--ll-board-red-deep);
-  animation: ll-board-flicker 4s infinite;
-}
-
-#restaurant-site-wrapper .neon-header-full::before {
-  content: '';
-  position: absolute;
-  inset: calc(var(--ll-safe-top) * -1) 0 0 0;
-  height: calc(100% + var(--ll-safe-top));
-  background-color: var(--ll-board-red);
-  box-shadow:
-    0 5px 25px var(--ll-board-glow),
-    inset 0 0 15px var(--ll-board-red-deep);
-  z-index: -1;
-  pointer-events: none;
-}
-
-#restaurant-site-wrapper .ll-board-topbar-left,
-#restaurant-site-wrapper .ll-board-topbar-center,
-#restaurant-site-wrapper .ll-board-topbar-right {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  transition: opacity 0.24s ease, transform 0.24s ease, max-height 0.24s ease, margin 0.24s ease;
-}
-
-#restaurant-site-wrapper .ll-board-topbar-left {
-  justify-content: flex-start;
-}
-
-#restaurant-site-wrapper .ll-board-topbar-center {
   justify-content: center;
+  gap: clamp(10px, 2vw, 24px);
+  width: min(1320px, 100%);
+  margin: 0 auto clamp(4px, 1vw, 8px);
 }
 
-#restaurant-site-wrapper .ll-board-topbar-right {
-  justify-content: flex-end;
-  gap: 1rem;
-  overflow: visible;
-}
-
-#restaurant-site-wrapper .ll-menu-toggle {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem;
-  border: 1px solid var(--ll-board-stamp-border);
-  border-radius: 999px;
-  background: var(--ll-board-shell-soft);
-  box-shadow: var(--ll-board-panel-shadow);
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
-  transition: transform 0.22s ease, box-shadow 0.22s ease, background-color 0.22s ease;
-}
-
-#restaurant-site-wrapper .ll-menu-toggle-btn {
-  border: 0;
-  background: transparent;
-  color: var(--ll-board-action-text-soft);
-  padding: 0.55rem 1.2rem;
-  border-radius: 999px;
-  font-family: 'Epilogue', sans-serif;
-  font-size: 0.72rem;
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
-}
-
-#restaurant-site-wrapper .ll-menu-toggle-btn.is-active,
-#restaurant-site-wrapper .ll-menu-toggle-btn:hover,
-#restaurant-site-wrapper .ll-menu-toggle-btn:focus-visible {
-  background: var(--ll-board-accent);
-  color: var(--ll-board-ink);
-  box-shadow: var(--ll-board-panel-shadow);
-  outline: none;
-}
-
-#restaurant-site-wrapper .ll-board-logo-btn {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  cursor: pointer;
-  transition: transform 0.2s ease, opacity 0.2s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
-}
-
-#restaurant-site-wrapper .ll-board-logo-btn--home {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-#restaurant-site-wrapper .ll-board-logo-btn:hover,
-#restaurant-site-wrapper .ll-board-logo-btn:focus-visible {
-  opacity: 0.88;
-  transform: scale(1.02);
-  outline: none;
-}
-
-#restaurant-site-wrapper .ll-board-logo {
+#restaurant-site-wrapper .ll-wall-location-sign,
+#restaurant-site-wrapper .ll-wall-brand-sign,
+#restaurant-site-wrapper .ll-wall-beer-sign,
+#restaurant-site-wrapper .ll-wall-side-image {
   display: block;
-  width: auto;
-  height: 3rem;
-  object-fit: contain;
-}
-
-#restaurant-site-wrapper .ll-board-logo-btn--center {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#restaurant-site-wrapper .ll-board-logo-btn.is-inert {
-  cursor: default;
-  pointer-events: none;
-}
-
-#restaurant-site-wrapper .ll-board-login-btn {
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-#restaurant-site-wrapper .ll-board-action-cluster {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  max-height: 6rem;
-  transition: opacity 0.24s ease, transform 0.24s ease, max-height 0.24s ease, margin 0.24s ease;
-}
-
-#restaurant-site-wrapper .ll-board-jump-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 4px 10px;
-  border: 1px solid var(--ll-board-action-border);
-  border-radius: 0.125rem;
-  text-decoration: none;
-  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, text-shadow 0.15s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
-}
-
-#restaurant-site-wrapper .ll-board-jump-logo {
-  display: block;
-  width: 3.9rem;
   height: auto;
 }
 
-#restaurant-site-wrapper .ll-board-jump-link:hover,
-#restaurant-site-wrapper .ll-board-jump-link:focus-visible {
-  border-color: var(--ll-board-action-hover-border);
-  transform: translateY(1px);
+#restaurant-site-wrapper .ll-wall-location-sign {
+  justify-self: end;
+  width: clamp(112px, 14vw, 178px);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+}
+
+#restaurant-site-wrapper .ll-wall-brand-link {
+  justify-self: center;
+  display: block;
+  width: min(520px, 100%);
+  border-radius: 4px;
+}
+
+#restaurant-site-wrapper .ll-wall-brand-link:focus-visible,
+#restaurant-site-wrapper .ll-wall-side-link:focus-visible,
+#restaurant-site-wrapper .ll-wall-footer-action:focus-visible,
+#restaurant-site-wrapper .ll-wall-menu-tab:focus-visible {
+  outline: 2px solid #ffe5a7;
+  outline-offset: 4px;
+}
+
+#restaurant-site-wrapper .ll-wall-brand-sign {
+  width: 100%;
+  filter:
+    drop-shadow(0 14px 26px rgba(0, 0, 0, 0.62))
+    drop-shadow(0 0 22px rgba(240, 130, 42, 0.2));
+}
+
+#restaurant-site-wrapper .ll-wall-beer-sign {
+  justify-self: start;
+  width: clamp(128px, 17vw, 220px);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+  transform: rotate(1.5deg);
+}
+
+#restaurant-site-wrapper .ll-wall-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(155px, 215px) minmax(0, 760px) minmax(155px, 215px);
+  justify-content: center;
+  align-items: start;
+  gap: clamp(10px, 2vw, 24px);
+  width: min(1320px, 100%);
+  margin: 0 auto;
+}
+
+#restaurant-site-wrapper .ll-wall-page *,
+#restaurant-site-wrapper .ll-wall-page *::before,
+#restaurant-site-wrapper .ll-wall-page *::after {
+  box-sizing: border-box;
+}
+
+#restaurant-site-wrapper .ll-wall-page button,
+#restaurant-site-wrapper .ll-wall-page a {
+  font: inherit;
+}
+
+#restaurant-site-wrapper .ll-wall-signs {
+  display: grid;
+  align-content: space-between;
+  gap: 11px;
+  min-height: min(560px, calc(100vh - 190px));
+  margin-top: clamp(10px, 2vw, 22px);
+  transform: rotate(-1deg);
+}
+
+#restaurant-site-wrapper .ll-wall-signs--left {
+  justify-items: center;
+}
+
+#restaurant-site-wrapper .ll-wall-signs--right {
+  align-content: start;
+  justify-items: center;
+  gap: clamp(170px, 27vh, 290px);
+  transform: rotate(1.2deg);
+}
+
+#restaurant-site-wrapper .ll-wall-side-link {
+  display: block;
+  width: min(100%, 210px);
+  border-radius: 4px;
+}
+
+#restaurant-site-wrapper .ll-wall-side-image {
+  width: min(100%, 210px);
+  justify-self: center;
+  filter: drop-shadow(0 15px 22px rgba(0, 0, 0, 0.46));
+}
+
+#restaurant-site-wrapper .ll-wall-side-image--pool {
+  transform: rotate(-1.5deg);
+}
+
+#restaurant-site-wrapper .ll-wall-side-image--pull-tabs {
+  width: min(100%, 205px);
+  transform: rotate(-4deg);
+}
+
+#restaurant-site-wrapper .ll-wall-side-image--leroy {
+  transform: rotate(2.4deg);
+}
+
+#restaurant-site-wrapper .ll-wall-side-image--plate {
+  transform: rotate(-3deg);
+}
+
+#restaurant-site-wrapper .ll-wall-side-image--note {
+  width: min(100%, 218px);
+  transform: rotate(3.5deg);
+}
+
+#restaurant-site-wrapper .ll-wall-menu-panel {
+  grid-column: 2;
+  position: relative;
+  overflow: visible;
+  padding: clamp(18px, 2.3vw, 26px) clamp(20px, 3vw, 32px) clamp(18px, 2.4vw, 26px);
+  border: 7px solid #130b07;
+  outline: 1px solid rgba(224, 176, 88, 0.36);
+  background:
+    linear-gradient(180deg, rgba(39, 28, 18, 0.86), rgba(13, 9, 6, 0.96)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 23px);
+  box-shadow:
+    0 24px 42px var(--ll-wall-shadow),
+    inset 0 0 0 1px rgba(255, 232, 175, 0.08);
+}
+
+#restaurant-site-wrapper .ll-wall-strip-kicker,
+#restaurant-site-wrapper .ll-wall-category-title span,
+#restaurant-site-wrapper .ll-wall-route-footer {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px clamp(10px, 1.5vw, 14px) 9px;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+#restaurant-site-wrapper .ll-wall-menu-tab {
+  min-height: 42px;
+  border: 1px solid rgba(182, 132, 56, 0.42);
+  border-radius: 2px;
+  background:
+    linear-gradient(180deg, rgba(235, 209, 160, 0.06), rgba(0, 0, 0, 0.18)),
+    #18110c;
+  color: var(--ll-wall-paper-dim);
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: transform 160ms ease, border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-tab:hover,
+#restaurant-site-wrapper .ll-wall-menu-tab:focus-visible {
+  border-color: rgba(245, 206, 133, 0.72);
+  color: var(--ll-wall-ink);
+  transform: translateY(-1px);
+}
+
+#restaurant-site-wrapper .ll-wall-menu-tab.is-active,
+#restaurant-site-wrapper .ll-wall-menu-tab[aria-pressed="true"] {
+  background:
+    linear-gradient(180deg, rgba(255, 210, 121, 0.18), rgba(139, 61, 28, 0.14)),
+    #2b1d13;
+  color: #ffe5a7;
+  box-shadow: inset 0 0 18px rgba(255, 189, 84, 0.14);
+}
+
+#restaurant-site-wrapper .ll-wall-menu-board {
+  margin: 0;
+  padding: clamp(8px, 1.2vw, 12px);
+  border: 1px solid rgba(182, 132, 56, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255, 231, 184, 0.025), rgba(0, 0, 0, 0.08)),
+    rgba(7, 5, 3, 0.18);
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.24);
+}
+
+#restaurant-site-wrapper .ll-wall-menu-board:focus {
   outline: none;
 }
 
-#restaurant-site-wrapper .ll-route-exit-btn {
+#restaurant-site-wrapper .ll-wall-specials-region:empty {
   display: none;
 }
 
-#restaurant-site-wrapper .ll-route-exit-btn.active {
-  display: inline-flex !important;
+#restaurant-site-wrapper .ll-wall-sections {
+  display: grid;
+  gap: 9px;
 }
 
-#restaurant-site-wrapper .ll-board-action-dropdown {
+#restaurant-site-wrapper .ll-wall-specials-strip {
   position: relative;
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.8fr) minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid rgba(123, 40, 26, 0.55);
+  background:
+    linear-gradient(90deg, rgba(180, 53, 36, 0.18), rgba(233, 212, 167, 0.1)),
+    repeating-linear-gradient(-3deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 8px),
+    #2b1b12;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
 }
 
-#restaurant-site-wrapper .ll-board-swap-trigger,
-#restaurant-site-wrapper .ll-board-settings-trigger {
-  border: 0;
-  background: transparent;
-  color: rgb(255 255 255 / 0.96);
-  cursor: pointer;
-  transition: color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
+#restaurant-site-wrapper .ll-wall-specials-strip::before,
+#restaurant-site-wrapper .ll-wall-specials-strip::after {
+  content: "";
+  position: absolute;
+  top: -8px;
+  width: 56px;
+  height: 16px;
+  background: rgba(223, 199, 147, 0.54);
+  transform: rotate(-3deg);
 }
 
-#restaurant-site-wrapper .ll-board-swap-trigger {
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid rgb(255 255 255 / 0.2);
-  border-radius: 0.125rem;
-  font-family: 'Epilogue', sans-serif;
-  font-size: 10px;
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+#restaurant-site-wrapper .ll-wall-specials-strip::before {
+  left: 18px;
+}
+
+#restaurant-site-wrapper .ll-wall-specials-strip::after {
+  right: 18px;
+  transform: rotate(4deg);
+}
+
+#restaurant-site-wrapper .ll-wall-strip-kicker {
+  color: #ffca78;
+  font-size: 0.8rem;
+}
+
+#restaurant-site-wrapper .ll-wall-specials-strip h2 {
+  margin: 2px 0 0;
+  color: #fff2cf;
+  font-family: var(--ll-wall-slab);
+  font-size: clamp(0.98rem, 1.85vw, 1.24rem);
+  line-height: 1.08;
   text-transform: uppercase;
-  text-shadow: 0 0 5px rgb(255 255 255 / 0.3);
-  box-shadow: 0 0 8px rgb(0 0 0 / 0.12);
 }
 
-#restaurant-site-wrapper .ll-board-settings-trigger {
+#restaurant-site-wrapper .ll-wall-specials-strip p {
+  margin: 0;
+  color: rgba(255, 239, 203, 0.82);
+  font-family: var(--ll-wall-slab);
+  font-size: 0.78rem;
+  line-height: 1.25;
+}
+
+#restaurant-site-wrapper .ll-wall-special-price {
+  justify-self: end;
+  min-width: 38px;
+  color: #f0bf68;
+  font-family: var(--ll-wall-stencil);
+  font-size: 1rem;
+  line-height: 1;
+  text-align: right;
+}
+
+#restaurant-site-wrapper .ll-wall-category {
+  display: grid;
+  gap: 0;
+}
+
+#restaurant-site-wrapper .ll-wall-category + .ll-wall-category {
+  margin-top: 9px;
+}
+
+#restaurant-site-wrapper .ll-wall-category-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 0 6px;
+  border-bottom: 2px solid rgba(182, 132, 56, 0.54);
+}
+
+#restaurant-site-wrapper .ll-wall-category-title h2 {
+  margin: 0;
+  color: #f4bd5d;
+  font-family: var(--ll-wall-stencil);
+  font-size: clamp(1.08rem, 2vw, 1.42rem);
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-wall-category-title span {
+  color: rgba(233, 212, 167, 0.64);
+  font-size: 0.74rem;
+}
+
+#restaurant-site-wrapper .ll-wall-category-rows {
+  display: grid;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row {
+  display: grid;
+  min-height: 45px;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(233, 212, 167, 0.24);
+}
+
+#restaurant-site-wrapper .ll-wall-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+#restaurant-site-wrapper .ll-wall-row--expandable {
+  cursor: pointer;
+}
+
+#restaurant-site-wrapper .ll-wall-item-main,
+#restaurant-site-wrapper .ll-wall-item-side,
+#restaurant-site-wrapper .ll-wall-item-name-wrap {
+  min-width: 0;
+}
+
+#restaurant-site-wrapper .ll-wall-item-name-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row h3,
+#restaurant-site-wrapper .ll-wall-item-name {
+  margin: 0;
+  color: #f9e2b0;
+  font-family: var(--ll-wall-slab);
+  font-size: clamp(0.86rem, 1.45vw, 0.98rem);
+  letter-spacing: 0.02em;
+  line-height: 1.16;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row p,
+#restaurant-site-wrapper .ll-wall-item-summary,
+#restaurant-site-wrapper .ll-wall-item-desc {
+  margin: 3px 0 0;
+  color: rgba(244, 224, 183, 0.68);
+  font-family: var(--ll-wall-slab);
+  font-size: 0.72rem;
+  line-height: 1.22;
+}
+
+#restaurant-site-wrapper .ll-wall-item-side {
+  display: inline-flex;
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row strong,
+#restaurant-site-wrapper .ll-wall-price {
+  color: #f0bf68;
+  font-family: var(--ll-wall-stencil);
+  font-size: 0.98rem;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row.is-sold-out {
+  opacity: 0.68;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row.is-sold-out .ll-wall-item-name {
+  text-decoration: line-through;
+  text-decoration-color: rgba(180, 53, 36, 0.9);
+  text-decoration-thickness: 3px;
+}
+
+#restaurant-site-wrapper .ll-wall-sold-out {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  min-height: 28px;
+  min-width: 82px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 2px solid rgba(180, 53, 36, 0.92);
+  color: #ffb29a;
+  font-family: var(--ll-wall-stencil);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-4deg);
 }
 
-#restaurant-site-wrapper .ll-board-settings-trigger .material-symbols-outlined {
-  font-size: 22px;
+#restaurant-site-wrapper .ll-wall-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border: 1px solid rgba(182, 132, 56, 0.42);
+  color: #ffca78;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-wall-upcharges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+#restaurant-site-wrapper .ll-wall-upcharge {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 6px;
+  border: 1px solid rgba(233, 212, 167, 0.24);
+  color: rgba(244, 224, 183, 0.74);
+  font-family: var(--ll-wall-slab);
+  font-size: 0.68rem;
+}
+
+#restaurant-site-wrapper .ll-wall-upcharge strong {
+  font-size: 0.72rem;
+}
+
+#restaurant-site-wrapper .ll-wall-expand {
+  color: rgba(244, 224, 183, 0.68);
+  font-size: 1.25rem;
   line-height: 1;
+  transition: transform 160ms ease, color 160ms ease;
 }
 
-#restaurant-site-wrapper .ll-board-swap-trigger:hover,
-#restaurant-site-wrapper .ll-board-swap-trigger:focus-visible,
-#restaurant-site-wrapper .ll-board-settings-trigger:hover,
-#restaurant-site-wrapper .ll-board-settings-trigger:focus-visible,
-#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-swap-trigger,
-#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-settings-trigger {
-  color: rgb(255 228 175 / 0.98);
-  transform: translateY(1px);
+#restaurant-site-wrapper .ll-wall-row--expandable:hover .ll-wall-expand,
+#restaurant-site-wrapper .ll-wall-expand:focus-visible {
+  color: #ffe5a7;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row.expanded .ll-wall-expand {
+  transform: rotate(180deg);
+}
+
+#restaurant-site-wrapper .ll-wall-detail {
+  display: none;
+  padding: 0 0 8px;
+}
+
+#restaurant-site-wrapper .ll-wall-menu-row.expanded .ll-wall-detail {
+  display: block;
+}
+
+#restaurant-site-wrapper .ll-wall-detail-copy {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 2px solid rgba(182, 132, 56, 0.42);
+  background: rgba(0, 0, 0, 0.14);
+}
+
+#restaurant-site-wrapper .ll-wall-detail-group + .ll-wall-detail-group {
+  margin-top: 8px;
+}
+
+#restaurant-site-wrapper .ll-wall-detail-label {
+  color: #ffca78;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#restaurant-site-wrapper .ll-wall-empty,
+#restaurant-site-wrapper .ll-wall-boot-copy {
+  margin: 14px 0;
+  color: rgba(244, 224, 183, 0.72);
+  font-family: var(--ll-wall-slab);
+  text-align: center;
+}
+
+#restaurant-site-wrapper .ll-wall-boot-rows {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+#restaurant-site-wrapper .ll-wall-boot-line {
+  display: block;
+  height: 11px;
+  background: linear-gradient(90deg, rgba(233, 212, 167, 0.16), rgba(233, 212, 167, 0.04));
+}
+
+#restaurant-site-wrapper .ll-wall-boot-line--wide {
+  width: 88%;
+}
+
+#restaurant-site-wrapper .ll-wall-boot-line--mid {
+  width: 68%;
+}
+
+#restaurant-site-wrapper .ll-wall-boot-line--narrow {
+  width: 48%;
+}
+
+#restaurant-site-wrapper .ll-wall-route-footer {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 7px clamp(14px, 2.2vw, 22px) 9px;
+  color: rgba(233, 212, 167, 0.58);
+  font-size: 0.68rem;
+}
+
+#restaurant-site-wrapper .ll-wall-route-footer p {
+  margin: 0;
+}
+
+#restaurant-site-wrapper .ll-wall-footer-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+#restaurant-site-wrapper .ll-wall-footer-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid rgba(182, 132, 56, 0.34);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--ll-wall-paper);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+#restaurant-site-wrapper .ll-wall-footer-action:hover,
+#restaurant-site-wrapper .ll-wall-footer-action:focus-visible {
+  border-color: rgba(245, 206, 133, 0.62);
+  color: #ffe5a7;
+}
+
+#restaurant-site-wrapper .ll-wall-route-dropdown {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 25;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid rgba(182, 132, 56, 0.34);
+  background: #18110c;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
+}
+
+#restaurant-site-wrapper .ll-wall-route-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--ll-wall-paper);
+  cursor: pointer;
+  text-align: left;
+}
+
+#restaurant-site-wrapper .ll-wall-route-option:hover,
+#restaurant-site-wrapper .ll-wall-route-option:focus-visible {
+  background: rgba(182, 132, 56, 0.18);
   outline: none;
 }
 
-#restaurant-site-wrapper .ll-board-swap-trigger:hover,
-#restaurant-site-wrapper .ll-board-swap-trigger:focus-visible,
-#restaurant-site-wrapper .ll-board-action-dropdown.open .ll-board-swap-trigger {
-  border-color: rgb(255 228 175 / 0.5);
-  text-shadow: 0 0 8px rgb(252 211 77 / 0.5);
+#restaurant-site-wrapper .ll-wall-route-option-icon {
+  font-size: 1rem;
 }
 
-#restaurant-site-wrapper .ll-board-userchip {
-  position: relative;
+#restaurant-site-wrapper .ll-wall-page .ll-board-userchip.ll-site-userchip {
+  position: absolute;
+  right: clamp(14px, 2.2vw, 22px);
+  bottom: clamp(10px, 2vw, 18px);
+  z-index: 28;
   display: inline-flex;
   align-items: center;
-  color: rgb(255 255 255 / 1);
+  justify-content: center;
+  gap: 0;
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #ffe5a7;
+  cursor: default;
 }
 
 #restaurant-site-wrapper .ll-board-userchip-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.3rem;
-  background: transparent;
-  border: 0;
-  color: inherit;
+  min-width: 38px;
+  min-height: 38px;
+}
+
+#restaurant-site-wrapper .ll-board-userchip-trigger {
+  gap: 0.1rem;
   padding: 0;
+  border: 1px solid rgba(182, 132, 56, 0.34);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+  color: inherit;
   cursor: pointer;
   touch-action: manipulation;
-  -webkit-tap-highlight-color: rgb(255 255 255 / 0.12);
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.12);
 }
 
 #restaurant-site-wrapper .ll-board-usericon {
-  font-size: 2rem;
+  font-size: 1.7rem;
   line-height: 1;
-  transition: transform 0.15s ease, opacity 0.15s ease;
 }
 
 #restaurant-site-wrapper .ll-board-usercaret {
-  font-size: 0.875rem;
+  display: inline-block;
+  font-size: 1rem;
   line-height: 1;
-  transition: transform 0.15s ease;
+  transition: transform 160ms ease;
 }
 
-#restaurant-site-wrapper .ll-board-userchip-trigger:hover .ll-board-usericon,
-#restaurant-site-wrapper .ll-board-userchip-trigger:focus-visible .ll-board-usericon {
-  transform: scale(1.06);
-}
-
-#restaurant-site-wrapper .ll-board-userchip.open .ll-board-usercaret {
-  transform: translateY(1px);
+#restaurant-site-wrapper .ll-wall-page .ll-board-userchip.ll-site-userchip.open .ll-board-usercaret {
+  transform: rotate(180deg);
 }
 
 #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown {
+  position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  min-width: 188px;
-  width: min(188px, calc(100vw - 2rem));
-  border-radius: 12px;
-  border-color: rgb(0 0 0 / 0.18);
-  background: rgb(246 244 241 / 1);
-  box-shadow: 0 18px 36px rgb(0 0 0 / 0.28);
+  min-width: 180px;
+  z-index: 30;
+}
+
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown {
+  padding: 10px;
+  border: 1px solid rgba(182, 132, 56, 0.34);
+  background: #18110c;
+  color: var(--ll-wall-paper);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.45);
 }
 
 #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-name {
-  color: var(--ll-board-ink);
-}
-
-#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-role {
-  color: rgb(17 24 39 / 0.7);
-}
-
-#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-divider {
-  background: rgb(17 24 39 / 0.12);
-}
-
-#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-signout {
-  color: var(--ll-board-red);
-}
-
-#restaurant-site-wrapper .ll-board-route-dropdown {
-  position: absolute;
-  top: calc(100% + 12px);
-  right: 0;
-  width: min(16rem, calc(100vw - 24px));
-  overflow: hidden;
-  border: 4px solid var(--ll-board-frame);
-  border-radius: 0.375rem;
-  background:
-    repeating-linear-gradient(
-      180deg,
-      var(--ll-board-dropdown),
-      var(--ll-board-dropdown) 2px,
-      var(--ll-board-dropdown-line) 2px,
-      var(--ll-board-dropdown-line) 30px
-    );
-  box-shadow:
-    var(--ll-board-shadow-inset),
-    var(--ll-board-panel-shadow);
-  z-index: 25;
-}
-
-#restaurant-site-wrapper .ll-board-route-dropdown[hidden] {
-  display: none;
-}
-
-#restaurant-site-wrapper .ll-board-route-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 1rem 1.5rem;
-  border: 0;
-  border-bottom: 1px solid rgb(255 255 255 / 0.05);
-  background: transparent;
-  color: rgb(14 14 14 / 1);
-  cursor: pointer;
-  text-align: left;
-  text-shadow: 1px 1px 0 rgb(0 0 0 / 1), 2px 2px 0 rgb(0 0 0 / 0.5);
-  transition: background-color 0.15s ease;
-}
-
-#restaurant-site-wrapper .ll-board-route-option:last-child {
-  border-bottom: 0;
-}
-
-#restaurant-site-wrapper .ll-board-route-option:hover,
-#restaurant-site-wrapper .ll-board-route-option:focus-visible,
-#restaurant-site-wrapper .ll-board-route-option.is-active {
-  background: rgb(255 255 255 / 0.05);
-  outline: none;
-}
-
-#restaurant-site-wrapper .ll-board-route-option-label {
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 1.125rem;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-board-route-option-icon {
-  font-size: 24px;
-  color: rgb(250 189 0 / 0.9);
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-#restaurant-site-wrapper .ll-board-route-option:hover .ll-board-route-option-icon,
-#restaurant-site-wrapper .ll-board-route-option:focus-visible .ll-board-route-option-icon,
-#restaurant-site-wrapper .ll-board-route-option.is-active .ll-board-route-option-icon {
-  opacity: 1;
-}
-
-#restaurant-site-wrapper .ll-board-bg {
-  position: relative;
-  background:
-    repeating-linear-gradient(
-      180deg,
-      var(--ll-board-slat),
-      var(--ll-board-slat) 9px,
-      var(--ll-board-slat-shadow) 9px,
-      var(--ll-board-slat-shadow) 10px
-    );
-  flex: 1 0 auto;
-  min-height: calc(100vh - 80px);
-  min-height: calc(100dvh - 80px);
-}
-
-#restaurant-site-wrapper .ll-board-bg::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top center, var(--ll-board-board-glaze), transparent 58%),
-    linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent 26%);
-  pointer-events: none;
-}
-
-#restaurant-site-wrapper .ll-board-main {
-  position: relative;
-  z-index: 1;
-  width: min(60rem, calc(100% - 2rem));
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 2.5rem calc(2rem + var(--ll-safe-right)) calc(3rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
-}
-
-#restaurant-site-wrapper #ll-route-main {
-  scroll-margin-top: calc(7rem + var(--ll-safe-top));
-}
-
-#restaurant-site-wrapper #ll-route-sections {
-  display: grid;
-  gap: 1.35rem;
-}
-
-#restaurant-site-wrapper .ll-board-footer-updated,
-#restaurant-site-wrapper .ll-board-footer-version {
-  margin: 0;
-  color: rgb(229 226 225 / 0.88);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-slat-section {
-  position: relative;
-  padding: 0;
-  padding: 1.35rem 1.45rem 1.1rem;
-  border: 1px solid var(--ll-board-section-border);
-  border-radius: 1.35rem;
-  background:
-    linear-gradient(180deg, var(--ll-board-section-surface-strong), var(--ll-board-section-surface));
-  box-shadow: var(--ll-board-section-shadow);
-  overflow: hidden;
-  margin-bottom: 0;
-}
-
-#restaurant-site-wrapper .ll-slat-section::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 1px;
-  background: linear-gradient(90deg, rgb(255 255 255 / 0.35), var(--ll-board-section-rule), rgb(255 255 255 / 0.12));
-  pointer-events: none;
-}
-
-#restaurant-site-wrapper .ll-slat-section[data-category='special'] {
-  border-color: rgb(250 189 0 / 0.22);
-  background:
-    linear-gradient(180deg, rgb(255 246 219 / 0.36), rgb(255 255 255 / 0.2));
-}
-
-#restaurant-site-wrapper .ll-slat-section[data-category='special']::before {
-  background: linear-gradient(90deg, rgb(255 240 214 / 0.45), rgb(250 189 0 / 0.48), transparent);
-}
-
-#restaurant-site-wrapper .ll-slat-section-head {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  margin-bottom: 1.15rem;
-}
-
-#restaurant-site-wrapper .ll-slat-section-head::after {
-  content: '';
-  flex: 1 1 auto;
-  min-width: 2rem;
-  height: 1px;
-  background: linear-gradient(90deg, var(--ll-board-section-rule), transparent);
-}
-
-#restaurant-site-wrapper .ll-slat-section[data-category='special'] .ll-slat-section-head::after {
-  background: linear-gradient(90deg, rgb(250 189 0 / 0.35), transparent);
-}
-
-#restaurant-site-wrapper .ll-slat-section-title {
-  margin: 0;
-  color: var(--ll-board-red);
-  font-family: 'Epilogue', sans-serif;
-  font-size: 1.5rem;
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-board-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-#restaurant-site-wrapper .ll-board-item.menu-item {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-#restaurant-site-wrapper .ll-board-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 10px;
-  padding-block: 0.15rem;
-}
-
-#restaurant-site-wrapper .ll-board-row--expandable {
-  cursor: pointer;
-}
-
-#restaurant-site-wrapper .ll-board-row-spacer {
-  height: 10px;
-}
-
-#restaurant-site-wrapper .ll-board-row--desc {
-  min-height: auto;
-  padding-top: 0.35rem;
-}
-
-#restaurant-site-wrapper .ll-board-row--sold {
-  isolation: isolate;
-}
-
-#restaurant-site-wrapper .ll-board-strike {
-  position: absolute;
-  inset-inline: 0;
-  top: 50%;
-  border-top: 1px solid rgb(17 24 39 / 0.6);
-  transform: translateY(-50%);
-  pointer-events: none;
-  z-index: 1;
-}
-
-#restaurant-site-wrapper .ll-board-item-main,
-#restaurant-site-wrapper .ll-board-item-side {
-  position: relative;
-  z-index: 2;
-}
-
-#restaurant-site-wrapper .ll-board-item-main {
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-#restaurant-site-wrapper .ll-board-item-side {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-#restaurant-site-wrapper .ll-board-item-name-wrap {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-#restaurant-site-wrapper .ll-board-item-name.menu-item-name,
-#restaurant-site-wrapper .ll-board-price.menu-item-price,
-#restaurant-site-wrapper .ll-board-item-desc.menu-item-desc,
-#restaurant-site-wrapper .ll-board-chip,
-#restaurant-site-wrapper .ll-route-empty {
-  color: var(--ll-board-ink);
-  text-shadow: var(--ll-board-text-shadow);
-}
-
-#restaurant-site-wrapper .ll-board-page.is-menu-switching .ll-board-main {
-  cursor: progress;
-}
-
-#restaurant-site-wrapper .ll-board-page.is-menu-switching .ll-route-switch-section {
-  min-height: 10rem;
-}
-
-#restaurant-site-wrapper .ll-board-page.is-menu-switching .ll-route-switch-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-}
-
-#restaurant-site-wrapper .ll-board-item-name.menu-item-name,
-#restaurant-site-wrapper .ll-board-price.menu-item-price {
-  margin: 0;
-  font-family: 'Epilogue', sans-serif;
-  font-weight: 700;
-  text-transform: uppercase;
-  line-height: 1;
-}
-
-#restaurant-site-wrapper .ll-board-item-name.menu-item-name {
-  font-size: 1.2em;
-}
-
-#restaurant-site-wrapper .ll-board-price.menu-item-price {
-  font-size: 1.2em;
-  font-variant-numeric: tabular-nums;
-}
-
-#restaurant-site-wrapper .ll-board-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 4px;
-  border: 1px solid var(--ll-board-stamp-border);
-  background-color: var(--ll-board-red);
-  color: rgb(255 255 255 / 1);
-  font-family: 'Epilogue', sans-serif;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  line-height: 1;
-  text-transform: uppercase;
-  transform: rotate(-10deg);
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.2);
-}
-
-#restaurant-site-wrapper .ll-slat-section[data-category='special'] .ll-board-chip {
-  padding: 2px 6px;
-  letter-spacing: 0.08em;
-  transform: rotate(-6deg);
-  box-shadow: 0 4px 10px rgb(211 11 11 / 0.16);
-}
-
-#restaurant-site-wrapper .ll-board-item--sold .ll-board-item-name,
-#restaurant-site-wrapper .ll-board-item--sold .ll-board-price {
-  opacity: 0.5;
-}
-
-#restaurant-site-wrapper .ll-board-stamp {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 4px;
-  border: 1px solid var(--ll-board-stamp-border);
-  background-color: var(--ll-board-red);
-  color: rgb(255 255 255 / 1);
-  font-family: 'Epilogue', sans-serif;
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: 0.05em;
-  line-height: 1;
-  text-transform: uppercase;
-  transform: rotate(-10deg);
-  box-shadow: 1px 1px 0 rgb(0 0 0 / 0.2);
-  white-space: nowrap;
-}
-
-#restaurant-site-wrapper .ll-board-expand.item-expand-icon {
-  color: rgb(17 24 39 / 0.65);
-  font-size: 18px;
-}
-
-#restaurant-site-wrapper .ll-board-item-desc.menu-item-desc {
-  margin: 0;
-  color: var(--ll-board-description);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.35;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-board-detail-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-#restaurant-site-wrapper .ll-board-detail-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-#restaurant-site-wrapper .ll-board-detail-label {
-  color: rgb(17 24 39 / 0.58);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-board-upcharges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  margin-top: 0.5rem;
-}
-
-#restaurant-site-wrapper .ll-board-upcharge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.28rem;
-  padding: 0.18rem 0.45rem;
-  border: 1px solid rgb(65 0 0 / 0.18);
-  background: rgb(255 255 255 / 0.32);
-  color: var(--ll-board-ink);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-#restaurant-site-wrapper .ll-board-upcharge strong {
-  color: var(--ll-board-red-deep);
+  color: #ffe5a7;
   font-weight: 800;
 }
 
-#restaurant-site-wrapper .ll-board-detail.item-detail-panel {
-  display: none;
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-role {
+  color: var(--ll-wall-ink-muted);
+  font-size: 0.78rem;
 }
 
-#restaurant-site-wrapper .ll-board-item.expanded .ll-board-detail.item-detail-panel {
-  display: block;
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-divider {
+  height: 1px;
+  margin: 8px 0;
+  background: rgba(182, 132, 56, 0.24);
 }
 
-#restaurant-site-wrapper .ll-route-empty {
-  margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-route-boot-copy {
-  margin: 0;
-  color: rgb(17 24 39 / 0.88);
-  font-family: 'Space Grotesk', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-#restaurant-site-wrapper .ll-route-boot-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-#restaurant-site-wrapper .ll-route-boot-line {
-  display: block;
-  height: 18px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgb(17 24 39 / 0.1), rgb(255 255 255 / 0.5), rgb(17 24 39 / 0.1));
-  background-size: 200% 100%;
-  animation: ll-route-boot-sheen 1.4s linear infinite;
-}
-
-#restaurant-site-wrapper .ll-route-boot-line--wide {
-  width: min(100%, 24rem);
-}
-
-#restaurant-site-wrapper .ll-route-boot-line--mid {
-  width: min(82%, 18rem);
-}
-
-#restaurant-site-wrapper .ll-route-boot-line--narrow {
-  width: min(68%, 14rem);
-}
-
-#restaurant-site-wrapper .ll-board-footer {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  gap: 0.55rem;
-  padding: 1.85rem calc(2rem + var(--ll-safe-right)) calc(1.9rem + var(--ll-safe-bottom)) calc(2rem + var(--ll-safe-left));
-  margin-top: auto;
-  background:
-    linear-gradient(
-      180deg,
-      rgb(125 127 124 / 0) 0%,
-      rgb(110 84 84 / 0.16) 18%,
-      rgb(65 0 0 / 0.72) 58%,
-      var(--ll-board-frame) 100%
-    );
-  text-align: left;
-}
-
-#restaurant-site-wrapper .ll-board-footer-updated,
-#restaurant-site-wrapper .ll-board-footer-version,
-#restaurant-site-wrapper .ll-board-footer-actions {
-  width: min(60rem, calc(100% - 2rem));
-  margin-inline: auto;
-}
-
-#restaurant-site-wrapper .ll-board-footer-version {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  flex-wrap: wrap;
-  margin-top: 0;
-}
-
-#restaurant-site-wrapper .ll-board-footer .footer-preview-badge {
-  color: rgb(255 240 214 / 0.98);
-  border-color: rgb(255 240 214 / 0.26);
-  border-radius: 999px;
-  background: rgb(255 240 214 / 0.08);
-  padding: 0.18rem 0.5rem;
-}
-
-#restaurant-site-wrapper .ll-board-footer-actions {
-  display: flex;
-  gap: 0.55rem;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  margin-top: 0.15rem;
-}
-
-#restaurant-site-wrapper .ll-board-footer-action {
-  appearance: none;
-  -webkit-appearance: none;
-  border: 1px solid rgb(255 240 214 / 0.18);
-  border-radius: 999px;
-  background: rgb(28 16 16 / 0.18);
-  color: rgba(255, 240, 231, 0.88);
+#restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-signout {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid rgba(180, 53, 36, 0.5);
+  background: rgba(180, 53, 36, 0.14);
+  color: #ffb29a;
   cursor: pointer;
-  font: inherit;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-decoration: none;
-  padding: 0.45rem 0.78rem;
-  transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-#restaurant-site-wrapper .ll-board-footer-action:hover,
-#restaurant-site-wrapper .ll-board-footer-action:focus-visible {
-  color: #fff0e7;
-  border-color: rgb(255 240 214 / 0.4);
-  background: rgb(255 240 214 / 0.08);
-  transform: translateY(-1px);
-  outline: none;
-}
-
-@media (min-width: 980px) {
-  #restaurant-site-wrapper #ll-route-sections {
-    grid-template-columns: minmax(0, 1.55fr) minmax(17rem, 0.95fr);
-    align-items: start;
+@media (max-width: 1120px) {
+  #restaurant-site-wrapper .ll-wall-stage {
+    grid-template-columns: minmax(0, 760px);
   }
 
-  #restaurant-site-wrapper #ll-route-sections > .ll-slat-section {
-    height: 100%;
-  }
-}
-
-@keyframes ll-board-flicker {
-  0%,
-  18%,
-  22%,
-  25%,
-  53%,
-  57%,
-  100% {
-    opacity: 1;
-    filter: brightness(1) drop-shadow(0 0 8px rgb(255 0 0 / 1));
+  #restaurant-site-wrapper .ll-wall-signs {
+    display: none;
   }
 
-  20%,
-  24%,
-  55% {
-    opacity: 0.95;
-    filter: brightness(1.05) drop-shadow(0 0 12px rgb(255 68 68 / 1));
-  }
-}
-
-@keyframes ll-route-boot-sheen {
-  from {
-    background-position: 200% 0;
-  }
-
-  to {
-    background-position: -200% 0;
-  }
-}
-
-@media (max-width: 820px) {
-  #restaurant-site-wrapper .ll-board-topbar {
-    grid-template-columns: auto 1fr auto;
-    gap: 0.5rem;
-    padding: calc(0.875rem + var(--ll-safe-top)) calc(0.875rem + var(--ll-safe-right)) 0.75rem calc(0.875rem + var(--ll-safe-left));
-  }
-
-  #restaurant-site-wrapper .ll-board-logo {
-    height: 2.4rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-topbar-right {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.5rem;
-  }
-
-  #restaurant-site-wrapper .ll-menu-toggle {
+  #restaurant-site-wrapper .ll-wall-menu-panel {
+    grid-column: 1;
+    grid-row: 1;
     width: 100%;
-    justify-content: stretch;
-    order: -1;
+  }
+}
+
+@media (max-width: 620px) {
+  #restaurant-site-wrapper .ll-wall-page {
+    padding: 18px 10px 14px;
   }
 
-  #restaurant-site-wrapper .ll-menu-toggle-btn {
-    flex: 1 1 50%;
-    text-align: center;
+  #restaurant-site-wrapper .ll-wall-sign-wrap {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 
-  #restaurant-site-wrapper .ll-board-action-cluster {
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.5rem;
+  #restaurant-site-wrapper .ll-wall-location-sign {
+    justify-self: center;
+    width: clamp(96px, 30vw, 128px);
   }
 
-  #restaurant-site-wrapper .ll-board-swap-trigger {
-    padding-inline: 0.625rem;
-    font-size: 9px;
+  #restaurant-site-wrapper .ll-wall-brand-sign {
+    justify-self: center;
+    width: min(360px, 82vw);
   }
 
-  #restaurant-site-wrapper .ll-board-route-dropdown {
-    right: -4px;
+  #restaurant-site-wrapper .ll-wall-beer-sign {
+    justify-self: center;
+    width: clamp(118px, 42vw, 168px);
   }
 
-  #restaurant-site-wrapper .ll-board-route-option {
-    padding: 0.875rem 1.125rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-route-option-label {
-    font-size: 1rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-main {
-    width: calc(100% - 1rem);
-    padding: 1rem calc(0.5rem + var(--ll-safe-right)) calc(2rem + var(--ll-safe-bottom)) calc(0.5rem + var(--ll-safe-left));
-  }
-
-  #restaurant-site-wrapper .ll-slat-section {
-    padding: 1rem 1rem 0.9rem;
-    margin-bottom: 1.75rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-item-name.menu-item-name,
-  #restaurant-site-wrapper .ll-board-price.menu-item-price {
-    font-size: 1rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-item-side {
-    gap: 0.35rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-upcharges {
-    gap: 0.35rem;
-    margin-top: 0.4rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-upcharge {
-    font-size: 0.58rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-footer {
-    padding-left: calc(0.75rem + var(--ll-safe-left));
-    padding-right: calc(0.75rem + var(--ll-safe-right));
+  #restaurant-site-wrapper .ll-wall-route-footer,
+  #restaurant-site-wrapper .ll-wall-specials-strip {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
     text-align: left;
   }
 
-  #restaurant-site-wrapper .ll-board-footer-actions {
-    justify-content: flex-start;
+  #restaurant-site-wrapper .ll-wall-menu-toggle {
+    padding-inline: 12px;
   }
 
-}
-
-@media (max-width: 640px) {
-  #restaurant-site-wrapper .ll-board-topbar {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      'logo actions'
-      'toggle toggle';
-    gap: 0.55rem 0.75rem;
-    padding: calc(0.75rem + var(--ll-safe-top)) calc(0.75rem + var(--ll-safe-right)) 0.75rem calc(0.75rem + var(--ll-safe-left));
+  #restaurant-site-wrapper .ll-wall-menu-tab {
+    font-size: 1.05rem;
+    letter-spacing: 0.12em;
   }
 
-  #restaurant-site-wrapper .ll-board-topbar-left {
-    grid-area: logo;
-    align-self: center;
+  #restaurant-site-wrapper .ll-wall-category-title {
+    display: grid;
+    align-items: start;
   }
 
-  #restaurant-site-wrapper .ll-board-topbar-center {
-    grid-area: toggle;
-    justify-content: stretch;
+  #restaurant-site-wrapper .ll-wall-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
   }
 
-  #restaurant-site-wrapper .ll-board-topbar-right {
-    grid-area: actions;
-    gap: 0.45rem;
-    align-self: center;
+  #restaurant-site-wrapper .ll-wall-item-side,
+  #restaurant-site-wrapper .ll-wall-price,
+  #restaurant-site-wrapper .ll-wall-sold-out {
+    justify-self: start;
   }
 
-  #restaurant-site-wrapper .ll-board-logo {
-    height: 2.1rem;
-  }
-
-  #restaurant-site-wrapper .ll-menu-toggle {
-    width: 100%;
-  }
-
-  #restaurant-site-wrapper .ll-board-action-cluster {
-    width: auto;
-    flex-wrap: nowrap;
-    justify-content: flex-end;
-    gap: 0.35rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-jump-link,
-  #restaurant-site-wrapper .ll-board-swap-trigger {
-    min-height: 32px;
-    padding-inline: 0.7rem;
-    font-size: 8px;
-  }
-
-  #restaurant-site-wrapper .ll-board-jump-logo {
-    width: 3.3rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-route-dropdown {
-    right: 0;
-    transform: none;
-  }
-
-  #restaurant-site-wrapper .ll-board-main {
-    width: calc(100% - 0.5rem);
-    padding: 0.875rem calc(0.25rem + var(--ll-safe-right)) calc(1.5rem + var(--ll-safe-bottom)) calc(0.25rem + var(--ll-safe-left));
-  }
-
-  #restaurant-site-wrapper .ll-slat-section {
-    padding-inline: 0.9rem;
-  }
-
-  #restaurant-site-wrapper .ll-board-row {
-    align-items: flex-start;
-  }
-
-  #restaurant-site-wrapper .ll-board-item-side {
+  #restaurant-site-wrapper .ll-wall-footer-actions {
     flex-wrap: wrap;
-    justify-content: flex-end;
-    max-width: 42%;
   }
 
-  #restaurant-site-wrapper .ll-board-item--sold .ll-board-strike {
-    inset-inline-end: 4.9rem;
-    top: 1.05rem;
+  #restaurant-site-wrapper .ll-wall-page .ll-board-userchip.ll-site-userchip {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    margin: 0 clamp(14px, 2.2vw, 22px) 8px auto;
   }
-
-  #restaurant-site-wrapper .ll-board-item--sold .ll-board-item-side {
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.22rem;
-    min-width: 4.35rem;
-    max-width: none;
-  }
-
-  #restaurant-site-wrapper .ll-board-item--sold .ll-board-stamp {
-    padding: 2px 5px;
-    font-size: 7px;
-    letter-spacing: 0.08em;
-    transform: none;
-  }
-
-  #restaurant-site-wrapper .ll-board-upcharges {
-    margin-right: 0.25rem;
-  }
-
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #restaurant-site-wrapper .neon-header-full {
-    animation: none;
-  }
-
-  #restaurant-site-wrapper .ll-board-topbar,
-  #restaurant-site-wrapper .ll-board-topbar-left,
-  #restaurant-site-wrapper .ll-board-topbar-center,
-  #restaurant-site-wrapper .ll-board-topbar-right,
-  #restaurant-site-wrapper .ll-board-action-cluster,
-  #restaurant-site-wrapper .ll-menu-toggle,
-  #restaurant-site-wrapper .ll-board-logo-btn,
-  #restaurant-site-wrapper .ll-board-jump-link,
-  #restaurant-site-wrapper .ll-board-swap-trigger,
-  #restaurant-site-wrapper .ll-board-settings-trigger,
-  #restaurant-site-wrapper .ll-site-userchip {
-    transition: none;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  html {
-    background: rgb(60 62 58 / 1);
-  }
-
-  body.route-restaurant.route-restaurant--leroy {
-    background: rgb(60 62 58 / 1);
-  }
-
-  #restaurant-site-wrapper {
-    --ll-board-surface: rgb(60 62 58 / 1);
-    --ll-board-slat: rgb(60 62 58 / 1);
-    --ll-board-slat-shadow: rgb(0 0 0 / 0.3);
-    --ll-board-ink: rgb(243 234 218 / 1);
-    --ll-board-ink-soft: rgb(243 234 218 / 0.92);
-    --ll-board-red: rgb(237 47 35 / 1);
-    --ll-board-red-deep: rgb(86 10 10 / 1);
-    --ll-board-accent: rgb(255 208 86 / 1);
-    --ll-board-shell: rgb(20 20 19 / 1);
-    --ll-board-shell-soft: rgb(20 20 19 / 0.42);
-    --ll-board-dropdown: rgb(35 35 34 / 1);
-    --ll-board-dropdown-line: rgb(48 48 47 / 1);
-    --ll-board-frame: rgb(28 16 16 / 0.95);
-    --ll-board-section-surface: rgb(22 18 17 / 0.54);
-    --ll-board-section-surface-strong: rgb(34 25 23 / 0.66);
-    --ll-board-section-border: rgb(255 240 214 / 0.12);
-    --ll-board-section-rule: rgb(255 240 214 / 0.16);
-    --ll-board-section-shadow: 0 20px 40px rgb(0 0 0 / 0.28);
-    --ll-board-board-glaze: rgb(255 244 224 / 0.08);
-    --ll-board-stamp-border: rgb(255 240 214 / 0.34);
-    --ll-board-action-border: rgb(255 240 214 / 0.24);
-    --ll-board-action-text: rgb(255 244 224 / 0.98);
-    --ll-board-action-text-soft: rgb(255 237 194 / 0.84);
-    --ll-board-action-hover: rgb(255 221 132 / 1);
-    --ll-board-action-hover-border: rgb(255 221 132 / 0.6);
-    --ll-board-action-shadow: rgb(255 242 214 / 0.32);
-    --ll-board-action-shadow-strong: rgb(255 214 95 / 0.62);
-    --ll-board-glow: rgb(255 59 48 / 0.5);
-    --ll-board-panel-shadow: 0 10px 24px rgb(0 0 0 / 0.42);
-    --ll-board-shadow-inset: inset 0 0 12px rgb(0 0 0 / 0.82);
-    --ll-board-text-shadow: 0 1px 0 rgb(0 0 0 / 0.34), 0 2px 10px rgb(0 0 0 / 0.24);
-    --ll-board-description: rgb(243 234 218 / 0.88);
-  }
-
-  #restaurant-site-wrapper .ll-board-page {
-    --ll-board-bg: rgb(57 59 55 / 1);
-    --ll-board-frame: rgb(40 22 22 / 1);
-    --ll-board-line: rgb(74 74 73 / 1);
-    --ll-board-ink: rgb(243 234 218 / 1);
-    --ll-board-ink-muted: rgb(214 205 188 / 0.86);
-    --ll-board-red: rgb(237 47 35 / 1);
-    --ll-board-red-dark: rgb(86 10 10 / 1);
-    --ll-board-pill-bg: rgb(255 240 214 / 0.08);
-    --ll-board-pill-border: rgb(255 240 214 / 0.18);
-    color-scheme: dark;
-  }
-
-  #restaurant-site-wrapper .ll-slat-section[data-category='special'] {
-    border-color: rgb(255 208 86 / 0.24);
-    background:
-      linear-gradient(180deg, rgb(50 34 24 / 0.66), rgb(28 20 18 / 0.6));
-  }
-
-  #restaurant-site-wrapper .ll-skip-link {
-    background: rgb(29 29 28 / 0.96);
-    color: var(--ll-board-ink);
-  }
-
-  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown {
-    border-color: rgb(255 240 214 / 0.1);
-    background: rgb(28 28 27 / 0.96);
-    box-shadow: 0 18px 36px rgb(0 0 0 / 0.45);
-  }
-
-  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-name,
-  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-role {
-    color: var(--ll-board-ink);
-  }
-
-  #restaurant-site-wrapper .ll-board-userdropdown.ll-site-userdropdown .user-dropdown-divider {
-    background: rgb(255 240 214 / 0.12);
-  }
-
-  #restaurant-site-wrapper .ll-board-route-option {
-    color: rgb(255 244 224 / 0.96);
-    text-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.26);
-  }
-
-  #restaurant-site-wrapper .ll-board-item-name.menu-item-name,
-  #restaurant-site-wrapper .ll-board-price.menu-item-price,
-  #restaurant-site-wrapper .ll-board-upcharge,
-  #restaurant-site-wrapper .ll-board-detail-copy,
-  #restaurant-site-wrapper .ll-board-detail-label,
-  #restaurant-site-wrapper .ll-board-expand.item-expand-icon {
-    color: var(--ll-board-ink);
-  }
-
-  #restaurant-site-wrapper .ll-route-boot-line {
-    background: linear-gradient(90deg, rgb(255 244 224 / 0.08), rgb(255 244 224 / 0.3), rgb(255 244 224 / 0.08));
+  #restaurant-site-wrapper .ll-wall-page,
+  #restaurant-site-wrapper .ll-wall-page *,
+  #restaurant-site-wrapper .ll-wall-page *::before,
+  #restaurant-site-wrapper .ll-wall-page *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
