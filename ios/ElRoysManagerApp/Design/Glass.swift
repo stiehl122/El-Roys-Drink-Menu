@@ -49,6 +49,84 @@ enum AppTypography {
   }
 }
 
+enum RestaurantPresentation: Equatable {
+  case leroys
+  case standard
+
+  static func resolve(restaurant: RestaurantRecord?) -> RestaurantPresentation {
+    guard let restaurant else { return .standard }
+    return resolve(slug: restaurant.slug, id: restaurant.id)
+  }
+
+  static func resolve(menu: MenuRecord, restaurants: [RestaurantRecord] = []) -> RestaurantPresentation {
+    if let restaurant = restaurants.first(where: { $0.id == menu.restaurantId }) {
+      return resolve(restaurant: restaurant)
+    }
+    return resolve(slug: menu.slug, id: menu.restaurantId)
+  }
+
+  private static func resolve(slug: String, id: String) -> RestaurantPresentation {
+    let normalizedSlug = slug.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let normalizedID = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let leroysTokens = Set([
+      "leroys-lounge",
+      "leroyslounge",
+      "leroys_lounge",
+      "00000000-0000-0000-0000-000000000002"
+    ])
+
+    if leroysTokens.contains(normalizedSlug) || leroysTokens.contains(normalizedID) {
+      return .leroys
+    }
+    return .standard
+  }
+
+  var isLeroys: Bool {
+    self == .leroys
+  }
+
+  var orderedMenuTypes: [String] {
+    switch self {
+    case .leroys:
+      return ["food", "drinks"]
+    case .standard:
+      return ["drinks", "food"]
+    }
+  }
+
+  var publicSoldOutLabel: String {
+    switch self {
+    case .leroys:
+      return "Sold Out"
+    case .standard:
+      return "86'D"
+    }
+  }
+
+  func showsFeaturedSpecials(selectedType: String) -> Bool {
+    switch self {
+    case .leroys:
+      return selectedType.lowercased() == "food"
+    case .standard:
+      return true
+    }
+  }
+}
+
+enum LeroysPalette {
+  static let walnut = Color(red: 0.105, green: 0.067, blue: 0.039)
+  static let deepWalnut = Color(red: 0.044, green: 0.031, blue: 0.022)
+  static let board = Color(red: 0.075, green: 0.067, blue: 0.052)
+  static let boardLift = Color(red: 0.145, green: 0.106, blue: 0.070)
+  static let nicotineCream = Color(red: 0.925, green: 0.842, blue: 0.650)
+  static let chalkCream = Color(red: 0.945, green: 0.886, blue: 0.730)
+  static let brass = Color(red: 0.730, green: 0.510, blue: 0.210)
+  static let fadedBeerRed = Color(red: 0.520, green: 0.165, blue: 0.115)
+  static let tvBlue = Color(red: 0.145, green: 0.275, blue: 0.405)
+  static let paper = Color(red: 0.890, green: 0.795, blue: 0.570)
+  static let paperInk = Color(red: 0.160, green: 0.095, blue: 0.060)
+}
+
 struct AppBackground: View {
   var body: some View {
     ZStack {
@@ -84,6 +162,92 @@ struct AppBackground: View {
         .opacity(0.26)
     }
     .ignoresSafeArea()
+  }
+}
+
+struct LeroysWallBackground: View {
+  var body: some View {
+    ZStack {
+      Image("LeroysWallBackground")
+        .resizable()
+        .scaledToFill()
+        .overlay(LeroysPalette.deepWalnut.opacity(0.36))
+
+      LinearGradient(
+        colors: [
+          .black.opacity(0.42),
+          LeroysPalette.walnut.opacity(0.12),
+          .black.opacity(0.58)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+      )
+
+      FilmGrain(intensity: 0.065, seed: 241)
+        .opacity(0.22)
+    }
+    .ignoresSafeArea()
+  }
+}
+
+struct LeroysChalkboardBackground: View {
+  var body: some View {
+    ZStack {
+      LinearGradient(
+        colors: [
+          LeroysPalette.boardLift,
+          LeroysPalette.board,
+          LeroysPalette.deepWalnut
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+
+      RadialGradient(
+        colors: [
+          LeroysPalette.chalkCream.opacity(0.10),
+          .clear
+        ],
+        center: .topLeading,
+        startRadius: 20,
+        endRadius: 360
+      )
+
+      FilmGrain(intensity: 0.075, seed: 304)
+        .opacity(0.30)
+    }
+    .ignoresSafeArea()
+  }
+}
+
+struct LeroysPostedCardModifier: ViewModifier {
+  var borderOpacity: Double = 0.46
+
+  func body(content: Content) -> some View {
+    content
+      .padding(18)
+      .background(
+        LinearGradient(
+          colors: [
+            LeroysPalette.boardLift.opacity(0.96),
+            LeroysPalette.board.opacity(0.98)
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        ),
+        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .stroke(LeroysPalette.brass.opacity(borderOpacity), lineWidth: 1)
+      }
+      .shadow(color: .black.opacity(0.30), radius: 18, y: 10)
+  }
+}
+
+extension View {
+  func leroysPostedCard(borderOpacity: Double = 0.46) -> some View {
+    modifier(LeroysPostedCardModifier(borderOpacity: borderOpacity))
   }
 }
 
