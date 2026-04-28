@@ -87,20 +87,23 @@ private struct LiveTextImageView: UIViewRepresentable {
     imageView.addInteraction(interaction)
 
     context.coordinator.interaction = interaction
-    Task {
-      await context.coordinator.analyze(image)
-    }
+    context.coordinator.startAnalysis(image)
 
     return imageView
   }
 
-  func updateUIView(_ uiView: UIImageView, context: Context) {}
+  func updateUIView(_ uiView: UIImageView, context: Context) {
+    guard uiView.image !== image else { return }
+    uiView.image = image
+    context.coordinator.startAnalysis(image)
+  }
 
   @MainActor
   final class Coordinator: NSObject, ImageAnalysisInteractionDelegate {
     private let analyzer = ImageAnalyzer()
     private let onSelectedTextChange: (String) -> Void
     private let onAnalysisMessageChange: (String?) -> Void
+    private var analysisTask: Task<Void, Never>?
     weak var interaction: ImageAnalysisInteraction?
 
     init(
@@ -111,13 +114,26 @@ private struct LiveTextImageView: UIViewRepresentable {
       self.onAnalysisMessageChange = onAnalysisMessageChange
     }
 
+    deinit {
+      analysisTask?.cancel()
+    }
+
+    func startAnalysis(_ image: UIImage) {
+      analysisTask?.cancel()
+      analysisTask = Task { [weak self] in
+        await self?.analyze(image)
+      }
+    }
+
     func analyze(_ image: UIImage) async {
       let configuration = ImageAnalyzer.Configuration([.text])
       do {
         let analysis = try await analyzer.analyze(image, configuration: configuration)
+        guard !Task.isCancelled else { return }
         interaction?.analysis = analysis
         onAnalysisMessageChange(nil)
       } catch {
+        guard !Task.isCancelled else { return }
         onSelectedTextChange("")
         onAnalysisMessageChange("Live Text could not read this image. Capture the label again with clearer lighting.")
       }
