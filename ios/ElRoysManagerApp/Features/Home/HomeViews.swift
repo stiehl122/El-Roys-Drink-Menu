@@ -47,6 +47,7 @@ struct RestaurantChooserView: View {
       if presentation.isLeroys {
         // Source contract: LeroysWallBackground renders Image("LeroysWallBackground").
         LeroysWallBackground()
+          .accessibilityHidden(true)
       } else {
         HomeBackground(theme: theme)
       }
@@ -511,7 +512,7 @@ private struct HomeRestaurantSwitcher: View {
           .padding(.vertical, 12)
           .contentShape(Rectangle())
           .background {
-            if optionPresentation.isLeroys {
+            if presentation.isLeroys && optionPresentation.isLeroys {
               RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(LeroysPalette.board.opacity(isSelected ? 0.72 : 0.34))
                 .overlay {
@@ -1159,17 +1160,6 @@ private struct HomeTheme {
   let toolsBorder: Color
   let toolsIconTint: Color
 
-  // Bottom nav
-  let bottomNavActive: Color
-  let bottomNavInactive: Color
-  let bottomNavGlassTint: Color
-  let bottomNavDetachedIcon: Color
-  let bottomNavSelectedBorder: Color
-
-  // Medallion
-  let medallionGlowA: Color
-  let medallionGlowB: Color
-
   // Shadow
   let shadowTint: Color
 
@@ -1255,15 +1245,6 @@ private struct HomeTheme {
     toolsBorder:        Color(red: 0.62, green: 0.37, blue: 0.22).opacity(0.55),
     toolsIconTint:      Color(red: 0.870, green: 0.680, blue: 0.320),
 
-    bottomNavActive:         Color(red: 0.28, green: 0.13, blue: 0.11),
-    bottomNavInactive:       Color(red: 0.44, green: 0.31, blue: 0.24),
-    bottomNavGlassTint:      Color(red: 0.96, green: 0.89, blue: 0.79),
-    bottomNavDetachedIcon:   Color(red: 0.28, green: 0.13, blue: 0.11),
-    bottomNavSelectedBorder: Color(red: 0.58, green: 0.46, blue: 0.38).opacity(0.75),
-
-    medallionGlowA: Color(red: 0.870, green: 0.680, blue: 0.320),
-    medallionGlowB: Color(red: 0.553, green: 0.137, blue: 0.153),
-
     shadowTint: .black,
 
     displayFontName:        "Didot",
@@ -1319,15 +1300,6 @@ private struct HomeTheme {
     toolsSurfaceBottom: Color(red: 0.400, green: 0.190, blue: 0.155).opacity(0.96),
     toolsBorder:        Color(red: 0.910, green: 0.639, blue: 0.090).opacity(0.55),
     toolsIconTint:      Color(red: 0.910, green: 0.639, blue: 0.090),
-
-    bottomNavActive:         Color(red: 0.130, green: 0.330, blue: 0.600),
-    bottomNavInactive:       Color(red: 0.500, green: 0.370, blue: 0.270),
-    bottomNavGlassTint:      Color(red: 0.988, green: 0.955, blue: 0.870),
-    bottomNavDetachedIcon:   Color(red: 0.210, green: 0.135, blue: 0.090),
-    bottomNavSelectedBorder: Color(red: 0.78, green: 0.66, blue: 0.51).opacity(0.70),
-
-    medallionGlowA: Color(red: 0.910, green: 0.639, blue: 0.090),
-    medallionGlowB: Color(red: 0.780, green: 0.243, blue: 0.114),
 
     shadowTint: Color(red: 0.26, green: 0.18, blue: 0.12),
 
