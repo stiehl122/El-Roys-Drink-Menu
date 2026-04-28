@@ -30,91 +30,56 @@
 </main>
 
 <template id="leroy-route-template">
-  <div class="ll-board-page">
+  <div class="ll-board-page ll-wall-page">
     <a class="ll-skip-link" href="#ll-route-main">Skip to menu content</a>
-    <header class="ll-board-topbar neon-header-full">
-      <div class="ll-board-topbar-left">
-        <a class="ll-board-logo-btn ll-board-logo-btn--home" href="/" aria-label="Return to the homepage">
-          <img class="ll-board-logo" src="/assets/leroys-lounge/stitch-logo.png" alt="Leroy's Lounge" width="495" height="335">
+
+    <header class="ll-board-topbar ll-wall-sign-wrap" aria-label="Leroy's Lounge">
+      <img class="ll-wall-location-sign" src="/assets/leroys-lounge/wall/leroys-established-sign.png" alt="EST. 2024, Fenton, MI" width="1680" height="916">
+      <a class="ll-wall-brand-link" href="/" aria-label="Return to the restaurant chooser">
+        <img class="ll-wall-brand-sign" src="/assets/leroys-lounge/wall/leroys-horizontal-wood-sign.png" alt="Leroy's Lounge" width="2000" height="880">
+      </a>
+      <img class="ll-wall-beer-sign" src="/assets/leroys-lounge/wall/leroys-ice-cold-beer-sign.png" alt="Ice Cold Beer Served Here" width="1680" height="916">
+    </header>
+
+    <section class="ll-wall-stage" aria-label="Leroy's Lounge menu">
+      <aside class="ll-wall-signs ll-wall-signs--left" aria-label="Left wall signs">
+        <img class="ll-wall-side-image ll-wall-side-image--pool" src="/assets/leroys-lounge/wall/leroys-pool-free-play-sign.png" alt="Pool Free Play" width="1680" height="916">
+        <a class="ll-wall-side-link ll-wall-pull-tabs-link" href="https://www.michiganlottery.com/resources/pull-tabs-prizes-remaining" target="_blank" rel="noopener noreferrer" aria-label="Open Michigan Lottery pull tabs prizes remaining">
+          <img class="ll-wall-side-image ll-wall-side-image--pull-tabs" src="/assets/leroys-lounge/wall/leroys-pull-tabs-sign.png" alt="Pull Tabs Sold Here" width="1680" height="916">
         </a>
-      </div>
-      <div class="ll-board-topbar-center">
-        <nav class="ll-menu-toggle" aria-label="Swap menu">
-          <button id="ll-nav-food"
-                  class="ll-menu-toggle-btn"
-                  type="button"
-                  data-route-menu-toggle="food">
-            Food
-          </button>
-          <button id="ll-nav-drinks"
-                  class="ll-menu-toggle-btn"
-                  type="button"
-                  data-route-menu-toggle="drinks">
-            Drinks
-          </button>
-        </nav>
-      </div>
-      <div class="ll-board-topbar-right">
-        <div class="ll-board-action-cluster">
-          <a class="ll-board-jump-link"
-             href="/elroyscantina"
-             aria-label="Open El Roy's Cantina menu">
-            <img
-              class="ll-board-jump-logo"
-              src="/ELROYSTEMPLOGO.png"
-              alt="El Roy's Cantina"
-              width="512"
-              height="512"
-            />
-          </a>
-          <div class="ll-board-action-dropdown" data-route-dropdown data-route-menu>
-            <button id="ll-route-swap-trigger"
-                    class="ll-board-swap-trigger"
-                    type="button"
-                    data-route-dropdown-trigger
-                    aria-haspopup="true"
-                    aria-expanded="false"
-                    aria-controls="ll-route-swap-dropdown"
-                    onclick="toggleRouteDropdown('ll-route-swap-trigger', 'll-route-swap-dropdown')">
-              Swap Menu
-            </button>
-            <div id="ll-route-swap-dropdown"
-                 class="ll-board-route-dropdown"
-                 data-route-dropdown-panel
-                 hidden></div>
-          </div>
-          <div class="ll-board-action-dropdown" data-route-dropdown data-route-settings style="display:none">
-            <button id="ll-route-settings-trigger"
-                    class="ll-board-settings-trigger"
-                    type="button"
-                    data-route-dropdown-trigger
-                    aria-label="Manager and admin actions"
-                    aria-haspopup="true"
-                    aria-expanded="false"
-                    aria-controls="ll-route-settings-dropdown"
-                    onclick="toggleRouteDropdown('ll-route-settings-trigger', 'll-route-settings-dropdown')">
-              <span class="material-symbols-outlined" aria-hidden="true">settings</span>
-            </button>
-            <div id="ll-route-settings-dropdown"
-                 class="ll-board-route-dropdown"
-                 data-route-dropdown-panel
-                 hidden></div>
-          </div>
-          <button class="ll-board-swap-trigger ll-route-exit-btn"
-                  type="button"
-                  data-route-manager
-                  onclick="exitView()"
-                  aria-label="Exit manager view">
-            Exit
-          </button>
-          <button class="ll-board-swap-trigger ll-route-exit-btn"
-                  type="button"
-                  data-route-admin
-                  onclick="exitView()"
-                  aria-label="Exit admin view">
-            Exit
-          </button>
+        <img class="ll-wall-side-image ll-wall-side-image--leroy" src="/assets/leroys-lounge/wall/leroys-thumbs-up-panel.png" alt="Wood etched Leroy giving a thumbs up" width="1680" height="916">
+      </aside>
+
+      <section class="ll-wall-menu-panel">
+        <div class="ll-wall-menu-toggle" role="group" aria-label="Choose menu">
+          <h1 id="ll-route-menu-name" class="ll-visually-hidden">Leroy's Lounge Menu</h1>
+          <button class="ll-wall-menu-tab" id="ll-nav-food" type="button" data-route-menu-toggle="food">Food</button>
+          <button class="ll-wall-menu-tab" id="ll-nav-drinks" type="button" data-route-menu-toggle="drinks">Drinks</button>
         </div>
+
+        <main class="ll-wall-menu-board" id="ll-route-main" tabindex="-1" aria-live="polite">
+          <section id="ll-route-specials" class="ll-wall-specials-region" aria-label="Weekly special"></section>
+          <div id="ll-route-sections" class="ll-wall-sections"></div>
+        </main>
+
+        <footer class="ll-wall-route-footer">
+          <p class="ll-wall-footer-meta">
+            <span id="ll-route-footer-version"></span>
+            <span aria-hidden="true"> · </span>
+            <span>Menu board draft</span>
+            <span aria-hidden="true"> · </span>
+            <span id="ll-route-footer-timestamp">Awaiting first update</span>
+          </p>
+          <div class="ll-wall-footer-actions" data-route-footer-actions>
+            <a class="ll-wall-footer-action" href="/elroyscantina">El Roy's</a>
+            <button class="ll-wall-footer-action" type="button" data-route-footer-signin>Staff Sign-In</button>
+            <button class="ll-wall-footer-action" type="button" data-route-footer-manager style="display:none">Manager</button>
+            <button class="ll-wall-footer-action" type="button" data-route-footer-admin style="display:none">Admin</button>
+            <button class="ll-wall-footer-action" type="button" data-route-footer-signout style="display:none">Sign Out</button>
+          </div>
+          <div class="ll-wall-route-dropdown" id="ll-route-settings-dropdown" data-route-dropdown-panel hidden></div>
+        </footer>
+
         <div class="ll-board-userchip ll-site-userchip" data-route-user-chip data-user-chip data-user-chip-scope="route" data-user-chip-variant="board" data-user-chip-theme="leroys" style="display:none">
           <button class="ll-board-userchip-trigger" type="button" data-user-chip-trigger aria-haspopup="true" aria-expanded="false" aria-label="User menu" onclick="toggleUserDropdown(this)">
             <span class="material-symbols-outlined ll-board-usericon" aria-hidden="true">account_circle</span>
@@ -128,32 +93,15 @@
           </div>
           <span data-user-chip-initials hidden>?</span>
         </div>
-      </div>
-    </header>
-
-    <div class="ll-board-bg">
-    <main class="ll-board-main" id="ll-route-main" tabindex="-1">
-      <section class="ll-slat-section menu-category" data-category="special">
-        <div class="ll-slat-section-head">
-          <h2 class="ll-slat-section-title">Specials</h2>
-        </div>
-        <div id="ll-route-specials" class="ll-board-rows"></div>
       </section>
 
-      <div id="ll-route-sections"></div>
-    </main>
-    </div>
-
-    <footer class="ll-board-footer">
-      <p class="ll-board-footer-updated">Menu last updated: <span id="ll-route-footer-timestamp">Awaiting first update</span></p>
-      <p id="ll-route-footer-version" class="ll-board-footer-version"></p>
-      <div class="ll-board-footer-actions" data-route-footer-actions>
-        <button class="ll-board-footer-action" type="button" data-route-footer-signin>Staff Sign-In</button>
-        <button class="ll-board-footer-action" type="button" data-route-footer-manager style="display:none">Manager</button>
-        <button class="ll-board-footer-action" type="button" data-route-footer-admin style="display:none">Admin</button>
-        <button class="ll-board-footer-action" type="button" data-route-footer-signout style="display:none">Sign Out</button>
-      </div>
-    </footer>
+      <aside class="ll-wall-signs ll-wall-signs--right" aria-label="Right wall signs">
+        <img class="ll-wall-side-image ll-wall-side-image--plate" src="/assets/leroys-lounge/wall/leroys-michigan-plate.png" alt="Michigan license plate reading LER0YS" width="1680" height="916">
+        <a class="ll-wall-side-link ll-wall-note-link" href="/elroyscantina?menu=drinks" aria-label="Open El Roy's drink menu">
+          <img class="ll-wall-side-image ll-wall-side-image--note" src="/assets/leroys-lounge/wall/leroys-margarita-note.png" alt="Handwritten note: Try my famous margaritas upstairs. Thanks, Leroy." width="1680" height="916">
+        </a>
+      </aside>
+    </section>
   </div>
 </template>
 

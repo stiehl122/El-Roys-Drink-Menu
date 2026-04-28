@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leroy's Lounge Wall Test</title>
+  <meta name="description" content="Static design prototype for the Leroy's Lounge public route.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Roboto+Slab:wght@500;700;900&family=Stardos+Stencil:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="wall" aria-labelledby="page-title">
+    <section class="sign-wrap" aria-label="Leroy's Lounge">
+      <img class="location-sign" src="./assets/leroys-established-sign.png" alt="EST. 2024, Fenton, MI" width="1680" height="916">
+      <img class="brand-sign" src="./assets/leroys-horizontal-wood-sign.png" alt="Leroy's Lounge" width="2000" height="880">
+      <img class="header-beer-sign" src="./assets/leroys-ice-cold-beer-sign.png" alt="Ice Cold Beer Served Here" width="1680" height="916">
+    </section>
+
+    <section class="wall-stage" aria-label="Leroy's Lounge menu prototype">
+      <aside class="wall-signs wall-signs--left" aria-label="Left wall signs">
+        <img class="side-image-sign side-image-sign--pool" src="./assets/leroys-pool-free-play-sign.png" alt="Pool Free Play" width="1680" height="916">
+        <img class="side-image-sign side-image-sign--pull-tabs" src="./assets/leroys-pull-tabs-sign.png" alt="Pull Tabs Sold Here" width="1680" height="916">
+        <img class="side-image-sign side-image-sign--leroy" src="./assets/leroys-thumbs-up-panel.png" alt="Wood etched Leroy giving a thumbs up" width="1680" height="916">
+      </aside>
+
+      <section class="menu-panel" aria-labelledby="page-title">
+        <div class="menu-toggle" role="tablist" aria-label="Choose menu">
+          <h1 id="page-title" class="visually-hidden">Leroy's Lounge Menu</h1>
+          <button class="menu-tab is-active" id="food-tab" type="button" role="tab" aria-selected="true" aria-controls="food-menu" data-menu-tab="food">Food</button>
+          <button class="menu-tab" id="drinks-tab" type="button" role="tab" aria-selected="false" aria-controls="drinks-menu" data-menu-tab="drinks">Drinks</button>
+        </div>
+
+        <div class="menu-board">
+          <section class="menu-view is-active" id="food-menu" role="tabpanel" aria-labelledby="food-tab" data-menu-view="food">
+            <article class="specials-strip" aria-labelledby="specials-title">
+              <div>
+                <p class="strip-kicker">Weekly Special</p>
+                <h2 id="specials-title">Fried Bologna On Texas Toast</h2>
+              </div>
+              <p>Griddled thick-cut bologna, American cheese, pickles, mustard, and fries.</p>
+              <strong class="special-price">$9</strong>
+            </article>
+
+            <div class="category">
+              <div class="category-title">
+                <h2>Burgers</h2>
+                <span>Served With Fries</span>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Double Cheeseburger</h3>
+                  <p>Two patties, American cheese, pickles, onion, comeback sauce.</p>
+                </div>
+                <strong>$11</strong>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Olive Burger</h3>
+                  <p>Green olive mayo, shredded lettuce, American cheese.</p>
+                </div>
+                <strong>$12</strong>
+              </div>
+            </div>
+
+            <div class="category">
+              <div class="category-title">
+                <h2>Bar Food</h2>
+                <span>Posted Favorites</span>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Chili</h3>
+                  <p>Beef chili, onion, cheddar, crackers.</p>
+                </div>
+                <strong>$7</strong>
+              </div>
+              <div class="menu-row is-sold-out">
+                <div>
+                  <h3>Fried Pickles</h3>
+                  <p>House ranch, hot sauce on request.</p>
+                </div>
+                <span class="sold-out">Sold Out</span>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Wings</h3>
+                  <p>Buffalo, BBQ, or dry rub. Celery if you ask nice.</p>
+                </div>
+                <strong>$13</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="menu-view" id="drinks-menu" role="tabpanel" aria-labelledby="drinks-tab" data-menu-view="drinks" hidden>
+            <div class="category">
+              <div class="category-title">
+                <h2>Domestics</h2>
+                <span>Bottles &amp; Cans</span>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>House Domestic</h3>
+                  <p>Cold, familiar, and not trying to be fancy.</p>
+                </div>
+                <strong>$4</strong>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Tallboy</h3>
+                  <p>Ask the bartender what is cold.</p>
+                </div>
+                <strong>$5</strong>
+              </div>
+            </div>
+
+            <div class="category">
+              <div class="category-title">
+                <h2>Cocktails</h2>
+                <span>Bar Standards</span>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Whiskey Ginger</h3>
+                  <p>Rail whiskey, ginger ale, lime.</p>
+                </div>
+                <strong>$7</strong>
+              </div>
+              <div class="menu-row">
+                <div>
+                  <h3>Vodka Soda</h3>
+                  <p>Simple, cold, lime wedge.</p>
+                </div>
+                <strong>$7</strong>
+              </div>
+              <div class="menu-row is-sold-out">
+                <div>
+                  <h3>Bloody Mary</h3>
+                  <p>Weekend pour, garnish when the kitchen has it.</p>
+                </div>
+                <span class="sold-out">Sold Out</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="route-footer">
+          <p>v0.0.prototype · Menu board draft</p>
+          <div class="footer-actions">
+            <a href="/elroyscantina/">El Roy's</a>
+            <button type="button">Staff Sign-In</button>
+          </div>
+        </footer>
+      </section>
+
+      <aside class="wall-signs wall-signs--right" aria-label="Right wall signs">
+        <img class="side-image-sign side-image-sign--plate" src="./assets/leroys-michigan-plate.png" alt="Michigan license plate reading LER0YS" width="1680" height="916">
+        <img class="side-image-sign side-image-sign--note" src="./assets/leroys-margarita-note.png" alt="Handwritten note: Try my famous margaritas upstairs. Thanks, Leroy." width="1680" height="916">
+      </aside>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
