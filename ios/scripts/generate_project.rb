@@ -63,7 +63,7 @@ INFO_PLIST_CONTENT = <<~PLIST
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>Scan drink and food item barcodes to prefill add-item fields.</string>
+    <string>Scan drink item barcodes and capture drink label text to prefill add-item fields.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Unlock the saved staff session before restoring manager access.</string>
     <key>UIApplicationSceneManifest</key>
@@ -226,7 +226,7 @@ app_target.build_configurations.each do |config|
   settings['INFOPLIST_KEY_UILaunchScreen_Generation'] = 'YES'
   settings['INFOPLIST_KEY_UISupportedInterfaceOrientations'] = 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'
   settings['INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad'] = 'UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight'
-  settings['INFOPLIST_KEY_NSCameraUsageDescription'] = 'Scan drink and food item barcodes to prefill add-item fields.'
+  settings['INFOPLIST_KEY_NSCameraUsageDescription'] = 'Scan drink item barcodes and capture drink label text to prefill add-item fields.'
   settings['INFOPLIST_KEY_NSFaceIDUsageDescription'] = 'Unlock the saved staff session before restoring manager access.'
   settings['INFOPLIST_KEY_CFBundleDisplayName'] = "El Roy's Manager"
   settings['INFOPLIST_KEY_ITSAppUsesNonExemptEncryption'] = 'NO'
