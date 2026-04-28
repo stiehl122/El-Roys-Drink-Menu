@@ -139,6 +139,17 @@ test('iOS launch smoke test uses deterministic anonymous bootstrap', () => {
   assert.match(appModel, /isLaunching = false/);
 });
 
+test('iOS product lookup sends current menu id with barcode requests', () => {
+  const backendClients = read('ios/ElRoysManagerApp/Clients/BackendClients.swift');
+  const appModel = read('ios/ElRoysManagerApp/App/AppModel.swift');
+
+  assert.match(backendClients, /protocol ProductLookupClienting\s*\{[\s\S]*func lookup\(upc: String, menuId: String, accessToken: String\)/);
+  assert.match(backendClients, /private struct ProductLookupRequest: Encodable\s*\{[\s\S]*var menuId: String/);
+  assert.match(backendClients, /ProductLookupRequest\(action: "product_lookup", barcode: trimmed, menuId: menuId\)/);
+  assert.match(appModel, /guard let currentMenuId else \{\s*throw BackendError\.server\(message: "Select a menu before scanning\."\)\s*\}/);
+  assert.match(appModel, /services\.productLookup\.lookup\(upc: barcode, menuId: currentMenuId, accessToken: accessToken\)/);
+});
+
 test('iOS home screen reserves explicit clearance for bottom navigation', () => {
   const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
   assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);

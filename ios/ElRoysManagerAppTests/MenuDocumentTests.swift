@@ -4010,7 +4010,7 @@ private final class StubPreviewClient: PreviewClienting {
 }
 
 private final class StubProductLookupClient: ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     throw TestError.message("Unused in this test")
   }
 }

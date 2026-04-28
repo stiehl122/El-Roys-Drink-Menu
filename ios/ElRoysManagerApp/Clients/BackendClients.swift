@@ -75,7 +75,7 @@ protocol PreviewClienting {
 }
 
 protocol ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult
 }
 
 private struct EmptyBody: Encodable {}
@@ -182,6 +182,7 @@ private struct PublishRequest: Encodable {
 private struct ProductLookupRequest: Encodable {
   var action: String
   var barcode: String
+  var menuId: String
 }
 
 private enum HTTPMethod: String {
@@ -615,16 +616,20 @@ final class ProductLookupClient: ProductLookupClienting {
     self.http = HTTPService(environment: environment, session: session)
   }
 
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     let trimmed = upc.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
       throw BackendError.server(message: "Enter a barcode first.")
+    }
+    let menuId = menuId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !menuId.isEmpty else {
+      throw BackendError.server(message: "Select a menu before scanning.")
     }
     return try await http.request(
       path: "api/manager",
       method: .post,
       accessToken: accessToken,
-      body: ProductLookupRequest(action: "product_lookup", barcode: trimmed)
+      body: ProductLookupRequest(action: "product_lookup", barcode: trimmed, menuId: menuId)
     )
   }
 }

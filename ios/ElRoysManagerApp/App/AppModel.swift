@@ -775,7 +775,10 @@ final class AppModel {
     guard let accessToken = authSession?.accessToken else {
       throw BackendError.unauthorized
     }
-    return try await services.productLookup.lookup(upc: barcode, accessToken: accessToken)
+    guard let currentMenuId else {
+      throw BackendError.server(message: "Select a menu before scanning.")
+    }
+    return try await services.productLookup.lookup(upc: barcode, menuId: currentMenuId, accessToken: accessToken)
   }
 
   func updatePreviewSelection(_ id: String, selected: Bool) {

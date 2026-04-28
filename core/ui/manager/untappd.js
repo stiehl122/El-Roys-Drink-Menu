@@ -17,6 +17,12 @@
 
     const endpoint = cleanText(deps.endpoint || '/api/manager');
     const headers = deps.headers && typeof deps.headers === 'object' ? deps.headers : {};
+    const menuId = cleanText(deps.menuId || deps.menu_id);
+    const body = {
+      action,
+      ...payload,
+    };
+    if (menuId) body.menu_id = menuId;
 
     try {
       const response = await fetchImpl(endpoint, {
@@ -26,10 +32,7 @@
           'Content-Type': 'application/json',
           ...headers,
         },
-        body: JSON.stringify({
-          action,
-          ...payload,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!response || !response.ok) return null;

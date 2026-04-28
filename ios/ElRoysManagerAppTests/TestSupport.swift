@@ -454,7 +454,7 @@ final class RouteStateStubPreviewClient: PreviewClienting {
 }
 
 final class RouteStateStubProductLookupClient: ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     throw RouteStateTestError.message("Unused in this test")
   }
 }

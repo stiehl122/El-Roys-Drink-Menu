@@ -9,7 +9,6 @@ import {
   readMenuAccessForUser,
   readProfile,
   requireMenuAccess,
-  requireRole,
 } from '../server/_auth.js';
 import { readMenuHistoryForRequest } from '../server/_menu-history.js';
 import { saveSharedDraftCommand } from '../server/_menu-draft.js';
@@ -21,6 +20,7 @@ import { deliverMenuNotification } from '../server/_notification-delivery.js';
 import { lookupProductByBarcode } from '../server/_product-lookup.js';
 import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
 import { parseRequestBody, readAction } from '../server/_request.js';
+import { checkManagerExternalActionLimit } from '../server/_manager-action-limits.js';
 
 async function parsePublishBody(req) {
   const body = await parseRequestBody(req);
@@ -29,6 +29,20 @@ async function parsePublishBody(req) {
     menuId: String(body?.menu_id || parseMenuId(req) || '').trim(),
     action: String(body?.action || '').trim().toLowerCase(),
   };
+}
+
+async function authorizeExternalLookup(req, body, action) {
+  const menuId = String(body?.menu_id || body?.menuId || '').trim();
+  if (!isSupportedMenuId(menuId)) throw { status: 400, message: 'Unsupported menu_id' };
+
+  const { uid } = await requireAuthenticatedUser(req);
+  const profile = await readProfile(uid, { select: 'role' });
+  const role = profile?.role || 'none';
+  if (role !== 'manager' && role !== 'admin') throw { status: 403, message: 'Forbidden' };
+  await requireMenuAccess(uid, role, menuId);
+
+  const limited = checkManagerExternalActionLimit(req, action);
+  if (limited) throw limited;
 }
 
 export default async function handler(req, res) {
@@ -110,17 +124,17 @@ export default async function handler(req, res) {
         return res.status(delivery.status).json({ results: delivery.results });
       }
       case 'product_lookup': {
-        await requireRole(req, 'manager', 'admin');
+        await authorizeExternalLookup(req, body, action);
         const barcode = String(body?.barcode || body?.upc || '').trim();
         return res.json(await lookupProductByBarcode(barcode));
       }
       case 'untappd_search': {
-        await requireRole(req, 'manager', 'admin');
+        await authorizeExternalLookup(req, body, action);
         const query = String(body?.query || body?.q || '').trim();
         return res.json({ beers: await searchUntappdBeers(query) });
       }
       case 'untappd_preview': {
-        await requireRole(req, 'manager', 'admin');
+        await authorizeExternalLookup(req, body, action);
         const bid = String(body?.bid || body?.beer_id || '').trim();
         const includeBrewery = Boolean(body?.includeBrewery || body?.include_brewery);
         return res.json({
@@ -131,6 +145,11 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Unsupported manager action' });
     }
   } catch (error) {
+    if (error?.headers && typeof res.setHeader === 'function') {
+      for (const [key, value] of Object.entries(error.headers)) {
+        res.setHeader(key, value);
+      }
+    }
     return res.status(error?.status || 500).json(error?.body || {
       error: error?.message || 'Server error',
       compatibility: error?.compatibility || null,

@@ -37,6 +37,12 @@
 
     const endpoint = cleanText(deps.endpoint || '/api/manager');
     const headers = deps.headers && typeof deps.headers === 'object' ? deps.headers : {};
+    const menuId = cleanText(deps.menuId || deps.menu_id);
+    const body = {
+      action: 'product_lookup',
+      barcode: normalizedBarcode,
+    };
+    if (menuId) body.menu_id = menuId;
 
     try {
       const response = await fetchImpl(endpoint, {
@@ -46,10 +52,7 @@
           'Content-Type': 'application/json',
           ...headers,
         },
-        body: JSON.stringify({
-          action: 'product_lookup',
-          barcode: normalizedBarcode,
-        }),
+        body: JSON.stringify(body),
       });
       if (!response || response.status === 404 || !response.ok) return null;
 

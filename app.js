@@ -1457,6 +1457,7 @@ async function beginAddItemBarcodeLookup(rawBarcode) {
   renderAddItemModal({ focusFieldId: 'add-item-name-input' });
 
   const product = await lookupOpenFoodFactsProduct(barcode, {
+    menuId: MENU_ID,
     headers: getAuthorizedApiHeaders(),
   });
   if (!_addItemModalState.isOpen || _addItemModalState.lookupRequestId !== requestId) {
@@ -1518,6 +1519,7 @@ async function runAddItemUntappdSearch(rawQuery = '') {
   renderAddItemModal();
 
   const results = await searchUntappdBeers(query, {
+    menuId: MENU_ID,
     headers: getAuthorizedApiHeaders(),
   });
   if (!_addItemModalState.isOpen || Number(_addItemModalState.untappd?.requestId || 0) !== requestId) {
@@ -1574,6 +1576,7 @@ async function previewAddItemUntappdSelection(bid) {
   renderAddItemModal();
 
   const preview = await previewUntappdBeerImport(bid, {
+    menuId: MENU_ID,
     includeBrewery: true,
     headers: getAuthorizedApiHeaders(),
   });
