@@ -43,16 +43,29 @@ final class ItemEditorScannerSourceTests: XCTestCase {
 }
 
 private func menuViewsSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
+  try! repositoryRootURL(filePath: filePath)
+    .appendingPathComponent("ios")
     .appendingPathComponent("ElRoysManagerApp/Features/Menu/MenuViews.swift")
 }
 
 private func featuresSourceURL(filePath: StaticString = #filePath) -> URL {
-  URL(fileURLWithPath: "\(filePath)")
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
-    .deletingLastPathComponent()
+  try! repositoryRootURL(filePath: filePath)
     .appendingPathComponent("docs/FEATURES.md")
+}
+
+private func repositoryRootURL(filePath: StaticString = #filePath) throws -> URL {
+  let fileManager = FileManager.default
+  var current = URL(fileURLWithPath: "\(filePath)").deletingLastPathComponent()
+
+  while current.path != current.deletingLastPathComponent().path {
+    let generator = current.appendingPathComponent("ios/scripts/generate_project.rb")
+    let features = current.appendingPathComponent("docs/FEATURES.md")
+    if fileManager.fileExists(atPath: generator.path),
+       fileManager.fileExists(atPath: features.path) {
+      return current
+    }
+    current.deleteLastPathComponent()
+  }
+
+  throw CocoaError(.fileNoSuchFile)
 }

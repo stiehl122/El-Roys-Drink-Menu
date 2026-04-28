@@ -1445,13 +1445,14 @@ private struct ItemEditorSheet: View {
       }
     }
     .sheet(isPresented: $showingLabelTextScanner) {
-      LabelTextCaptureSheet { selection in
-        pendingTextSelection = selection
-        showingTextApplyDialog = true
-      }
+      LabelTextCaptureSheet(
+        onSelection: { selection in
+          pendingTextSelection = selection
+          showingTextApplyDialog = true
+        }
+      )
     }
-    .confirmationDialog(
-      "Use Scanned Text",
+    .confirmationDialog("Use Scanned Text",
       isPresented: $showingTextApplyDialog,
       presenting: pendingTextSelection
     ) { selection in
