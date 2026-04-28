@@ -72,3 +72,26 @@ test('iOS source contracts preserve reorder mutation and account deletion copy',
   assert.match(appModel, /within 30 days/);
   assert.match(homeViews, /Account Deletion Details/);
 });
+
+test('iOS login screen does not show demo credentials in production copy', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Auth/AuthViews.swift');
+  assert.doesNotMatch(source, /manager@elroys\.example/);
+  assert.doesNotMatch(source, /••••••••/);
+  assert.match(source, /TextField\("Email", text: \$model\.email\)/);
+  assert.match(source, /SecureField\("Password", text: \$model\.password\)/);
+});
+
+test('iOS home screen reserves explicit clearance for bottom navigation', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);
+  assert.match(source, /Color\.clear\.frame\(height: homeBottomNavigationClearance\)/);
+});
+
+test('iOS exact route preview has loading and error states', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift');
+  assert.match(source, /enum WebPreviewLoadState/);
+  assert.match(source, /ProgressView\("Loading preview"/);
+  assert.match(source, /Preview unavailable/);
+  assert.match(source, /makeCoordinator\(\)/);
+  assert.match(source, /webView\(_ webView: WKWebView, didFail/);
+});

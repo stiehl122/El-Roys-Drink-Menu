@@ -1,7 +1,15 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const { createFetchResponse, loadSandboxWithScripts, setState } = require('./helpers/runtime.cjs');
+
+const ROOT = path.join(__dirname, '..');
+
+function readAppJs() {
+  return fs.readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+}
 
 test('auth api bootstrap exposes one shared auth boundary object', () => {
   const sandbox = loadSandboxWithScripts(['core/auth/auth-api.js']);
@@ -213,6 +221,25 @@ test('auth api getProfile preserves non-ok profile errors', async () => {
       return true;
     }
   );
+});
+
+test('profile fetch is skipped when no access token is available', async () => {
+  const source = readAppJs();
+  assert.match(source, /getProfile:\s*\(\{\s*accessToken = ''\s*\} = \{\}\) =>/);
+  assert.match(source, /if \(!accessToken\)/);
+  assert.match(source, /return Promise\.resolve\(\{ ok: false, profile: null, reason: 'missing-token' \}\)/);
+
+  let fetchCount = 0;
+  const sandbox = loadSandboxWithScripts(['core/auth/auth-api.js'], {
+    fetch: async () => {
+      fetchCount += 1;
+      return createFetchResponse(401, { error: 'Missing token' });
+    },
+  });
+
+  const result = await sandbox.__HF_AUTH_API__.getProfile();
+  assert.equal(fetchCount, 0);
+  assert.equal(JSON.stringify(result), JSON.stringify({ ok: false, profile: null, reason: 'missing-token' }));
 });
 
 test('auth api signIn rejects malformed successful responses', async () => {
