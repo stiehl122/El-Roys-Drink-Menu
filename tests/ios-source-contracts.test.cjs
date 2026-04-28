@@ -128,3 +128,39 @@ test('iOS login screen does not show demo credentials in production copy', () =>
   assert.match(source, /TextField\("Email", text: \$model\.email\)/);
   assert.match(source, /SecureField\("Password", text: \$model\.password\)/);
 });
+
+test('iOS launch smoke test uses deterministic anonymous bootstrap', () => {
+  const appModel = read('ios/ElRoysManagerApp/App/AppModel.swift');
+  const uiTest = read('ios/ElRoysManagerAppUITests/ElRoysManagerAppUITests.swift');
+
+  assert.match(uiTest, /app\.launchArguments\.append\("--ui-testing"\)/);
+  assert.match(appModel, /ProcessInfo\.processInfo\.arguments\.contains\("--ui-testing"\)/);
+  assert.match(appModel, /bootstrap = \.uiTestingAnonymous/);
+  assert.match(appModel, /isLaunching = false/);
+});
+
+test('iOS home screen reserves explicit clearance for bottom navigation', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);
+  assert.match(source, /Color\.clear\.frame\(height: homeBottomNavigationClearance\)/);
+});
+
+test('iOS home menu review reminders use EventKit with permission fallbacks', () => {
+  const service = read('ios/ElRoysManagerApp/Features/Home/CalendarReminderService.swift');
+  const homeViews = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const plist = read('ios/ElRoysManagerApp/Info.plist');
+
+  assert.match(service, /import EventKit/);
+  assert.match(service, /requestFullAccessToEvents/);
+  assert.doesNotMatch(service, /requestAccess\(to: \.event\)/);
+  assert.match(service, /CalendarReminderError\.accessDenied|case accessDenied/);
+  assert.match(service, /defaultCalendarForNewEvents/);
+  assert.match(service, /eventStore\.save/);
+
+  assert.match(homeViews, /HomeCalendarReminderCard/);
+  assert.match(homeViews, /calendar\.badge\.clock/);
+  assert.match(homeViews, /Add menu review calendar reminder/);
+
+  assert.match(plist, /NSCalendarsFullAccessUsageDescription/);
+  assert.match(plist, /NSCalendarsUsageDescription/);
+});

@@ -11,7 +11,10 @@ struct RestaurantChooserView: View {
   @State private var selectedRestaurantSlug: String
   @State private var expandedUpdateID: String?
   @State private var homeData = HomeDerivedData.empty
+  @State private var calendarReminderMessage: String?
+  @State private var isSchedulingCalendarReminder = false
   @Namespace private var switcherNamespace
+  private let calendarReminderService: any CalendarReminderServicing
 
   private struct HomeDerivedData {
     var updates: [HomeUpdate]
@@ -36,6 +39,7 @@ struct RestaurantChooserView: View {
   init(model: AppModel, initialRestaurantSlug: String? = nil) {
     self.model = model
     self.initialRestaurantSlug = initialRestaurantSlug
+    self.calendarReminderService = EventKitCalendarReminderService()
     _selectedRestaurantSlug = State(initialValue: initialRestaurantSlug ?? "leroys-lounge")
   }
 
@@ -106,6 +110,13 @@ struct RestaurantChooserView: View {
             theme: theme
           )
 
+          HomeCalendarReminderCard(
+            restaurant: restaurant,
+            theme: theme,
+            isScheduling: isSchedulingCalendarReminder,
+            onSchedule: scheduleCalendarReminder
+          )
+
           Color.clear.frame(height: homeBottomNavigationClearance)
         }
         .padding(.horizontal, 20)
@@ -140,6 +151,16 @@ struct RestaurantChooserView: View {
     .task(id: selectedRestaurantSlug) {
       guard let restaurant = selectedRestaurant else { return }
       await model.loadRestaurantTools(for: restaurant.id)
+    }
+    .alert("Calendar Reminder", isPresented: Binding(
+      get: { calendarReminderMessage != nil },
+      set: { if !$0 { calendarReminderMessage = nil } }
+    )) {
+      Button("OK", role: .cancel) {
+        calendarReminderMessage = nil
+      }
+    } message: {
+      Text(calendarReminderMessage ?? "")
     }
   }
 
@@ -281,6 +302,21 @@ struct RestaurantChooserView: View {
       drinksEditorDestination: drinksMenu.map(AppDestination.editor),
       foodEditorDestination: foodMenu.map(AppDestination.editor)
     )
+  }
+
+  private func scheduleCalendarReminder() {
+    guard let restaurant = selectedRestaurant else { return }
+    isSchedulingCalendarReminder = true
+    Task {
+      do {
+        let result = try await calendarReminderService.scheduleMenuReview(for: restaurant.name)
+        let date = DateFormatter.calendarReminderStamp.string(from: result.startDate)
+        calendarReminderMessage = "\(result.title) was added for \(date)."
+      } catch {
+        calendarReminderMessage = error.localizedDescription
+      }
+      isSchedulingCalendarReminder = false
+    }
   }
 }
 
@@ -1028,6 +1064,63 @@ private struct HomeRestaurantToolsCard: View {
   }
 }
 
+// MARK: - Calendar reminder
+
+private struct HomeCalendarReminderCard: View {
+  let restaurant: RestaurantRecord?
+  let theme: HomeTheme
+  let isScheduling: Bool
+  let onSchedule: () -> Void
+
+  var body: some View {
+    Button(action: onSchedule) {
+      HStack(spacing: 14) {
+        Image(systemName: "calendar.badge.clock")
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(theme.accentCool)
+          .frame(width: 32, height: 32)
+          .background(theme.accentCool.opacity(0.14), in: Circle())
+          .overlay(Circle().stroke(theme.accentCool.opacity(0.35), lineWidth: 0.6))
+
+        VStack(alignment: .leading, spacing: 3) {
+          Text("MENU REVIEW")
+            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+            .tracking(1.7)
+            .foregroundStyle(theme.accentCool)
+          Text(restaurant.map { "Add calendar reminder for \($0.name)" } ?? "Add calendar reminder")
+            .font(theme.body(15, weight: .semibold))
+            .foregroundStyle(theme.surfaceBodyText)
+            .multilineTextAlignment(.leading)
+        }
+
+        Spacer()
+
+        if isScheduling {
+          ProgressView()
+            .controlSize(.small)
+            .tint(theme.accentCool)
+        } else {
+          Image(systemName: "plus")
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(theme.accentCool)
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 14)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(theme.rowSurface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .stroke(theme.rowBorder, lineWidth: 1)
+      }
+    }
+    .buttonStyle(.plain)
+    .disabled(restaurant == nil || isScheduling)
+    .accessibilityLabel("Add menu review calendar reminder")
+    .accessibilityHint("Creates a Calendar event for the selected restaurant's next menu review.")
+  }
+}
+
 // MARK: - Background (gradient + motif + grain)
 
 private struct HomeBackground: View {
@@ -1431,5 +1524,12 @@ private extension DateFormatter {
     let f = DateFormatter()
     f.dateFormat = "MM·dd HH:mm"
     return f
+  }()
+
+  static let calendarReminderStamp: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter
   }()
 }

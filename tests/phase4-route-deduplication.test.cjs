@@ -34,3 +34,13 @@ test('shared app route handoff no longer relies on legacy route globals', () => 
   assert.doesNotMatch(app, /window\.initializeRoute/);
   assert.doesNotMatch(app, /window\.renderRouteBootShell/);
 });
+
+test('shared route core announces menu load and switch status accessibly', () => {
+  const source = read('routes/shared/public-route-core.js');
+
+  assert.match(source, /statusAnnouncerId/);
+  assert.match(source, /aria-live/);
+  assert.match(source, /role', 'status'/);
+  assert.match(source, /Loading \$\{targetMenuType/);
+  assert.match(source, /activeMenuName .* loaded/);
+});

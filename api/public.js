@@ -1,4 +1,5 @@
 import {
+  createPublicMenuCatalogPayload,
   createPublicMenuPayload,
   getKnownMenus,
   getKnownRestaurants,
@@ -37,9 +38,11 @@ export default async function handler(req, res) {
 
     if (action === 'menu_index' || action === 'catalog') {
       const payload = await readMenuIndex();
+      const catalog = createPublicMenuCatalogPayload(payload.menus);
       return res.json({
-        menus: payload.menus,
-        restaurants: getKnownRestaurants(),
+        menus: catalog.menus,
+        restaurants: action === 'catalog' ? catalog.restaurants : getKnownRestaurants(),
+        appVersion: catalog.appVersion,
       });
     }
 

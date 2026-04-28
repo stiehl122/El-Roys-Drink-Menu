@@ -22,6 +22,7 @@ const MENUS = domainConstants.MENUS || {};
 const KNOWN_MENU_ORDER = Array.isArray(domainConstants.KNOWN_MENU_ORDER) ? domainConstants.KNOWN_MENU_ORDER.slice() : [];
 const KNOWN_RESTAURANT_ORDER = Array.isArray(domainConstants.KNOWN_RESTAURANT_ORDER) ? domainConstants.KNOWN_RESTAURANT_ORDER.slice() : [];
 const APP_VERSION = domainConstants.APP_VERSION || 'unknown';
+const SITE_PATHS = domainConstants.SITE_PATHS || {};
 const featuredSpecials = (globalThis.__HF_FEATURED_SPECIALS__ && typeof globalThis.__HF_FEATURED_SPECIALS__ === 'object')
   ? globalThis.__HF_FEATURED_SPECIALS__
   : {};
@@ -117,6 +118,53 @@ export function getKnownRestaurants() {
 
 export function getKnownMenuById(menuId = '') {
   return getKnownMenus().find(menu => menu.id === menuId) || null;
+}
+
+function normalizeMenuRecord(menu = {}) {
+  const restaurantId = menu.restaurantId || menu.restaurant_id || '';
+  return {
+    id: menu.id || '',
+    slug: menu.slug || '',
+    name: menu.name || '',
+    type: String(menu.type || 'drinks').toLowerCase(),
+    restaurantId,
+    restaurant_id: restaurantId,
+    archived: menu.archived === true,
+  };
+}
+
+function publicHrefForMenu(menu = {}) {
+  const normalized = normalizeMenuRecord(menu);
+  const basePath = SITE_PATHS[normalized.restaurantId] || '/';
+  if (normalized.type === 'drinks') {
+    return `${basePath}?menu=drinks`;
+  }
+  return basePath;
+}
+
+export function createPublicMenuCatalogPayload(menuRows = getKnownMenus()) {
+  const knownRestaurants = getKnownRestaurants();
+  const menus = sortByKnownOrder(
+    (Array.isArray(menuRows) ? menuRows : [])
+      .map(normalizeMenuRecord)
+      .filter(menu => menu.id && isSupportedMenuId(menu.id))
+      .map(menu => ({
+        ...menu,
+        label: menu.type === 'food' ? 'Food' : 'Drinks',
+        publicHref: publicHrefForMenu(menu),
+      })),
+    KNOWN_MENU_ORDER
+  );
+
+  return {
+    appVersion: APP_VERSION,
+    restaurants: sortByKnownOrder(knownRestaurants.map(restaurant => ({
+      ...restaurant,
+      publicHref: SITE_PATHS[restaurant.id] || '/',
+      menus: menus.filter(menu => menu.restaurantId === restaurant.id),
+    })), KNOWN_RESTAURANT_ORDER),
+    menus,
+  };
 }
 
 export function getDefaultMenuId(accessibleMenuIds = []) {
