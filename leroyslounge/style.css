@@ -426,6 +426,18 @@
   border-bottom: 1px dashed rgba(233, 212, 167, 0.24);
 }
 
+#restaurant-site-wrapper .ll-wall-menu-row.menu-item {
+  display: grid;
+  align-items: initial;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px dashed rgba(233, 212, 167, 0.24);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: inherit;
+}
+
 #restaurant-site-wrapper .ll-wall-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

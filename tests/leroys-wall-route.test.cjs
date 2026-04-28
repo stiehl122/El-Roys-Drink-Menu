@@ -75,5 +75,7 @@ test("leroy's wall css keeps route scope, desktop side signs, and mobile hiding"
   assert.match(css, /@media\s*\(max-width:\s*1120px\)\s*{[\s\S]*?\.ll-wall-signs\s*{[\s\S]*?display:\s*none;/);
   assert.match(css, /\.ll-board-userchip-trigger/);
   assert.match(css, /\.ll-board-userdropdown\.ll-site-userdropdown/);
+  assert.match(css, /\.ll-wall-menu-row\.menu-item\s*{[\s\S]*?background:\s*transparent;/);
+  assert.match(css, /\.ll-wall-menu-row\.menu-item\s*{[\s\S]*?border-radius:\s*0;/);
   assert.doesNotMatch(css, /\.ll-board-page\.is-mobile-compact/);
 });
