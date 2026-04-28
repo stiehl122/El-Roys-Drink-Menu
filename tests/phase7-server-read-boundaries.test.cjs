@@ -54,7 +54,26 @@ test('shared menu read helper exposes stable wave 1 contract builders', async ()
   assert.equal(typeof helper.readMenuStateBundle, 'function');
   assert.equal(typeof helper.createMenuWorkspacePayload, 'function');
   assert.equal(typeof helper.createPublicMenuPayload, 'function');
+  assert.equal(typeof helper.createPublicMenuCatalogPayload, 'function');
   assert.equal(typeof helper.createSessionBootstrapPayload, 'function');
+});
+
+test('public catalog exposes fixed restaurant menu routes for clients', async () => {
+  const helper = await importApiModule('server/_menu-read.js');
+  const payload = helper.createPublicMenuCatalogPayload();
+
+  assert.equal(payload.restaurants.length, 2);
+  assert.equal(payload.menus.length, 4);
+  assert.deepEqual(
+    payload.menus.map(menu => [menu.label, menu.publicHref]),
+    [
+      ['Drinks', '/leroyslounge?menu=drinks'],
+      ['Food', '/leroyslounge'],
+      ['Drinks', '/elroyscantina?menu=drinks'],
+      ['Food', '/elroyscantina'],
+    ]
+  );
+  assert.deepEqual(payload.restaurants.map(restaurant => restaurant.menus.length), [2, 2]);
 });
 
 test('consolidated read routes export request handlers', async () => {

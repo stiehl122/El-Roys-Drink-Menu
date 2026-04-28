@@ -27,6 +27,9 @@ The app lives in-repo so backend contracts, parity tracking, and native client b
 - Native menu rendering first, embedded `WKWebView` exact-route preview second
 - Offline drafts are editor-only and keyed by `userId + menuId`
 - Admin remains web-only
+- Home can create EventKit calendar reminders for staff menu review. Calendar
+  permission is requested at use time and denied/unavailable devices fall back
+  to an in-app explanation.
 
 ## Backend Contracts
 

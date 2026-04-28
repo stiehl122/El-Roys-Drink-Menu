@@ -3,6 +3,7 @@ import XCTest
 final class ElRoysManagerAppUITests: XCTestCase {
   func testLaunchShowsEntryPoint() throws {
     let app = XCUIApplication()
+    app.launchArguments.append("--ui-testing")
     app.launch()
 
     let deadline = Date().addingTimeInterval(8)

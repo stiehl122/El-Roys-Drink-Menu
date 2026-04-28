@@ -238,11 +238,18 @@ body.root-landing-page::before {
   box-shadow: 0 0 0 8px rgba(240, 224, 204, 0.08);
 }
 
+.landing-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
 .landing-hero-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 220px;
+  min-width: 132px;
   min-height: 54px;
   padding: 0 24px;
   border-radius: 999px;
@@ -252,6 +259,13 @@ body.root-landing-page::before {
   letter-spacing: 0.18em;
   text-transform: uppercase;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.landing-hero-cta--secondary {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: var(--landing-ink);
+  box-shadow: none;
 }
 
 .landing-hero-cta:hover,
@@ -271,6 +285,10 @@ body.root-landing-page::before {
   background: #ffc279;
 }
 
+.landing-hero-cta--leroys.landing-hero-cta--secondary {
+  color: #ffd4a1;
+}
+
 .landing-hero-cta--elroys {
   background: var(--landing-elroys);
   color: #042116;
@@ -280,6 +298,15 @@ body.root-landing-page::before {
 .landing-hero-cta--elroys:hover,
 .landing-hero-cta--elroys:focus-visible {
   background: #76ffd8;
+}
+
+.landing-hero-cta--elroys.landing-hero-cta--secondary {
+  color: #96ffe0;
+}
+
+.landing-hero-cta--secondary:hover,
+.landing-hero-cta--secondary:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .landing-shell-section {
@@ -747,6 +774,7 @@ body.root-landing-page::before {
 
 .landing-root-fallback-actions {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -811,6 +839,21 @@ body.root-landing-page::before {
   .landing-story-grid,
   .landing-review-grid,
   .landing-review-pair {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .landing-hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .landing-hero-cta {
+    width: 100%;
+  }
+
+  .landing-root-fallback-actions {
     grid-template-columns: 1fr;
   }
 }

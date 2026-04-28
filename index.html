@@ -34,7 +34,10 @@
           <h1 class="landing-hero-title landing-hero-title--leroys">Leroy's Lounge</h1>
           <p class="landing-hero-copy">Basement-bar warmth, American bites, and the kind of late-night room that rewards a wrong turn.</p>
           <div id="landing-hero-status-leroys" class="landing-status-pill is-closed">Loading hours...</div>
-          <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge">See Leroy's Food</a>
+          <div class="landing-hero-actions" aria-label="Leroy's Lounge menus">
+            <a class="landing-hero-cta landing-hero-cta--leroys" href="/leroyslounge?menu=drinks">Drinks</a>
+            <a class="landing-hero-cta landing-hero-cta--leroys landing-hero-cta--secondary" href="/leroyslounge">Food</a>
+          </div>
         </div>
       </article>
 
@@ -45,7 +48,10 @@
           <h1 class="landing-hero-title landing-hero-title--elroys">El Roy's Cantina</h1>
           <p class="landing-hero-copy">Border-glam color, Tex-Mex heat, and a louder kind of night out when the room needs more shine.</p>
           <div id="landing-hero-status-elroys" class="landing-status-pill is-closed">Loading hours...</div>
-          <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina">See El Roy's Food</a>
+          <div class="landing-hero-actions" aria-label="El Roy's Cantina menus">
+            <a class="landing-hero-cta landing-hero-cta--elroys" href="/elroyscantina?menu=drinks">Drinks</a>
+            <a class="landing-hero-cta landing-hero-cta--elroys landing-hero-cta--secondary" href="/elroyscantina">Food</a>
+          </div>
         </div>
       </article>
     </section>
@@ -120,8 +126,10 @@
       <h2>Choose a restaurant</h2>
       <p>The richer homepage is temporarily unavailable, but the direct path to each food menu stays open.</p>
       <div class="landing-root-fallback-actions">
-        <a class="landing-root-fallback-link" href="/leroyslounge">Leroy's Lounge</a>
-        <a class="landing-root-fallback-link" href="/elroyscantina">El Roy's Cantina</a>
+        <a class="landing-root-fallback-link" href="/leroyslounge?menu=drinks">Leroy's Drinks</a>
+        <a class="landing-root-fallback-link" href="/leroyslounge">Leroy's Food</a>
+        <a class="landing-root-fallback-link" href="/elroyscantina?menu=drinks">El Roy's Drinks</a>
+        <a class="landing-root-fallback-link" href="/elroyscantina">El Roy's Food</a>
       </div>
     </div>
   </div>

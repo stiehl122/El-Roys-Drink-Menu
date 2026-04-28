@@ -210,6 +210,12 @@ final class AppModel {
 
   func start() async {
     guard isLaunching else { return }
+    if ProcessInfo.processInfo.arguments.contains("--ui-testing") {
+      bootstrap = .uiTestingAnonymous
+      homeDataVersion += 1
+      isLaunching = false
+      return
+    }
     do {
       let anonymousBootstrap = try await services.bootstrap.fetch(accessToken: nil)
       bootstrap = anonymousBootstrap
@@ -1467,6 +1473,22 @@ final class AppModel {
   }
 }
 
+private extension SessionBootstrapPayload {
+  static var uiTestingAnonymous: SessionBootstrapPayload {
+    SessionBootstrapPayload(
+      actor: nil,
+      appVersion: "ui-test",
+      defaultMenuId: nil,
+      capabilities: BootstrapCapabilities(canAccessManager: false, canAccessAdmin: false, canManageAnyMenu: false),
+      menus: [],
+      restaurants: [],
+      access: BootstrapAccess(accessibleMenuIds: [], accessibleRestaurantIds: []),
+      config: nil,
+      readiness: BootstrapReadiness(hasSupabaseConfig: false, previewAuditAvailable: false),
+      loopAudit: nil
+    )
+  }
+}
 
 private struct InstalledEditorSessionState {
   var isWorking: Bool

@@ -45,3 +45,6 @@ design-loop/**/*.jpg
 bug-loop/log.md
 bug-loop/artifacts/
 *.xcworkspacedata
+
+# Local superpowers runtime state
+.superpowers/brainstorm/*/state/
