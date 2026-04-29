@@ -411,6 +411,64 @@ test('createManagerItemsTableService renders cockpit item table actions without 
   assert.doesNotMatch(html, /swipe-action/);
 });
 
+test('createManagerItemsTableService exposes featured-special controls for featured category rows', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/items-table.js',
+  ]);
+  const service = sandbox.__HF_UI_MODULES__.createManagerItemsTableService();
+  const tableState = service.buildTableState({
+    categories: [{ id: 'featured_specials', title: 'Featured Specials', icon: '*', isFeaturedSpecials: true }],
+    menuState: {
+      featured_specials: {
+        items: [{
+          id: 'spritz',
+          name: 'House Spritz',
+          featuredEnabled: true,
+          onMenu: true,
+        }],
+      },
+    },
+  });
+
+  const html = service.renderTableHtml(tableState);
+
+  assert.match(html, /data-item-action="toggle-featured"/);
+  assert.match(html, /Show in Featured Preview/);
+  assert.match(html, /checked/);
+});
+
+test('createManagerItemsTableService delegates featured-special toggles', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/items-table.js',
+  ]);
+  const calls = [];
+  const service = sandbox.__HF_UI_MODULES__.createManagerItemsTableService({
+    onToggleFeatured: (categoryId, itemId, checked) => calls.push([categoryId, itemId, checked]),
+  });
+  const listeners = {};
+  const container = {
+    dataset: {},
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+  };
+  const row = { dataset: { categoryId: 'featured_specials', itemId: 'spritz' } };
+  const toggleTarget = {
+    checked: false,
+    dataset: { itemAction: 'toggle-featured' },
+    closest(selector) {
+      if (selector === '[data-item-action]') return toggleTarget;
+      if (selector === '[data-category-id][data-item-id]') return row;
+      return null;
+    },
+  };
+
+  service.bindTable(container);
+  listeners.click({ target: toggleTarget });
+
+  assert.deepEqual(calls, [['featured_specials', 'spritz', false]]);
+});
+
 test('createManagerWorkspaceService skips legacy primary section renderers during cockpit render', () => {
   const sandbox = loadSandboxWithScripts([
     'core/ui/manager/workspace.js',
@@ -558,6 +616,40 @@ test('delegated refreshManagerViews refreshes cockpit shell and item table', () 
 
   assert.match(sandbox.document.getElementById('manager-cockpit-items').innerHTML, /Draft Lager/);
   assert.match(sandbox.document.getElementById('manager-cockpit-header').innerHTML, /Manager Workspace/);
+});
+
+test('renderManagerCockpitItemsTable filters by search query and selected category', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+    'app.js',
+  ]);
+  registerCockpitDom(sandbox);
+  setState(sandbox, {
+    MENU_TYPE: 'drinks',
+    CATEGORY_DEFS: [
+      { id: 'beer', title: 'Draft Beer', icon: 'B', color: '', sub: '', placeholder: '' },
+      { id: 'wine', title: 'Wine', icon: 'W', color: '', sub: '', placeholder: '' },
+    ],
+    menuState: {
+      beer: {
+        items: [{ id: 'lager', name: 'Draft Lager', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      wine: {
+        items: [{ id: 'rose', name: 'House Rose', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+  });
+
+  getState(sandbox, '_managerCockpitSearchQuery = "lager"; _managerCockpitCategoryFilter = "beer"; renderManagerCockpitItemsTable()');
+
+  const html = sandbox.document.getElementById('manager-cockpit-items').innerHTML;
+  assert.match(html, /Draft Lager/);
+  assert.doesNotMatch(html, /House Rose/);
+  assert.doesNotMatch(html, />Wine</);
 });
 
 test('createManagerItemsTableService delegates item name and edit clicks to the edit callback', () => {

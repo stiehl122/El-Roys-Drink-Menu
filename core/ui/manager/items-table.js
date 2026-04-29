@@ -21,6 +21,7 @@
       eightySixed: !!(item.eightySixed ?? item.is_eighty_sixed),
       onMenu: item.onMenu !== false && item.on_menu !== false,
       visibility: String(item.visibility ?? ''),
+      featuredEnabled: item.featuredEnabled === true || item.featured_enabled === true,
     };
   }
 
@@ -46,6 +47,7 @@
   function createManagerItemsTableServiceImpl(deps = {}) {
     const onEditItem = typeof deps.onEditItem === 'function' ? deps.onEditItem : (() => {});
     const onToggle86 = typeof deps.onToggle86 === 'function' ? deps.onToggle86 : (() => {});
+    const onToggleFeatured = typeof deps.onToggleFeatured === 'function' ? deps.onToggleFeatured : (() => {});
     const onDragStart = typeof deps.onDragStart === 'function' ? deps.onDragStart : (() => {});
     const onDragOver = typeof deps.onDragOver === 'function' ? deps.onDragOver : (() => {});
     const onDrop = typeof deps.onDrop === 'function' ? deps.onDrop : (() => {});
@@ -58,9 +60,27 @@
           id: String(category.id ?? ''),
           title: String(category.title ?? category.label ?? ''),
           icon: String(category.icon ?? ''),
+          isFeaturedSpecials: category.isFeaturedSpecials === true || String(category.id ?? '') === 'featured_specials',
           items: (Array.isArray(categoryItems) ? categoryItems : []).map(normalizeItem),
         };
       });
+    }
+
+    function renderStatusCell(category, item, status, itemLabel) {
+      if (!category.isFeaturedSpecials) {
+        return `<span class="${status.className}">${escHtml(status.label)}</span>`;
+      }
+      return `
+        <label class="manager-cockpit-featured-toggle">
+          <input
+            type="checkbox"
+            data-item-action="toggle-featured"
+            ${item.featuredEnabled ? 'checked' : ''}
+            aria-label="Show ${escHtml(itemLabel)} in Featured Preview"
+          >
+          <span>Show in Featured Preview</span>
+        </label>
+        <span class="${status.className}">${escHtml(status.label)}</span>`;
     }
 
     function renderItemRow(category, item, itemIndex) {
@@ -84,7 +104,7 @@
             <button class="manager-cockpit-item-name" type="button" data-item-action="edit">${escHtml(itemLabel)}</button>
           </div>
           <div class="manager-cockpit-item-cell manager-cockpit-item-cell--status" role="cell" data-label="Status">
-            <span class="${status.className}">${escHtml(status.label)}</span>
+            ${renderStatusCell(category, item, status, itemLabel)}
           </div>
           <div class="manager-cockpit-item-cell manager-cockpit-item-cell--edit" role="cell" data-label="Edit">
             <button class="manager-cockpit-row-btn" type="button" data-item-action="edit" aria-label="Edit ${escHtml(itemLabel)}">Edit</button>
@@ -145,6 +165,10 @@
         }
         if (actionEl.dataset.itemAction === 'toggle-86') {
           onToggle86(categoryId, itemId, event);
+          return;
+        }
+        if (actionEl.dataset.itemAction === 'toggle-featured') {
+          onToggleFeatured(categoryId, itemId, actionEl.checked === true, event);
         }
       });
       container.addEventListener('dragstart', event => {

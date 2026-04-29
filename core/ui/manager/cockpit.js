@@ -23,6 +23,7 @@
       : (() => ({ status: 'Live', statusMeta: 'Live menu is current', activeItems: 0, eightySixed: 0 }));
     const getManagerNote = typeof deps.getManagerNote === 'function' ? deps.getManagerNote : (() => ({ note: '', updated_at: '' }));
     const getActivityEntries = typeof deps.getActivityEntries === 'function' ? deps.getActivityEntries : (() => []);
+    const getFilterCategories = typeof deps.getFilterCategories === 'function' ? deps.getFilterCategories : (() => []);
     const notesService = deps.notesService || (
       typeof modules.createManagerNotesService === 'function'
         ? modules.createManagerNotesService()
@@ -95,6 +96,17 @@
     }
 
     function renderWorkbar(container) {
+      const currentSearch = documentRef?.getElementById?.('manager-item-search')?.value || '';
+      const currentFilter = documentRef?.getElementById?.('manager-category-filter')?.value || 'all';
+      const categoryOptions = (Array.isArray(getFilterCategories()) ? getFilterCategories() : [])
+        .map(category => {
+          const value = String(category?.id || '').trim();
+          if (!value) return '';
+          const label = String(category?.title || category?.label || value);
+          return `<option value="${escHtml(value)}" ${value === currentFilter ? 'selected' : ''}>${escHtml(label)}</option>`;
+        })
+        .filter(Boolean)
+        .join('');
       container.innerHTML = `
         <button class="manager-cockpit-tool manager-cockpit-tool--primary" type="button" id="manager-add-item-btn" onclick="openAddItemModal({ mode: 'manual' })">
           <span class="manager-cockpit-tool-icon">＋</span>
@@ -106,11 +118,11 @@
         </button>
         <label class="manager-cockpit-tool manager-cockpit-tool--field" for="manager-item-search">
           <span class="manager-cockpit-tool-icon">⌕</span>
-          <input id="manager-item-search" type="search" placeholder="Search..." autocomplete="off">
+          <input id="manager-item-search" type="search" placeholder="Search..." autocomplete="off" value="${escHtml(currentSearch)}">
         </label>
         <label class="manager-cockpit-tool manager-cockpit-tool--field" for="manager-category-filter">
           <span class="manager-cockpit-tool-icon">▽</span>
-          <select id="manager-category-filter"><option value="all">No Filter</option></select>
+          <select id="manager-category-filter"><option value="all">No Filter</option>${categoryOptions}</select>
         </label>`;
     }
 

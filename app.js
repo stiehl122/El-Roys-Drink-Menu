@@ -608,6 +608,8 @@ let _previewModalState = null;
 let _previewSelectionState = {};
 let _previewNotifyEnabled = true;
 let _lastAddItemCategoryId = '';
+let _managerCockpitSearchQuery = '';
+let _managerCockpitCategoryFilter = 'all';
 const ADD_ITEM_MODAL_MANUAL_MODE = 'manual';
 const ADD_ITEM_MODAL_SCAN_MODE = 'scan';
 function createAddItemModalUntappdState(overrides = {}) {
@@ -2594,8 +2596,8 @@ function getMenuSessionPorts() {
       const canonicalPreview = result.preview && typeof result.preview === 'object' ? result.preview : providedPreview;
       const ts = Number(result.ts || Date.now());
       if (mode === 'save') {
-        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
-        lsSet(LS_KEYS.lastUpdated, String(ts));
+        _lastSentFeaturedIds = new Set(getCurrentFeaturedIds());
+        applySentState(Array.isArray(canonicalPreview?.diff) ? canonicalPreview.diff : [], ts);
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
         clearCurrentLocalDraft();
@@ -3358,6 +3360,7 @@ function buildManagerCockpitModuleDeps() {
     getStats: () => getManagerCockpitStats(),
     getManagerNote: () => _managerNote || { note: '', updated_at: '', updated_by: '' },
     getActivityEntries: () => Array.isArray(_managerActivityEntries) ? _managerActivityEntries : [],
+    getFilterCategories: () => getManagerCockpitItemCategories(),
   };
 }
 
@@ -3379,6 +3382,12 @@ function buildManagerItemsTableModuleDeps() {
       toggle86(catId, itemId);
       renderManagerCockpitShell();
       renderManagerCockpitItemsTable();
+    },
+    onToggleFeatured: (catId, itemId, checked) => {
+      toggleFeaturedSpecialEnabled(catId, itemId, checked);
+      renderManagerCockpitShell();
+      renderManagerCockpitItemsTable();
+      renderFeaturedTab();
     },
     onDragStart: (event, catId, itemId) => startManagerItemDrag(event, catId, itemId),
     onDragOver: (event, catId, itemId) => allowManagerItemDrop(event, catId, itemId),
@@ -6843,7 +6852,10 @@ function bindManagerQuickNotesControls() {
 
 function renderManagerCockpitShell(service = getManagerCockpitService()) {
   const rendered = service?.renderCockpit();
-  if (rendered) bindManagerQuickNotesControls();
+  if (rendered) {
+    bindManagerQuickNotesControls();
+    bindManagerCockpitWorkbarControls();
+  }
   return !!rendered;
 }
 
@@ -6860,28 +6872,76 @@ function getManagerCockpitItemCategories() {
   return [
     ...getManagedCategoryDefs(),
     getUncategorizedCategoryDef(),
-  ];
+  ].map(category => ({
+    ...category,
+    isFeaturedSpecials: category.id === FEATURED_SPECIALS_CATEGORY_ID,
+  }));
+}
+
+function getManagerCockpitFilteredCategories(categories = []) {
+  const selectedCategoryId = String(_managerCockpitCategoryFilter || 'all').trim();
+  if (!selectedCategoryId || selectedCategoryId === 'all') return categories;
+  return categories.filter(category => category.id === selectedCategoryId);
+}
+
+function filterManagerCockpitItems(items = []) {
+  const query = String(_managerCockpitSearchQuery || '').trim().toLowerCase();
+  if (!query) return items;
+  return (Array.isArray(items) ? items : []).filter(item => {
+    const searchable = [
+      item?.name,
+      item?.desc,
+      item?.price,
+    ].map(value => String(value || '').toLowerCase()).join(' ');
+    return searchable.includes(query);
+  });
 }
 
 function buildManagerCockpitItemMenuState(categories) {
   return categories.reduce((state, category) => {
     state[category.id] = {
-      items: getRenderableCategoryItems(category.id),
+      items: filterManagerCockpitItems(getRenderableCategoryItems(category.id)),
     };
     return state;
   }, {});
+}
+
+function bindManagerCockpitWorkbarControls() {
+  const searchInput = document.getElementById('manager-item-search');
+  const categorySelect = document.getElementById('manager-category-filter');
+  if (searchInput && searchInput.dataset.managerCockpitSearchBound !== 'true') {
+    searchInput.dataset.managerCockpitSearchBound = 'true';
+    searchInput.value = _managerCockpitSearchQuery;
+    searchInput.addEventListener('input', () => {
+      _managerCockpitSearchQuery = searchInput.value || '';
+      renderManagerCockpitItemsTable();
+    });
+  }
+  if (categorySelect && categorySelect.dataset.managerCockpitFilterBound !== 'true') {
+    categorySelect.dataset.managerCockpitFilterBound = 'true';
+    categorySelect.value = _managerCockpitCategoryFilter || 'all';
+    categorySelect.addEventListener('change', () => {
+      _managerCockpitCategoryFilter = categorySelect.value || 'all';
+      renderManagerCockpitItemsTable();
+    });
+  }
 }
 
 function renderManagerCockpitItemsTable() {
   const container = document.getElementById('manager-cockpit-items');
   const service = getManagerItemsTableService();
   if (!container || !service) return false;
-  const categories = getManagerCockpitItemCategories();
+  const categories = getManagerCockpitFilteredCategories(getManagerCockpitItemCategories());
   const tableState = service.buildTableState({
     categories,
     menuState: buildManagerCockpitItemMenuState(categories),
   });
-  container.innerHTML = service.renderTableHtml(tableState);
+  const visibleTableState = String(_managerCockpitSearchQuery || '').trim()
+    ? tableState.filter(category => (category.items || []).length > 0)
+    : tableState;
+  container.innerHTML = visibleTableState.length
+    ? service.renderTableHtml(visibleTableState)
+    : '<p class="db-empty">No items match that search.</p>';
   service.bindTable(container);
   return true;
 }
@@ -9054,7 +9114,9 @@ function renderUserHeader(options = {}) {
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
-    actionBtn.textContent   = (isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager';
+    actionBtn.textContent   = isSettingsRoute && _appPageMode === 'manager'
+      ? 'Return to Menu'
+      : ((isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager');
     actionBtn.classList.toggle('active', isManagerMode);
   }
   if (adminBtn) {
@@ -9234,6 +9296,11 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
+  if (_appPageMode === 'manager') {
+    const publicHref = getPublicHrefForMenuId(MENU_ID);
+    if (publicHref) navigateToPage(publicHref);
+    return;
+  }
   const targetPath = getManagerHrefForMenuId(MENU_ID);
   if (!MENU_ID || targetPath === SHARED_PAGE_PATHS.manager) {
     showToast('Select a menu from the public view first.', 'info');
@@ -11152,6 +11219,7 @@ function toggleFeaturedSpecialEnabled(catId, itemId, checked) {
   markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   renderManagerOverviewStats();
+  renderFeaturedTab();
   renderFeaturedPublicSection();
 }
 

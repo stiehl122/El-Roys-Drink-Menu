@@ -96,6 +96,35 @@
         <span id="manager-cockpit-rail" hidden></span>
         <button class="manager-shell-rail-close" type="button" aria-label="Close manager navigation" onclick="closeSettingsDrawer()">×</button>
         <div id="manager-cockpit-rail-meta"></div>
+        <div class="manager-shell-drawer-actions manager-dossier-drawer-actions" id="manager-cockpit-rail-actions">
+          <div
+            class="manager-userchip manager-dossier-userchip"
+            data-user-chip
+            data-user-chip-scope="fallback"
+            data-user-chip-variant="rail"
+            style="display:none"
+          >
+            <button
+              class="manager-userchip-trigger"
+              type="button"
+              data-user-chip-trigger
+              aria-haspopup="true"
+              aria-expanded="false"
+              onclick="toggleUserDropdown(this)"
+            >
+              <span data-user-chip-initials>?</span>
+              <span>Account</span>
+            </button>
+            <div class="user-dropdown" data-user-chip-panel>
+              <div class="user-dropdown-name" data-user-chip-name>Staff</div>
+              <div class="user-dropdown-role" data-user-chip-role>Manager</div>
+              <button class="user-dropdown-signout" type="button" onclick="signOut()">Sign Out</button>
+            </div>
+          </div>
+          <button class="btn-small manager-shell-switch-btn manager-shell-drawer-switch" id="switch-menu-btn" onclick="onSwitchMenuClick()" style="display:none" aria-label="Switch to a different menu">Switch Menu</button>
+          <button class="btn-small manager-shell-drawer-admin admin-btn" id="admin-btn" onclick="onAdminBtnClick()" style="display:none">Admin Console</button>
+          <button class="btn-small manager-shell-drawer-return" id="action-btn" onclick="onActionBtnClick()" style="display:none">Return to Menu</button>
+        </div>
         <nav id="manager-cockpit-nav" aria-label="Manager cockpit navigation"></nav>
       </aside>
 

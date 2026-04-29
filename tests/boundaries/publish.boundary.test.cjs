@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { loadAppSandbox, loadSandboxWithScripts } = require('../helpers/runtime.cjs');
+const { createFetchResponse, getState, loadAppSandbox, loadSandboxWithScripts, setState } = require('../helpers/runtime.cjs');
 
 function toPlainValue(value) {
   return JSON.parse(JSON.stringify(value));
@@ -364,4 +364,58 @@ test('menu publish service keeps fallback methods explicit for quiet-save and pu
   assert.equal(publishCalls.length, 1);
   assert.deepEqual(toPlainValue(publishCalls[0]), { selectedChangeIds: ['beer::added::lager'] });
   assert.equal(saveUnavailable.ok, false);
+});
+
+test('server-backed quiet save advances the local notification baseline', async () => {
+  const sandbox = loadAppSandbox({
+    fetch: async () => createFetchResponse(200, {
+      ok: true,
+      ts: 2000,
+      preview: {
+        hasChanges: true,
+        hasLocalDraft: true,
+        hasNotificationChanges: true,
+        diff: [{ id: 'beer', changes: [] }],
+        sections: [{ id: 'beer', changes: [] }],
+        notificationChanges: [{ id: 'beer::added::lager' }],
+      },
+      notificationStatus: null,
+    }),
+  });
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    MENU_TYPE: 'drinks',
+    RESTAURANT_ID: 'restaurant-main',
+    _activeMenuName: 'Main Menu',
+    currentUser: { uid: 'user-1', role: 'manager', accessToken: 'token', accessibleMenuIds: ['menu-main'] },
+    CATEGORY_DEFS: [{ id: 'beer', title: 'Beer', icon: 'B' }],
+    menuState: {
+      beer: {
+        items: [{ id: 'lager', name: 'New Lager', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      _meta: {
+        lastUpdatedTs: '1000',
+        lastSentTs: '1000',
+      },
+    },
+    updateSaveBtn: () => {},
+    updateLastUpdatedLabel: () => {},
+  });
+
+  const result = await getState(sandbox, `getMenuSessionPorts().publishMenuUpdate({
+    mode: 'save',
+    preview: {
+      hasChanges: true,
+      hasLocalDraft: true,
+      hasNotificationChanges: true,
+      diff: [{ id: 'beer', changes: [] }],
+      sections: [{ id: 'beer', changes: [] }],
+      notificationChanges: [{ id: 'beer::added::lager' }]
+    }
+  })`);
+
+  assert.equal(result.ok, true);
+  assert.equal(getState(sandbox, 'menuState._meta.lastUpdatedTs'), '2000');
+  assert.equal(getState(sandbox, 'menuState._meta.lastSentTs'), '2000');
 });

@@ -8337,7 +8337,7 @@ body.admin-console-page .settings-rail-btn:focus-visible {
 }
 
 body.manager-dossier-shell .manager-cockpit-layout { width: min(1800px, calc(100% - 24px)); margin: 14px auto 96px; display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 22px; }
-body.manager-dossier-shell .manager-cockpit-rail { position: sticky; top: 14px; height: calc(100vh - 28px); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 14px; }
+body.manager-dossier-shell .manager-cockpit-rail { position: sticky; top: 14px; height: calc(100vh - 28px); display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 14px; }
 body.manager-dossier-shell .manager-cockpit-stage { min-width: 0; }
 body.manager-dossier-shell .manager-cockpit-panel { min-height: calc(100vh - 28px); padding: 28px; border: 1px solid rgba(31, 25, 16, 0.25); border-radius: 6px; background: #fbf6eb; box-shadow: 8px 8px 0 rgba(54, 42, 22, 0.14); }
 body.manager-dossier-shell .manager-cockpit-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.86fr); gap: 14px; align-items: start; }
@@ -8358,6 +8358,19 @@ body.manager-dossier-shell .manager-cockpit-status-strip strong { font-size: 13p
 body.manager-dossier-shell #manager-cockpit-nav { display: grid; gap: 8px; align-content: start; }
 body.manager-dossier-shell .manager-cockpit-nav-link { display: block; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; padding: 11px 12px; color: #2d2418; text-decoration: none; font-weight: 800; background: rgba(255,255,255,0.38); }
 body.manager-dossier-shell .manager-cockpit-nav-link.is-active { background: #2d2418; color: #fff8ea; }
+body.manager-dossier-shell #manager-cockpit-rail-actions { display: grid; gap: 8px; }
+body.manager-dossier-shell #manager-cockpit-rail-actions .btn-small,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-btn,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-shell-switch-btn,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-userchip-trigger {
+  width: 100%;
+  justify-content: center;
+}
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-shell-drawer-return {
+  background: #2d2418;
+  border-color: #2d2418;
+  color: #fff8ea;
+}
 body.manager-dossier-shell #manager-cockpit-workbar { display: grid; grid-template-columns: minmax(170px, auto) minmax(160px, auto) minmax(180px, 1fr) minmax(160px, 0.7fr); gap: 10px; align-items: stretch; margin-bottom: 14px; }
 body.manager-dossier-shell .manager-cockpit-tool { min-height: 58px; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: rgba(255,255,255,0.62); color: #2d2418; display: inline-flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 10px 12px; font: inherit; text-align: left; cursor: pointer; }
 body.manager-dossier-shell .manager-cockpit-tool--primary { justify-content: center; background: #1f6f68; color: #fff; border-color: #185750; box-shadow: 0 3px 0 rgba(24, 87, 80, 0.32); }
@@ -8407,6 +8420,23 @@ body.manager-dossier-shell .manager-cockpit-row-btn:hover,
 body.manager-dossier-shell .manager-cockpit-row-btn:focus-visible { border-color: #1f6f68; color: #185750; outline: 2px solid rgba(31, 111, 104, 0.22); outline-offset: 1px; }
 body.manager-dossier-shell .manager-cockpit-drag-btn { width: 38px; min-width: 38px; color: rgba(45, 36, 24, 0.62); cursor: grab; }
 body.manager-dossier-shell .manager-cockpit-row-btn--86 { border-color: rgba(141, 50, 31, 0.28); color: #8d321f; }
+body.manager-dossier-shell .manager-cockpit-featured-toggle {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  color: #185750;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+body.manager-dossier-shell .manager-cockpit-featured-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #1f6f68;
+}
 body.manager-dossier-shell .manager-cockpit-status-pill { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; max-width: 100%; border-radius: 999px; padding: 5px 9px; font-size: 11px; line-height: 1.1; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
 body.manager-dossier-shell .manager-cockpit-status-pill--on { background: rgba(31, 111, 104, 0.13); color: #185750; }
 body.manager-dossier-shell .manager-cockpit-status-pill--86 { background: rgba(141, 50, 31, 0.14); color: #8d321f; }
