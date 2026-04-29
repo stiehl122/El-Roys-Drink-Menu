@@ -11,13 +11,44 @@
       onResult,
       onError,
       getContextKey,
+      now = () => Date.now(),
+      backoffBaseMs = 10_000,
+      backoffMaxMs = 120_000,
     } = config;
     let activeToken = 0;
     let inFlight = null;
     let queuedReason = '';
     let queuedToken = 0;
+    let consecutiveErrors = 0;
+    let nextAllowedAt = 0;
+
+    function getBackoffSkip(reason) {
+      const currentTime = now();
+      if (reason === 'interval' && nextAllowedAt && currentTime < nextAllowedAt) {
+        return { skipped: true, reason: 'backoff', nextAllowedAt };
+      }
+      return null;
+    }
+
+    function registerError() {
+      consecutiveErrors += 1;
+      if (consecutiveErrors < 3) return;
+      const multiplier = Math.min(
+        2 ** (consecutiveErrors - 3),
+        Math.ceil(backoffMaxMs / backoffBaseMs),
+      );
+      nextAllowedAt = now() + Math.min(backoffBaseMs * multiplier, backoffMaxMs);
+    }
+
+    function resetBackoff() {
+      consecutiveErrors = 0;
+      nextAllowedAt = 0;
+    }
 
     async function run(reason = 'interval') {
+      const backoffSkip = getBackoffSkip(reason);
+      if (backoffSkip) return backoffSkip;
+
       const token = ++activeToken;
       if (inFlight) {
         queuedReason = reason;
@@ -30,24 +61,33 @@
         let currentToken = token;
         let finalResult = { skipped: true };
         while (true) {
-          const requestContext = getContextKey();
-          if (!requestContext) {
-            finalResult = { skipped: true, reason: 'missing-context' };
+          const queuedBackoffSkip = getBackoffSkip(currentReason);
+          if (queuedBackoffSkip) {
+            finalResult = queuedBackoffSkip;
           } else {
-            try {
-              const result = await loader({ reason: currentReason, requestContext });
-              const isLatest = currentToken === activeToken;
-              const contextUnchanged = requestContext === getContextKey();
-              if (isLatest && contextUnchanged) {
-                finalResult = await onResult(result, { reason: currentReason, requestContext });
-              } else {
-                finalResult = { ignored: true, reason: 'stale-result' };
+            const requestContext = getContextKey();
+            if (!requestContext) {
+              finalResult = { skipped: true, reason: 'missing-context' };
+            } else {
+              try {
+                const result = await loader({ reason: currentReason, requestContext });
+                const isLatest = currentToken === activeToken;
+                const contextUnchanged = requestContext === getContextKey();
+                if (isLatest && contextUnchanged) {
+                  finalResult = await onResult(result, { reason: currentReason, requestContext });
+                  resetBackoff();
+                } else {
+                  finalResult = { ignored: true, reason: 'stale-result' };
+                }
+              } catch (error) {
+                const isLatest = currentToken === activeToken;
+                const contextUnchanged = requestContext === getContextKey();
+                if (isLatest && contextUnchanged) {
+                  onError(error, { reason: currentReason, requestContext });
+                  registerError();
+                }
+                finalResult = { error };
               }
-            } catch (error) {
-              const isLatest = currentToken === activeToken;
-              const contextUnchanged = requestContext === getContextKey();
-              if (isLatest && contextUnchanged) onError(error, { reason: currentReason, requestContext });
-              finalResult = { error };
             }
           }
 
@@ -77,6 +117,7 @@
         inFlight = null;
         queuedReason = '';
         queuedToken = 0;
+        resetBackoff();
       },
     };
   }
