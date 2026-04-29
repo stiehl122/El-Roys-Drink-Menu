@@ -28,12 +28,18 @@ const SHARED_RUNTIME_SCRIPTS = [
   '/core/landing/root-renderer.js',
 ];
 
+const PUBLIC_ROUTE_RUNTIME_SCRIPTS = SHARED_RUNTIME_SCRIPTS.filter(source => (
+  !source.startsWith('/core/ui/manager/')
+  && !source.startsWith('/core/ui/admin/')
+  && source !== '/core/landing/admin-workspace.js'
+));
+
 const EXPECTED_SCRIPT_ORDER = {
   'index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
   'manager/index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
   'admin/index.html': [...SHARED_RUNTIME_SCRIPTS, '/app.js'],
-  'leroyslounge/index.html': [...SHARED_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/leroyslounge/app.js', '/app.js'],
-  'elroyscantina/index.html': [...SHARED_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/elroyscantina/app.js', '/app.js'],
+  'leroyslounge/index.html': [...PUBLIC_ROUTE_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/leroyslounge/app.js', '/app.js'],
+  'elroyscantina/index.html': [...PUBLIC_ROUTE_RUNTIME_SCRIPTS, '/routes/shared/public-route-core.js', '/elroyscantina/app.js', '/app.js'],
 };
 
 function readScriptSources(filePath) {

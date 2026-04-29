@@ -143,3 +143,16 @@ test('Leroy public wall images use optimized lazy assets for non-critical signs'
     assert.ok(size <= 700 * 1024, `${fullPath} must be 700KB or smaller, got ${size}`);
   }
 });
+
+test('restaurant public routes do not boot manager or admin modules', () => {
+  const routeFiles = ['leroyslounge/index.html', 'elroyscantina/index.html'];
+  for (const file of routeFiles) {
+    const html = fs.readFileSync(file, 'utf8');
+    assert.doesNotMatch(html, /\/core\/ui\/manager\//, `${file} must not load manager UI modules`);
+    assert.doesNotMatch(html, /\/core\/ui\/admin\//, `${file} must not load admin UI modules`);
+    assert.doesNotMatch(html, /\/core\/landing\/admin-workspace\.js/, `${file} must not load landing admin workspace`);
+    assert.match(html, /\/core\/ui\/public\/footer-actions\.js/, `${file} must keep public footer actions`);
+    assert.match(html, /\/routes\/shared\/public-route-core\.js/, `${file} must keep route core`);
+    assert.match(html, /\/app\.js/, `${file} still uses shared runtime until the final app split`);
+  }
+});
