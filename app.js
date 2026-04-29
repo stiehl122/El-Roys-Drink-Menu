@@ -75,6 +75,8 @@ let _authTriggerDelegated = false;
 const _uiModuleDelegationStack = new Set();
 let _managerWorkspaceService = null;
 let _managerCockpitService = null;
+let _managerItemsTableService = null;
+let _managerItemEditorModalService = null;
 let _managerSectionService = null;
 let _managerEditorsService = null;
 let _adminWorkspaceService = null;
@@ -3349,6 +3351,27 @@ function buildManagerCockpitModuleDeps() {
   };
 }
 
+function buildManagerItemsTableModuleDeps() {
+  return {
+    document,
+    onEditItem: (catId, itemId) => openManagerCockpitItemEditor(catId, itemId),
+    onToggle86: (catId, itemId) => {
+      toggle86(catId, itemId);
+      getManagerCockpitService()?.renderCockpit();
+      renderManagerCockpitItemsTable();
+    },
+    onDragStart: (event, catId, itemId) => startManagerItemDrag(event, catId, itemId),
+    onDragOver: (event, catId, itemId) => allowManagerItemDrop(event, catId, itemId),
+    onDrop: (event, catId, itemId) => {
+      handleManagerItemDrop(event, catId, itemId);
+      endManagerItemDrag(event);
+      getManagerCockpitService()?.renderCockpit();
+      renderManagerCockpitItemsTable();
+    },
+    onDragEnd: event => endManagerItemDrag(event),
+  };
+}
+
 function buildManagerSectionModuleDeps() {
   return {
     document,
@@ -3425,6 +3448,22 @@ function getManagerCockpitService() {
   if (typeof boundary?.createManagerCockpitService !== 'function') return null;
   _managerCockpitService = boundary.createManagerCockpitService(buildManagerCockpitModuleDeps());
   return _managerCockpitService;
+}
+
+function getManagerItemsTableService() {
+  if (_managerItemsTableService) return _managerItemsTableService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerItemsTableService !== 'function') return null;
+  _managerItemsTableService = boundary.createManagerItemsTableService(buildManagerItemsTableModuleDeps());
+  return _managerItemsTableService;
+}
+
+function getManagerItemEditorModalService() {
+  if (_managerItemEditorModalService) return _managerItemEditorModalService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerItemEditorModalService !== 'function') return null;
+  _managerItemEditorModalService = boundary.createManagerItemEditorModalService({ document, window });
+  return _managerItemEditorModalService;
 }
 
 function getManagerSectionService() {
@@ -6593,6 +6632,51 @@ function hasManagerCockpitShellContainers() {
   );
 }
 
+function getManagerCockpitItemCategories() {
+  return [
+    ...getManagedCategoryDefs(),
+    getUncategorizedCategoryDef(),
+  ];
+}
+
+function buildManagerCockpitItemMenuState(categories) {
+  return categories.reduce((state, category) => {
+    state[category.id] = {
+      items: getRenderableCategoryItems(category.id),
+    };
+    return state;
+  }, {});
+}
+
+function renderManagerCockpitItemsTable() {
+  const container = document.getElementById('manager-cockpit-items');
+  const service = getManagerItemsTableService();
+  if (!container || !service) return false;
+  const categories = getManagerCockpitItemCategories();
+  const tableState = service.buildTableState({
+    categories,
+    menuState: buildManagerCockpitItemMenuState(categories),
+  });
+  container.innerHTML = service.renderTableHtml(tableState);
+  service.bindTable(container);
+  return true;
+}
+
+function openManagerCockpitItemEditor(catId, itemId) {
+  const item = findItem(catId, itemId);
+  if (!item) return false;
+  const category = catId === UNCATEGORIZED_ID
+    ? getUncategorizedCategoryDef()
+    : CATEGORY_DEFS.find(cat => cat.id === catId);
+  const service = getManagerItemEditorModalService();
+  if (typeof service?.open === 'function') {
+    const opened = service.open({ categoryId: catId, itemId, item, category });
+    if (opened) return true;
+  }
+  showToast(`Edit controls for ${item.name || 'this item'} are coming in the item editor.`, 'info');
+  return false;
+}
+
 function renderManagerWorkspace(options = {}) {
   if (!_uiModuleDelegationStack.has('renderManagerWorkspace')) {
     const service = getManagerWorkspaceService();
@@ -6609,6 +6693,7 @@ function renderManagerWorkspace(options = {}) {
         const result = service.renderManagerWorkspace(workspaceOptions);
         const cockpitRendered = cockpitService?.renderCockpit();
         if (cockpitRendered) {
+          renderManagerCockpitItemsTable();
           renderFeaturedTab();
           if (shouldRenderRecentAfterCockpit) renderRecentChanges();
         }
@@ -6631,6 +6716,7 @@ function renderManagerWorkspace(options = {}) {
   renderManagerOverviewStats();
   const cockpitRendered = getManagerCockpitService()?.renderCockpit();
   if (cockpitRendered) {
+    renderManagerCockpitItemsTable();
     renderFeaturedTab();
   }
   if (options.includeRecentChanges !== false) renderRecentChanges();

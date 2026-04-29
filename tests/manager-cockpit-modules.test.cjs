@@ -37,3 +37,34 @@ test('createManagerCockpitService renders manager cockpit shell regions', () => 
     assert.match(navHtml, new RegExp(label));
   });
 });
+
+test('createManagerItemsTableService renders cockpit item table actions without inline or swipe controls', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/items-table.js',
+  ]);
+  const service = sandbox.__HF_UI_MODULES__.createManagerItemsTableService();
+  const tableState = service.buildTableState({
+    categories: [{ id: 'cocktails', title: 'Cocktails', icon: 'C' }],
+    menuState: {
+      cocktails: {
+        items: [{
+          id: 'marg',
+          name: 'House Margarita',
+          eightySixed: false,
+          onMenu: true,
+        }],
+      },
+    },
+  });
+
+  const html = service.renderTableHtml(tableState);
+
+  ['Order', 'Item Name', 'Status', 'Edit', '86'].forEach(label => {
+    assert.match(html, new RegExp(label));
+  });
+  assert.match(html, /data-item-action="edit"/);
+  assert.doesNotMatch(html, /<input\b/);
+  assert.doesNotMatch(html, />Delete</);
+  assert.doesNotMatch(html, /item-swipeable/);
+  assert.doesNotMatch(html, /swipe-action/);
+});

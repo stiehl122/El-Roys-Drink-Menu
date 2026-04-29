@@ -103,6 +103,11 @@
         </label>`;
     }
 
+    function renderItemsHost(container) {
+      if (!container || (container.innerHTML || '').trim()) return;
+      container.innerHTML = '<p class="db-empty">Menu items will appear here after the menu loads.</p>';
+    }
+
     function renderSide(container) {
       const note = getManagerNote() || {};
       const noteText = String(note.note ?? '');
@@ -156,7 +161,7 @@
       container.innerHTML = `
         <span class="manager-cockpit-kicker">Database</span>
         <h2>Audit/search lives below the editing cockpit.</h2>
-        <p class="workspace-actions-sub">Use this area for database review and search. The editable item table will render in the cockpit body in the next task.</p>`;
+        <p class="workspace-actions-sub">Use this area for database review and search. The editable item table stays in the cockpit body.</p>`;
       if (searchHost && typeof container.appendChild === 'function') {
         searchHost.hidden = true;
         container.appendChild(searchHost);
@@ -183,6 +188,7 @@
         renderNav(documentRef.getElementById('manager-cockpit-nav'));
         renderHeader(header, stats);
         renderWorkbar(workbar);
+        renderItemsHost(documentRef.getElementById('manager-cockpit-items'));
         renderSide(side);
         renderDatabase(documentRef.getElementById('manager-cockpit-database'));
         return true;
