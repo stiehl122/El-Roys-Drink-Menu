@@ -10,10 +10,14 @@ test('manager shell contains cockpit root containers and scripts', () => {
 
   assert.match(html, /id="manager-cockpit-root"/);
   assert.match(html, /id="manager-cockpit-rail"/);
+  assert.match(html, /id="manager-settings-rail"/);
   assert.match(html, /id="manager-cockpit-workbar"/);
   assert.match(html, /id="manager-cockpit-items"/);
   assert.match(html, /id="manager-cockpit-side"/);
+  assert.match(html, /id="db-search"/);
+  assert.match(html, /id="db-table-wrap"/);
   assert.match(html, /id="manager-cockpit-revision-dock"/);
+  assert.match(html, /class="[^"]*\bmanager-cockpit-mobile-trigger\b[^"]*\bmanager-shell-mobile-drawer-trigger\b[^"]*"/);
   assert.match(html, /core\/ui\/manager\/cockpit\.js/);
   assert.match(html, /core\/ui\/manager\/item-editor-modal\.js/);
 });

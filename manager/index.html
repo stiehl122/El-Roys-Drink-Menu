@@ -82,16 +82,18 @@
 
     <div class="manager-cockpit-layout" id="manager-cockpit-root">
       <button
-        class="manager-cockpit-mobile-trigger"
+        class="manager-cockpit-mobile-trigger manager-shell-mobile-drawer-trigger"
         id="manager-mobile-drawer-trigger"
         type="button"
         aria-label="Open manager navigation"
-        aria-controls="manager-cockpit-rail"
+        aria-controls="manager-settings-rail"
         aria-expanded="false"
         onclick="toggleSettingsDrawer()"
+        hidden
       >☰ Menu Tools</button>
 
-      <aside class="manager-cockpit-rail" id="manager-cockpit-rail" aria-label="Manager workspace sections">
+      <aside class="manager-cockpit-rail" id="manager-settings-rail" aria-label="Manager workspace sections">
+        <span id="manager-cockpit-rail" hidden></span>
         <button class="manager-shell-rail-close" type="button" aria-label="Close manager navigation" onclick="closeSettingsDrawer()">×</button>
         <div id="manager-cockpit-rail-meta"></div>
         <nav id="manager-cockpit-nav" aria-label="Manager cockpit navigation"></nav>
@@ -105,7 +107,10 @@
             <section id="manager-cockpit-items" aria-label="Editable menu items"></section>
             <aside id="manager-cockpit-side" aria-label="Manager context panels"></aside>
           </div>
-          <section id="manager-cockpit-database"></section>
+          <section id="manager-cockpit-database">
+            <input type="search" id="db-search" hidden>
+            <div id="db-table-wrap" hidden></div>
+          </section>
         </section>
       </main>
     </div>
