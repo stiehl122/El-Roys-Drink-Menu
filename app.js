@@ -81,6 +81,7 @@ let _managerSectionService = null;
 let _managerEditorsService = null;
 let _managerNotesService = null;
 let _managerActivityService = null;
+let _managerRevisionDockService = null;
 let _adminWorkspaceService = null;
 let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
@@ -3495,6 +3496,14 @@ function getManagerActivityService() {
   return _managerActivityService;
 }
 
+function getManagerRevisionDockService() {
+  if (_managerRevisionDockService) return _managerRevisionDockService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerRevisionDockService !== 'function') return null;
+  _managerRevisionDockService = boundary.createManagerRevisionDockService();
+  return _managerRevisionDockService;
+}
+
 function getManagerItemsTableService() {
   if (_managerItemsTableService) return _managerItemsTableService;
   const boundary = getUiModuleBoundary();
@@ -6656,6 +6665,36 @@ function updateManagerActionBar() {
   const syncEl = document.getElementById('sync-status');
   const isCompactViewport = window.innerWidth <= 480;
   const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
+  const syncMessage = (syncEl?.textContent || '').trim();
+  const syncClass = syncEl?.className || '';
+
+  if (cockpitDock) {
+    const dockService = getManagerRevisionDockService();
+    if (dockService && typeof dockService.renderDockHtml === 'function') {
+      bar.hidden = true;
+      bar.innerHTML = '';
+      cockpitDock.innerHTML = dockService.renderDockHtml({
+        hasWork: !!(
+          ledgerState.hasDraftChanges ||
+          ledgerState.hasDraftWork ||
+          ledgerState.hasPendingUpdate ||
+          ledgerState.hasChanges ||
+          ledgerState.hasSaveOnlyChanges ||
+          ledgerState.hasNotificationChanges
+        ),
+        isSaving: false,
+        syncMessage,
+        syncClass,
+        summary: ledgerState.summaryText,
+        saveLabel: ledgerState.saveLabel || 'Save',
+        saveDisabled: !!ledgerState.saveDisabled,
+        showDiscard: !!ledgerState.showDiscard,
+      });
+      return;
+    }
+  }
+
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
   const discardBtn = document.getElementById('discard-draft-btn');
