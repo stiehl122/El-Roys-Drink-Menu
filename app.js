@@ -11937,23 +11937,17 @@ function renderFeaturedTab() {
       }).join('')
     : `<div class="empty-state"><span class="empty-state-icon">⭐</span><span>No items are currently set to show in the featured strip for ${escHtml(menuLabel || 'this menu')}.</span></div>`;
   const capNote = totalCount > previewItems.length
-    ? `<p class="featured-specials-access-detail">The public featured strip shows the first five featured items. ${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} stay in the category.</p>`
+    ? `<p class="featured-specials-access-detail">${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} in Featured Specials.</p>`
     : '';
   wrap.innerHTML = `<div class="featured-specials-editor featured-specials-editor--readonly">
-    <div class="featured-specials-access-note" role="note" aria-live="polite">
-      <p class="featured-specials-access-kicker">Category-owned flow</p>
-      <h4>Manage featured items from Edit Menu</h4>
-      <p class="featured-specials-access-copy">Use the <strong>Featured Specials</strong> category and its <strong>Show in featured strip</strong> toggles to control this menu’s featured items.</p>
-      <p class="featured-specials-access-detail">This overview is read-only now that featured specials are owned by the menu itself instead of a separate restaurant-wide transport.</p>
-      ${capNote}
-    </div>
     <div class="featured-specials-head">
       <div>
-        <h4>Featured Strip Preview</h4>
+        <h4>Featured Preview</h4>
         <p class="featured-specials-access-detail">${escHtml(menuLabel || 'Current Menu')}</p>
       </div>
       <span class="featured-count">${previewItems.length} / 5 previewed</span>
     </div>
+    ${capNote}
     <div class="featured-specials-list">${itemsHtml}</div>
   </div>`;
 }

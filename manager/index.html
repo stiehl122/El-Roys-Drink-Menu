@@ -147,8 +147,24 @@
           <section class="settings-section manager-shell-overview manager-dossier-panel" id="manager-overview-section">
             <div class="manager-shell-section-header manager-dossier-panel-head">
               <div>
-                <p class="settings-section-kicker">Tonight's Board</p>
-                <h2>The pass, before service.</h2>
+                <h2>Manager Workspace</h2>
+              </div>
+              <div class="manager-shell-stats-grid manager-dossier-stats" aria-label="Manager menu status">
+                <article class="manager-shell-stat-card">
+                  <p class="manager-shell-stat-label">Menu Status</p>
+                  <strong class="manager-shell-stat-value" id="manager-overview-status-value">Live</strong>
+                  <span class="manager-shell-stat-meta" id="manager-overview-status-meta">Live menu is current</span>
+                </article>
+                <article class="manager-shell-stat-card">
+                  <p class="manager-shell-stat-label">Active Items</p>
+                  <strong class="manager-shell-stat-value" id="manager-overview-active-value">0</strong>
+                  <span class="manager-shell-stat-meta" id="manager-overview-active-meta">active items</span>
+                </article>
+                <article class="manager-shell-stat-card manager-shell-stat-card--warn">
+                  <p class="manager-shell-stat-label">86 Watch</p>
+                  <strong class="manager-shell-stat-value" id="manager-overview-86-value">0</strong>
+                  <span class="manager-shell-stat-meta" id="manager-overview-86-meta">items 86'd</span>
+                </article>
               </div>
             </div>
 
@@ -164,24 +180,6 @@
                 <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-description-section')">Descriptions</button>
                 <button type="button" class="btn-small manager-shell-overview-chip" onclick="focusSettingsSection('manager-categories-section')">Categories</button>
               </div>
-            </div>
-
-            <div class="manager-shell-stats-grid manager-dossier-stats">
-              <article class="manager-shell-stat-card">
-                <p class="manager-shell-stat-label">Menu Status</p>
-                <strong class="manager-shell-stat-value" id="manager-overview-status-value">Live</strong>
-                <span class="manager-shell-stat-meta" id="manager-overview-status-meta">Live menu is current</span>
-              </article>
-              <article class="manager-shell-stat-card">
-                <p class="manager-shell-stat-label">Active Items</p>
-                <strong class="manager-shell-stat-value" id="manager-overview-active-value">0</strong>
-                <span class="manager-shell-stat-meta" id="manager-overview-active-meta">active items</span>
-              </article>
-              <article class="manager-shell-stat-card manager-shell-stat-card--warn">
-                <p class="manager-shell-stat-label">86 Watch</p>
-                <strong class="manager-shell-stat-value" id="manager-overview-86-value">0</strong>
-                <span class="manager-shell-stat-meta" id="manager-overview-86-meta">items 86'd</span>
-              </article>
             </div>
 
             <div class="manager-shell-overview-grid manager-dossier-record-grid">

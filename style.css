@@ -7102,37 +7102,53 @@ body.manager-dossier-shell .manager-shell-overview-chip {
 }
 
 body.manager-dossier-shell .manager-shell-stats-grid {
-  gap: 1px;
-  padding: 1px;
-  background: var(--manager-dossier-border-strong);
+  gap: 8px;
+  padding: 0;
+  background: transparent;
 }
 
 body.manager-dossier-shell .manager-shell-stat-card {
-  min-height: 142px;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 10px;
-  padding: 24px 24px 22px;
-  border: 0;
-  background: var(--manager-dossier-panel);
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--manager-dossier-border);
+  border-left: 3px solid var(--manager-dossier-olive);
+  background: var(--manager-dossier-panel-strong);
   box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-shell-stat-label,
+body.manager-dossier-shell .manager-shell-stat-meta {
+  overflow-wrap: anywhere;
+}
+
+body.manager-dossier-shell .manager-shell-stat-label {
+  margin: 0;
+  font-size: 9px;
 }
 
 body.manager-dossier-shell .manager-shell-stat-value {
   margin: 0;
   color: var(--manager-dossier-ink);
-  font-family: var(--font-heading);
-  font-size: clamp(1.85rem, 4vw, 2.5rem);
-  line-height: 0.9;
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1;
 }
 
 body.manager-dossier-shell .manager-shell-stat-card--warn {
-  background: var(--manager-dossier-red-soft);
+  border-left-color: var(--manager-dossier-red);
+  background: var(--manager-dossier-panel);
 }
 
 body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
   color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .manager-dossier-panel-head .manager-shell-stats-grid {
+  width: 100%;
 }
 
 body.manager-dossier-shell .manager-shell-overview-grid {
@@ -7802,8 +7818,7 @@ body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-b
 
 body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
 body.manager-dossier-shell .manager-shell-actionbar .send-btn,
-body.manager-dossier-shell .btn-danger,
-body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+body.manager-dossier-shell .btn-danger {
   background: var(--manager-dossier-red);
   border-color: var(--manager-dossier-red);
   color: var(--manager-dossier-panel);
@@ -7965,6 +7980,13 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-section-header {
     flex-direction: row;
     justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+  }
+
+  body.manager-dossier-shell .manager-dossier-panel-head .manager-shell-stats-grid {
+    width: min(640px, 62%);
+    margin-left: auto;
   }
 
   body.manager-dossier-shell .manager-shell-card-head {
