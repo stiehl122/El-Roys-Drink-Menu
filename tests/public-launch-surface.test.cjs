@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 
 test('vercel config defines launch security headers', () => {
   const config = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
@@ -108,5 +109,37 @@ test('public html shells include launch metadata', () => {
     assert.match(html, /<meta\s+property="og:type"\s+content="website"\s*\/?>/, `${file} missing Open Graph type`);
     assert.match(html, new RegExp(`<meta\\s+property="og:url"\\s+content="${canonicalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"\\s*/?>`), `${file} has the wrong Open Graph URL`);
     assert.match(html, /<meta\s+name="twitter:card"\s+content="summary"\s*\/?>/, `${file} missing Twitter card`);
+  }
+});
+
+test('Leroy public wall images use optimized lazy assets for non-critical signs', () => {
+  const html = fs.readFileSync('leroyslounge/index.html', 'utf8');
+  const imageTags = [...html.matchAll(/<img\b[^>]*class="([^"]*\bll-wall-[^"]*)"[^>]*>/g)].map(match => match[0]);
+
+  assert.ok(imageTags.length >= 8, 'expected Leroy wall image tags');
+
+  const nonCriticalTags = imageTags.filter(tag => !/ll-wall-location-sign|ll-wall-brand-sign|ll-wall-beer-sign/.test(tag));
+  for (const tag of nonCriticalTags) {
+    assert.match(tag, /loading="lazy"/, `${tag} must lazy load`);
+    assert.match(tag, /decoding="async"/, `${tag} must async decode`);
+    assert.match(tag, /\/assets\/leroys-lounge\/wall\/optimized\//, `${tag} must use optimized asset path`);
+  }
+
+  const optimizedFiles = [
+    'leroys-established-sign.png',
+    'leroys-horizontal-wood-sign.png',
+    'leroys-ice-cold-beer-sign.png',
+    'leroys-pool-free-play-sign.png',
+    'leroys-pull-tabs-sign.png',
+    'leroys-thumbs-up-panel.png',
+    'leroys-michigan-plate.png',
+    'leroys-margarita-note.png',
+  ];
+
+  for (const file of optimizedFiles) {
+    const fullPath = path.join('assets', 'leroys-lounge', 'wall', 'optimized', file);
+    assert.ok(fs.existsSync(fullPath), `${fullPath} must exist`);
+    const size = fs.statSync(fullPath).size;
+    assert.ok(size <= 700 * 1024, `${fullPath} must be 700KB or smaller, got ${size}`);
   }
 });
