@@ -266,6 +266,48 @@ test('manager revision dock collapses while scrolling and re-expands after idle'
   assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-expanded/);
 });
 
+test('syncManagerActionBarStatus refreshes cockpit dock mode for sync-only changes', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/workspace.js',
+    'core/ui/manager/revision-dock.js',
+    'app.js',
+  ]);
+  const dock = sandbox.document._registerElement('manager-cockpit-revision-dock', createElement('div', 'manager-cockpit-revision-dock'));
+  sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  sandbox.document._registerElement('manager-action-bar-summary', createElement('p', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  sandbox.document._registerElement('discard-draft-btn', createElement('button', 'discard-draft-btn'));
+  sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+  const syncStatus = sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+
+  setState(sandbox, {
+    _dirty: false,
+    _draftSaveOnlyChanges: new Map(),
+    _serverLiveSnapshot: null,
+    _localDraftBaseSnapshot: null,
+  });
+
+  getState(sandbox, 'updateManagerActionBar()');
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-collapsed/);
+
+  syncStatus.textContent = 'Cloud sync failed';
+  syncStatus.className = 'sync-error';
+  sandbox.__testSyncEl = syncStatus;
+  getState(sandbox, 'syncManagerActionBarStatus(globalThis.__testSyncEl)');
+  delete sandbox.__testSyncEl;
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-expanded/);
+  assert.match(dock.innerHTML, /id="sync-status" class="sync-error"/);
+  assert.match(dock.innerHTML, /Cloud sync failed/);
+
+  syncStatus.textContent = '';
+  syncStatus.className = '';
+  sandbox.__testSyncEl = syncStatus;
+  getState(sandbox, 'syncManagerActionBarStatus(globalThis.__testSyncEl)');
+  delete sandbox.__testSyncEl;
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-collapsed/);
+});
+
 test('renderRecentChanges clears cached manager activity when history is empty', async () => {
   const sandbox = loadSandboxWithScripts(['app.js']);
   const wrap = sandbox.document._registerElement('recent-changes-wrap', createElement('div', 'recent-changes-wrap'));

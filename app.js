@@ -3565,6 +3565,14 @@ function renderManagerRevisionDock(ledgerState = {}, syncEl = document.getElemen
   return true;
 }
 
+function refreshManagerRevisionDockFromCurrentState(syncEl = document.getElementById('sync-status')) {
+  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
+  if (!cockpitDock) return false;
+  const isCompactViewport = window.innerWidth <= 480;
+  const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+  return renderManagerRevisionDock(ledgerState, syncEl);
+}
+
 function getManagerItemsTableService() {
   if (_managerItemsTableService) return _managerItemsTableService;
   const boundary = getUiModuleBoundary();
@@ -6765,7 +6773,9 @@ function syncManagerActionBarStatus(syncEl = document.getElementById('sync-statu
     if (typeof service?.syncManagerActionBarStatus === 'function') {
       _uiModuleDelegationStack.add('syncManagerActionBarStatus');
       try {
-        return service.syncManagerActionBarStatus(syncEl);
+        const result = service.syncManagerActionBarStatus(syncEl);
+        refreshManagerRevisionDockFromCurrentState(syncEl);
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('syncManagerActionBarStatus');
       }
@@ -6773,8 +6783,10 @@ function syncManagerActionBarStatus(syncEl = document.getElementById('sync-statu
   }
 
   const statusWrap = syncEl?.closest('.manager-shell-actionbar-status');
-  if (!statusWrap) return;
-  statusWrap.hidden = !((syncEl.textContent || '').trim());
+  if (statusWrap) {
+    statusWrap.hidden = !((syncEl.textContent || '').trim());
+  }
+  refreshManagerRevisionDockFromCurrentState(syncEl);
 }
 
 function hasManagerCockpitShellContainers() {
