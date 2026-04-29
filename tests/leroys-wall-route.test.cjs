@@ -33,7 +33,7 @@ test("leroy's wall route references approved production assets and links", () =>
 
   assert.match(css, /url\(["']?\/assets\/leroys-lounge\/wall\/leroys-wall-background\.png["']?\)/);
   assert.match(html, /class="ll-wall-brand-link"[\s\S]*href="\/"/);
-  assert.match(html, /src="\/assets\/leroys-lounge\/wall\/leroys-horizontal-wood-sign\.png"/);
+  assert.match(html, /src="\/assets\/leroys-lounge\/wall\/optimized\/leroys-horizontal-wood-sign\.png"/);
   assert.match(html, /<a\b(?=[^>]*\bclass="[^"]*\bll-wall-note-link\b[^"]*")(?=[^>]*\bhref="\/elroyscantina\?menu=drinks")[^>]*>/);
   assert.match(html, /<a\b(?=[^>]*\bclass="[^"]*\bll-wall-pull-tabs-link\b[^"]*")(?=[^>]*\bhref="https:\/\/www\.michiganlottery\.com\/resources\/pull-tabs-prizes-remaining")[^>]*>/);
 });
