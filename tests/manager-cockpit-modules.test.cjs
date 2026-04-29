@@ -43,6 +43,99 @@ test('createManagerCockpitService renders manager cockpit shell regions', () => 
   });
 });
 
+test('createManagerNotesService preserves typed text and exposes errors after save failure', async () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/notes.js',
+  ]);
+  const service = sandbox.__HF_UI_MODULES__.createManagerNotesService({
+    saveNote: async () => {
+      throw new Error('Notes unavailable');
+    },
+  });
+
+  service.setInitialNote({
+    note: 'Opening count complete',
+    updated_at: '2026-04-29T12:00:00.000Z',
+    updated_by: 'Mina',
+  });
+  service.setText('Need more mint');
+
+  await assert.rejects(() => service.save(), /Notes unavailable/);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(service.getState())), {
+    text: 'Need more mint',
+    savedText: 'Opening count complete',
+    isSaving: false,
+    error: 'Notes unavailable',
+    updatedAt: '2026-04-29T12:00:00.000Z',
+    updatedBy: 'Mina',
+  });
+});
+
+test('createManagerActivityService normalizes quiet saves and sends', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/activity.js',
+  ]);
+  const service = sandbox.__HF_UI_MODULES__.createManagerActivityService();
+
+  const entries = service.normalizeActivity([
+    { event_type: 'save_quietly', user_name: 'Alex', created_at: '2026-04-29T12:00:00.000Z', source: 'web_manager' },
+    { event_type: 'save_live', actor: 'Mina', time: 'Apr 29, 12:05 PM', channel: 'Manager' },
+    { event_type: 'send_notification', user_name: 'Rae', created_at: '2026-04-29T12:10:00.000Z', source: 'groupme' },
+    { event_type: 'publish', user_name: 'Lee', created_at: '2026-04-29T12:15:00.000Z' },
+    { event_type: 'category_rename', user_name: 'Kai', created_at: '2026-04-29T12:20:00.000Z' },
+  ]);
+
+  assert.deepEqual(entries.map(entry => entry.label), [
+    'Saved quietly',
+    'Saved quietly',
+    'Sent update',
+    'Sent update',
+    'Updated menu',
+  ]);
+  assert.equal(entries[0].actor, 'Alex');
+  assert.equal(entries[0].time, '2026-04-29T12:00:00.000Z');
+  assert.equal(entries[0].channel, 'web_manager');
+  assert.match(service.renderActivityHtml(entries), /Saved quietly/);
+  assert.match(service.renderActivityHtml(entries), /Sent update/);
+});
+
+test('createManagerCockpitService renders quick notes save control and status', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/activity.js',
+    'core/ui/manager/notes.js',
+    'core/ui/manager/cockpit.js',
+  ]);
+
+  [
+    'manager-cockpit-rail-meta',
+    'manager-cockpit-nav',
+    'manager-cockpit-header',
+    'manager-cockpit-workbar',
+    'manager-cockpit-side',
+    'manager-cockpit-database',
+  ].forEach(id => sandbox.document._registerElement(id, createElement('div', id)));
+
+  const notesService = sandbox.__HF_UI_MODULES__.createManagerNotesService();
+  notesService.setInitialNote({
+    note: 'Prep mint',
+    updated_at: '2026-04-29T12:00:00.000Z',
+    updated_by: 'Mina',
+  });
+  const service = sandbox.__HF_UI_MODULES__.createManagerCockpitService({
+    document: sandbox.document,
+    notesService,
+    activityService: sandbox.__HF_UI_MODULES__.createManagerActivityService(),
+  });
+
+  assert.equal(service.renderCockpit(), true);
+  const html = sandbox.document.getElementById('manager-cockpit-side').innerHTML;
+  assert.match(html, /id="manager-quick-note"/);
+  assert.match(html, /id="manager-quick-note-save"/);
+  assert.match(html, /manager-quick-note-status/);
+  assert.match(html, /Saved Apr 29, 2026/);
+});
+
 test('createManagerItemsTableService renders cockpit item table actions without inline or swipe controls', () => {
   const sandbox = loadSandboxWithScripts([
     'core/ui/manager/items-table.js',

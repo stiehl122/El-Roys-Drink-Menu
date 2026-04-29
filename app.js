@@ -79,6 +79,8 @@ let _managerItemsTableService = null;
 let _managerItemEditorModalService = null;
 let _managerSectionService = null;
 let _managerEditorsService = null;
+let _managerNotesService = null;
+let _managerActivityService = null;
 let _adminWorkspaceService = null;
 let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
@@ -3343,6 +3345,8 @@ function buildManagerCockpitModuleDeps() {
   return {
     document,
     window,
+    notesService: getManagerNotesService(),
+    activityService: getManagerActivityService(),
     getActiveMenuName: () => formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'Current Menu',
     getLastUpdatedLabel: () => getManagerCockpitLastUpdatedLabel(),
     getStats: () => getManagerCockpitStats(),
@@ -3351,13 +3355,23 @@ function buildManagerCockpitModuleDeps() {
   };
 }
 
+function buildManagerNotesModuleDeps() {
+  return {
+    saveNote: note => saveManagerQuickNoteThroughApi(note),
+  };
+}
+
+function buildManagerActivityModuleDeps() {
+  return {};
+}
+
 function buildManagerItemsTableModuleDeps() {
   return {
     document,
     onEditItem: (catId, itemId) => openManagerCockpitItemEditor(catId, itemId),
     onToggle86: (catId, itemId) => {
       toggle86(catId, itemId);
-      getManagerCockpitService()?.renderCockpit();
+      renderManagerCockpitShell();
       renderManagerCockpitItemsTable();
     },
     onDragStart: (event, catId, itemId) => startManagerItemDrag(event, catId, itemId),
@@ -3365,7 +3379,7 @@ function buildManagerItemsTableModuleDeps() {
     onDrop: (event, catId, itemId) => {
       handleManagerItemDrop(event, catId, itemId);
       endManagerItemDrag(event);
-      getManagerCockpitService()?.renderCockpit();
+      renderManagerCockpitShell();
       renderManagerCockpitItemsTable();
     },
     onDragEnd: event => endManagerItemDrag(event),
@@ -3460,6 +3474,25 @@ function getManagerCockpitService() {
   if (typeof boundary?.createManagerCockpitService !== 'function') return null;
   _managerCockpitService = boundary.createManagerCockpitService(buildManagerCockpitModuleDeps());
   return _managerCockpitService;
+}
+
+function getManagerNotesService() {
+  if (_managerNotesService) return _managerNotesService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerNotesService !== 'function') return null;
+  _managerNotesService = boundary.createManagerNotesService(buildManagerNotesModuleDeps());
+  if (typeof _managerNotesService?.setInitialNote === 'function') {
+    _managerNotesService.setInitialNote(_managerNote || { note: '', updated_at: '', updated_by: '' });
+  }
+  return _managerNotesService;
+}
+
+function getManagerActivityService() {
+  if (_managerActivityService) return _managerActivityService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerActivityService !== 'function') return null;
+  _managerActivityService = boundary.createManagerActivityService(buildManagerActivityModuleDeps());
+  return _managerActivityService;
 }
 
 function getManagerItemsTableService() {
@@ -4776,6 +4809,42 @@ async function readMenuWorkspaceThroughApi({ menuId = MENU_ID } = {}) {
   });
 }
 
+function normalizeManagerNotePayload(notePayload = {}) {
+  const payload = notePayload?.note && typeof notePayload.note === 'object'
+    ? notePayload.note
+    : notePayload;
+  return {
+    note: String(payload?.note ?? payload?.text ?? ''),
+    updated_at: String(payload?.updated_at ?? payload?.updatedAt ?? ''),
+    updated_by: String(payload?.updated_by ?? payload?.updatedBy ?? ''),
+  };
+}
+
+function setManagerNotePayload(notePayload = {}) {
+  _managerNote = normalizeManagerNotePayload(notePayload);
+  if (typeof _managerNotesService?.setInitialNote === 'function') {
+    _managerNotesService.setInitialNote(_managerNote);
+  }
+  return _managerNote;
+}
+
+async function saveManagerQuickNoteThroughApi(note = '') {
+  if (!MENU_ID) throw new Error('Select a menu before saving notes.');
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!authorizedHeaders.Authorization) throw new Error('Sign in again before saving notes.');
+  const result = await postApiJson('/api/manager', {
+    action: 'notes_write',
+    menu_id: MENU_ID,
+    note: String(note ?? ''),
+  }, {
+    headers: authorizedHeaders,
+  });
+  if (!result.ok) {
+    throw new Error(result.payload?.error || result.payload?.message || 'Quick note could not be saved.');
+  }
+  return setManagerNotePayload(result.payload?.note || result.payload?.managerNote || result.payload);
+}
+
 function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const workspace = workspacePayload?.workspace && typeof workspacePayload.workspace === 'object'
     ? workspacePayload.workspace
@@ -4784,11 +4853,7 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
     ? workspacePayload.featuredItems
     : null;
   if (workspacePayload?.managerNote && typeof workspacePayload.managerNote === 'object') {
-    _managerNote = {
-      note: String(workspacePayload.managerNote.note ?? ''),
-      updated_at: String(workspacePayload.managerNote.updated_at ?? ''),
-      updated_by: String(workspacePayload.managerNote.updated_by ?? ''),
-    };
+    setManagerNotePayload(workspacePayload.managerNote);
   }
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
@@ -6644,6 +6709,47 @@ function hasManagerCockpitShellContainers() {
   );
 }
 
+function bindManagerQuickNotesControls() {
+  const service = getManagerNotesService();
+  const textarea = document.getElementById('manager-quick-note');
+  const saveButton = document.getElementById('manager-quick-note-save');
+  if (!service || !textarea || !saveButton || textarea.__managerQuickNotesBound) return false;
+
+  textarea.__managerQuickNotesBound = true;
+  saveButton.__managerQuickNotesBound = true;
+
+  textarea.addEventListener('input', event => {
+    service.setText(event?.target?.value ?? textarea.value ?? '');
+    const status = document.getElementById('manager-quick-note-status');
+    const error = document.getElementById('manager-quick-note-error');
+    if (status) status.textContent = 'Unsaved note changes';
+    if (error) error.remove();
+  });
+
+  saveButton.addEventListener('click', async () => {
+    const status = document.getElementById('manager-quick-note-status');
+    saveButton.disabled = true;
+    if (status) status.textContent = 'Saving note...';
+    try {
+      await service.save();
+    } catch (error) {
+      if (typeof showToast === 'function') {
+        showToast(error?.message || 'Quick note could not be saved.', 'error');
+      }
+    } finally {
+      renderManagerCockpitShell();
+    }
+  });
+
+  return true;
+}
+
+function renderManagerCockpitShell(service = getManagerCockpitService()) {
+  const rendered = service?.renderCockpit();
+  if (rendered) bindManagerQuickNotesControls();
+  return !!rendered;
+}
+
 function getManagerCockpitItemCategories() {
   return [
     ...getManagedCategoryDefs(),
@@ -6684,7 +6790,7 @@ function refreshManagerItemEditorDraftViews(categoryIds = []) {
   updateDraftIndicator();
   renderManagerOverviewStats();
   renderManagerCockpitItemsTable();
-  getManagerCockpitService()?.renderCockpit();
+  renderManagerCockpitShell();
   renderFeaturedTab();
   renderFeaturedPublicSection();
 }
@@ -6826,7 +6932,7 @@ function renderManagerWorkspace(options = {}) {
       _uiModuleDelegationStack.add('renderManagerWorkspace');
       try {
         const result = service.renderManagerWorkspace(workspaceOptions);
-        const cockpitRendered = cockpitService?.renderCockpit();
+        const cockpitRendered = renderManagerCockpitShell(cockpitService);
         if (cockpitRendered) {
           renderManagerCockpitItemsTable();
           renderFeaturedTab();
@@ -6849,7 +6955,7 @@ function renderManagerWorkspace(options = {}) {
   renderPruneSection();
   updateActiveMenuBar();
   renderManagerOverviewStats();
-  const cockpitRendered = getManagerCockpitService()?.renderCockpit();
+  const cockpitRendered = renderManagerCockpitShell();
   if (cockpitRendered) {
     renderManagerCockpitItemsTable();
     renderFeaturedTab();
@@ -12001,6 +12107,13 @@ async function renderRecentChanges() {
       return;
     }
     wrap.innerHTML = buildChangeFeedHtml(logs);
+    _managerActivityEntries = logs;
+    if (hasManagerCockpitShellContainers()) {
+      const activityService = getManagerActivityService();
+      if (typeof activityService?.renderActivityHtml === 'function') {
+        wrap.innerHTML = activityService.renderActivityHtml(logs);
+      }
+    }
   } catch(e) {
     wrap.innerHTML = '<p class="db-empty db-error">Failed to load recent changes.</p>';
   }

@@ -23,6 +23,17 @@
       : (() => ({ status: 'Live', statusMeta: 'Live menu is current', activeItems: 0, eightySixed: 0 }));
     const getManagerNote = typeof deps.getManagerNote === 'function' ? deps.getManagerNote : (() => ({ note: '', updated_at: '' }));
     const getActivityEntries = typeof deps.getActivityEntries === 'function' ? deps.getActivityEntries : (() => []);
+    const notesService = deps.notesService || (
+      typeof modules.createManagerNotesService === 'function'
+        ? modules.createManagerNotesService()
+        : null
+    );
+    const activityService = deps.activityService || (
+      typeof modules.createManagerActivityService === 'function'
+        ? modules.createManagerActivityService()
+        : null
+    );
+    const shouldHydrateNoteFromGetter = !deps.notesService && typeof notesService?.setInitialNote === 'function';
 
     function readStats() {
       const stats = getStats() || {};
@@ -110,17 +121,22 @@
 
     function renderSide(container) {
       const note = getManagerNote() || {};
-      const noteText = String(note.note ?? '');
-      const noteMeta = note.updated_at ? `Updated ${new Date(note.updated_at).toLocaleString()}` : 'No note saved yet';
+      if (shouldHydrateNoteFromGetter) notesService.setInitialNote(note);
+      const noteState = typeof notesService?.getState === 'function'
+        ? notesService.getState()
+        : {
+          text: String(note.note ?? ''),
+          updatedAt: String(note.updated_at ?? ''),
+          updatedBy: String(note.updated_by ?? ''),
+        };
+      const noteMeta = noteState.updatedAt ? `Updated ${new Date(noteState.updatedAt).toLocaleString()}` : 'No note saved yet';
       const activityEntries = Array.isArray(getActivityEntries()) ? getActivityEntries() : [];
-      const activityHtml = activityEntries.length
-        ? activityEntries.map(entry => `
-          <article class="manager-cockpit-activity-row">
-            <strong>${escHtml(entry.label || 'Activity')}</strong>
-            <span>${escHtml([entry.actor, entry.time].filter(Boolean).join(' • '))}</span>
-            ${entry.channel ? `<small>${escHtml(entry.channel)}</small>` : ''}
-          </article>`).join('')
+      const activityHtml = typeof activityService?.renderActivityHtml === 'function'
+        ? activityService.renderActivityHtml(activityEntries)
         : '<p class="db-empty">Recent activity will appear after staff updates.</p>';
+      const notesHtml = typeof notesService?.renderHtml === 'function'
+        ? notesService.renderHtml()
+        : `<textarea id="manager-quick-note" rows="5" placeholder="Prep notes, counts, handoff details...">${escHtml(noteState.text)}</textarea>`;
 
       container.innerHTML = `
         <section class="manager-cockpit-side-panel" aria-labelledby="manager-cockpit-featured-title">
@@ -143,7 +159,7 @@
             <h2 id="manager-cockpit-notes-title">Quick Notes</h2>
             <small>${escHtml(noteMeta)}</small>
           </div>
-          <textarea id="manager-quick-note" rows="5" placeholder="Prep notes, counts, handoff details...">${escHtml(noteText)}</textarea>
+          ${notesHtml}
         </section>
         <section class="manager-cockpit-side-panel" aria-labelledby="manager-cockpit-snapshot-title">
           <div class="manager-cockpit-side-panel-head">
