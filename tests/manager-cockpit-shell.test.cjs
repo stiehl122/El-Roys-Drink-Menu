@@ -21,3 +21,15 @@ test('manager shell contains cockpit root containers and scripts', () => {
   assert.match(html, /core\/ui\/manager\/cockpit\.js/);
   assert.match(html, /core\/ui\/manager\/item-editor-modal\.js/);
 });
+
+test('manager cockpit shell and modules do not wire legacy swipe controls', () => {
+  [
+    'manager/index.html',
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+  ].forEach(relativePath => {
+    const source = fs.readFileSync(path.join(root, relativePath), 'utf8');
+    assert.doesNotMatch(source, /item-swipeable/, relativePath);
+    assert.doesNotMatch(source, /swipe-action/, relativePath);
+  });
+});

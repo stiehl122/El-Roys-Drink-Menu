@@ -394,6 +394,98 @@ test('createManagerItemsTableService renders cockpit item table actions without 
   assert.doesNotMatch(html, /swipe-action/);
 });
 
+test('createManagerWorkspaceService skips legacy primary section renderers during cockpit render', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/workspace.js',
+  ]);
+  const renderCalls = [];
+  const service = sandbox.__HF_UI_MODULES__.createManagerWorkspaceService({
+    document: sandbox.document,
+    window: { innerWidth: 1024 },
+    renderManagerCategories: () => renderCalls.push('manager-categories'),
+    renderPricingSection: () => renderCalls.push('pricing'),
+    renderDescriptionSection: () => renderCalls.push('description'),
+    renderFeaturedTab: () => renderCalls.push('featured'),
+    renderCategoriesTab: () => renderCalls.push('categories-tab'),
+    updateManagerToolsContext: () => renderCalls.push('tools-context'),
+    renderDatabaseTab: () => renderCalls.push('database'),
+    renderPruneSection: () => renderCalls.push('prune'),
+    updateActiveMenuBar: () => renderCalls.push('active-menu-bar'),
+    renderRecentChanges: () => renderCalls.push('recent'),
+    updateManagerActionBar: () => renderCalls.push('action-bar'),
+    renderFooter: () => renderCalls.push('footer'),
+    initManagerMobileDrawerTrigger: () => renderCalls.push('mobile-drawer'),
+    initDrawerSwipe: () => renderCalls.push('drawer-swipe'),
+  });
+
+  service.renderManagerWorkspace();
+
+  assert.deepEqual(renderCalls, [
+    'featured',
+    'tools-context',
+    'active-menu-bar',
+    'recent',
+    'footer',
+    'mobile-drawer',
+    'drawer-swipe',
+  ]);
+});
+
+test('fallback renderManagerWorkspace skips legacy primary sections on cockpit route', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+    'app.js',
+  ]);
+  [
+    'manager-cockpit-header',
+    'manager-cockpit-workbar',
+    'manager-cockpit-side',
+    'manager-cockpit-items',
+    'manager-cockpit-database',
+    'manager-cockpit-rail-meta',
+    'manager-cockpit-nav',
+    'manager-action-bar',
+    'manager-primary-action-group',
+    'manager-action-bar-summary',
+    'sync-status',
+    'manager-cockpit-revision-dock',
+  ].forEach(id => sandbox.document._registerElement(id, createElement('div', id)));
+  const renderCalls = [];
+  setState(sandbox, {
+    CATEGORY_DEFS: [{ id: 'beer', title: 'Beer', icon: 'B' }],
+    menuState: {
+      beer: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    renderManagerCategories: () => renderCalls.push('manager-categories'),
+    renderPricingSection: () => renderCalls.push('pricing'),
+    renderDescriptionSection: () => renderCalls.push('description'),
+    renderCategoriesTab: () => renderCalls.push('categories-tab'),
+    renderDatabaseTab: () => renderCalls.push('database'),
+    renderPruneSection: () => renderCalls.push('prune'),
+    renderFeaturedTab: () => renderCalls.push('featured'),
+    updateManagerToolsContext: () => renderCalls.push('tools-context'),
+    updateActiveMenuBar: () => renderCalls.push('active-menu-bar'),
+    renderRecentChanges: () => renderCalls.push('recent'),
+    renderFooter: () => renderCalls.push('footer'),
+    initManagerMobileDrawerTrigger: () => renderCalls.push('mobile-drawer'),
+    initDrawerSwipe: () => renderCalls.push('drawer-swipe'),
+  });
+
+  getState(sandbox, 'renderManagerWorkspace()');
+
+  assert.deepEqual(renderCalls, [
+    'tools-context',
+    'active-menu-bar',
+    'featured',
+    'recent',
+    'footer',
+    'mobile-drawer',
+    'drawer-swipe',
+  ]);
+});
+
 test('createManagerItemsTableService delegates item name and edit clicks to the edit callback', () => {
   const sandbox = loadSandboxWithScripts([
     'core/ui/manager/items-table.js',

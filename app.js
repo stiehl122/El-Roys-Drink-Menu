@@ -7041,19 +7041,15 @@ function renderManagerWorkspace(options = {}) {
     }
   }
 
-  renderManagerCategories();
-  renderPricingSection();
-  renderDescriptionSection();
-  renderFeaturedTab();
-  renderCategoriesTab();
+  if (options.includeLegacyManagerCategories === true) renderManagerCategories();
   updateManagerToolsContext();
-  renderDatabaseTab();
-  renderPruneSection();
   updateActiveMenuBar();
   renderManagerOverviewStats();
   const cockpitRendered = renderManagerCockpitShell();
   if (cockpitRendered) {
     renderManagerCockpitItemsTable();
+    renderFeaturedTab();
+  } else {
     renderFeaturedTab();
   }
   if (options.includeRecentChanges !== false) renderRecentChanges();

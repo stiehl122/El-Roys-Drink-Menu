@@ -20,13 +20,8 @@
       : (() => ({ getActionBarState: () => ({ hasDraftChanges: false, hasDraftWork: false, hasPendingUpdate: false, saveDisabled: true, publishDisabled: true, showDiscard: false }) }));
 
     const renderManagerCategories = typeof deps.renderManagerCategories === 'function' ? deps.renderManagerCategories : (() => {});
-    const renderPricingSection = typeof deps.renderPricingSection === 'function' ? deps.renderPricingSection : (() => {});
-    const renderDescriptionSection = typeof deps.renderDescriptionSection === 'function' ? deps.renderDescriptionSection : (() => {});
     const renderFeaturedTab = typeof deps.renderFeaturedTab === 'function' ? deps.renderFeaturedTab : (() => {});
-    const renderCategoriesTab = typeof deps.renderCategoriesTab === 'function' ? deps.renderCategoriesTab : (() => {});
     const updateManagerToolsContext = typeof deps.updateManagerToolsContext === 'function' ? deps.updateManagerToolsContext : (() => {});
-    const renderDatabaseTab = typeof deps.renderDatabaseTab === 'function' ? deps.renderDatabaseTab : (() => {});
-    const renderPruneSection = typeof deps.renderPruneSection === 'function' ? deps.renderPruneSection : (() => {});
     const updateActiveMenuBar = typeof deps.updateActiveMenuBar === 'function' ? deps.updateActiveMenuBar : (() => {});
     const renderRecentChanges = typeof deps.renderRecentChanges === 'function' ? deps.renderRecentChanges : (() => {});
     const renderFooter = typeof deps.renderFooter === 'function' ? deps.renderFooter : (() => {});
@@ -130,14 +125,9 @@
     }
 
     function renderManagerWorkspace(options = {}) {
-      renderManagerCategories();
-      renderPricingSection();
-      renderDescriptionSection();
+      if (options.includeLegacyManagerCategories === true) renderManagerCategories();
       renderFeaturedTab();
-      renderCategoriesTab();
       updateManagerToolsContext();
-      renderDatabaseTab();
-      renderPruneSection();
       updateActiveMenuBar();
       renderManagerOverviewStats();
       if (options.includeRecentChanges !== false) renderRecentChanges();
