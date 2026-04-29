@@ -177,3 +177,77 @@ test('openManagerCockpitItemEditor passes the selected item to the modal service
   assert.equal(modalCalls[0].category.title, 'Cocktails');
   assert.deepEqual(toastCalls, []);
 });
+
+test('applyManagerItemPatch moves categories and updates draft views without publishing', () => {
+  const renderCalls = [];
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  setState(sandbox, {
+    MENU_TYPE: 'drinks',
+    CATEGORY_DEFS: [
+      { id: 'cocktails', title: 'Cocktails' },
+      { id: 'beer', title: 'Beer' },
+    ],
+    menuState: {
+      cocktails: {
+        items: [{ id: 'marg', name: 'House Margarita', price: '$10', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      beer: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    updateSaveBtn: () => {},
+    updateDraftIndicator: () => renderCalls.push('draft'),
+    renderManagerItems: catId => renderCalls.push(`items:${catId}`),
+    renderPricingSection: () => renderCalls.push('pricing'),
+    renderDescriptionSection: () => renderCalls.push('description'),
+    markSectionsStale: section => renderCalls.push(`stale:${section}`),
+    renderManagerOverviewStats: () => renderCalls.push('overview'),
+    renderFeaturedTab: () => renderCalls.push('featured'),
+    renderFeaturedPublicSection: () => renderCalls.push('public-featured'),
+  });
+
+  const result = getState(sandbox, `applyManagerItemPatch({
+    categoryId: 'cocktails',
+    itemId: 'marg',
+    patch: { categoryId: 'beer', name: 'Skinny Margarita', price: '$11' }
+  })`);
+
+  assert.equal(result.ok, true);
+  assert.equal(getState(sandbox, 'menuState.cocktails.items.length'), 0);
+  assert.equal(getState(sandbox, 'menuState.beer.items[0].name'), 'Skinny Margarita');
+  assert.equal(getState(sandbox, 'menuState.beer.items[0].price'), '$11');
+  assert.equal(getState(sandbox, '_dirty'), true);
+  assert.equal(renderCalls.includes('items:cocktails'), true);
+  assert.equal(renderCalls.includes('items:beer'), true);
+});
+
+test('removeManagerItemFromMenu marks the item off-menu without deleting it', () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  setState(sandbox, {
+    MENU_TYPE: 'drinks',
+    CATEGORY_DEFS: [{ id: 'cocktails', title: 'Cocktails' }],
+    menuState: {
+      cocktails: {
+        items: [{ id: 'marg', name: 'House Margarita', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    updateSaveBtn: () => {},
+    updateDraftIndicator: () => {},
+    renderManagerItems: () => {},
+    renderPricingSection: () => {},
+    renderDescriptionSection: () => {},
+    markSectionsStale: () => {},
+    renderManagerOverviewStats: () => {},
+    renderFeaturedTab: () => {},
+    renderFeaturedPublicSection: () => {},
+  });
+
+  const result = getState(sandbox, "removeManagerItemFromMenu({ categoryId: 'cocktails', itemId: 'marg' })");
+
+  assert.equal(result.ok, true);
+  assert.equal(getState(sandbox, 'menuState.cocktails.items[0].onMenu'), false);
+  assert.equal(getState(sandbox, 'menuState.cocktails.items[0].visibility'), 'off_menu');
+  assert.deepEqual(JSON.parse(getState(sandbox, 'JSON.stringify(Array.from(_deletedItemIds))')), []);
+});

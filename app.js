@@ -3372,6 +3372,18 @@ function buildManagerItemsTableModuleDeps() {
   };
 }
 
+function buildManagerItemEditorModuleDeps() {
+  return {
+    document,
+    window,
+    getItem: (catId, itemId) => findItem(catId, itemId),
+    getCategories: () => getManagerCockpitItemCategories(),
+    menuType: () => MENU_TYPE,
+    applyItemPatch: payload => applyManagerItemPatch(payload),
+    removeFromMenu: payload => removeManagerItemFromMenu(payload),
+  };
+}
+
 function buildManagerSectionModuleDeps() {
   return {
     document,
@@ -3462,7 +3474,7 @@ function getManagerItemEditorModalService() {
   if (_managerItemEditorModalService) return _managerItemEditorModalService;
   const boundary = getUiModuleBoundary();
   if (typeof boundary?.createManagerItemEditorModalService !== 'function') return null;
-  _managerItemEditorModalService = boundary.createManagerItemEditorModalService({ document, window });
+  _managerItemEditorModalService = boundary.createManagerItemEditorModalService(buildManagerItemEditorModuleDeps());
   return _managerItemEditorModalService;
 }
 
@@ -6660,6 +6672,78 @@ function renderManagerCockpitItemsTable() {
   container.innerHTML = service.renderTableHtml(tableState);
   service.bindTable(container);
   return true;
+}
+
+function refreshManagerItemEditorDraftViews(categoryIds = []) {
+  Array.from(new Set(categoryIds.filter(Boolean))).forEach(catId => renderManagerItems(catId));
+  renderPricingSection();
+  renderDescriptionSection();
+  markSectionsStale('manager-items-section');
+  markSectionsStale('manager-pricing-section');
+  markSectionsStale('manager-description-section');
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  renderManagerCockpitItemsTable();
+  getManagerCockpitService()?.renderCockpit();
+  renderFeaturedTab();
+  renderFeaturedPublicSection();
+}
+
+function applyManagerItemPatch({ categoryId = '', itemId = '', patch = {} } = {}) {
+  if (!categoryId || !itemId || !patch || typeof patch !== 'object') {
+    return { ok: false, error: 'Item update is missing required details.' };
+  }
+  const sourceState = menuState[categoryId];
+  const sourceItems = sourceState?.items || [];
+  const itemIndex = sourceItems.findIndex(item => item.id === itemId);
+  if (itemIndex < 0) return { ok: false, error: 'Item was not found.' };
+
+  const nextCategoryId = String(patch.categoryId || categoryId).trim() || categoryId;
+  const nextPatch = { ...patch };
+  delete nextPatch.categoryId;
+  let activeCategoryId = categoryId;
+  let item = sourceItems[itemIndex];
+
+  if (nextCategoryId !== categoryId) {
+    if (!menuState[nextCategoryId]) menuState[nextCategoryId] = { items: [], lastSent: [] };
+    const [movedItem] = sourceItems.splice(itemIndex, 1);
+    item = movedItem;
+    if (nextCategoryId === UNCATEGORIZED_ID) {
+      item.onMenu = false;
+      item.visibility = 'off_menu';
+    } else if (categoryId === UNCATEGORIZED_ID || item.onMenu === false) {
+      item.onMenu = true;
+      item.visibility = item.visibility === 'off_menu' ? 'public' : (item.visibility || 'public');
+    }
+    menuState[nextCategoryId].items.push(item);
+    activeCategoryId = nextCategoryId;
+  }
+
+  Object.entries(nextPatch).forEach(([field, value]) => {
+    if (field === 'recipe') {
+      item.recipe = MENU_TYPE === 'food' ? [] : recipeArray(value);
+    } else if (field === 'upcharges') {
+      item.upcharges = itemUpchargeArray(value);
+    } else if (field === 'name' || field === 'desc' || field === 'price') {
+      item[field] = String(value || '').trim();
+    } else if (field === 'eightySixed' || field === 'showDescription' || field === 'showRecipe') {
+      item[field] = !!value;
+    }
+  });
+
+  invalidateDiff();
+  refreshManagerItemEditorDraftViews([categoryId, activeCategoryId]);
+  return { ok: true };
+}
+
+function removeManagerItemFromMenu({ categoryId = '', itemId = '' } = {}) {
+  const item = findItem(categoryId, itemId);
+  if (!item) return { ok: false, error: 'Item was not found.' };
+  item.onMenu = false;
+  item.visibility = 'off_menu';
+  invalidateDiff();
+  refreshManagerItemEditorDraftViews([categoryId]);
+  return { ok: true };
 }
 
 function openManagerCockpitItemEditor(catId, itemId) {
