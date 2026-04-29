@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Manager Cockpit Prototype</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="prototype-shell">
+    <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-controls="prototype-rail">
+      <span aria-hidden="true">☰</span>
+      Menu tools
+    </button>
+    <button class="mobile-nav-backdrop" type="button" aria-label="Close menu tools" hidden></button>
+    <aside class="rail" id="prototype-rail" aria-label="Manager prototype sections">
+      <button class="mobile-nav-close" type="button" aria-label="Close menu tools">×</button>
+      <div class="rail-card rail-card--menu">
+        <p class="kicker">Index</p>
+        <div class="menu-chip">
+          <span>Menu</span>
+          <strong>Leroy's Lounge Drinks</strong>
+        </div>
+        <p class="rail-meta">Last updated: Mon, Apr 27 at 2:55 PM</p>
+        <button class="user-button" type="button">LS <span aria-hidden="true">⌄</span></button>
+        <button class="rail-button" type="button">Switch Menu</button>
+        <button class="rail-button" type="button">Admin Console</button>
+        <button class="rail-button" type="button">Scan / Add Item</button>
+        <button class="rail-button rail-button--primary" type="button">Return to Menu</button>
+      </div>
+
+      <nav class="rail-nav" aria-label="Prototype navigation">
+        <a class="rail-link" href="#overview"><span>◆</span>Overview</a>
+        <a class="rail-link is-active" href="#items"><span>■</span>Edit Items</a>
+        <a class="rail-link" href="#featured"><span>★</span>Featured</a>
+        <a class="rail-link" href="#history"><span>↺</span>History</a>
+        <a class="rail-link" href="#database"><span>⋮</span>Database</a>
+      </nav>
+    </aside>
+
+    <main class="stage">
+      <section class="workspace-panel" id="overview">
+        <header class="workspace-header">
+          <div>
+            <h1>Manager Workspace</h1>
+            <p class="workspace-sub">Leroy's Lounge Drinks</p>
+          </div>
+          <div class="status-strip" aria-label="Menu status">
+            <article class="status-pill status-pill--live">
+              <span class="status-dot" aria-hidden="true"></span>
+              <strong>Live</strong>
+              <span>Live menu is current</span>
+            </article>
+            <article class="status-pill">
+              <strong>16 active</strong>
+              <span>active items</span>
+            </article>
+            <article class="status-pill status-pill--warn">
+              <strong>0 86'd</strong>
+              <span>items 86'd</span>
+            </article>
+          </div>
+        </header>
+
+        <div class="command-strip" aria-label="Workflow tools">
+          <button class="tool-card tool-card--primary" type="button" id="add-row-btn">
+            <span class="tool-icon">＋</span>
+            <span><strong>Add Item</strong><small>Quick add or scan</small></span>
+          </button>
+          <button class="tool-card" type="button">
+            <span class="tool-icon">☷</span>
+            <span><strong>Bulk Actions</strong><small>86, move, copy</small></span>
+          </button>
+          <label class="tool-card tool-search tool-card--field" for="item-search">
+            <span class="tool-icon" aria-hidden="true">⌕</span>
+            <input id="item-search" type="search" placeholder="Search…" autocomplete="off">
+          </label>
+          <label class="tool-card tool-select tool-card--field" for="category-filter">
+            <span class="tool-icon" aria-hidden="true">▽</span>
+            <select id="category-filter">
+              <option value="all">No Filter</option>
+              <option value="draft">Draft Beer</option>
+              <option value="bottles">Bottles and Cans</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="cockpit-grid">
+          <section class="editor-card editor-card--items" id="items" aria-labelledby="items-title">
+            <div class="card-title-row">
+              <div>
+                <p class="kicker">Items</p>
+                <h2 id="items-title">Drag to reorder. Click 86 to toggle availability.</h2>
+              </div>
+            </div>
+
+            <div class="item-table" role="table" aria-label="Editable drink menu">
+              <div class="table-head" role="row">
+                <span>Order</span>
+                <span>Item Name</span>
+                <span>Status</span>
+                <span>Edit</span>
+                <span>86</span>
+                <span>Delete</span>
+              </div>
+
+              <section class="menu-group" data-category="draft">
+                <button class="group-head" type="button" aria-expanded="true">
+                  <span aria-hidden="true">▾</span>
+                  <strong>🍺 Draft Beer</strong>
+                  <em>13</em>
+                  <small>On Menu</small>
+                </button>
+                <div class="group-body">
+                  <div class="item-row" data-name="Pabst Blue Ribbon" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Pabst Blue Ribbon">⋮⋮</button>
+                    <input type="text" value="Pabst Blue Ribbon" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Miller High Life" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Miller High Life">⋮⋮</button>
+                    <input type="text" value="Miller High Life" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Coors Light" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Coors Light">⋮⋮</button>
+                    <input type="text" value="Coors Light" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Michelob Ultra" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Michelob Ultra">⋮⋮</button>
+                    <input type="text" value="Michelob Ultra" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Short's Local's Light" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Short's Local's Light">⋮⋮</button>
+                    <input type="text" value="Short's Local's Light" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Yuengling Lager" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Yuengling Lager">⋮⋮</button>
+                    <input type="text" value="Yuengling Lager" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Yuengling Flight" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Yuengling Flight">⋮⋮</button>
+                    <input type="text" value="Yuengling Flight" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Atwater Vanilla Java Porter" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Atwater Vanilla Java Porter">⋮⋮</button>
+                    <input type="text" value="Atwater Vanilla Java Porter" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Atwater Dirty Blond" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Atwater Dirty Blond">⋮⋮</button>
+                    <input type="text" value="Atwater Dirty Blond" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Dark Horse Crooked Tree" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Dark Horse Crooked Tree">⋮⋮</button>
+                    <input type="text" value="Dark Horse Crooked Tree" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Machine Shop Stout" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Machine Shop Stout">⋮⋮</button>
+                    <input type="text" value="Machine Shop Stout" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="Machine Shop Whitbier" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag Machine Shop Whitbier">⋮⋮</button>
+                    <input type="text" value="Machine Shop Whitbier" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="AUDIT 2026-04-27 1434 Web Leroy Drinks" data-category="draft">
+                    <button class="drag-handle" type="button" aria-label="Drag audit item">⋮⋮</button>
+                    <input type="text" value="AUDIT 2026-04-27 1434 Web Leroy Drinks" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="menu-group is-collapsed" data-category="bottles">
+                <button class="group-head" type="button" aria-expanded="false">
+                  <span aria-hidden="true">▸</span>
+                  <strong>🍾 Bottles and Cans</strong>
+                  <em>3</em>
+                  <small>On Menu</small>
+                </button>
+                <div class="group-body">
+                  <div class="item-row" data-name="White Claw Mango" data-category="bottles">
+                    <button class="drag-handle" type="button" aria-label="Drag White Claw Mango">⋮⋮</button>
+                    <input type="text" value="White Claw Mango" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="High Noon Pineapple" data-category="bottles">
+                    <button class="drag-handle" type="button" aria-label="Drag High Noon Pineapple">⋮⋮</button>
+                    <input type="text" value="High Noon Pineapple" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                  <div class="item-row" data-name="High Noon Black Cherry" data-category="bottles">
+                    <button class="drag-handle" type="button" aria-label="Drag High Noon Black Cherry">⋮⋮</button>
+                    <input type="text" value="High Noon Black Cherry" aria-label="Item name">
+                    <span class="status-cell"><i></i>On Menu</span>
+                    <button class="edit-item-btn" type="button">Edit</button>
+                    <button class="eighty-six-action" type="button">86</button>
+                    <button class="danger" type="button" aria-label="Delete">Delete</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="menu-group is-collapsed" data-category="pool">
+                <button class="group-head" type="button" aria-expanded="false">
+                  <span aria-hidden="true">▸</span>
+                  <strong>📦 Uncategorized</strong>
+                  <em>0</em>
+                  <small>Not shown publicly</small>
+                </button>
+                <div class="group-body empty-pool">
+                  <p>Pool is empty. Deleted categories move items here and stay hidden publicly.</p>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <aside class="side-stack" aria-label="Manager context panels">
+            <section class="side-panel" id="featured">
+              <div class="side-title">
+                <h2><span aria-hidden="true">★</span> Featured Preview</h2>
+                <span>0 / 5 previewed</span>
+              </div>
+              <div class="empty-featured">
+                <span aria-hidden="true">☆</span>
+                <p>No items are currently set to show in the featured strip for Leroy's Lounge Drinks.</p>
+                <button type="button">Open Featured Specials</button>
+              </div>
+            </section>
+
+            <section class="side-panel" id="history">
+              <div class="side-title">
+                <h2>Recent Sends <small>This menu</small></h2>
+                <a href="#database">View all history →</a>
+              </div>
+              <table class="history-table">
+                <thead><tr><th>Date & Time</th><th>User</th><th>Changes</th><th>Channel</th></tr></thead>
+                <tbody>
+                  <tr><td>Apr 27, 2:55 PM</td><td>Luke Stiehl</td><td>+3 added</td><td>Web Admin ›</td></tr>
+                  <tr><td>Apr 27, 1:08 PM</td><td>Luke Stiehl</td><td>-2 removed</td><td>Web Admin ›</td></tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="side-panel notes-panel">
+              <div class="side-title">
+                <h2>✎ Quick Notes</h2>
+                <button type="button" aria-label="Collapse notes">⌃</button>
+              </div>
+              <textarea placeholder="Add a note for this menu (internal only)..."></textarea>
+              <p>Prototype-only: this panel models a possible persisted manager note.</p>
+            </section>
+
+            <section class="side-panel snapshot-panel">
+              <h2>Menu Snapshot</h2>
+              <dl>
+                <div><dt>Menu</dt><dd>Leroy's Lounge Drinks</dd></div>
+                <div><dt>Last Published</dt><dd>Apr 26, 2026 10:12 PM</dd></div>
+                <div><dt>Last Update</dt><dd>Apr 27, 2026 2:55 PM</dd></div>
+                <div><dt>Version</dt><dd>v0.9.0 Preview</dd></div>
+              </dl>
+            </section>
+          </aside>
+        </div>
+
+        <section class="audit-panel" id="database">
+          <div>
+            <p class="kicker">Database</p>
+            <h2>Audit/search lives below the editing cockpit.</h2>
+          </div>
+          <div class="audit-filters">
+            <button type="button">All</button>
+            <button type="button">Missing Recipe</button>
+            <button type="button">Archive</button>
+          </div>
+        </section>
+
+        <footer class="revision-dock" aria-label="Revision dock">
+          <div>
+            <p class="kicker">Revision Dock</p>
+            <strong>No pending changes</strong>
+          </div>
+          <span class="local-save">● All changes saved locally</span>
+          <button class="dock-save" type="button" disabled>Save</button>
+          <button class="dock-discard" type="button" disabled>Discard Draft</button>
+          <button class="dock-collapse" type="button" aria-label="Collapse dock">⌃</button>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <div class="edit-modal" id="edit-modal" hidden>
+    <section class="edit-modal-card" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+      <div class="edit-modal-head">
+        <div>
+          <p class="kicker">Edit Item</p>
+          <h2 id="edit-modal-title">Pabst Blue Ribbon</h2>
+        </div>
+        <button class="modal-icon-button" type="button" data-close-edit aria-label="Close edit item">×</button>
+      </div>
+      <div class="edit-form-grid">
+        <label>
+          <span>Item Name</span>
+          <input id="edit-item-name" type="text" value="Pabst Blue Ribbon">
+        </label>
+        <label>
+          <span>Price</span>
+          <input type="text" value="$3.50">
+        </label>
+        <label>
+          <span>Category</span>
+          <select>
+            <option>Draft Beer</option>
+            <option>Bottles and Cans</option>
+            <option>Featured Specials</option>
+          </select>
+        </label>
+        <label>
+          <span>Status</span>
+          <select>
+            <option>On Menu</option>
+            <option>86'd</option>
+            <option>Hidden</option>
+          </select>
+        </label>
+        <label class="edit-form-wide">
+          <span>Modifiers</span>
+          <input type="text" placeholder="Flight size, pour options, substitutions">
+        </label>
+        <label class="edit-form-wide">
+          <span>Description</span>
+          <textarea rows="4" placeholder="Optional guest-facing description"></textarea>
+        </label>
+      </div>
+      <div class="edit-modal-actions">
+        <button type="button" data-close-edit>Cancel</button>
+        <button class="compact-primary" type="button" data-close-edit>Done</button>
+      </div>
+    </section>
+  </div>
+  <script src="./script.js"></script>
+</body>
+</html>
