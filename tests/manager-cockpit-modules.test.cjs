@@ -8,6 +8,23 @@ const {
   setState,
 } = require('./helpers/runtime.cjs');
 
+function registerCockpitDom(sandbox) {
+  [
+    'manager-cockpit-header',
+    'manager-cockpit-workbar',
+    'manager-cockpit-side',
+    'manager-cockpit-items',
+    'manager-cockpit-database',
+    'manager-cockpit-rail-meta',
+    'manager-cockpit-nav',
+    'manager-action-bar',
+    'manager-primary-action-group',
+    'manager-action-bar-summary',
+    'sync-status',
+    'manager-cockpit-revision-dock',
+  ].forEach(id => sandbox.document._registerElement(id, createElement('div', id)));
+}
+
 test('createManagerCockpitService renders manager cockpit shell regions', () => {
   const sandbox = loadSandboxWithScripts([
     'core/ui/manager/activity.js',
@@ -437,20 +454,7 @@ test('fallback renderManagerWorkspace skips legacy primary sections on cockpit r
     'core/ui/manager/items-table.js',
     'app.js',
   ]);
-  [
-    'manager-cockpit-header',
-    'manager-cockpit-workbar',
-    'manager-cockpit-side',
-    'manager-cockpit-items',
-    'manager-cockpit-database',
-    'manager-cockpit-rail-meta',
-    'manager-cockpit-nav',
-    'manager-action-bar',
-    'manager-primary-action-group',
-    'manager-action-bar-summary',
-    'sync-status',
-    'manager-cockpit-revision-dock',
-  ].forEach(id => sandbox.document._registerElement(id, createElement('div', id)));
+  registerCockpitDom(sandbox);
   const renderCalls = [];
   setState(sandbox, {
     CATEGORY_DEFS: [{ id: 'beer', title: 'Beer', icon: 'B' }],
@@ -484,6 +488,76 @@ test('fallback renderManagerWorkspace skips legacy primary sections on cockpit r
     'mobile-drawer',
     'drawer-swipe',
   ]);
+});
+
+test('confirmAddItemModal refreshes the visible cockpit table after adding an item', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+    'app.js',
+  ]);
+  registerCockpitDom(sandbox);
+  sandbox.document._registerElement('manager-add-item-modal-host', createElement('div', 'manager-add-item-modal-host'));
+  setState(sandbox, {
+    MENU_ID: '00000000-0000-0000-0000-000000000020',
+    MENU_TYPE: 'drinks',
+    currentUser: {
+      role: 'manager',
+      accessibleMenuIds: ['00000000-0000-0000-0000-000000000020'],
+    },
+    CATEGORY_DEFS: [{ id: 'cocktails', title: 'Cocktails', icon: 'C', color: '', sub: '', placeholder: '' }],
+    menuState: {
+      cocktails: { items: [], lastSent: [] },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    updateDraftIndicator: () => {},
+    renderManagerOverviewStats: () => {},
+    markSectionsStale: () => {},
+    showToast: () => {},
+  });
+
+  getState(sandbox, 'openAddItemModal()');
+  getState(sandbox, "updateAddItemModalField('name', 'House Paloma')");
+  getState(sandbox, "updateAddItemModalField('categoryId', 'cocktails')");
+  const result = getState(sandbox, 'confirmAddItemModal()');
+
+  assert.equal(result.ok, true);
+  assert.match(sandbox.document.getElementById('manager-cockpit-items').innerHTML, /House Paloma/);
+  assert.match(sandbox.document.getElementById('manager-cockpit-header').innerHTML, /Manager Workspace/);
+});
+
+test('delegated refreshManagerViews refreshes cockpit shell and item table', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/workspace.js',
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+    'app.js',
+  ]);
+  registerCockpitDom(sandbox);
+  sandbox.document.getElementById('manager-cockpit-items').innerHTML = 'stale table';
+  setState(sandbox, {
+    MENU_TYPE: 'drinks',
+    CATEGORY_DEFS: [{ id: 'beer', title: 'Beer', icon: 'B', color: '', sub: '', placeholder: '' }],
+    menuState: {
+      beer: {
+        items: [{ id: 'lager', name: 'Draft Lager', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    renderFeaturedTab: () => {},
+    updateManagerToolsContext: () => {},
+    updateActiveMenuBar: () => {},
+    renderRecentChanges: () => {},
+    renderFooter: () => {},
+    initManagerMobileDrawerTrigger: () => {},
+    initDrawerSwipe: () => {},
+  });
+
+  getState(sandbox, 'refreshManagerViews()');
+
+  assert.match(sandbox.document.getElementById('manager-cockpit-items').innerHTML, /Draft Lager/);
+  assert.match(sandbox.document.getElementById('manager-cockpit-header').innerHTML, /Manager Workspace/);
 });
 
 test('createManagerItemsTableService delegates item name and edit clicks to the edit callback', () => {

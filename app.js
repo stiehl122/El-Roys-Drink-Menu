@@ -2022,6 +2022,7 @@ function confirmAddItemModal(options = {}) {
   markSectionsStale('manager-description-section');
   updateDraftIndicator();
   renderManagerOverviewStats();
+  refreshManagerCockpitSurface();
 
   if (options && options.addMore) {
     const reopenMode = _addItemModalState.entryMode === ADD_ITEM_MODAL_SCAN_MODE
@@ -6846,6 +6847,15 @@ function renderManagerCockpitShell(service = getManagerCockpitService()) {
   return !!rendered;
 }
 
+function refreshManagerCockpitSurface({ includeFeatured = true } = {}) {
+  if (!hasManagerCockpitShellContainers()) return false;
+  const cockpitRendered = renderManagerCockpitShell();
+  if (!cockpitRendered) return false;
+  renderManagerCockpitItemsTable();
+  if (includeFeatured) renderFeaturedTab();
+  return true;
+}
+
 function getManagerCockpitItemCategories() {
   return [
     ...getManagedCategoryDefs(),
@@ -7028,10 +7038,8 @@ function renderManagerWorkspace(options = {}) {
       _uiModuleDelegationStack.add('renderManagerWorkspace');
       try {
         const result = service.renderManagerWorkspace(workspaceOptions);
-        const cockpitRendered = renderManagerCockpitShell(cockpitService);
+        const cockpitRendered = refreshManagerCockpitSurface();
         if (cockpitRendered) {
-          renderManagerCockpitItemsTable();
-          renderFeaturedTab();
           if (shouldRenderRecentAfterCockpit) renderRecentChanges();
         }
         return result;
@@ -7045,11 +7053,8 @@ function renderManagerWorkspace(options = {}) {
   updateManagerToolsContext();
   updateActiveMenuBar();
   renderManagerOverviewStats();
-  const cockpitRendered = renderManagerCockpitShell();
-  if (cockpitRendered) {
-    renderManagerCockpitItemsTable();
-    renderFeaturedTab();
-  } else {
+  const cockpitRendered = refreshManagerCockpitSurface();
+  if (!cockpitRendered) {
     renderFeaturedTab();
   }
   if (options.includeRecentChanges !== false) renderRecentChanges();
@@ -7084,7 +7089,9 @@ function refreshManagerViews() {
     if (typeof service?.refreshManagerViews === 'function') {
       _uiModuleDelegationStack.add('refreshManagerViews');
       try {
-        return service.refreshManagerViews();
+        const result = service.refreshManagerViews();
+        refreshManagerCockpitSurface();
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('refreshManagerViews');
       }
