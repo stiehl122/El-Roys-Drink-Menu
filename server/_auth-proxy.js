@@ -20,6 +20,12 @@ const AUTH_ABUSE_LIMIT_MESSAGE = 'Too many authentication attempts. Please wait 
 const authAttemptLimiter = createRateLimiter({ limit: 5, windowMs: 5 * 60 * 1000 });
 const authTokenLimiter = createRateLimiter({ limit: 20, windowMs: 5 * 60 * 1000 });
 const passwordResetLimiter = createRateLimiter({ limit: 3, windowMs: 60 * 60 * 1000 });
+const TRUSTED_PUBLIC_ORIGIN_ENV_NAMES = [
+  'PUBLIC_SITE_URL',
+  'SITE_URL',
+  'VERCEL_PROJECT_PRODUCTION_URL',
+  'VERCEL_URL',
+];
 
 const AUTH_ABUSE_ACTION_POLICIES = {
   web_sign_in: { limiter: authAttemptLimiter, includeEmail: true },
@@ -85,6 +91,66 @@ function readClientIp(req) {
     || readHeaderValue(req, 'x-real-ip')
     || String(req?.socket?.remoteAddress || req?.connection?.remoteAddress || '').trim()
     || 'unknown';
+}
+
+function readFirstHeaderPart(value = '') {
+  return String(value || '').split(',')[0].trim();
+}
+
+function hasSaneHostSyntax(host = '') {
+  return !!host && !/[\s/\\]/.test(host);
+}
+
+function normalizeTrustedManagerRedirect(value = '') {
+  const rawValue = String(value || '').trim();
+  if (!rawValue) return '';
+  const candidate = /^[a-z][a-z\d+\-.]*:\/\//i.test(rawValue) ? rawValue : `https://${rawValue}`;
+  try {
+    const url = new URL(candidate);
+    if (!hasSaneHostSyntax(url.host)) return '';
+    url.protocol = 'https:';
+    url.username = '';
+    url.password = '';
+    url.pathname = '/manager';
+    url.search = '';
+    url.hash = '';
+    return url.href;
+  } catch (_) {
+    return '';
+  }
+}
+
+function readTrustedPublicManagerRedirect() {
+  for (const name of TRUSTED_PUBLIC_ORIGIN_ENV_NAMES) {
+    const configuredValue = String(process.env[name] || '').trim();
+    if (!configuredValue) continue;
+    return {
+      configured: true,
+      redirect: normalizeTrustedManagerRedirect(configuredValue),
+    };
+  }
+  return {
+    configured: false,
+    redirect: '',
+  };
+}
+
+function readRequestOrigin(req) {
+  const proto = readFirstHeaderPart(readHeaderValue(req, 'x-forwarded-proto'));
+  const host = readFirstHeaderPart(readHeaderValue(req, 'x-forwarded-host') || readHeaderValue(req, 'host'));
+  if (proto.toLowerCase() !== 'https' || !hasSaneHostSyntax(host)) return '';
+  try {
+    return new URL(`https://${host}`).origin;
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizePasswordResetRedirect(req) {
+  const trustedOrigin = readTrustedPublicManagerRedirect();
+  if (trustedOrigin.configured) return trustedOrigin.redirect;
+  const origin = readRequestOrigin(req);
+  return origin ? `${origin}/manager` : '';
 }
 
 function normalizeAuthEmail(body = {}) {
@@ -492,7 +558,7 @@ export async function executeAuthAction(req) {
       await supabaseAuthRequest('auth/v1/recover', {
         body: {
           email: String(body?.email || '').trim(),
-          redirect_to: String(body?.redirect_to || body?.redirectTo || '').trim(),
+          redirect_to: normalizePasswordResetRedirect(req),
         },
       }, 'Password reset request failed.');
       return { ok: true };

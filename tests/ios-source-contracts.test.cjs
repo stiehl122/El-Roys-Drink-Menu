@@ -139,6 +139,61 @@ test('iOS launch smoke test uses deterministic anonymous bootstrap', () => {
   assert.match(appModel, /isLaunching = false/);
 });
 
+test('iOS product lookup sends current menu id with barcode requests', () => {
+  const backendClients = read('ios/ElRoysManagerApp/Clients/BackendClients.swift');
+  const appModel = read('ios/ElRoysManagerApp/App/AppModel.swift');
+
+  assert.match(backendClients, /protocol ProductLookupClienting\s*\{[\s\S]*func lookup\(upc: String, menuId: String, accessToken: String\)/);
+  assert.match(backendClients, /private struct ProductLookupRequest: Encodable\s*\{[\s\S]*var menuId: String/);
+  assert.match(backendClients, /ProductLookupRequest\(action: "product_lookup", barcode: trimmed, menuId: menuId\)/);
+  assert.match(appModel, /guard let currentMenuId else \{\s*throw BackendError\.server\(message: "Select a menu before scanning\."\)\s*\}/);
+  assert.match(appModel, /services\.productLookup\.lookup\(upc: barcode, menuId: currentMenuId, accessToken: accessToken\)/);
+});
+
+test('iOS backend client exposes string public menu revision fetch', () => {
+  const source = read('ios/ElRoysManagerApp/Clients/BackendClients.swift');
+
+  assert.match(source, /protocol PublicMenuRevisionClienting\s*\{[\s\S]*func fetchRevision\(menuId: String\) async throws -> MenuRevisionPayload/);
+  assert.match(source, /struct MenuRevisionPayload: Decodable\s*\{[\s\S]*let menuId: String/);
+  assert.match(source, /struct MenuRevisionPayload: Decodable\s*\{[\s\S]*let revision: String\?/);
+  assert.match(source, /struct MenuRevisionPayload: Decodable\s*\{[\s\S]*let lastUpdatedTs: Int\?/);
+  assert.match(source, /struct MenuRevisionPayload: Decodable\s*\{[\s\S]*let lastSentTs: Int\?/);
+  assert.doesNotMatch(source, /let revision: Int64\?/);
+  assert.match(source, /final class PublicMenuRevisionClient: PublicMenuRevisionClienting/);
+  assert.match(source, /URLQueryItem\(name: "action", value: "revision"\)/);
+  assert.match(source, /URLQueryItem\(name: "menu_id", value: menuId\)/);
+});
+
+test('iOS editor monitor gates public revision before fetching full workspace', () => {
+  const source = read('ios/ElRoysManagerApp/App/AppModel.swift');
+  const body = sourceBetween(
+    source,
+    'func checkForRemoteMenuUpdate(menuId: String, force: Bool = false) async',
+    'func loadRestaurantTools'
+  );
+
+  const revisionFetchIndex = body.indexOf('services.publicMenuRevision.fetchRevision(menuId: menuId)');
+  const workspaceFetchIndex = body.indexOf('services.workspace.fetch(menuId: menuId');
+  assert.notEqual(revisionFetchIndex, -1, 'missing public revision fetch in remote update monitor');
+  assert.notEqual(workspaceFetchIndex, -1, 'missing workspace fetch in remote update monitor');
+  assert.ok(
+    body.indexOf('if !force') < revisionFetchIndex,
+    'revision fetch should be guarded by force == false'
+  );
+  assert.match(
+    body,
+    /if !force,\s*let currentWorkspace = currentEditorWorkspace,\s*canUsePublicRevisionPrecheck\(currentWorkspace\) \{/,
+    'public revision fetch should only run for eligible non-draft-sensitive workspaces'
+  );
+  assert.ok(
+    revisionFetchIndex < workspaceFetchIndex,
+    'revision fetch must happen before full workspace fetch'
+  );
+  assert.match(body, /publicRevisionPrecheckProvesUnchanged|publicRevisionPayloadMatchesCurrentWorkspace/);
+  assert.match(source, /private func canUsePublicRevisionPrecheck\(_ workspace: MenuWorkspacePayload\) -> Bool/);
+  assert.match(source, /return !state\.capabilities\.canSaveDraft && !hasWorkspaceDraft && !hasMetaDraft/);
+});
+
 test('iOS home screen reserves explicit clearance for bottom navigation', () => {
   const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
   assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);

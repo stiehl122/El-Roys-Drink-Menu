@@ -588,6 +588,8 @@ let _sharedDraftSavedTs = '';
 let _sharedDraftSavedBy = null;
 let _sharedDraftSource = '';
 let _serverLiveSnapshot = null;
+let _publicRevisionTokens = new Map();
+let _publicRevisionEtags = new Map();
 let _localDraftBaseSnapshot = null;
 let _localDraftPersistTimer = null;
 let _previewModalState = null;
@@ -1457,6 +1459,7 @@ async function beginAddItemBarcodeLookup(rawBarcode) {
   renderAddItemModal({ focusFieldId: 'add-item-name-input' });
 
   const product = await lookupOpenFoodFactsProduct(barcode, {
+    menuId: MENU_ID,
     headers: getAuthorizedApiHeaders(),
   });
   if (!_addItemModalState.isOpen || _addItemModalState.lookupRequestId !== requestId) {
@@ -1518,6 +1521,7 @@ async function runAddItemUntappdSearch(rawQuery = '') {
   renderAddItemModal();
 
   const results = await searchUntappdBeers(query, {
+    menuId: MENU_ID,
     headers: getAuthorizedApiHeaders(),
   });
   if (!_addItemModalState.isOpen || Number(_addItemModalState.untappd?.requestId || 0) !== requestId) {
@@ -1574,6 +1578,7 @@ async function previewAddItemUntappdSelection(bid) {
   renderAddItemModal();
 
   const preview = await previewUntappdBeerImport(bid, {
+    menuId: MENU_ID,
     includeBrewery: true,
     headers: getAuthorizedApiHeaders(),
   });
@@ -4673,7 +4678,137 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   return true;
 }
 
-async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) {
+function normalizePublicRevisionToken(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function getPublicRevisionCacheKey(request = {}) {
+  return normalizePublicRevisionToken(
+    request?.requestedMenuId ||
+    request?.menuId ||
+    request?.requestedMenuSlug ||
+    request?.menuSlug ||
+    'public-menu',
+  );
+}
+
+function getPublicRevisionEtagKey(request = {}, revision = '') {
+  return `${getPublicRevisionCacheKey(request)}::${normalizePublicRevisionToken(revision)}`;
+}
+
+function extractPublicRevisionToken(payload = {}) {
+  const directToken = normalizePublicRevisionToken(payload);
+  if (!payload || typeof payload !== 'object') return directToken;
+
+  const candidates = [
+    payload.revision,
+    payload.publicRevision,
+    payload.public_revision,
+    payload.revisionToken,
+    payload.revision_token,
+    payload._revision,
+    payload.meta?.publicRevision,
+    payload.meta?.public_revision,
+    payload.meta?.revisionToken,
+    payload.meta?.revision_token,
+    payload.meta?.revision,
+    payload.context?.publicRevision,
+    payload.context?.public_revision,
+    payload.context?.revisionToken,
+    payload.context?.revision_token,
+    payload.context?.revision,
+  ];
+
+  for (const candidate of candidates) {
+    const token = normalizePublicRevisionToken(candidate);
+    if (token) return token;
+  }
+  return '';
+}
+
+function getCachedPublicRevisionToken(request = {}) {
+  return _publicRevisionTokens.get(getPublicRevisionCacheKey(request)) || '';
+}
+
+function rememberPublicRevisionToken(request = {}, ...sources) {
+  const key = getPublicRevisionCacheKey(request);
+  for (const source of sources) {
+    const token = extractPublicRevisionToken(source);
+    if (token) {
+      _publicRevisionTokens.set(key, token);
+      return token;
+    }
+  }
+  return getCachedPublicRevisionToken(request);
+}
+
+function isRevisionNotModified(revision = {}) {
+  return !!(revision && (
+    revision.notModified ||
+    revision.status === 304 ||
+    revision.statusCode === 304
+  ));
+}
+
+function shouldSkipForUnchangedRevision(request = {}, revision = {}) {
+  if (isRevisionNotModified(revision)) return true;
+  const nextRevision = extractPublicRevisionToken(revision);
+  if (!nextRevision) return false;
+  return nextRevision === getCachedPublicRevisionToken(request);
+}
+
+function readResponseHeader(response, name) {
+  if (typeof response?.headers?.get === 'function') {
+    return response.headers.get(name) || response.headers.get(String(name || '').toLowerCase()) || '';
+  }
+  const headers = response?.headers || {};
+  return headers[name] || headers[String(name || '').toLowerCase()] || '';
+}
+
+function extractPublicRevisionTokenFromEtag(etag = '', action = 'menu') {
+  const normalized = normalizePublicRevisionToken(etag)
+    .replace(/^W\//i, '')
+    .replace(/^"|"$/g, '');
+  const parts = normalized.split(':');
+  if (parts.length < 3 || parts[0] !== action) return '';
+  return parts.slice(2).join(':');
+}
+
+async function sbReadPublicRevision(request = buildCurrentMenuPageRequest(), options = {}) {
+  const menuId = request?.requestedMenuId || MENU_ID;
+  if (!menuId) return null;
+
+  const normalizedRequest = { ...request, requestedMenuId: menuId };
+  const cachedRevision = normalizePublicRevisionToken(options.cachedRevision) ||
+    getCachedPublicRevisionToken(normalizedRequest);
+  const headers = { Accept: 'application/json' };
+  const cachedEtag = cachedRevision
+    ? (_publicRevisionEtags.get(getPublicRevisionEtagKey(normalizedRequest, cachedRevision)) || '')
+    : '';
+  if (cachedEtag) headers['If-None-Match'] = cachedEtag;
+
+  const params = new URLSearchParams({ action: 'revision', menu_id: menuId });
+  const response = await fetch(`/api/public?${params.toString()}`, { headers });
+  if (response.status === 304) {
+    return {
+      revision: cachedRevision,
+      notModified: true,
+      status: 304,
+    };
+  }
+  if (!response.ok) throw new Error('Failed to load menu revision');
+
+  const payload = await response.json();
+  const etag = readResponseHeader(response, 'ETag');
+  const nextRevision = extractPublicRevisionToken(payload);
+  if (etag && nextRevision) {
+    _publicRevisionEtags.set(getPublicRevisionEtagKey(normalizedRequest, nextRevision), etag);
+  }
+  return payload;
+}
+
+async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest(), options = {}) {
   const menuId = request.requestedMenuId || MENU_ID;
   if (!menuId) return null;
 
@@ -4687,8 +4822,27 @@ async function readMenuStateThroughApi(request = buildCurrentMenuPageRequest()) 
 
   if (pageMode === 'public' || pageMode === 'picker') {
     const params = new URLSearchParams({ action: 'menu', menu_id: menuId });
-    const projection = await readApiJsonOrNull(`/api/public?${params.toString()}`);
-    if (projection) return projection;
+    const fetchOptions = {
+      headers: { Accept: 'application/json' },
+    };
+    if (options.bypassCache) {
+      fetchOptions.cache = 'no-store';
+      fetchOptions.headers['Cache-Control'] = 'no-cache';
+      fetchOptions.headers.Pragma = 'no-cache';
+    }
+    try {
+      const response = await fetch(`/api/public?${params.toString()}`, fetchOptions);
+      if (!response.ok) return null;
+      const text = await response.text();
+      const projection = text ? JSON.parse(text) : null;
+      const revision = extractPublicRevisionTokenFromEtag(readResponseHeader(response, 'ETag'), 'menu');
+      if (projection && typeof projection === 'object' && revision) {
+        projection._publicRevision = revision;
+      }
+      if (projection) return projection;
+    } catch (_) {
+      return null;
+    }
   }
 
   return null;
@@ -5198,9 +5352,15 @@ function withMenuStateLoaderDefaults(deps = {}) {
   return {
     readState: typeof deps.readState === 'function'
       ? deps.readState
-      : async ({ request } = {}) => {
-          return readMenuStateThroughApi(request || buildCurrentMenuPageRequest());
+      : async ({ request, options: stateOptions = {} } = {}) => {
+          return readMenuStateThroughApi(request || buildCurrentMenuPageRequest(), stateOptions);
         },
+    readRevision: typeof deps.readRevision === 'function'
+      ? deps.readRevision
+      : (({ request, cachedRevision } = {}) => sbReadPublicRevision(
+          request || buildCurrentMenuPageRequest(),
+          { cachedRevision },
+        )),
     hydrateFromState: typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => hydrateState(data)),
     applyPersistedDraftState: typeof deps.applyPersistedDraftState === 'function'
       ? deps.applyPersistedDraftState
@@ -5288,6 +5448,7 @@ function createMenuStateLoaderService(deps = {}) {
   }
 
   const readState = resolvedDeps.readState;
+  const readRevision = resolvedDeps.readRevision;
   const hydrateFromState = resolvedDeps.hydrateFromState;
   const applyDraftState = resolvedDeps.applyPersistedDraftState;
   const setDefaultState = resolvedDeps.setDefaultState;
@@ -5356,6 +5517,7 @@ function createMenuStateLoaderService(deps = {}) {
             await refreshFeatured();
             if (!hasActiveLocalDraft) syncServerLiveSnapshot();
           }
+          rememberPublicRevisionToken(request, data);
         } else if (fallbackToDefault) {
           setDefaultState();
           setDirty(false);
@@ -5386,13 +5548,40 @@ function createMenuStateLoaderService(deps = {}) {
     },
 
     async poll(options = {}) {
-      void options;
+      const request = options.request || buildCurrentMenuPageRequest();
+      let revisionProbe = null;
+      let bypassStateCache = false;
+      if (options.useRevisionProbe && readRevision) {
+        try {
+          const cachedRevision = getCachedPublicRevisionToken(request);
+          revisionProbe = await readRevision({
+            request,
+            source: 'poll',
+            options,
+            cachedRevision,
+          });
+          if (shouldSkipForUnchangedRevision(request, revisionProbe)) {
+            return {
+              changed: false,
+              designChanged: false,
+              skipped: 'unchanged-revision',
+              snapshot: buildSnapshot('poll'),
+            };
+          }
+          const probedRevision = extractPublicRevisionToken(revisionProbe);
+          bypassStateCache = !!probedRevision && probedRevision !== cachedRevision;
+        } catch (_) {
+          revisionProbe = null;
+        }
+      }
       const oldTs = getLastUpdatedTs();
       const oldCats = getCategorySnapshot();
       const oldDesign = getDesignSnapshotValue();
       const oldFeatured = getFeaturedSnapshotValue();
-      const request = options.request || buildCurrentMenuPageRequest();
-      const data = await readState({ request, source: 'poll', options });
+      const stateReadOptions = bypassStateCache
+        ? { ...options, bypassCache: true, expectedRevision: extractPublicRevisionToken(revisionProbe) }
+        : options;
+      const data = await readState({ request, source: 'poll', options: stateReadOptions });
       if (!data) {
         return {
           changed: false,
@@ -5432,6 +5621,7 @@ function createMenuStateLoaderService(deps = {}) {
         await refreshFeatured();
         if (!hasActiveLocalDraft) syncServerLiveSnapshot();
       }
+      rememberPublicRevisionToken(request, data);
 
       const afterCats = getCategorySnapshot();
       const newDesign = getDesignSnapshotValue();
@@ -5449,8 +5639,8 @@ async function _loadActiveMenuStateInternal(options = {}) {
   return createMenuStateLoaderService().load(options);
 }
 
-async function _pollActiveMenuStateInternal() {
-  return createMenuStateLoaderService().poll();
+async function _pollActiveMenuStateInternal(options = {}) {
+  return createMenuStateLoaderService().poll(options);
 }
 
 async function loadActiveMenuState(options = {}) {
@@ -7286,14 +7476,24 @@ function handlePollError() {
   }
 }
 
-function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
+function createMenuPollScheduler(config = {}) {
+  const {
+    loader,
+    onResult,
+    onError,
+    getContextKey,
+    now = () => Date.now(),
+    backoffBaseMs = 10_000,
+    backoffMaxMs = 120_000,
+  } = config;
+
   if (!_sessionModuleDelegationStack.has('createMenuPollScheduler')) {
     const boundary = getSessionModuleBoundary();
     if (typeof boundary?.createMenuPollScheduler === 'function') {
       _sessionModuleDelegationStack.add('createMenuPollScheduler');
       try {
-        return boundary.createMenuPollScheduler({ loader, onResult, onError, getContextKey }, {
-          fallback: () => createMenuPollScheduler({ loader, onResult, onError, getContextKey }),
+        return boundary.createMenuPollScheduler(config, {
+          fallback: () => createMenuPollScheduler(config),
         });
       } finally {
         _sessionModuleDelegationStack.delete('createMenuPollScheduler');
@@ -7305,8 +7505,36 @@ function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
   let inFlight = null;
   let queuedReason = '';
   let queuedToken = 0;
+  let consecutiveErrors = 0;
+  let nextAllowedAt = 0;
+
+  function getBackoffSkip(reason) {
+    const currentTime = now();
+    if (reason === 'interval' && nextAllowedAt && currentTime < nextAllowedAt) {
+      return { skipped: true, reason: 'backoff', nextAllowedAt };
+    }
+    return null;
+  }
+
+  function registerError() {
+    consecutiveErrors += 1;
+    if (consecutiveErrors < 3) return;
+    const multiplier = Math.min(
+      2 ** (consecutiveErrors - 3),
+      Math.ceil(backoffMaxMs / backoffBaseMs),
+    );
+    nextAllowedAt = now() + Math.min(backoffBaseMs * multiplier, backoffMaxMs);
+  }
+
+  function resetBackoff() {
+    consecutiveErrors = 0;
+    nextAllowedAt = 0;
+  }
 
   async function run(reason = 'interval') {
+    const backoffSkip = getBackoffSkip(reason);
+    if (backoffSkip) return backoffSkip;
+
     const token = ++activeToken;
     if (inFlight) {
       queuedReason = reason;
@@ -7319,24 +7547,33 @@ function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
       let currentToken = token;
       let finalResult = { skipped: true };
       while (true) {
-        const requestContext = getContextKey();
-        if (!requestContext) {
-          finalResult = { skipped: true, reason: 'missing-context' };
+        const queuedBackoffSkip = getBackoffSkip(currentReason);
+        if (queuedBackoffSkip) {
+          finalResult = queuedBackoffSkip;
         } else {
-          try {
-            const result = await loader({ reason: currentReason, requestContext });
-            const isLatest = currentToken === activeToken;
-            const contextUnchanged = requestContext === getContextKey();
-            if (isLatest && contextUnchanged) {
-              finalResult = await onResult(result, { reason: currentReason, requestContext });
-            } else {
-              finalResult = { ignored: true, reason: 'stale-result' };
+          const requestContext = getContextKey();
+          if (!requestContext) {
+            finalResult = { skipped: true, reason: 'missing-context' };
+          } else {
+            try {
+              const result = await loader({ reason: currentReason, requestContext });
+              const isLatest = currentToken === activeToken;
+              const contextUnchanged = requestContext === getContextKey();
+              if (isLatest && contextUnchanged) {
+                finalResult = await onResult(result, { reason: currentReason, requestContext });
+                resetBackoff();
+              } else {
+                finalResult = { ignored: true, reason: 'stale-result' };
+              }
+            } catch (error) {
+              const isLatest = currentToken === activeToken;
+              const contextUnchanged = requestContext === getContextKey();
+              if (isLatest && contextUnchanged) {
+                onError(error, { reason: currentReason, requestContext });
+                registerError();
+              }
+              finalResult = { error };
             }
-          } catch (error) {
-            const isLatest = currentToken === activeToken;
-            const contextUnchanged = requestContext === getContextKey();
-            if (isLatest && contextUnchanged) onError(error, { reason: currentReason, requestContext });
-            finalResult = { error };
           }
         }
 
@@ -7366,6 +7603,7 @@ function createMenuPollScheduler({ loader, onResult, onError, getContextKey }) {
       inFlight = null;
       queuedReason = '';
       queuedToken = 0;
+      resetBackoff();
     },
   };
 }
@@ -7384,6 +7622,7 @@ function getMenuPollScheduler() {
         requestedMenuId: menuId,
         source: 'poll',
         expectedMenuType: menuType,
+        useRevisionProbe: true,
       });
     },
     onResult: async result => {

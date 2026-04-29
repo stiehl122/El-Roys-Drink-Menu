@@ -3087,6 +3087,232 @@ final class MenuDocumentTests: XCTestCase {
   }
 
   @MainActor
+  func testRemoteCheckSkipsWorkspaceFetchWhenPublicRevisionMatchesAndWorkspaceIsNotDraftSensitive() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil),
+      capabilities: noDraftCapabilities()
+    )
+    let workspaceClient = StubWorkspaceClient(payloads: [initialWorkspace])
+    let revisionClient = StubPublicMenuRevisionClient(payloads: [
+      MenuRevisionPayload(menuId: "menu", revision: "sha256:current", lastUpdatedTs: 30, lastSentTs: 20)
+    ])
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: workspaceClient,
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publicMenuRevisionClient: revisionClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu")
+
+    XCTAssertEqual(revisionClient.fetchCount, 1)
+    XCTAssertEqual(workspaceClient.fetchCount, 1)
+    XCTAssertNil(model.editorRefreshRequirement)
+  }
+
+  @MainActor
+  func testRemoteCheckSkipsPublicRevisionProbeForDraftCapableWorkspaceAndFetchesSharedDraft() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: 20, notificationBaselineRevision: 20)
+    )
+    var draftDocument = EditableMenuDocument(workspace: initialWorkspace)
+    guard var draftBeer = draftDocument.itemRecord(for: "item-1")?.item else {
+      XCTFail("Expected seeded item")
+      return
+    }
+    draftBeer.name = "Remote Draft Pilsner"
+    draftDocument.upsertItem(draftBeer, categoryKey: "beer", originalCategoryKey: "beer")
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20, draftState: makeJSONValue(from: draftDocument), draftSavedTs: 44),
+      hasSharedDraft: true,
+      sharedDraft: SharedDraftInfo(
+        exists: true,
+        savedAt: 44,
+        savedBy: SharedDraftSavedBy(id: "web-staff", name: "Web Staff"),
+        source: "web_manager"
+      ),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: 44, lastSentRevision: 20, notificationBaselineRevision: 20)
+    )
+    let workspaceClient = StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace])
+    let revisionClient = StubPublicMenuRevisionClient(payloads: [])
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: workspaceClient,
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publicMenuRevisionClient: revisionClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu")
+
+    XCTAssertEqual(revisionClient.fetchCount, 0)
+    XCTAssertEqual(workspaceClient.fetchCount, 2)
+    XCTAssertNotNil(model.editorRefreshRequirement)
+  }
+
+  @MainActor
+  func testRemoteCheckFetchesWorkspaceWhenPublicRevisionChanges() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil),
+      capabilities: noDraftCapabilities()
+    )
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 40, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 40, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil),
+      capabilities: noDraftCapabilities()
+    )
+    let recorder = CallRecorder()
+    let workspaceClient = StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace], recorder: recorder)
+    let revisionClient = StubPublicMenuRevisionClient(
+      payloads: [MenuRevisionPayload(menuId: "menu", revision: "sha256:changed", lastUpdatedTs: 40, lastSentTs: 20)],
+      recorder: recorder
+    )
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: workspaceClient,
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publicMenuRevisionClient: revisionClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    recorder.reset()
+    await model.checkForRemoteMenuUpdate(menuId: "menu")
+
+    XCTAssertEqual(revisionClient.fetchCount, 1)
+    XCTAssertEqual(workspaceClient.fetchCount, 2)
+    XCTAssertEqual(recorder.events, ["revision:menu", "workspace:menu"])
+  }
+
+  @MainActor
+  func testForcedRemoteCheckBypassesPublicRevisionFetch() async throws {
+    let initialWorkspace = makeWorkspace(
+      categories: [
+        MenuCategoryPayload(
+          id: "beer",
+          menuId: "menu",
+          key: "beer",
+          label: "Beer",
+          icon: "",
+          color: "",
+          sub: "",
+          placeholder: "",
+          displayOrder: 0,
+          items: [makeItem(id: "item-1", name: "Pilsner")]
+        )
+      ],
+      meta: MenuMetaPayload(lastUpdatedTs: 30, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 30, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let updatedWorkspace = makeWorkspace(
+      categories: initialWorkspace.cats,
+      meta: MenuMetaPayload(lastUpdatedTs: 40, lastSentTs: 20),
+      revisions: WorkspaceRevisions(liveRevision: 40, draftRevision: nil, lastSentRevision: nil, notificationBaselineRevision: nil)
+    )
+    let workspaceClient = StubWorkspaceClient(payloads: [initialWorkspace, updatedWorkspace])
+    let revisionClient = StubPublicMenuRevisionClient(payloads: [])
+    let model = AppModel(
+      environment: AppEnvironment(
+        name: .preview,
+        baseURL: exampleURL,
+        publicOrigin: exampleURL,
+        displayName: "Preview"
+      ),
+      services: makeServices(
+        workspaceClient: workspaceClient,
+        historyClient: StubHistoryClient(payload: makeHistoryPayload()),
+        publicMenuRevisionClient: revisionClient
+      ),
+      sessionStore: TestSessionStore(),
+      offlineDraftStore: TestOfflineDraftStore()
+    )
+    model.authSession = makeAuthSession()
+
+    await model.loadEditor(menuId: "menu")
+    await model.checkForRemoteMenuUpdate(menuId: "menu", force: true)
+
+    XCTAssertEqual(revisionClient.fetchCount, 0)
+    XCTAssertEqual(workspaceClient.fetchCount, 2)
+  }
+
+  @MainActor
   func testRemoteQueueOnlyUpdateClassifiesAsQueueState() async throws {
     let initialWorkspace = makeWorkspace(
       categories: [
@@ -3514,6 +3740,19 @@ final class MenuDocumentTests: XCTestCase {
     XCTAssertEqual(Set(itemIDs).count, itemIDs.count)
   }
 
+  private func noDraftCapabilities() -> WorkspaceCapabilities {
+    WorkspaceCapabilities(
+      canSaveDraft: false,
+      canSaveLiveMenu: true,
+      canPublishUpdates: true,
+      canManageRestaurantSpecials: false,
+      canReadRestaurantTools: false,
+      canManageAdminSettings: false,
+      includesDraftAuthorship: false,
+      includesRestaurantTools: false
+    )
+  }
+
   private func makeWorkspace(
     categories: [MenuCategoryPayload] = [],
     meta: MenuMetaPayload = MenuMetaPayload(),
@@ -3522,7 +3761,17 @@ final class MenuDocumentTests: XCTestCase {
     revisions: WorkspaceRevisions = WorkspaceRevisions(liveRevision: 10, draftRevision: nil, lastSentRevision: 10, notificationBaselineRevision: 10),
     menuStatus: String = "",
     hasUnsentChanges: Bool? = nil,
-    permissions: WorkspacePermissions = WorkspacePermissions(canManage: true, canAdmin: true, canEditRestaurantSpecials: false, canReadRestaurantTools: false)
+    permissions: WorkspacePermissions = WorkspacePermissions(canManage: true, canAdmin: true, canEditRestaurantSpecials: false, canReadRestaurantTools: false),
+    capabilities: WorkspaceCapabilities = WorkspaceCapabilities(
+      canSaveDraft: true,
+      canSaveLiveMenu: true,
+      canPublishUpdates: true,
+      canManageRestaurantSpecials: false,
+      canReadRestaurantTools: false,
+      canManageAdminSettings: false,
+      includesDraftAuthorship: true,
+      includesRestaurantTools: false
+    )
   ) -> MenuWorkspacePayload {
     let resolvedSharedDraft = sharedDraft ?? SharedDraftInfo(
       exists: hasSharedDraft,
@@ -3544,16 +3793,7 @@ final class MenuDocumentTests: XCTestCase {
         menuStatus: menuStatus,
         hasUnsentChanges: hasUnsentChanges,
         permissions: permissions,
-        capabilities: WorkspaceCapabilities(
-          canSaveDraft: true,
-          canSaveLiveMenu: true,
-          canPublishUpdates: true,
-          canManageRestaurantSpecials: false,
-          canReadRestaurantTools: false,
-          canManageAdminSettings: false,
-          includesDraftAuthorship: true,
-          includesRestaurantTools: false
-        ),
+        capabilities: capabilities,
         revisions: revisions
       ),
       capabilities: nil
@@ -3617,6 +3857,7 @@ final class MenuDocumentTests: XCTestCase {
   private func makeServices(
     workspaceClient: WorkspaceClienting,
     historyClient: HistoryClienting,
+    publicMenuRevisionClient: PublicMenuRevisionClienting = StubPublicMenuRevisionClient(payloads: []),
     draftClient: DraftClienting = StubDraftClient(),
     liveSaveClient: LiveSaveClienting = StubLiveSaveClient(),
     publishClient: PublishClienting = StubPublishClient()
@@ -3626,6 +3867,7 @@ final class MenuDocumentTests: XCTestCase {
       auth: StubAuthClient(),
       workspace: workspaceClient,
       publicMenu: StubPublicMenuClient(),
+      publicMenuRevision: publicMenuRevisionClient,
       draft: draftClient,
       liveSave: liveSaveClient,
       publish: publishClient,
@@ -3727,6 +3969,18 @@ private enum TestError: LocalizedError {
     case .message(let value):
       return value
     }
+  }
+}
+
+private final class CallRecorder {
+  private(set) var events: [String] = []
+
+  func record(_ event: String) {
+    events.append(event)
+  }
+
+  func reset() {
+    events = []
   }
 }
 
@@ -3877,13 +4131,16 @@ private final class StubAuthClient: AuthClienting {
 
 private final class StubWorkspaceClient: WorkspaceClienting {
   private let payloads: [MenuWorkspacePayload]
-  private var fetchCount = 0
+  private let recorder: CallRecorder?
+  private(set) var fetchCount = 0
 
-  init(payloads: [MenuWorkspacePayload]) {
+  init(payloads: [MenuWorkspacePayload], recorder: CallRecorder? = nil) {
     self.payloads = payloads
+    self.recorder = recorder
   }
 
   func fetch(menuId: String, accessToken: String) async throws -> MenuWorkspacePayload {
+    recorder?.record("workspace:\(menuId)")
     let index = min(fetchCount, max(payloads.count - 1, 0))
     fetchCount += 1
     return payloads[index]
@@ -3893,6 +4150,27 @@ private final class StubWorkspaceClient: WorkspaceClienting {
 private final class StubPublicMenuClient: PublicMenuClienting {
   func fetch(menuId: String, accessToken: String?) async throws -> PublicMenuPayload {
     throw TestError.message("Unused in this test")
+  }
+}
+
+private final class StubPublicMenuRevisionClient: PublicMenuRevisionClienting {
+  private let payloads: [MenuRevisionPayload]
+  private let recorder: CallRecorder?
+  private(set) var fetchCount = 0
+
+  init(payloads: [MenuRevisionPayload], recorder: CallRecorder? = nil) {
+    self.payloads = payloads
+    self.recorder = recorder
+  }
+
+  func fetchRevision(menuId: String) async throws -> MenuRevisionPayload {
+    recorder?.record("revision:\(menuId)")
+    let index = min(fetchCount, max(payloads.count - 1, 0))
+    fetchCount += 1
+    guard !payloads.isEmpty else {
+      throw TestError.message("Unexpected public revision fetch for \(menuId)")
+    }
+    return payloads[index]
   }
 }
 
@@ -4010,7 +4288,7 @@ private final class StubPreviewClient: PreviewClienting {
 }
 
 private final class StubProductLookupClient: ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     throw TestError.message("Unused in this test")
   }
 }

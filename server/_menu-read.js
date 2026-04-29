@@ -13,6 +13,7 @@ import {
 } from './_supabase.js';
 import { buildCategoryQueueState } from './_menu-queue.js';
 import { normalizeLegacyFeaturedBaseline } from './_menu-queue.js';
+import { buildPublicJsonPayloadRevision } from './_public-cache.js';
 
 const domainConstants = (globalThis.__HF_DOMAIN_CONSTANTS__ && typeof globalThis.__HF_DOMAIN_CONSTANTS__ === 'object')
   ? globalThis.__HF_DOMAIN_CONSTANTS__
@@ -318,6 +319,24 @@ export async function readMenuStateBundle(menuId) {
     cats: categoriesWithLegacyFeatured,
     meta: metaRows?.[0] || {},
     restaurant: restaurantRows?.[0] || null,
+  };
+}
+
+export async function readPublicMenuRevision(menuId) {
+  if (!isSupportedMenuId(menuId)) {
+    throw { status: 400, message: 'Unsupported menu_id' };
+  }
+
+  const bundle = await readMenuStateBundle(menuId);
+  const publicPayload = createPublicMenuPayload(bundle);
+  const meta = bundle?.meta || {};
+  const lastUpdatedTs = meta?.last_updated_ts ? Number(meta.last_updated_ts) : 0;
+  const lastSentTs = meta?.last_sent_ts ? Number(meta.last_sent_ts) : 0;
+  return {
+    menuId,
+    revision: buildPublicJsonPayloadRevision(publicPayload),
+    lastUpdatedTs,
+    lastSentTs,
   };
 }
 

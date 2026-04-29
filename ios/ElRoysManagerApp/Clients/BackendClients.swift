@@ -52,6 +52,10 @@ protocol PublicMenuClienting {
   func fetch(menuId: String, accessToken: String?) async throws -> PublicMenuPayload
 }
 
+protocol PublicMenuRevisionClienting {
+  func fetchRevision(menuId: String) async throws -> MenuRevisionPayload
+}
+
 protocol DraftClienting {
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse
   func clear(menuId: String, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse
@@ -75,7 +79,7 @@ protocol PreviewClienting {
 }
 
 protocol ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult
 }
 
 private struct EmptyBody: Encodable {}
@@ -182,6 +186,14 @@ private struct PublishRequest: Encodable {
 private struct ProductLookupRequest: Encodable {
   var action: String
   var barcode: String
+  var menuId: String
+}
+
+struct MenuRevisionPayload: Decodable {
+  let menuId: String
+  let revision: String?
+  let lastUpdatedTs: Int?
+  let lastSentTs: Int?
 }
 
 private enum HTTPMethod: String {
@@ -449,6 +461,25 @@ final class PublicMenuClient: PublicMenuClienting {
   }
 }
 
+final class PublicMenuRevisionClient: PublicMenuRevisionClienting {
+  private let http: HTTPService
+
+  init(environment: AppEnvironment, session: URLSession = .shared) {
+    http = HTTPService(environment: environment, session: session)
+  }
+
+  func fetchRevision(menuId: String) async throws -> MenuRevisionPayload {
+    try await http.request(
+      path: "api/public",
+      method: .get,
+      queryItems: [
+        URLQueryItem(name: "action", value: "revision"),
+        URLQueryItem(name: "menu_id", value: menuId),
+      ]
+    )
+  }
+}
+
 final class DraftClient: DraftClienting {
   private let http: HTTPService
 
@@ -615,16 +646,20 @@ final class ProductLookupClient: ProductLookupClienting {
     self.http = HTTPService(environment: environment, session: session)
   }
 
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     let trimmed = upc.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
       throw BackendError.server(message: "Enter a barcode first.")
+    }
+    let menuId = menuId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !menuId.isEmpty else {
+      throw BackendError.server(message: "Select a menu before scanning.")
     }
     return try await http.request(
       path: "api/manager",
       method: .post,
       accessToken: accessToken,
-      body: ProductLookupRequest(action: "product_lookup", barcode: trimmed)
+      body: ProductLookupRequest(action: "product_lookup", barcode: trimmed, menuId: menuId)
     )
   }
 }

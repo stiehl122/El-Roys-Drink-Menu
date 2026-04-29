@@ -199,6 +199,7 @@ func routeStateMakeAuthSession() -> AuthSession {
 func routeStateMakeServices(
   workspaceClient: WorkspaceClienting = RouteStateStubWorkspaceClient(payloads: [routeStateMakeWorkspace(menuId: "menu-drinks")]),
   publicMenuClient: PublicMenuClienting = RouteStateStubPublicMenuClient(payload: routeStateMakePublicMenuPayload(menuId: "menu-food")),
+  publicMenuRevisionClient: PublicMenuRevisionClienting = RouteStateStubPublicMenuRevisionClient(payload: MenuRevisionPayload(menuId: "menu-drinks", revision: nil, lastUpdatedTs: 10, lastSentTs: 10)),
   historyClient: HistoryClienting = RouteStateStubHistoryClient(payload: routeStateMakeHistoryPayload()),
   liveSaveClient: LiveSaveClienting? = nil
 ) -> AppServices {
@@ -209,6 +210,7 @@ func routeStateMakeServices(
     auth: RouteStateStubAuthClient(),
     workspace: workspaceClient,
     publicMenu: publicMenuClient,
+    publicMenuRevision: publicMenuRevisionClient,
     draft: RouteStateStubDraftClient(),
     liveSave: resolvedLiveSaveClient,
     publish: RouteStateStubPublishClient(),
@@ -389,6 +391,18 @@ final class RouteStateStubPublicMenuClient: PublicMenuClienting {
   }
 }
 
+final class RouteStateStubPublicMenuRevisionClient: PublicMenuRevisionClienting {
+  private let payload: MenuRevisionPayload
+
+  init(payload: MenuRevisionPayload) {
+    self.payload = payload
+  }
+
+  func fetchRevision(menuId: String) async throws -> MenuRevisionPayload {
+    payload
+  }
+}
+
 final class RouteStateStubDraftClient: DraftClienting {
   func save(menuId: String, snapshot: MenuSnapshotPayload, expectedDraftRevision: Int?, accessToken: String, source: String) async throws -> DraftCommandResponse {
     throw RouteStateTestError.message("Unused in this test")
@@ -454,7 +468,7 @@ final class RouteStateStubPreviewClient: PreviewClienting {
 }
 
 final class RouteStateStubProductLookupClient: ProductLookupClienting {
-  func lookup(upc: String, accessToken: String) async throws -> ProductLookupResult {
+  func lookup(upc: String, menuId: String, accessToken: String) async throws -> ProductLookupResult {
     throw RouteStateTestError.message("Unused in this test")
   }
 }
