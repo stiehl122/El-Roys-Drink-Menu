@@ -74,6 +74,7 @@ let _authOverlayController = null;
 let _authTriggerDelegated = false;
 const _uiModuleDelegationStack = new Set();
 let _managerWorkspaceService = null;
+let _managerCockpitService = null;
 let _managerSectionService = null;
 let _managerEditorsService = null;
 let _adminWorkspaceService = null;
@@ -98,6 +99,8 @@ let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sell
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
 let _workspaceRestaurantToolsReadable = false;
+let _managerNote = { note: '', updated_at: '', updated_by: '' };
+let _managerActivityEntries = [];
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const FALLBACK_ICON_COLOR_PALETTE = [
@@ -3294,6 +3297,58 @@ function buildManagerWorkspaceModuleDeps() {
   };
 }
 
+function getManagerCockpitLastUpdatedLabel() {
+  const ts = getLastUpdatedTs();
+  return ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+}
+
+function getManagerCockpitStats() {
+  const activeItems = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
+  ), 0);
+  const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
+  ), 0);
+  const draftCount = getDraftChangeCount();
+  const hasLocalDraft = syncLocalDraftDirtyState();
+  const notifyCount = !hasLocalDraft ? countDiffLines() : 0;
+
+  if (hasLocalDraft) {
+    return {
+      status: 'Drafting',
+      statusMeta: `${draftCount} pending change${draftCount === 1 ? '' : 's'} on this device.`,
+      activeItems,
+      eightySixed,
+    };
+  }
+  if (notifyCount > 0) {
+    return {
+      status: 'Review',
+      statusMeta: `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready for review.`,
+      activeItems,
+      eightySixed,
+    };
+  }
+  return {
+    status: 'Live',
+    statusMeta: 'Live menu is current',
+    activeItems,
+    eightySixed,
+  };
+}
+
+function buildManagerCockpitModuleDeps() {
+  return {
+    document,
+    window,
+    getActiveMenuName: () => formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'Current Menu',
+    getLastUpdatedLabel: () => getManagerCockpitLastUpdatedLabel(),
+    getStats: () => getManagerCockpitStats(),
+    getManagerNote: () => _managerNote || { note: '', updated_at: '', updated_by: '' },
+    getActivityEntries: () => Array.isArray(_managerActivityEntries) ? _managerActivityEntries : [],
+  };
+}
+
 function buildManagerSectionModuleDeps() {
   return {
     document,
@@ -3362,6 +3417,14 @@ function getManagerWorkspaceService() {
   if (typeof boundary?.createManagerWorkspaceService !== 'function') return null;
   _managerWorkspaceService = boundary.createManagerWorkspaceService(buildManagerWorkspaceModuleDeps());
   return _managerWorkspaceService;
+}
+
+function getManagerCockpitService() {
+  if (_managerCockpitService) return _managerCockpitService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerCockpitService !== 'function') return null;
+  _managerCockpitService = boundary.createManagerCockpitService(buildManagerCockpitModuleDeps());
+  return _managerCockpitService;
 }
 
 function getManagerSectionService() {
@@ -4669,6 +4732,13 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const featuredItems = Array.isArray(workspacePayload?.featuredItems)
     ? workspacePayload.featuredItems
     : null;
+  if (workspacePayload?.managerNote && typeof workspacePayload.managerNote === 'object') {
+    _managerNote = {
+      note: String(workspacePayload.managerNote.note ?? ''),
+      updated_at: String(workspacePayload.managerNote.updated_at ?? ''),
+      updated_by: String(workspacePayload.managerNote.updated_by ?? ''),
+    };
+  }
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
   if (!featuredItems) return false;
@@ -6521,7 +6591,13 @@ function renderManagerWorkspace(options = {}) {
     if (typeof service?.renderManagerWorkspace === 'function') {
       _uiModuleDelegationStack.add('renderManagerWorkspace');
       try {
-        return service.renderManagerWorkspace(options);
+        const result = service.renderManagerWorkspace(options);
+        const cockpitRendered = getManagerCockpitService()?.renderCockpit();
+        if (cockpitRendered) {
+          renderFeaturedTab();
+          if (options.includeRecentChanges !== false) renderRecentChanges();
+        }
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('renderManagerWorkspace');
       }
@@ -6539,6 +6615,11 @@ function renderManagerWorkspace(options = {}) {
   updateActiveMenuBar();
   renderManagerOverviewStats();
   if (options.includeRecentChanges !== false) renderRecentChanges();
+  const cockpitRendered = getManagerCockpitService()?.renderCockpit();
+  if (cockpitRendered) {
+    renderFeaturedTab();
+    if (options.includeRecentChanges !== false) renderRecentChanges();
+  }
   updateManagerActionBar();
   renderFooter();
   initManagerMobileDrawerTrigger();
