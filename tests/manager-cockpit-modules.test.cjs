@@ -1,7 +1,12 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { createElement, loadSandboxWithScripts } = require('./helpers/runtime.cjs');
+const {
+  createElement,
+  getState,
+  loadSandboxWithScripts,
+  setState,
+} = require('./helpers/runtime.cjs');
 
 test('createManagerCockpitService renders manager cockpit shell regions', () => {
   const sandbox = loadSandboxWithScripts([
@@ -67,4 +72,108 @@ test('createManagerItemsTableService renders cockpit item table actions without 
   assert.doesNotMatch(html, />Delete</);
   assert.doesNotMatch(html, /item-swipeable/);
   assert.doesNotMatch(html, /swipe-action/);
+});
+
+test('createManagerItemsTableService delegates item name and edit clicks to the edit callback', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/items-table.js',
+  ]);
+  const calls = [];
+  const service = sandbox.__HF_UI_MODULES__.createManagerItemsTableService({
+    onEditItem: (categoryId, itemId) => calls.push([categoryId, itemId]),
+  });
+  const listeners = {};
+  const container = {
+    dataset: {},
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+  };
+  const row = { dataset: { categoryId: 'cocktails', itemId: 'marg' } };
+
+  service.bindTable(container);
+  ['name', 'button'].forEach(() => {
+    const editTarget = {
+      dataset: { itemAction: 'edit' },
+      closest(selector) {
+        if (selector === '[data-item-action]') return editTarget;
+        if (selector === '[data-category-id][data-item-id]') return row;
+        return null;
+      },
+    };
+    listeners.click({ target: editTarget });
+  });
+
+  assert.deepEqual(calls, [
+    ['cocktails', 'marg'],
+    ['cocktails', 'marg'],
+  ]);
+});
+
+test('createManagerItemEditorModalService opens an accessible item summary modal', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/item-editor-modal.js',
+  ]);
+  const host = sandbox.document._registerElement(
+    'manager-item-editor-modal-root',
+    createElement('div', 'manager-item-editor-modal-root'),
+  );
+  const service = sandbox.__HF_UI_MODULES__.createManagerItemEditorModalService({
+    document: sandbox.document,
+  });
+
+  assert.equal(service.open({
+    categoryId: 'cocktails',
+    itemId: 'marg',
+    category: { title: 'Cocktails' },
+    item: {
+      name: 'House Margarita',
+      price: '$10',
+      eightySixed: true,
+      upcharges: [{ label: 'Mezcal', price: '+$2' }],
+    },
+  }), true);
+
+  assert.match(host.innerHTML, /role="dialog"/);
+  assert.match(host.innerHTML, /aria-modal="true"/);
+  assert.match(host.innerHTML, /House Margarita/);
+  assert.match(host.innerHTML, /Cocktails/);
+  assert.match(host.innerHTML, /86&#39;d/);
+  assert.match(host.innerHTML, /\$10/);
+  assert.match(host.innerHTML, /Mezcal/);
+  assert.match(host.innerHTML, /Done/);
+  assert.match(host.innerHTML, /Close/);
+});
+
+test('openManagerCockpitItemEditor passes the selected item to the modal service', () => {
+  const modalCalls = [];
+  const toastCalls = [];
+  const sandbox = loadSandboxWithScripts(['app.js'], {
+    __HF_UI_MODULES__: {
+      createManagerItemEditorModalService: () => ({
+        open(payload) {
+          modalCalls.push(payload);
+          return true;
+        },
+      }),
+    },
+  });
+  setState(sandbox, {
+    CATEGORY_DEFS: [{ id: 'cocktails', title: 'Cocktails' }],
+    menuState: {
+      cocktails: {
+        items: [{ id: 'marg', name: 'House Margarita', price: '$10' }],
+      },
+    },
+    showToast: message => toastCalls.push(message),
+  });
+
+  assert.equal(getState(sandbox, 'openManagerCockpitItemEditor("cocktails", "marg")'), true);
+
+  assert.equal(modalCalls.length, 1);
+  assert.equal(modalCalls[0].categoryId, 'cocktails');
+  assert.equal(modalCalls[0].itemId, 'marg');
+  assert.equal(modalCalls[0].item.name, 'House Margarita');
+  assert.equal(modalCalls[0].category.title, 'Cocktails');
+  assert.deepEqual(toastCalls, []);
 });
