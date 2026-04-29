@@ -4,9 +4,91 @@
   const modules = (globalScope.__HF_SESSION_MODULES__ && typeof globalScope.__HF_SESSION_MODULES__ === 'object')
     ? globalScope.__HF_SESSION_MODULES__
     : {};
+  const publicRevisionTokens = new Map();
+
+  function normalizeRevisionToken(value) {
+    if (value === null || value === undefined) return '';
+    return String(value).trim();
+  }
+
+  function getRevisionCacheKey(request = {}) {
+    return normalizeRevisionToken(
+      request?.requestedMenuId ||
+      request?.menuId ||
+      request?.requestedMenuSlug ||
+      request?.menuSlug ||
+      'public-menu',
+    );
+  }
+
+  function extractPublicRevisionToken(payload = {}) {
+    const directToken = normalizeRevisionToken(payload);
+    if (!payload || typeof payload !== 'object') return directToken;
+
+    const candidates = [
+      payload.revision,
+      payload.publicRevision,
+      payload.public_revision,
+      payload.revisionToken,
+      payload.revision_token,
+      payload._revision,
+      payload.meta?.publicRevision,
+      payload.meta?.public_revision,
+      payload.meta?.revisionToken,
+      payload.meta?.revision_token,
+      payload.meta?.revision,
+      payload.context?.publicRevision,
+      payload.context?.public_revision,
+      payload.context?.revisionToken,
+      payload.context?.revision_token,
+      payload.context?.revision,
+    ];
+
+    for (const candidate of candidates) {
+      const token = normalizeRevisionToken(candidate);
+      if (token) return token;
+    }
+    return '';
+  }
+
+  function getCachedPublicRevisionToken(request = {}) {
+    return publicRevisionTokens.get(getRevisionCacheKey(request)) || '';
+  }
+
+  function rememberPublicRevisionToken(request = {}, ...sources) {
+    const key = getRevisionCacheKey(request);
+    for (const source of sources) {
+      const token = extractPublicRevisionToken(source);
+      if (token) {
+        publicRevisionTokens.set(key, token);
+        return token;
+      }
+    }
+    return getCachedPublicRevisionToken(request);
+  }
+
+  function isRevisionNotModified(revision = {}) {
+    return !!(revision && (
+      revision.notModified ||
+      revision.status === 304 ||
+      revision.statusCode === 304
+    ));
+  }
+
+  function shouldSkipForUnchangedRevision(request = {}, revision = {}) {
+    if (isRevisionNotModified(revision)) return true;
+    const nextRevision = extractPublicRevisionToken(revision);
+    if (!nextRevision) return false;
+    return nextRevision === getCachedPublicRevisionToken(request);
+  }
 
   function createMenuStateLoaderServiceImpl(deps = {}) {
     const readState = typeof deps.readState === 'function' ? deps.readState : (() => globalScope.sbRead?.());
+    const readRevision = typeof deps.readRevision === 'function'
+      ? deps.readRevision
+      : (typeof globalScope.sbReadPublicRevision === 'function'
+          ? (({ request, cachedRevision } = {}) => globalScope.sbReadPublicRevision(request, { cachedRevision }))
+          : null);
     const hydrateFromState = typeof deps.hydrateFromState === 'function' ? deps.hydrateFromState : (data => globalScope.hydrateState?.(data));
     const setDefaultState = typeof deps.setDefaultState === 'function'
       ? deps.setDefaultState
@@ -119,6 +201,7 @@
               await refreshFeatured();
               if (!hasActiveLocalDraft) syncServerLiveSnapshot();
             }
+            rememberPublicRevisionToken(request, data);
           } else if (fallbackToDefault) {
             setDefaultState();
             setDirty(false);
@@ -147,13 +230,40 @@
       },
 
       async poll(options = {}) {
-        void options;
+        const request = options.request || globalScope.buildCurrentMenuPageRequest?.();
+        let revisionProbe = null;
+        let bypassStateCache = false;
+        if (options.useRevisionProbe && readRevision) {
+          try {
+            const cachedRevision = getCachedPublicRevisionToken(request);
+            revisionProbe = await readRevision({
+              request,
+              source: 'poll',
+              options,
+              cachedRevision,
+            });
+            if (shouldSkipForUnchangedRevision(request, revisionProbe)) {
+              return {
+                changed: false,
+                designChanged: false,
+                skipped: 'unchanged-revision',
+                snapshot: buildSnapshot('poll'),
+              };
+            }
+            const probedRevision = extractPublicRevisionToken(revisionProbe);
+            bypassStateCache = !!probedRevision && probedRevision !== cachedRevision;
+          } catch (_) {
+            revisionProbe = null;
+          }
+        }
         const oldTs = getLastUpdatedTs();
         const oldCats = getCategorySnapshot();
         const oldDesign = getDesignSnapshotValue();
         const oldFeatured = getFeaturedSnapshotValue();
-        const request = options.request || globalScope.buildCurrentMenuPageRequest?.();
-        const data = await readState({ request, source: 'poll', options });
+        const stateReadOptions = bypassStateCache
+          ? { ...options, bypassCache: true, expectedRevision: extractPublicRevisionToken(revisionProbe) }
+          : options;
+        const data = await readState({ request, source: 'poll', options: stateReadOptions });
         if (!data) {
           return {
             changed: false,
@@ -195,6 +305,7 @@
           await refreshFeatured();
           if (!hasActiveLocalDraft) syncServerLiveSnapshot();
         }
+        rememberPublicRevisionToken(request, data);
 
         const afterCats = getCategorySnapshot();
         const newDesign = getDesignSnapshotValue();

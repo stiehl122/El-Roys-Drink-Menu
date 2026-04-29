@@ -2337,6 +2337,31 @@ test('menu poll scheduler is single-flight and ignores stale poll results', asyn
   assert.equal(errorCount, 0);
 });
 
+test('public menu poll scheduler requests revision probes for interval polling', async () => {
+  const sandbox = loadAppSandbox();
+  const refreshCalls = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    MENU_TYPE: 'drinks',
+    RESTAURANT_ID: 'restaurant-main',
+    getMenuById: () => ({ slug: 'leroys-lounge-drinks' }),
+    ensureCurrentMenuSession: overrides => ({
+      refresh: async options => {
+        refreshCalls.push({ overrides, options });
+        return { changed: false, designChanged: false };
+      },
+    }),
+  });
+
+  await sandbox.getMenuPollScheduler().tick();
+
+  assert.equal(refreshCalls.length, 1);
+  assert.equal(refreshCalls[0].options.reason, 'poll');
+  assert.equal(refreshCalls[0].options.useRevisionProbe, true);
+  assert.equal(refreshCalls[0].options.requestedMenuId, 'menu-main');
+});
+
 test('featured view policy filters sell notes by explicit staff visibility', () => {
   const sandbox = loadAppSandbox();
   const groups = [
