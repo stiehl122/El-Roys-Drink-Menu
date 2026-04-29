@@ -21,6 +21,7 @@ import { lookupProductByBarcode } from '../server/_product-lookup.js';
 import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
 import { parseRequestBody, readAction } from '../server/_request.js';
 import { checkManagerExternalActionLimit } from '../server/_manager-action-limits.js';
+import { readManagerNoteCommand, writeManagerNoteCommand } from '../server/_manager-notes.js';
 
 async function parsePublishBody(req) {
   const body = await parseRequestBody(req);
@@ -55,6 +56,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       if (action === 'history') {
         return res.json(await readMenuHistoryForRequest(req));
+      }
+      if (action === 'notes_read') {
+        return res.json(await readManagerNoteCommand(req, parseMenuId(req)));
       }
 
       const menuId = parseMenuId(req);
@@ -141,6 +145,8 @@ export default async function handler(req, res) {
           preview: await previewUntappdBeerImport(bid, { includeBrewery }),
         });
       }
+      case 'notes_write':
+        return res.status(200).json(await writeManagerNoteCommand(req, body));
       default:
         return res.status(400).json({ error: 'Unsupported manager action' });
     }

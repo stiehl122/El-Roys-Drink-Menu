@@ -9,6 +9,7 @@ import {
   readMenuStateBundle,
 } from './_menu-read.js';
 import { readMenuAccessForUser, readProfile } from './_auth.js';
+import { readManagerNoteForMenu } from './_manager-notes.js';
 
 function normalizeWorkspaceActor({ uid = '', role = 'none', name = '' } = {}) {
   return {
@@ -61,13 +62,15 @@ export async function buildWorkspacePayload({ menuId, uid, role }) {
     ? (await readMenuAccessForUser(uid, { select: 'menu_id' })).map(row => row.menu_id)
     : [];
   const bundle = await readMenuStateBundle(menuId);
-  return createMenuWorkspacePayload(bundle, {
+  const payload = createMenuWorkspacePayload(bundle, {
     actor: { ...normalizeWorkspaceActor({
       uid,
       role: effectiveRole,
       name: actorProfile?.name || '',
     }), accessibleMenuIds },
   });
+  payload.managerNote = await readManagerNoteForMenu(menuId);
+  return payload;
 }
 
 export { createSessionBootstrapPayload, getDefaultMenuId, getKnownMenus, getKnownRestaurants, isSupportedMenuId, parseMenuId, readMenuStateBundle };
