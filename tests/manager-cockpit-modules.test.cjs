@@ -32,5 +32,8 @@ test('createManagerCockpitService renders manager cockpit shell regions', () => 
   assert.match(sandbox.document.getElementById('manager-cockpit-header').innerHTML, /Manager Workspace/);
   assert.match(sandbox.document.getElementById('manager-cockpit-workbar').innerHTML, /Add Item/);
   assert.match(sandbox.document.getElementById('manager-cockpit-side').innerHTML, /Quick Notes/);
-  assert.match(sandbox.document.getElementById('manager-cockpit-nav').innerHTML, /Activity/);
+  const navHtml = sandbox.document.getElementById('manager-cockpit-nav').innerHTML;
+  ['Overview', 'Edit Items', 'Featured', 'Activity', 'Database'].forEach(label => {
+    assert.match(navHtml, new RegExp(label));
+  });
 });

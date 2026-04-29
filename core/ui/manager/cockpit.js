@@ -50,7 +50,8 @@
     function renderNav(container) {
       if (!container) return;
       container.innerHTML = `
-        <a class="manager-cockpit-nav-link is-active" href="#manager-cockpit-items">Edit Menu</a>
+        <a class="manager-cockpit-nav-link is-active" href="#manager-cockpit-header">Overview</a>
+        <a class="manager-cockpit-nav-link" href="#manager-cockpit-items">Edit Items</a>
         <a class="manager-cockpit-nav-link" href="#featured-mgr-wrap">Featured</a>
         <a class="manager-cockpit-nav-link" href="#recent-changes-wrap">Activity</a>
         <a class="manager-cockpit-nav-link" href="#manager-cockpit-database">Database</a>`;

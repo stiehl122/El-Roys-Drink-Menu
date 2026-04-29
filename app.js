@@ -6585,17 +6585,32 @@ function syncManagerActionBarStatus(syncEl = document.getElementById('sync-statu
   statusWrap.hidden = !((syncEl.textContent || '').trim());
 }
 
+function hasManagerCockpitShellContainers() {
+  return !!(
+    document.getElementById('manager-cockpit-header') &&
+    document.getElementById('manager-cockpit-workbar') &&
+    document.getElementById('manager-cockpit-side')
+  );
+}
+
 function renderManagerWorkspace(options = {}) {
   if (!_uiModuleDelegationStack.has('renderManagerWorkspace')) {
     const service = getManagerWorkspaceService();
     if (typeof service?.renderManagerWorkspace === 'function') {
+      const cockpitService = getManagerCockpitService();
+      const shouldRenderRecentAfterCockpit = options.includeRecentChanges !== false &&
+        !!cockpitService &&
+        hasManagerCockpitShellContainers();
+      const workspaceOptions = shouldRenderRecentAfterCockpit
+        ? { ...options, includeRecentChanges: false }
+        : options;
       _uiModuleDelegationStack.add('renderManagerWorkspace');
       try {
-        const result = service.renderManagerWorkspace(options);
-        const cockpitRendered = getManagerCockpitService()?.renderCockpit();
+        const result = service.renderManagerWorkspace(workspaceOptions);
+        const cockpitRendered = cockpitService?.renderCockpit();
         if (cockpitRendered) {
           renderFeaturedTab();
-          if (options.includeRecentChanges !== false) renderRecentChanges();
+          if (shouldRenderRecentAfterCockpit) renderRecentChanges();
         }
         return result;
       } finally {
@@ -6614,12 +6629,11 @@ function renderManagerWorkspace(options = {}) {
   renderPruneSection();
   updateActiveMenuBar();
   renderManagerOverviewStats();
-  if (options.includeRecentChanges !== false) renderRecentChanges();
   const cockpitRendered = getManagerCockpitService()?.renderCockpit();
   if (cockpitRendered) {
     renderFeaturedTab();
-    if (options.includeRecentChanges !== false) renderRecentChanges();
   }
+  if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
   renderFooter();
   initManagerMobileDrawerTrigger();

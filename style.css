@@ -8200,7 +8200,7 @@ body.manager-dossier-shell .manager-cockpit-activity-row { display: grid; gap: 3
 body.manager-dossier-shell .manager-cockpit-activity-row:first-child { border-top: 0; padding-top: 0; }
 body.manager-dossier-shell #manager-cockpit-database { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(31, 25, 16, 0.16); }
 body.manager-dossier-shell #manager-cockpit-database h2 { margin: 4px 0 6px; font-size: 24px; letter-spacing: 0; color: #2d2418; }
-@media (max-width: 1120px) {
+@media (max-width: 920px) {
   body.manager-dossier-shell .manager-cockpit-layout { width: min(100% - 18px, 640px); grid-template-columns: 1fr; }
   body.manager-dossier-shell .manager-cockpit-rail { position: fixed; top: 0; left: 0; z-index: 60; width: min(340px, calc(100vw - 42px)); height: 100vh; overflow-y: auto; padding: 14px; background: #e7dfd0; transform: translateX(calc(-100% - 24px)); transition: transform 0.2s ease; }
   body.settings-drawer-open .manager-cockpit-rail { transform: translateX(0); }
