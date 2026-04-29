@@ -60,8 +60,10 @@ test('createManagerNotesService preserves typed text and exposes errors after sa
   });
   service.setText('Need more mint');
 
-  await assert.rejects(() => service.save(), /Notes unavailable/);
+  const result = await service.save();
 
+  assert.equal(result.ok, false);
+  assert.equal(result.error, 'Notes unavailable');
   assert.deepEqual(JSON.parse(JSON.stringify(service.getState())), {
     text: 'Need more mint',
     savedText: 'Opening count complete',
@@ -98,6 +100,25 @@ test('createManagerActivityService normalizes quiet saves and sends', () => {
   assert.equal(entries[0].channel, 'web_manager');
   assert.match(service.renderActivityHtml(entries), /Saved quietly/);
   assert.match(service.renderActivityHtml(entries), /Sent update/);
+});
+
+test('renderRecentChanges clears cached manager activity when history is empty', async () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  const wrap = sandbox.document._registerElement('recent-changes-wrap', createElement('div', 'recent-changes-wrap'));
+  setState(sandbox, {
+    MENU_ID: '00000000-0000-0000-0000-000000000020',
+    currentUser: { accessToken: 'token' },
+    _managerActivityEntries: [{ event_type: 'send_notification', user_name: 'Old', created_at: '2026-04-28T12:00:00.000Z' }],
+    readMenuHistoryThroughApi: async () => ({
+      history: { scope: 'menu' },
+      logs: [],
+    }),
+  });
+
+  await getState(sandbox, 'renderRecentChanges()');
+
+  assert.deepEqual(JSON.parse(getState(sandbox, 'JSON.stringify(_managerActivityEntries)')), []);
+  assert.match(wrap.innerHTML, /No sent updates for this menu/);
 });
 
 test('createManagerCockpitService renders quick notes save control and status', () => {

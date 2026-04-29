@@ -97,11 +97,11 @@
           state.updatedBy = payload.updatedBy;
           state.isSaving = false;
           state.error = '';
-          return this.getState();
+          return { ok: true, ...this.getState() };
         } catch (error) {
           state.isSaving = false;
           state.error = String(error?.message || error || 'Note could not be saved.');
-          throw error;
+          return { ok: false, error: state.error, state: this.getState() };
         }
       },
     };

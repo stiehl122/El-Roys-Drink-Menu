@@ -6730,15 +6730,23 @@ function bindManagerQuickNotesControls() {
     const status = document.getElementById('manager-quick-note-status');
     saveButton.disabled = true;
     if (status) status.textContent = 'Saving note...';
+    let result = null;
     try {
-      await service.save();
+      result = await service.save();
     } catch (error) {
-      if (typeof showToast === 'function') {
-        showToast(error?.message || 'Quick note could not be saved.', 'error');
-      }
-    } finally {
-      renderManagerCockpitShell();
+      result = { ok: false, error: error?.message || 'Quick note could not be saved.' };
     }
+    if (result?.ok === false) {
+      const message = result.error || 'Quick note could not be saved.';
+      saveButton.disabled = false;
+      if (status) status.textContent = message;
+      if (typeof showToast === 'function') {
+        showToast(message, 'error');
+      }
+      return;
+    }
+
+    renderManagerCockpitShell();
   });
 
   return true;
@@ -12086,10 +12094,12 @@ async function renderRecentChanges() {
   const wrap = document.getElementById('recent-changes-wrap');
   if (!wrap) return;
   if (!currentUser?.accessToken) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty">Recent changes are unavailable until you are signed in.</p>';
     return;
   }
   if (!MENU_ID) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty">Select a menu to view recent changes.</p>';
     return;
   }
@@ -12101,6 +12111,7 @@ async function renderRecentChanges() {
     const scope = String(history?.history?.scope || 'menu');
     const logs = Array.isArray(history?.logs) ? history.logs : [];
     if (!logs.length) {
+      _managerActivityEntries = [];
       wrap.innerHTML = scope === 'restaurant'
         ? '<p class="db-empty">No sent updates for this restaurant in the last 7 days.</p>'
         : '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
@@ -12115,6 +12126,7 @@ async function renderRecentChanges() {
       }
     }
   } catch(e) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty db-error">Failed to load recent changes.</p>';
   }
 }
