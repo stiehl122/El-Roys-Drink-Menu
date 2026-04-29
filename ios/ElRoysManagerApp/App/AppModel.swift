@@ -62,6 +62,7 @@ struct AppServices {
   var auth: any AuthClienting
   var workspace: any WorkspaceClienting
   var publicMenu: any PublicMenuClienting
+  var publicMenuRevision: any PublicMenuRevisionClienting
   var draft: any DraftClienting
   var liveSave: any LiveSaveClienting
   var publish: any PublishClienting
@@ -75,6 +76,7 @@ struct AppServices {
       auth: AuthClient(environment: environment),
       workspace: WorkspaceClient(environment: environment),
       publicMenu: PublicMenuClient(environment: environment),
+      publicMenuRevision: PublicMenuRevisionClient(environment: environment),
       draft: DraftClient(environment: environment),
       liveSave: LiveSaveClient(environment: environment),
       publish: PublishClient(environment: environment),
@@ -126,6 +128,7 @@ final class AppModel {
   @ObservationIgnored private var editorSessionsByMenuID: [String: MenuEditorSession] = [:]
   @ObservationIgnored private var publicMenuSessionsByMenuID: [String: PublicMenuSession] = [:]
   @ObservationIgnored private var restaurantToolsSessionsByRestaurantID: [String: RestaurantToolsSession] = [:]
+  @ObservationIgnored private var editorPublicRevisionTokensByMenuID: [String: String] = [:]
 
   init(
     environment: AppEnvironment = .fromBundle(),
@@ -311,6 +314,7 @@ final class AppModel {
     editorSessionsByMenuID = [:]
     publicMenuSessionsByMenuID = [:]
     restaurantToolsSessionsByRestaurantID = [:]
+    editorPublicRevisionTokensByMenuID = [:]
     notice = AppNotice(tone: .neutral, title: "Signed Out", message: "The stored device session has been cleared.")
   }
 
@@ -463,8 +467,29 @@ final class AppModel {
     }
 
     do {
+      var pendingPublicRevision: MenuRevisionPayload?
+      if !force,
+         let currentWorkspace = currentEditorWorkspace,
+         canUsePublicRevisionPrecheck(currentWorkspace) {
+        do {
+          let revision = try await services.publicMenuRevision.fetchRevision(menuId: menuId)
+          pendingPublicRevision = revision
+          if publicRevisionPrecheckProvesUnchanged(revision, for: menuId, currentWorkspace: currentWorkspace) {
+            updateCachedEditorPublicRevision(revision, for: menuId, matching: currentWorkspace)
+            return
+          }
+        } catch {
+          #if DEBUG
+            print("Public menu revision unavailable for \(menuId): \(error)")
+          #endif
+        }
+      }
+
       let fetchedWorkspace = try await services.workspace.fetch(menuId: menuId, accessToken: accessToken)
       let workspace = normalizedEditorWorkspace(fetchedWorkspace)
+      if let pendingPublicRevision {
+        updateCachedEditorPublicRevision(pendingPublicRevision, for: menuId, matching: workspace)
+      }
       guard let currentWorkspace = currentEditorWorkspace else { return }
       guard workspace.workspace.revisions != currentWorkspace.workspace.revisions else { return }
       let localDraft = currentLocalDraftEnvelope()
@@ -838,6 +863,7 @@ final class AppModel {
     } catch {
       try? sessionStore.clearSession()
       authSession = nil
+      editorPublicRevisionTokensByMenuID = [:]
     }
   }
 
@@ -1390,6 +1416,71 @@ final class AppModel {
     var normalizedWorkspace = workspace
     normalizedWorkspace.workspace.revisions = normalizedWorkspaceRevisions(workspace.workspace.revisions, meta: workspace.meta)
     return normalizedWorkspace
+  }
+
+  private func publicRevisionPrecheckProvesUnchanged(
+    _ revision: MenuRevisionPayload,
+    for menuId: String,
+    currentWorkspace: MenuWorkspacePayload
+  ) -> Bool {
+    guard revision.menuId == menuId,
+          canUsePublicRevisionPrecheck(currentWorkspace) else { return false }
+    if let token = normalizedPublicRevisionToken(revision.revision),
+       let cachedToken = editorPublicRevisionTokensByMenuID[menuId] {
+      return token == cachedToken
+    }
+    return publicRevisionPayloadMatchesCurrentWorkspace(revision, for: menuId, currentWorkspace: currentWorkspace)
+  }
+
+  private func canUsePublicRevisionPrecheck(_ workspace: MenuWorkspacePayload) -> Bool {
+    let state = workspace.workspace
+    let sharedDraft = state.sharedDraft
+    let meta = workspace.meta
+    let hasWorkspaceDraft = state.hasSharedDraft ||
+      sharedDraft.exists ||
+      sharedDraft.savedAt != nil ||
+      state.revisions.draftRevision != nil
+    let hasMetaDraft = meta.draftState != nil ||
+      meta.draftSavedTs != nil ||
+      meta.draftSavedByUserId != nil ||
+      meta.draftSavedByName != nil ||
+      meta.draftSavedSource != nil
+    return !state.capabilities.canSaveDraft && !hasWorkspaceDraft && !hasMetaDraft
+  }
+
+  private func publicRevisionPayloadMatchesCurrentWorkspace(
+    _ revision: MenuRevisionPayload,
+    for menuId: String,
+    currentWorkspace: MenuWorkspacePayload
+  ) -> Bool {
+    guard revision.menuId == menuId,
+          let remoteLiveRevision = revision.lastUpdatedTs else { return false }
+    let currentRevisions = currentWorkspace.workspace.revisions
+    guard let currentLiveRevision = currentRevisions.liveRevision ?? currentWorkspace.meta.lastUpdatedTs,
+          remoteLiveRevision == currentLiveRevision else { return false }
+
+    let currentLastSentRevision = currentRevisions.lastSentRevision ?? currentWorkspace.meta.lastSentTs
+    if let remoteLastSentRevision = revision.lastSentTs {
+      return remoteLastSentRevision == currentLastSentRevision
+    }
+    return currentLastSentRevision == nil
+  }
+
+  private func updateCachedEditorPublicRevision(
+    _ revision: MenuRevisionPayload,
+    for menuId: String,
+    matching workspace: MenuWorkspacePayload
+  ) {
+    guard let token = normalizedPublicRevisionToken(revision.revision) else { return }
+    if editorPublicRevisionTokensByMenuID[menuId] == token ||
+       publicRevisionPayloadMatchesCurrentWorkspace(revision, for: menuId, currentWorkspace: workspace) {
+      editorPublicRevisionTokensByMenuID[menuId] = token
+    }
+  }
+
+  private func normalizedPublicRevisionToken(_ revision: String?) -> String? {
+    let token = revision?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return token.isEmpty ? nil : token
   }
 
   private func normalizedWorkspaceRevisions(_ revisions: WorkspaceRevisions, meta: MenuMetaPayload) -> WorkspaceRevisions {

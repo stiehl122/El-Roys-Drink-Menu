@@ -94,6 +94,7 @@ Use it to answer three questions:
 | Optional notification during save | Full | Full | Staff editor clients | The save review lets staff choose whether selected notification-ready rows should notify channels; notify-off saves live and clears the queue baseline. |
 | Send preview and selective send | Full | Full | Staff editor clients | Both can preview grouped changes and select which rows notify during the unified save flow. |
 | Remote change detection and conflict refresh | Full | Full | Staff editor clients | Both clients detect remote changes and force review/reload when needed. |
+| Lightweight remote revision polling | Full | Partial | Staff editor clients | Web public routes can query `/api/public?action=revision&menu_id=<id>` before fetching full menu payloads. iOS supports the same public revision contract only for non-draft-sensitive editor workspaces; normal draft-capable manager/admin polling fetches the manager workspace directly so shared draft and conflict state stays visible. |
 | Recent change history | Full | Full | Staff editor clients | Web has manager recent changes/history views; iOS surfaces recent updates in home and restaurant tools. |
 | Add items manually | Full | Full | Staff editor clients | Both can create new items from the editor. |
 | Barcode scan and product lookup | Full | Full | Staff editor clients | Both support barcode-driven item entry plus product lookup; iOS additionally supports drinks-only captured-image label selection with Apple-native swipe text selection before prefilling local add-item drafts. |
