@@ -67,6 +67,14 @@ export async function readManagerNoteForMenu(menuId) {
   return createManagerNotePayload(Array.isArray(rows) ? rows[0] : null);
 }
 
+export async function readManagerNoteForWorkspace(menuId) {
+  try {
+    return await readManagerNoteForMenu(menuId);
+  } catch (_) {
+    return createManagerNotePayload();
+  }
+}
+
 export async function readManagerNoteCommand(req, menuId) {
   const normalizedMenuId = String(menuId || '').trim();
   const actor = await readAuthorizedNotesActor(req, normalizedMenuId);

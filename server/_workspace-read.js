@@ -9,7 +9,7 @@ import {
   readMenuStateBundle,
 } from './_menu-read.js';
 import { readMenuAccessForUser, readProfile } from './_auth.js';
-import { readManagerNoteForMenu } from './_manager-notes.js';
+import { readManagerNoteForWorkspace } from './_manager-notes.js';
 
 function normalizeWorkspaceActor({ uid = '', role = 'none', name = '' } = {}) {
   return {
@@ -69,7 +69,7 @@ export async function buildWorkspacePayload({ menuId, uid, role }) {
       name: actorProfile?.name || '',
     }), accessibleMenuIds },
   });
-  payload.managerNote = await readManagerNoteForMenu(menuId);
+  payload.managerNote = await readManagerNoteForWorkspace(menuId);
   return payload;
 }
 

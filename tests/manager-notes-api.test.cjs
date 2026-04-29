@@ -95,6 +95,38 @@ test('manager note read uses the menu notes table and returns an empty payload f
   }
 });
 
+test('workspace manager note read falls back to empty payload when the notes table is unavailable', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: false,
+    async json() {
+      return { message: 'relation "menu_manager_notes" does not exist' };
+    },
+  });
+
+  try {
+    await withSupabaseEnv(async () => {
+      const {
+        readManagerNoteForMenu,
+        readManagerNoteForWorkspace,
+      } = await importServerModule('server/_manager-notes.js');
+
+      assert.deepEqual(await readManagerNoteForWorkspace(LEROYS_DRINKS_MENU_ID), {
+        note: '',
+        updated_at: '',
+        updated_by: '',
+      });
+
+      await assert.rejects(
+        () => readManagerNoteForMenu(LEROYS_DRINKS_MENU_ID),
+        error => error?.status === 500 && /menu_manager_notes/.test(error?.message || '')
+      );
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('manager note write authenticates menu access and upserts note payload', async () => {
   const originalFetch = global.fetch;
   const calls = [];
