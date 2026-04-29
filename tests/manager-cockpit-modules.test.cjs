@@ -112,6 +112,7 @@ test('createManagerRevisionDockService collapses idle state and expands for work
   assert.equal(service.getDockMode({ hasWork: true, syncMessage: '', isSaving: false }), 'expanded');
   assert.equal(service.getDockMode({ hasWork: false, syncMessage: 'Cloud sync failed', isSaving: false }), 'expanded');
   assert.equal(service.getDockMode({ hasWork: false, syncMessage: '', isSaving: true }), 'expanded');
+  assert.equal(service.getDockMode({ hasWork: true, syncMessage: '', isScrollCollapsed: true }), 'collapsed');
 });
 
 test('createManagerRevisionDockService renders adaptive dock markup with legacy action ids', () => {
@@ -134,6 +135,13 @@ test('createManagerRevisionDockService renders adaptive dock markup with legacy 
     saveDisabled: false,
     showDiscard: true,
   });
+  const scrollingHtml = service.renderDockHtml({
+    hasWork: true,
+    isScrollCollapsed: true,
+    summary: '2 pending changes. Save opens a review before anything goes live.',
+    saveDisabled: false,
+    showDiscard: true,
+  });
 
   assert.match(idleHtml, /manager-cockpit-dock-inner is-collapsed/);
   assert.match(idleHtml, /id="save-btn" onclick="openPreview\(\)"/);
@@ -143,6 +151,7 @@ test('createManagerRevisionDockService renders adaptive dock markup with legacy 
   assert.match(workHtml, /2 pending changes/);
   assert.match(workHtml, /id="sync-status" class="sync-error"/);
   assert.match(workHtml, /Cloud sync failed/);
+  assert.match(scrollingHtml, /manager-cockpit-dock-inner is-collapsed/);
 });
 
 test('updateManagerActionBar renders cockpit dock and clears legacy action ids', () => {
@@ -182,6 +191,79 @@ test('updateManagerActionBar renders cockpit dock and clears legacy action ids',
   assert.equal((dock.innerHTML.match(/id="discard-draft-btn"/g) || []).length, 1);
   assert.equal((dock.innerHTML.match(/id="sync-status"/g) || []).length, 1);
   assert.match(dock.innerHTML, /Cloud sync failed/);
+});
+
+test('updateManagerActionBar renders cockpit dock after workspace service delegation', () => {
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/workspace.js',
+    'core/ui/manager/revision-dock.js',
+    'app.js',
+  ]);
+  const dock = sandbox.document._registerElement('manager-cockpit-revision-dock', createElement('div', 'manager-cockpit-revision-dock'));
+  const bar = sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  sandbox.document._registerElement('manager-action-bar-summary', createElement('p', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  sandbox.document._registerElement('discard-draft-btn', createElement('button', 'discard-draft-btn'));
+  sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+  const syncStatus = sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+  syncStatus.textContent = 'Cloud sync failed';
+  syncStatus.className = 'sync-error';
+
+  setState(sandbox, {
+    _dirty: true,
+    _draftSaveOnlyChanges: new Map([['featured-special', { key: 'featured-special', label: 'Updated featured special' }]]),
+    _serverLiveSnapshot: null,
+    _localDraftBaseSnapshot: null,
+  });
+
+  getState(sandbox, 'updateManagerActionBar()');
+
+  assert.equal(bar.hidden, true);
+  assert.equal(bar.innerHTML, '');
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-expanded/);
+  assert.equal((dock.innerHTML.match(/id="save-btn"/g) || []).length, 1);
+  assert.equal((dock.innerHTML.match(/id="discard-draft-btn"/g) || []).length, 1);
+  assert.equal((dock.innerHTML.match(/id="sync-status"/g) || []).length, 1);
+  assert.match(dock.innerHTML, /Cloud sync failed/);
+});
+
+test('manager revision dock collapses while scrolling and re-expands after idle', async () => {
+  const listeners = {};
+  const sandbox = loadSandboxWithScripts([
+    'core/ui/manager/workspace.js',
+    'core/ui/manager/revision-dock.js',
+    'app.js',
+  ], {
+    addEventListener(type, handler) {
+      listeners[type] = handler;
+    },
+  });
+  const dock = sandbox.document._registerElement('manager-cockpit-revision-dock', createElement('div', 'manager-cockpit-revision-dock'));
+  sandbox.document._registerElement('manager-action-bar', createElement('div', 'manager-action-bar'));
+  sandbox.document._registerElement('manager-action-bar-summary', createElement('p', 'manager-action-bar-summary'));
+  sandbox.document._registerElement('manager-primary-action-group', createElement('div', 'manager-primary-action-group'));
+  sandbox.document._registerElement('save-btn', createElement('button', 'save-btn'));
+  sandbox.document._registerElement('discard-draft-btn', createElement('button', 'discard-draft-btn'));
+  sandbox.document._registerElement('send-btn', createElement('button', 'send-btn'));
+  sandbox.document._registerElement('sync-status', createElement('div', 'sync-status'));
+
+  setState(sandbox, {
+    _dirty: true,
+    _draftSaveOnlyChanges: new Map([['featured-special', { key: 'featured-special', label: 'Updated featured special' }]]),
+    _serverLiveSnapshot: null,
+    _localDraftBaseSnapshot: null,
+  });
+
+  getState(sandbox, 'updateManagerActionBar()');
+  assert.equal(typeof listeners.scroll, 'function');
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-expanded/);
+
+  listeners.scroll();
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-collapsed/);
+
+  await new Promise(resolve => setTimeout(resolve, 260));
+  assert.match(dock.innerHTML, /manager-cockpit-dock-inner is-expanded/);
 });
 
 test('renderRecentChanges clears cached manager activity when history is empty', async () => {

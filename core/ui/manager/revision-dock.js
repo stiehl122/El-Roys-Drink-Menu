@@ -16,6 +16,7 @@
 
   function createManagerRevisionDockServiceImpl() {
     function getDockMode(state = {}) {
+      if (state?.isScrollCollapsed) return 'collapsed';
       return state?.hasWork || state?.syncMessage || state?.isSaving
         ? 'expanded'
         : 'collapsed';

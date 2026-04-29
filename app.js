@@ -70,6 +70,7 @@ let _menuLinkResolver = null;
 let _featuredViewPolicy = null;
 const _sessionModuleDelegationStack = new Set();
 const _authModuleDelegationStack = new Set();
+const MANAGER_REVISION_DOCK_SCROLL_IDLE_MS = 180;
 let _authOverlayController = null;
 let _authTriggerDelegated = false;
 const _uiModuleDelegationStack = new Set();
@@ -82,6 +83,9 @@ let _managerEditorsService = null;
 let _managerNotesService = null;
 let _managerActivityService = null;
 let _managerRevisionDockService = null;
+let _managerRevisionDockScrollBound = false;
+let _managerRevisionDockScrollCollapsed = false;
+let _managerRevisionDockScrollTimer = null;
 let _adminWorkspaceService = null;
 let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
@@ -3504,6 +3508,63 @@ function getManagerRevisionDockService() {
   return _managerRevisionDockService;
 }
 
+function hasManagerRevisionDockWork(ledgerState = {}) {
+  return !!(
+    ledgerState.hasDraftChanges ||
+    ledgerState.hasDraftWork ||
+    ledgerState.hasPendingUpdate ||
+    ledgerState.hasChanges ||
+    ledgerState.hasSaveOnlyChanges ||
+    ledgerState.hasNotificationChanges
+  );
+}
+
+function bindManagerRevisionDockScrollCollapse() {
+  if (_managerRevisionDockScrollBound) return;
+  _managerRevisionDockScrollBound = true;
+
+  window.addEventListener('scroll', () => {
+    if (!document.getElementById('manager-cockpit-revision-dock')) return;
+    _managerRevisionDockScrollCollapsed = true;
+    updateManagerActionBar();
+
+    if (_managerRevisionDockScrollTimer) clearTimeout(_managerRevisionDockScrollTimer);
+    _managerRevisionDockScrollTimer = setTimeout(() => {
+      _managerRevisionDockScrollTimer = null;
+      _managerRevisionDockScrollCollapsed = false;
+      updateManagerActionBar();
+    }, MANAGER_REVISION_DOCK_SCROLL_IDLE_MS);
+  }, { passive: true });
+}
+
+function renderManagerRevisionDock(ledgerState = {}, syncEl = document.getElementById('sync-status')) {
+  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
+  if (!cockpitDock) return false;
+  const bar = document.getElementById('manager-action-bar');
+  if (!bar) return false;
+  const dockService = getManagerRevisionDockService();
+  if (!dockService || typeof dockService.renderDockHtml !== 'function') return false;
+
+  bindManagerRevisionDockScrollCollapse();
+
+  const syncMessage = (syncEl?.textContent || '').trim();
+  const syncClass = typeof syncEl?.className === 'string' ? syncEl.className : '';
+  bar.hidden = true;
+  bar.innerHTML = '';
+  cockpitDock.innerHTML = dockService.renderDockHtml({
+    hasWork: hasManagerRevisionDockWork(ledgerState),
+    isSaving: false,
+    isScrollCollapsed: _managerRevisionDockScrollCollapsed,
+    syncMessage,
+    syncClass,
+    summary: ledgerState.summaryText,
+    saveLabel: ledgerState.saveLabel || 'Save',
+    saveDisabled: !!ledgerState.saveDisabled,
+    showDiscard: !!ledgerState.showDiscard,
+  });
+  return true;
+}
+
 function getManagerItemsTableService() {
   if (_managerItemsTableService) return _managerItemsTableService;
   const boundary = getUiModuleBoundary();
@@ -6651,7 +6712,11 @@ function updateManagerActionBar() {
     if (typeof service?.updateManagerActionBar === 'function') {
       _uiModuleDelegationStack.add('updateManagerActionBar');
       try {
-        return service.updateManagerActionBar();
+        const result = service.updateManagerActionBar();
+        const isCompactViewport = window.innerWidth <= 480;
+        const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+        renderManagerRevisionDock(ledgerState, document.getElementById('sync-status'));
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('updateManagerActionBar');
       }
@@ -6665,35 +6730,7 @@ function updateManagerActionBar() {
   const syncEl = document.getElementById('sync-status');
   const isCompactViewport = window.innerWidth <= 480;
   const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
-  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
-  const syncMessage = (syncEl?.textContent || '').trim();
-  const syncClass = syncEl?.className || '';
-
-  if (cockpitDock) {
-    const dockService = getManagerRevisionDockService();
-    if (dockService && typeof dockService.renderDockHtml === 'function') {
-      bar.hidden = true;
-      bar.innerHTML = '';
-      cockpitDock.innerHTML = dockService.renderDockHtml({
-        hasWork: !!(
-          ledgerState.hasDraftChanges ||
-          ledgerState.hasDraftWork ||
-          ledgerState.hasPendingUpdate ||
-          ledgerState.hasChanges ||
-          ledgerState.hasSaveOnlyChanges ||
-          ledgerState.hasNotificationChanges
-        ),
-        isSaving: false,
-        syncMessage,
-        syncClass,
-        summary: ledgerState.summaryText,
-        saveLabel: ledgerState.saveLabel || 'Save',
-        saveDisabled: !!ledgerState.saveDisabled,
-        showDiscard: !!ledgerState.showDiscard,
-      });
-      return;
-    }
-  }
+  if (renderManagerRevisionDock(ledgerState, syncEl)) return;
 
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
