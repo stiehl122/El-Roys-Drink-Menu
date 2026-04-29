@@ -221,6 +221,50 @@ test('applyManagerItemPatch moves categories and updates draft views without pub
   assert.equal(renderCalls.includes('items:beer'), true);
 });
 
+test('applyManagerItemPatch marks price-only modal edits as save-only draft changes', () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  setState(sandbox, {
+    MENU_TYPE: 'drinks',
+    CATEGORY_DEFS: [{ id: 'cocktails', title: 'Cocktails' }],
+    menuState: {
+      cocktails: {
+        items: [{ id: 'marg', name: 'House Margarita', price: '$10', onMenu: true, visibility: 'public' }],
+        lastSent: [],
+      },
+      __uncategorized__: { items: [], lastSent: [] },
+    },
+    updateSaveBtn: () => {},
+    updateDraftIndicator: () => {},
+    renderManagerItems: () => {},
+    renderPricingSection: () => {},
+    renderDescriptionSection: () => {},
+    markSectionsStale: () => {},
+    renderManagerOverviewStats: () => {},
+    renderFeaturedTab: () => {},
+    renderFeaturedPublicSection: () => {},
+  });
+
+  const result = getState(sandbox, `applyManagerItemPatch({
+    categoryId: 'cocktails',
+    itemId: 'marg',
+    patch: { price: '$11' }
+  })`);
+  const saveOnlyChanges = JSON.parse(getState(sandbox, 'JSON.stringify(getDraftSaveOnlyChanges())'));
+
+  assert.equal(result.ok, true);
+  assert.equal(getState(sandbox, 'menuState.cocktails.items[0].price'), '$11');
+  assert.equal(saveOnlyChanges.length, 1);
+  assert.deepEqual(saveOnlyChanges[0], {
+    id: 'price:cocktails:marg',
+    key: 'price:cocktails:marg',
+    label: 'Updated price for House Margarita',
+    message: 'Updated price for House Margarita',
+    sectionId: 'cocktails',
+    itemId: 'marg',
+    kind: 'price',
+  });
+});
+
 test('removeManagerItemFromMenu marks the item off-menu without deleting it', () => {
   const sandbox = loadSandboxWithScripts(['app.js']);
   setState(sandbox, {

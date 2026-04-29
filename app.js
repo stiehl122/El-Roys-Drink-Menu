@@ -6689,6 +6689,56 @@ function refreshManagerItemEditorDraftViews(categoryIds = []) {
   renderFeaturedPublicSection();
 }
 
+function markManagerItemEditorSaveOnlyDraftChanges(catId, item, patch = {}) {
+  if (!catId || !item?.id || !patch || typeof patch !== 'object') return;
+  const itemName = String(item.name || 'this item').trim() || 'this item';
+  const saveOnlyChangeDefs = {
+    price: {
+      key: `price:${catId}:${item.id}`,
+      label: `Updated price for ${itemName}`,
+      kind: 'price',
+    },
+    desc: {
+      key: `desc:${catId}:${item.id}`,
+      label: `Updated description for ${itemName}`,
+      kind: 'description',
+    },
+    recipe: {
+      key: `recipe:${catId}:${item.id}`,
+      label: `Updated recipe for ${itemName}`,
+      kind: 'recipe',
+    },
+    upcharges: {
+      key: `upcharges:${catId}:${item.id}`,
+      label: `Updated upcharges for ${itemName}`,
+      kind: 'upcharges',
+    },
+    showDescription: {
+      key: `visibility:showDescription:${catId}:${item.id}`,
+      label: `Updated description visibility for ${itemName}`,
+      kind: 'showDescription',
+    },
+    showRecipe: {
+      key: `visibility:showRecipe:${catId}:${item.id}`,
+      label: `Updated recipe visibility for ${itemName}`,
+      kind: 'showRecipe',
+    },
+  };
+
+  Object.keys(saveOnlyChangeDefs).forEach(field => {
+    if (!Object.prototype.hasOwnProperty.call(patch, field)) return;
+    const change = saveOnlyChangeDefs[field];
+    markSaveOnlyDraftChange({
+      key: change.key,
+      label: change.label,
+      message: change.label,
+      sectionId: catId,
+      itemId: item.id,
+      kind: change.kind,
+    });
+  });
+}
+
 function applyManagerItemPatch({ categoryId = '', itemId = '', patch = {} } = {}) {
   if (!categoryId || !itemId || !patch || typeof patch !== 'object') {
     return { ok: false, error: 'Item update is missing required details.' };
@@ -6731,6 +6781,7 @@ function applyManagerItemPatch({ categoryId = '', itemId = '', patch = {} } = {}
     }
   });
 
+  markManagerItemEditorSaveOnlyDraftChanges(activeCategoryId, item, nextPatch);
   invalidateDiff();
   refreshManagerItemEditorDraftViews([categoryId, activeCategoryId]);
   return { ok: true };
