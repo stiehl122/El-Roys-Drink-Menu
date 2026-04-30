@@ -9223,7 +9223,13 @@ function setSettingsDrawerOpen(isOpen, options = {}) {
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
-  if ('inert' in drawer) drawer.inert = isMobileDrawer && !isOpen;
+  if (isMobileDrawer && !isOpen) {
+    if ('inert' in drawer) drawer.inert = true;
+    drawer.setAttribute('inert', '');
+  } else {
+    if ('inert' in drawer) drawer.inert = false;
+    drawer.removeAttribute('inert');
+  }
   backdrop.hidden = !(isOpen && isMobileDrawer);
   document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
   document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);

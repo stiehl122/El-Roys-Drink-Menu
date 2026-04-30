@@ -346,6 +346,12 @@ test('manager mobile drawer trigger stays available when cockpit has no legacy t
   sandbox.setSettingsDrawerOpen(false, { restoreFocus: false });
   assert.equal(drawer.getAttribute('aria-hidden'), 'true');
   assert.equal(drawer.inert, true);
+  assert.equal(drawer.getAttribute('inert'), '');
+
+  sandbox.setSettingsDrawerOpen(true);
+  assert.equal(drawer.getAttribute('aria-hidden'), 'false');
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute('inert'), null);
 });
 
 test('duplicate blocking clears once the manager changes the conflicting draft', () => {
