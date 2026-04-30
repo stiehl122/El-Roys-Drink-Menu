@@ -366,9 +366,6 @@ function buildMenuMetaPatch(meta = {}, ts) {
   if (Object.prototype.hasOwnProperty.call(meta, 'bot_id')) {
     patch.bot_id = asString(meta.bot_id);
   }
-  if (Object.prototype.hasOwnProperty.call(meta, 'notifications') && asObject(meta.notifications)) {
-    patch.notifications = meta.notifications;
-  }
   return patch;
 }
 
@@ -386,33 +383,6 @@ async function upsertMenuMeta(menuId, patch) {
     const payload = await readJsonSafe(response);
     throw new Error(getApiErrorMessage(payload, 'Failed to persist menu metadata'));
   }
-}
-
-async function patchRestaurantDesignIfPresent(restaurantId, restaurant = {}) {
-  if (!restaurantId) return false;
-  const hasDesign = Object.prototype.hasOwnProperty.call(restaurant, 'design');
-  const design = hasDesign ? restaurant.design : undefined;
-  if (!hasDesign) return false;
-
-  const patch = { design: asObject(design) || {} };
-  if (Object.prototype.hasOwnProperty.call(restaurant, 'use_custom_design')) {
-    patch.use_custom_design = !!restaurant.use_custom_design;
-  }
-
-  const { sbUrl } = getSupabaseServerConfig();
-  const response = await fetch(`${sbUrl}/rest/v1/restaurants?id=eq.${restaurantId}`, {
-    method: 'PATCH',
-    headers: serviceHeaders({
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    }),
-    body: JSON.stringify(patch),
-  });
-  if (!response.ok) {
-    const payload = await readJsonSafe(response);
-    throw new Error(getApiErrorMessage(payload, 'Failed to persist restaurant design'));
-  }
-  return true;
 }
 
 export async function saveLiveMenuCommand(req) {
@@ -466,7 +436,7 @@ export async function saveLiveMenuCommand(req) {
     currentRevisions,
   });
 
-  const { categories, meta, restaurant } = extractSnapshot(payload);
+  const { categories, meta } = extractSnapshot(payload);
   const { menu, categoriesByKey: existingByKey } = await readMenuAndCategories(menuId);
   const preparedSnapshotCategories = prepareFeaturedCategoriesForPersistence(categories, {
     menuId,
@@ -492,7 +462,6 @@ export async function saveLiveMenuCommand(req) {
 
   const ts = Date.now();
   await upsertMenuMeta(menuId, buildMenuMetaPatch(meta, ts));
-  const restaurantDesignUpdated = await patchRestaurantDesignIfPresent(menu.restaurant_id, restaurant);
 
   return {
     ok: true,
@@ -506,7 +475,7 @@ export async function saveLiveMenuCommand(req) {
       categoryCount: normalizedCategories.categoryRows.length + 1,
       itemCount: itemRowsResult.rows.length,
       deletedItemCount: deletedCount,
-      restaurantDesignUpdated,
+      restaurantDesignUpdated: false,
     },
   };
 }

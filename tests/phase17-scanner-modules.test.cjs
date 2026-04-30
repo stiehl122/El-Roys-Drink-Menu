@@ -14,19 +14,29 @@ async function settleAsync() {
 }
 
 test('open food facts lookup returns a normalized product payload', async () => {
+  let request = null;
   const sandbox = loadSandboxWithScripts(['core/ui/manager/open-food-facts.js'], {
-    fetch: async () => createFetchResponse(200, {
-      status: 1,
-      product: {
-        product_name: 'Topo Chico',
-        brands: 'Coca-Cola',
-        quantity: '355 ml',
-      },
-    }),
+    fetch: async (url, options) => {
+      request = { url, options };
+      return createFetchResponse(200, {
+        status: 1,
+        product: {
+          product_name: 'Topo Chico',
+          brands: 'Coca-Cola',
+          quantity: '355 ml',
+        },
+      });
+    },
   });
 
-  const result = await sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct('02113642');
+  const result = await sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct('02113642', { menuId: 'menu-1' });
 
+  assert.equal(request.url, '/api/manager');
+  assert.deepEqual(JSON.parse(request.options.body), {
+    action: 'product_lookup',
+    barcode: '02113642',
+    menu_id: 'menu-1',
+  });
   assert.equal(result.name, 'Topo Chico');
   assert.equal(result.description, 'Coca-Cola • 355 ml');
 });
@@ -56,7 +66,7 @@ test('untappd lookup boundary only talks to the manager API and returns shaped r
     },
   });
 
-  const result = await sandbox.__HF_UI_MODULES__.searchUntappdBeers('  West Coast IPA draft 16 oz can  ');
+  const result = await sandbox.__HF_UI_MODULES__.searchUntappdBeers('  West Coast IPA draft 16 oz can  ', { menuId: 'menu-1' });
 
   assert.equal(request.url, '/api/manager');
   assert.equal(request.options.method, 'POST');
@@ -64,6 +74,7 @@ test('untappd lookup boundary only talks to the manager API and returns shaped r
   assert.deepEqual(JSON.parse(request.options.body), {
     action: 'untappd_search',
     query: 'West Coast IPA draft 16 oz can',
+    menu_id: 'menu-1',
   });
   assert.equal(result.length, 1);
   assert.equal(JSON.stringify(result), JSON.stringify([
@@ -80,13 +91,14 @@ test('untappd preview boundary falls back to null on bad transport responses', a
     },
   });
 
-  const result = await sandbox.__HF_UI_MODULES__.previewUntappdBeerImport(42, { includeBrewery: true });
+  const result = await sandbox.__HF_UI_MODULES__.previewUntappdBeerImport(42, { includeBrewery: true, menuId: 'menu-1' });
 
   assert.equal(request.url, '/api/manager');
   assert.deepEqual(JSON.parse(request.options.body), {
     action: 'untappd_preview',
     bid: 42,
     includeBrewery: true,
+    menu_id: 'menu-1',
   });
   assert.equal(result, null);
 });

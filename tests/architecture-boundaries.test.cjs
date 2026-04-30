@@ -7,6 +7,7 @@ const {
   createElement,
   getState,
   loadAppSandbox,
+  loadSandboxWithScripts,
   loadScript,
   setState,
 } = require('./helpers/runtime.cjs');
@@ -66,6 +67,108 @@ function makeMenuState(itemsByCategory = {}, lastUpdatedTs = '1712705100000') {
     state[categoryId] = { items, lastSent: [] };
   });
   return state;
+}
+
+function createBackoffSchedulerHarness(createScheduler) {
+  let now = 1_000;
+  let loaderCalls = 0;
+  let errors = 0;
+  let shouldFail = true;
+
+  const scheduler = createScheduler({
+    loader: async () => {
+      loaderCalls += 1;
+      if (shouldFail) throw new Error('network down');
+      return { call: loaderCalls };
+    },
+    onResult: async result => result,
+    onError: () => {
+      errors += 1;
+    },
+    getContextKey: () => 'menu-main|drinks|restaurant-main',
+    now: () => now,
+    backoffBaseMs: 10_000,
+    backoffMaxMs: 60_000,
+  });
+
+  return {
+    scheduler,
+    get loaderCalls() {
+      return loaderCalls;
+    },
+    get errors() {
+      return errors;
+    },
+    setNow(value) {
+      now = value;
+    },
+    fail() {
+      shouldFail = true;
+    },
+    succeed() {
+      shouldFail = false;
+    },
+  };
+}
+
+async function expectIntervalBackoffDoesNotSupersedeResume(createScheduler) {
+  let now = 1_000;
+  let errors = 0;
+  let resolveResume = null;
+  const loaderCalls = [];
+  const appliedResults = [];
+
+  const scheduler = createScheduler({
+    loader: async ({ reason }) => {
+      loaderCalls.push(reason);
+      if (reason === 'resume') {
+        return await new Promise(resolve => {
+          resolveResume = resolve;
+        });
+      }
+      throw new Error('network down');
+    },
+    onResult: async result => {
+      appliedResults.push(result.id);
+      return result;
+    },
+    onError: () => {
+      errors += 1;
+    },
+    getContextKey: () => 'menu-main|drinks|restaurant-main',
+    now: () => now,
+    backoffBaseMs: 10_000,
+    backoffMaxMs: 60_000,
+  });
+
+  await scheduler.tick();
+  await scheduler.tick();
+  await scheduler.tick();
+  assert.equal(errors, 3);
+  assert.deepEqual(loaderCalls, ['interval', 'interval', 'interval']);
+
+  const resumeRun = scheduler.resume();
+  assert.equal(loaderCalls.length, 4);
+  assert.equal(loaderCalls[3], 'resume');
+  assert.equal(typeof resolveResume, 'function');
+
+  const tickRun = scheduler.tick();
+  const tickState = await Promise.race([
+    tickRun.then(result => ({ settled: true, result })),
+    new Promise(resolve => setTimeout(() => resolve({ settled: false }), 0)),
+  ]);
+  assert.equal(tickState.settled, true, 'backed-off interval tick should skip immediately');
+  assert.equal(tickState.result.reason, 'backoff');
+  assert.equal(loaderCalls.length, 4);
+
+  resolveResume({ id: 'resume-ok' });
+  const resumeResult = await resumeRun;
+  assert.equal(resumeResult.id, 'resume-ok');
+  assert.deepEqual(appliedResults, ['resume-ok']);
+
+  await scheduler.tick();
+  assert.equal(loaderCalls.length, 5, 'successful resume should clear the interval backoff');
+  assert.deepEqual(loaderCalls.slice(3), ['resume', 'interval']);
 }
 
 function createMenuSessionPorts(overrides = {}) {
@@ -2335,6 +2438,117 @@ test('menu poll scheduler is single-flight and ignores stale poll results', asyn
 
   assert.deepEqual(appliedResults, ['new-result']);
   assert.equal(errorCount, 0);
+});
+
+test('menu poll scheduler backs off interval ticks after repeated errors', async () => {
+  const sandbox = loadSandboxWithScripts(['core/session/poll-scheduler.js']);
+  const harness = createBackoffSchedulerHarness(sandbox.__HF_SESSION_MODULES__.createMenuPollScheduler);
+
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 3);
+  assert.equal(harness.errors, 3);
+
+  const skipped = await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 3, 'fourth immediate interval tick should be backed off');
+  assert.equal(skipped.skipped, true);
+  assert.equal(skipped.reason, 'backoff');
+  assert.equal(skipped.nextAllowedAt, 11_000);
+
+  await harness.scheduler.resume();
+  assert.equal(harness.loaderCalls, 4, 'resume polls should not be blocked by interval backoff');
+
+  const secondWindowSkip = await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 4);
+  assert.equal(secondWindowSkip.reason, 'backoff');
+  assert.equal(secondWindowSkip.nextAllowedAt, 21_000);
+
+  harness.setNow(21_001);
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 5);
+});
+
+test('menu poll scheduler success and reset clear backoff state', async () => {
+  const sandbox = loadSandboxWithScripts(['core/session/poll-scheduler.js']);
+  const harness = createBackoffSchedulerHarness(sandbox.__HF_SESSION_MODULES__.createMenuPollScheduler);
+
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  assert.equal((await harness.scheduler.tick()).reason, 'backoff');
+
+  harness.setNow(11_001);
+  harness.succeed();
+  const success = await harness.scheduler.tick();
+  assert.equal(success.call, 4);
+
+  harness.fail();
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 6, 'success should require fresh errors before backing off again');
+
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 7);
+  assert.equal((await harness.scheduler.tick()).reason, 'backoff');
+
+  harness.scheduler.reset();
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 9, 'reset should clear both the window and consecutive error count');
+});
+
+test('menu poll scheduler interval backoff does not supersede an in-flight resume', async () => {
+  const sandbox = loadSandboxWithScripts(['core/session/poll-scheduler.js']);
+  await expectIntervalBackoffDoesNotSupersedeResume(sandbox.__HF_SESSION_MODULES__.createMenuPollScheduler);
+});
+
+test('app fallback menu poll scheduler mirrors interval backoff behavior', async () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  const harness = createBackoffSchedulerHarness(config => sandbox.createMenuPollScheduler(config));
+
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 3);
+
+  const skipped = await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 3);
+  assert.equal(skipped.reason, 'backoff');
+
+  harness.setNow(11_001);
+  await harness.scheduler.tick();
+  assert.equal(harness.loaderCalls, 4);
+});
+
+test('app fallback menu poll scheduler interval backoff does not supersede an in-flight resume', async () => {
+  const sandbox = loadSandboxWithScripts(['app.js']);
+  await expectIntervalBackoffDoesNotSupersedeResume(config => sandbox.createMenuPollScheduler(config));
+});
+
+test('public menu poll scheduler requests revision probes for interval polling', async () => {
+  const sandbox = loadAppSandbox();
+  const refreshCalls = [];
+
+  setState(sandbox, {
+    MENU_ID: 'menu-main',
+    MENU_TYPE: 'drinks',
+    RESTAURANT_ID: 'restaurant-main',
+    getMenuById: () => ({ slug: 'leroys-lounge-drinks' }),
+    ensureCurrentMenuSession: overrides => ({
+      refresh: async options => {
+        refreshCalls.push({ overrides, options });
+        return { changed: false, designChanged: false };
+      },
+    }),
+  });
+
+  await sandbox.getMenuPollScheduler().tick();
+
+  assert.equal(refreshCalls.length, 1);
+  assert.equal(refreshCalls[0].options.reason, 'poll');
+  assert.equal(refreshCalls[0].options.useRevisionProbe, true);
+  assert.equal(refreshCalls[0].options.requestedMenuId, 'menu-main');
 });
 
 test('featured view policy filters sell notes by explicit staff visibility', () => {

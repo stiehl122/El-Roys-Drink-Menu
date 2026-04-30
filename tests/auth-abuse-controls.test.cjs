@@ -26,16 +26,32 @@ function jsonResponse(payload = {}, ok = true, status = ok ? 200 : 400) {
   };
 }
 
+function restoreEnvValue(name, value) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+  process.env[name] = value;
+}
+
 async function withMockedSupabaseAuth(handler) {
   const originalFetch = global.fetch;
   const originalUrl = process.env.SUPABASE_URL;
   const originalService = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const originalAnon = process.env.SUPABASE_ANON_KEY;
+  const originalPublicSiteUrl = process.env.PUBLIC_SITE_URL;
+  const originalSiteUrl = process.env.SITE_URL;
+  const originalVercelProjectProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  const originalVercelUrl = process.env.VERCEL_URL;
   const calls = [];
 
   process.env.SUPABASE_URL = 'https://example.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
   process.env.SUPABASE_ANON_KEY = 'anon-key';
+  delete process.env.PUBLIC_SITE_URL;
+  delete process.env.SITE_URL;
+  delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  delete process.env.VERCEL_URL;
   global.fetch = async (url, options = {}) => {
     calls.push({ url: String(url), options, body: options.body ? JSON.parse(options.body) : null });
     return jsonResponse({
@@ -51,9 +67,13 @@ async function withMockedSupabaseAuth(handler) {
     return await handler(calls);
   } finally {
     global.fetch = originalFetch;
-    process.env.SUPABASE_URL = originalUrl;
-    process.env.SUPABASE_SERVICE_ROLE_KEY = originalService;
-    process.env.SUPABASE_ANON_KEY = originalAnon;
+    restoreEnvValue('SUPABASE_URL', originalUrl);
+    restoreEnvValue('SUPABASE_SERVICE_ROLE_KEY', originalService);
+    restoreEnvValue('SUPABASE_ANON_KEY', originalAnon);
+    restoreEnvValue('PUBLIC_SITE_URL', originalPublicSiteUrl);
+    restoreEnvValue('SITE_URL', originalSiteUrl);
+    restoreEnvValue('VERCEL_PROJECT_PRODUCTION_URL', originalVercelProjectProductionUrl);
+    restoreEnvValue('VERCEL_URL', originalVercelUrl);
   }
 }
 
@@ -179,6 +199,113 @@ test('auth proxy limits sign-in floods by client IP even when emails vary', asyn
     assert.equal(blocked.status, 429);
     assert.equal(blocked.headers['Retry-After'], '300');
     assert.equal(calls.length, 5);
+    resetAuthAbuseLimitersForTest();
+  });
+});
+
+test('auth proxy normalizes password reset redirects to same-origin manager reset URL', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    const { executeAuthAction, resetAuthAbuseLimitersForTest } = await import('../server/_auth-proxy.js');
+    resetAuthAbuseLimitersForTest();
+
+    const result = await executeAuthAction(createJsonRequest({
+      action: 'reset_password',
+      email: 'manager@example.com',
+      redirect_to: 'https://evil.example/reset',
+    }, {
+      host: 'menus.example.test',
+      'x-forwarded-proto': 'https',
+      'x-real-ip': '203.0.113.88',
+    }));
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'https://example.supabase.co/auth/v1/recover');
+    assert.deepEqual(calls[0].body, {
+      email: 'manager@example.com',
+      redirect_to: 'https://menus.example.test/manager',
+    });
+
+    resetAuthAbuseLimitersForTest();
+  });
+});
+
+test('auth proxy prefers trusted public origin over spoofed password reset host', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    process.env.PUBLIC_SITE_URL = 'http://menus.example.test/some/reset/path?x=1#frag';
+    const { executeAuthAction, resetAuthAbuseLimitersForTest } = await import('../server/_auth-proxy.js');
+    resetAuthAbuseLimitersForTest();
+
+    const result = await executeAuthAction(createJsonRequest({
+      action: 'reset_password',
+      email: 'manager@example.com',
+      redirect_to: 'https://evil.example/reset',
+    }, {
+      host: 'evil.example',
+      'x-forwarded-proto': 'https',
+      'x-real-ip': '203.0.113.88',
+    }));
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].body, {
+      email: 'manager@example.com',
+      redirect_to: 'https://menus.example.test/manager',
+    });
+
+    resetAuthAbuseLimitersForTest();
+  });
+});
+
+test('auth proxy fails closed for password reset redirects without trusted or HTTPS request origin', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    const { executeAuthAction, resetAuthAbuseLimitersForTest } = await import('../server/_auth-proxy.js');
+    resetAuthAbuseLimitersForTest();
+
+    const result = await executeAuthAction(createJsonRequest({
+      action: 'reset_password',
+      email: 'manager@example.com',
+      redirect_to: 'https://evil.example/reset',
+    }, {
+      host: 'evil.example',
+      'x-forwarded-proto': 'http',
+      'x-real-ip': '203.0.113.88',
+    }));
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].body, {
+      email: 'manager@example.com',
+      redirect_to: '',
+    });
+
+    resetAuthAbuseLimitersForTest();
+  });
+});
+
+test('auth proxy fails closed when trusted password reset origin is configured but invalid', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    process.env.PUBLIC_SITE_URL = 'https://bad host.example';
+    const { executeAuthAction, resetAuthAbuseLimitersForTest } = await import('../server/_auth-proxy.js');
+    resetAuthAbuseLimitersForTest();
+
+    const result = await executeAuthAction(createJsonRequest({
+      action: 'reset_password',
+      email: 'manager@example.com',
+      redirect_to: 'https://evil.example/reset',
+    }, {
+      host: 'evil.example',
+      'x-forwarded-proto': 'https',
+      'x-real-ip': '203.0.113.88',
+    }));
+
+    assert.deepEqual(result, { ok: true });
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].body, {
+      email: 'manager@example.com',
+      redirect_to: '',
+    });
+
     resetAuthAbuseLimitersForTest();
   });
 });
