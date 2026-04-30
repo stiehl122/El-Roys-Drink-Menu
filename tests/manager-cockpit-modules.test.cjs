@@ -117,6 +117,12 @@ test('createManagerActivityService normalizes quiet saves and sends', () => {
   assert.equal(entries[0].channel, 'web_manager');
   assert.match(service.renderActivityHtml(entries), /Saved quietly/);
   assert.match(service.renderActivityHtml(entries), /Sent update/);
+  const activityHtml = service.renderActivityHtml(entries);
+  assert.match(activityHtml, /manager-cockpit-activity-more/);
+  assert.match(activityHtml, /Show more activity/);
+  assert.match(activityHtml, /3 older updates/);
+  assert.equal((activityHtml.match(/manager-cockpit-activity-row/g) || []).length, 5);
+  assert.equal(activityHtml.indexOf('Kai') > activityHtml.indexOf('manager-cockpit-activity-more-body'), true);
 });
 
 test('createManagerRevisionDockService collapses idle state and expands for work or sync messages', () => {

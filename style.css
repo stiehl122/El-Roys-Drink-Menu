@@ -8439,6 +8439,14 @@ body.manager-dossier-shell .manager-quick-note-status { color: rgba(45, 36, 24, 
 body.manager-dossier-shell .manager-quick-note-error { margin: 8px 0 0; color: #8d321f; font-size: 12px; font-weight: 800; }
 body.manager-dossier-shell .manager-cockpit-activity-row { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid rgba(31, 25, 16, 0.12); }
 body.manager-dossier-shell .manager-cockpit-activity-row:first-child { border-top: 0; padding-top: 0; }
+body.manager-dossier-shell .manager-cockpit-activity-more { border-top: 1px solid rgba(31, 25, 16, 0.12); }
+body.manager-dossier-shell .manager-cockpit-activity-more summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 0; color: #185750; cursor: pointer; font-size: 13px; font-weight: 850; list-style: none; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary::-webkit-details-marker { display: none; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary::after { content: '+'; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid rgba(24, 87, 80, 0.26); border-radius: 999px; color: #185750; font-size: 16px; line-height: 1; }
+body.manager-dossier-shell .manager-cockpit-activity-more[open] summary::after { content: '-'; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary small { margin-left: auto; color: rgba(45, 36, 24, 0.62); font-size: 11px; font-weight: 800; }
+body.manager-dossier-shell .manager-cockpit-activity-more-body { padding-top: 10px; }
+body.manager-dossier-shell .manager-cockpit-activity-more-body .manager-cockpit-activity-row:first-child { border-top: 0; padding-top: 0; }
 body.manager-dossier-shell #manager-cockpit-database { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(31, 25, 16, 0.16); }
 body.manager-dossier-shell #manager-cockpit-database h2 { margin: 4px 0 6px; font-size: 24px; letter-spacing: 0; color: #2d2418; }
 body.manager-dossier-shell #manager-cockpit-items { min-width: 0; overflow-x: auto; }

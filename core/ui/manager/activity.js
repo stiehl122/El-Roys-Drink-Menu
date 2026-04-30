@@ -55,12 +55,24 @@
         if (!normalizedEntries.length) {
           return '<p class="db-empty">Recent activity will appear after staff updates.</p>';
         }
-        return normalizedEntries.map(entry => `
+        const renderRow = entry => `
           <article class="manager-cockpit-activity-row">
             <strong>${escHtml(entry.label || 'Updated menu')}</strong>
             <span>${escHtml([entry.actor, entry.time].filter(Boolean).join(' • '))}</span>
             ${entry.channel ? `<small>${escHtml(entry.channel)}</small>` : ''}
-          </article>`).join('');
+          </article>`;
+        const visibleRows = normalizedEntries.slice(0, 2).map(renderRow).join('');
+        const hiddenRows = normalizedEntries.slice(2).map(renderRow).join('');
+        if (!hiddenRows) return visibleRows;
+        const hiddenCount = normalizedEntries.length - 2;
+        return `${visibleRows}
+          <details class="manager-cockpit-activity-more">
+            <summary>
+              <span>Show more activity</span>
+              <small>${escHtml(hiddenCount)} older update${hiddenCount === 1 ? '' : 's'}</small>
+            </summary>
+            <div class="manager-cockpit-activity-more-body">${hiddenRows}</div>
+          </details>`;
       },
     };
   }
