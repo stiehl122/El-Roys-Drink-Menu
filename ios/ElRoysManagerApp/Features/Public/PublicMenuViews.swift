@@ -341,6 +341,7 @@ private struct LeroysPublicMenuHero: View {
         .resizable()
         .scaledToFit()
         .frame(maxWidth: 280)
+        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityLabel("Leroy's Lounge")
 
       HStack(spacing: 8) {
@@ -375,18 +376,77 @@ private struct LeroysPublicMenuHero: View {
 
       if let previewMenu {
         NavigationLink(value: AppDestination.routePreview(previewMenu)) {
-          AppIslandButtonLabel(
-            title: "Open exact route preview",
-            subtitle: "Verify Leroy's deployed route before publishing or sharing.",
-            systemImage: "arrow.up.right"
-          )
+          LeroysLiveMenuPreviewButton()
         }
         .buttonStyle(.plain)
-        .appPillChrome(accent: LeroysPalette.brass, filled: true)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .leroysPostedCard(borderOpacity: 0.52)
+  }
+}
+
+private struct LeroysLiveMenuPreviewButton: View {
+  var body: some View {
+    HStack(spacing: 14) {
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Open Live Menu")
+          .font(.system(size: 14.5, weight: .heavy, design: .rounded))
+          .foregroundStyle(LeroysPalette.nicotineCream)
+        Text("See it just like guests do.")
+          .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+          .foregroundStyle(LeroysPalette.chalkCream.opacity(0.82))
+          .lineLimit(1)
+          .minimumScaleFactor(0.82)
+      }
+
+      Spacer(minLength: 10)
+
+      ZStack {
+        Circle()
+          .fill(LeroysPalette.chalkCream.opacity(0.16))
+        Circle()
+          .stroke(LeroysPalette.brass.opacity(0.55), lineWidth: 0.8)
+        Image(systemName: "arrow.up.right")
+          .font(.system(size: 13, weight: .black))
+          .foregroundStyle(LeroysPalette.nicotineCream)
+      }
+      .frame(width: 38, height: 38)
+    }
+    .padding(.leading, 16)
+    .padding(.trailing, 10)
+    .padding(.vertical, 12)
+    .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
+    .background {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(
+          LinearGradient(
+            colors: [
+              Color(red: 0.500, green: 0.310, blue: 0.120),
+              Color(red: 0.275, green: 0.170, blue: 0.075),
+              LeroysPalette.board.opacity(0.96)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .stroke(
+          LinearGradient(
+            colors: [
+              LeroysPalette.brass.opacity(0.72),
+              LeroysPalette.chalkCream.opacity(0.24),
+              LeroysPalette.fadedBeerRed.opacity(0.26)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          ),
+          lineWidth: 1
+        )
+    }
+    .shadow(color: .black.opacity(0.22), radius: 10, y: 5)
   }
 }
 
