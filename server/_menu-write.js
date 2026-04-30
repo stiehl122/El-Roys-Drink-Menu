@@ -64,6 +64,15 @@ function normalizeRecipe(recipe = []) {
   return [];
 }
 
+function normalizePersistentVisibility() {
+  return 'public';
+}
+
+function normalizePersistentOnMenu(item = {}) {
+  if (item?.on_menu === false || item?.onMenu === false) return false;
+  return String(item?.visibility || '').trim().toLowerCase() !== 'off_menu';
+}
+
 function isUuid(value = '') {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
 }
@@ -96,8 +105,8 @@ function normalizeSnapshot(snapshot = {}) {
         recipe: normalizeRecipe(item?.recipe),
         price: item?.price == null ? null : String(item.price || ''),
         is_eighty_sixed: !!item?.is_eighty_sixed,
-        on_menu: item?.on_menu !== false,
-        visibility: String(item?.visibility || 'public'),
+        on_menu: normalizePersistentOnMenu(item),
+        visibility: normalizePersistentVisibility(item?.visibility),
         upcharges: cloneItemUpcharges(item?.upcharges),
         show_description: item?.show_description !== false,
         show_recipe: !!item?.show_recipe,
