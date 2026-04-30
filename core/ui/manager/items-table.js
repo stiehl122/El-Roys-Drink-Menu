@@ -122,6 +122,12 @@
       }
 
       return categories.map(category => {
+        const featuredCount = category.isFeaturedSpecials
+          ? category.items.filter(item => item.featuredEnabled && item.onMenu !== false && item.visibility !== 'off_menu').length
+          : 0;
+        const categoryMeta = category.isFeaturedSpecials
+          ? `<span class="manager-cockpit-item-group-meta">${escHtml(featuredCount)} / 5 previewed</span>`
+          : '';
         const rows = category.items.length
           ? category.items.map((item, index) => renderItemRow(category, item, index)).join('')
           : '<div class="manager-cockpit-item-empty" role="row"><span role="cell">No items in this category.</span></div>';
@@ -130,6 +136,7 @@
             <header class="manager-cockpit-item-group-head">
               <span class="manager-cockpit-kicker">${escHtml(category.icon || 'Items')}</span>
               <h2>${escHtml(category.title || 'Menu Items')}</h2>
+              ${categoryMeta}
             </header>
             <div class="manager-cockpit-item-table" role="table" aria-label="${escHtml(category.title || 'Menu')} items">
               <div class="manager-cockpit-item-head" role="row">

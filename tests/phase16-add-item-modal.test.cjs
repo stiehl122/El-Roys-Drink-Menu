@@ -329,6 +329,25 @@ test('manager mobile drawer trigger appears after the header scrolls out and hid
   assert.equal(mobileTrigger.hidden, false);
 });
 
+test('manager mobile drawer trigger stays available when cockpit has no legacy topbar', () => {
+  const sandbox = loadAppSandbox();
+  const { mobileTrigger, drawer } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+  sandbox.document._registerSelector('#app-shell > header.manager-shell-topbar', null);
+  drawer.inert = false;
+  sandbox.innerWidth = 390;
+  sandbox.window.innerWidth = 390;
+
+  sandbox.syncManagerMobileDrawerTrigger();
+
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), true);
+  assert.equal(mobileTrigger.hidden, false);
+
+  sandbox.setSettingsDrawerOpen(false, { restoreFocus: false });
+  assert.equal(drawer.getAttribute('aria-hidden'), 'true');
+  assert.equal(drawer.inert, true);
+});
+
 test('duplicate blocking clears once the manager changes the conflicting draft', () => {
   const sandbox = loadAppSandbox();
   const { modalHost } = setupManagerAddItemDom(sandbox);

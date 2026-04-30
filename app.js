@@ -9223,6 +9223,7 @@ function setSettingsDrawerOpen(isOpen, options = {}) {
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
+  if ('inert' in drawer) drawer.inert = isMobileDrawer && !isOpen;
   backdrop.hidden = !(isOpen && isMobileDrawer);
   document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
   document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);
@@ -11358,7 +11359,13 @@ function syncManagerMobileDrawerTrigger() {
   const trigger = document.getElementById('manager-mobile-drawer-trigger');
   const header = document.querySelector('#app-shell > header.manager-shell-topbar');
   if (!trigger || !header) {
-    body.classList.remove('manager-mobile-drawer-trigger-visible');
+    if (trigger && window.innerWidth <= 920 && trigger.style.display !== 'none' && !body.classList.contains('settings-drawer-open')) {
+      body.classList.add('manager-mobile-drawer-trigger-visible');
+      trigger.hidden = false;
+    } else {
+      body.classList.remove('manager-mobile-drawer-trigger-visible');
+      if (trigger) trigger.hidden = true;
+    }
     return;
   }
   if (window.innerWidth > 920 || body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {

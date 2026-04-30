@@ -434,6 +434,8 @@ test('createManagerItemsTableService exposes featured-special controls for featu
 
   assert.match(html, /data-item-action="toggle-featured"/);
   assert.match(html, /Show in Featured Preview/);
+  assert.match(html, /manager-cockpit-item-group-meta/);
+  assert.match(html, /1 \/ 5 previewed/);
   assert.match(html, /checked/);
 });
 

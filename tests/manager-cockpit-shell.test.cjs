@@ -33,3 +33,14 @@ test('manager cockpit shell and modules do not wire legacy swipe controls', () =
     assert.doesNotMatch(source, /swipe-action/, relativePath);
   });
 });
+
+test('manager cockpit mobile styles use compact rows, workbar, and idle dock', () => {
+  const css = fs.readFileSync(path.join(root, 'style.css'), 'utf8');
+
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*\.manager-cockpit-item-row[\s\S]*grid-template-areas:/);
+  assert.match(css, /"order name edit eighty"/);
+  assert.match(css, /label\[for="manager-item-search"\][\s\S]*grid-column: 1 \/ -1/);
+  assert.match(css, /\.manager-cockpit-dock-inner\.is-collapsed[\s\S]*translateY\(calc\(100% - 12px\)\)/);
+  assert.match(css, /\.manager-cockpit-header-stats[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.manager-shell-mobile-drawer-trigger[\s\S]*border-radius: 999px/);
+});
