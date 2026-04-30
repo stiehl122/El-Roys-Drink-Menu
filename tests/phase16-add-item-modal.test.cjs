@@ -354,6 +354,29 @@ test('manager mobile drawer trigger stays available when cockpit has no legacy t
   assert.equal(drawer.getAttribute('inert'), null);
 });
 
+test('manager rail is re-enabled when resizing out of mobile drawer mode', () => {
+  const sandbox = loadAppSandbox();
+  const { drawer, backdrop, mobileTrigger } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+  drawer.inert = true;
+  drawer.setAttribute('inert', '');
+  drawer.setAttribute('aria-hidden', 'true');
+  backdrop.hidden = false;
+  sandbox.document.body.classList.add('settings-drawer-open');
+  sandbox.innerWidth = 1120;
+  sandbox.window.innerWidth = 1120;
+
+  sandbox.syncManagerMobileDrawerTrigger();
+
+  assert.equal(sandbox.document.body.classList.contains('settings-drawer-open'), false);
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), false);
+  assert.equal(mobileTrigger.hidden, true);
+  assert.equal(backdrop.hidden, true);
+  assert.equal(drawer.getAttribute('aria-hidden'), 'false');
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute('inert'), null);
+});
+
 test('duplicate blocking clears once the manager changes the conflicting draft', () => {
   const sandbox = loadAppSandbox();
   const { modalHost } = setupManagerAddItemDom(sandbox);

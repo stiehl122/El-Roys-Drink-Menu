@@ -8016,16 +8016,14 @@ body.manager-dossier-shell .manager-shell-mobile-drawer-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 42px;
-  padding: 9px 12px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border: 1px solid var(--manager-dossier-border-strong);
-  border-radius: 999px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--manager-dossier-panel) 94%, transparent);
   color: var(--manager-dossier-ink);
   box-shadow: 4px 4px 0 var(--manager-dossier-shadow);
-  font-size: 13px;
-  font-weight: 850;
   opacity: 0;
   transform: translateY(-10px);
   pointer-events: none;
@@ -8036,7 +8034,7 @@ body.manager-dossier-shell .manager-shell-stack-icon {
   display: inline-flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   width: 16px;
   height: 16px;
   flex: 0 0 16px;
@@ -8048,6 +8046,10 @@ body.manager-dossier-shell .manager-shell-stack-icon span {
   height: 2px;
   border-radius: 999px;
   background: currentColor;
+}
+
+body.manager-dossier-shell .manager-cockpit-rail[aria-hidden="false"] {
+  pointer-events: auto;
 }
 
 body.manager-dossier-shell.manager-mobile-drawer-trigger-visible .manager-shell-mobile-drawer-trigger {

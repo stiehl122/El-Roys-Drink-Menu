@@ -9215,6 +9215,17 @@ function getSettingsDrawerDom() {
   };
 }
 
+function setDrawerInertState(drawer, shouldBeInert) {
+  if (!drawer) return;
+  if (shouldBeInert) {
+    if ('inert' in drawer) drawer.inert = true;
+    drawer.setAttribute('inert', '');
+    return;
+  }
+  if ('inert' in drawer) drawer.inert = false;
+  drawer.removeAttribute('inert');
+}
+
 function setSettingsDrawerOpen(isOpen, options = {}) {
   const drawerDom = getSettingsDrawerDom();
   const { drawer, backdrop, toggle, mobileTrigger, mobileWidth, bodyOpenClass } = drawerDom;
@@ -9223,13 +9234,7 @@ function setSettingsDrawerOpen(isOpen, options = {}) {
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
-  if (isMobileDrawer && !isOpen) {
-    if ('inert' in drawer) drawer.inert = true;
-    drawer.setAttribute('inert', '');
-  } else {
-    if ('inert' in drawer) drawer.inert = false;
-    drawer.removeAttribute('inert');
-  }
+  setDrawerInertState(drawer, isMobileDrawer && !isOpen);
   backdrop.hidden = !(isOpen && isMobileDrawer);
   document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
   document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);
@@ -11364,8 +11369,21 @@ function syncManagerMobileDrawerTrigger() {
   if (!body) return;
   const trigger = document.getElementById('manager-mobile-drawer-trigger');
   const header = document.querySelector('#app-shell > header.manager-shell-topbar');
+  const { drawer, backdrop, mobileWidth = 920 } = getSettingsDrawerDom();
+  const isMobileDrawer = window.innerWidth <= mobileWidth;
+  if (!isMobileDrawer) {
+    body.classList.remove('manager-mobile-drawer-trigger-visible', 'settings-drawer-open');
+    if (trigger) trigger.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    if (drawer) {
+      drawer.classList?.remove?.('is-open');
+      drawer.setAttribute('aria-hidden', 'false');
+      setDrawerInertState(drawer, false);
+    }
+    return;
+  }
   if (!trigger || !header) {
-    if (trigger && window.innerWidth <= 920 && trigger.style.display !== 'none' && !body.classList.contains('settings-drawer-open')) {
+    if (trigger && trigger.style.display !== 'none' && !body.classList.contains('settings-drawer-open')) {
       body.classList.add('manager-mobile-drawer-trigger-visible');
       trigger.hidden = false;
     } else {
@@ -11374,7 +11392,7 @@ function syncManagerMobileDrawerTrigger() {
     }
     return;
   }
-  if (window.innerWidth > 920 || body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
+  if (body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
     body.classList.remove('manager-mobile-drawer-trigger-visible');
     trigger.hidden = true;
     return;
