@@ -112,6 +112,23 @@ test('iOS Leroy public menu is themed, food-first, and uses guest sold-out langu
   assert.doesNotMatch(publicViews, /Text\("86'D"\)/);
 });
 
+test('iOS Leroy public menu hero centers sign and uses guest-facing preview copy', () => {
+  const publicViews = read('ios/ElRoysManagerApp/Features/Public/PublicMenuViews.swift');
+  const hero = sourceBetween(
+    publicViews,
+    'private struct LeroysPublicMenuHero',
+    'private struct LeroysSpecialsSlip'
+  );
+
+  assert.match(hero, /Image\("LeroysHeroSign"\)/);
+  assert.match(hero, /\.frame\(maxWidth:\s*\.infinity,\s*alignment:\s*\.center\)/);
+  assert.match(hero, /LeroysLiveMenuPreviewButton/);
+  assert.match(hero, /Open Live Menu/);
+  assert.match(hero, /See it just like guests do\./);
+  assert.doesNotMatch(hero, /Open exact route preview/);
+  assert.doesNotMatch(hero, /deployed route/);
+});
+
 test('iOS exact route preview uses SFSafariViewController instead of embedded WKWebView', () => {
   const routePreview = read('ios/ElRoysManagerApp/Features/Preview/RoutePreviewView.swift');
 
@@ -143,6 +160,103 @@ test('iOS home screen reserves explicit clearance for bottom navigation', () => 
   const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
   assert.match(source, /private let homeBottomNavigationClearance: CGFloat = 132/);
   assert.match(source, /Color\.clear\.frame\(height: homeBottomNavigationClearance\)/);
+});
+
+test('iOS home recent updates empty state reflects the programmed entry limit', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const recentUpdates = sourceBetween(
+    source,
+    'private struct HomeRecentUpdatesCard',
+    'private struct HomeUpdateRow'
+  );
+
+  assert.match(source, /private let homeRecentUpdatesLimit = 2/);
+  assert.match(source, /Array\(updates\.prefix\(homeRecentUpdatesLimit\)\)/);
+  assert.match(recentUpdates, /No updates in the last \\\(homeRecentUpdatesLimit\) entries\./);
+  assert.doesNotMatch(recentUpdates, /No sent updates yet\./);
+});
+
+test('iOS home edit tiles stay constrained to the viewport', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const editGrid = sourceBetween(
+    source,
+    'private struct HomeEditGrid',
+    'private struct HomeEditTile'
+  );
+
+  assert.match(editGrid, /GeometryReader\s*\{\s*geometry\s+in/);
+  assert.match(editGrid, /let tileWidth = Swift\.max\(0,\s*\(geometry\.size\.width - 12\) \/ 2\)/);
+  assert.match(editGrid, /\.frame\(width:\s*tileWidth\)/);
+  assert.match(editGrid, /\.frame\(width:\s*geometry\.size\.width,\s*alignment:\s*\.leading\)/);
+});
+
+test('iOS Leroy home edit tiles use Leroy-specific panels and volume order', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const editGrid = sourceBetween(
+    source,
+    'private struct HomeEditGrid',
+    'private struct HomeViewRows'
+  );
+
+  assert.match(editGrid, /chapter:\s*presentation\.isLeroys \? "VOL\. 02" : "VOL\. 01"/);
+  assert.match(editGrid, /chapter:\s*presentation\.isLeroys \? "VOL\. 01" : "VOL\. 02"/);
+  assert.match(editGrid, /private var leroysBody/);
+  assert.match(editGrid, /Image\(menuType == "food" \? "LeroysFoodGhostArt" : "LeroysDrinksGhostArt"\)/);
+  assert.match(editGrid, /\.blendMode\(\.screen\)/);
+  assert.match(editGrid, /if !presentation\.isLeroys \{/);
+});
+
+test('iOS Leroy home scroll content is pinned to the device width', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const chooser = sourceBetween(
+    source,
+    'struct RestaurantChooserView',
+    'private var restaurantSwitcherOptions'
+  );
+
+  assert.match(chooser, /GeometryReader\s*\{\s*geometry\s+in/);
+  assert.match(chooser, /\.frame\(width:\s*geometry\.size\.width,\s*alignment:\s*\.leading\)/);
+});
+
+test('iOS Leroy home header and background cannot force page overflow', () => {
+  const homeViews = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const glass = read('ios/ElRoysManagerApp/Design/Glass.swift');
+  const header = sourceBetween(
+    homeViews,
+    'private struct HomeHeader',
+    'private var accountDeletionURL'
+  );
+  const background = sourceBetween(
+    glass,
+    'struct LeroysWallBackground',
+    'struct LeroysChalkboardBackground'
+  );
+
+  assert.match(header, /let availableSignWidth = geometry\.size\.width - horizontalPadding - accountWidth - headerGap/);
+  assert.match(header, /let signWidth = min\(275,\s*max\(190,\s*availableSignWidth\)\)/);
+  assert.match(header, /\.frame\(width:\s*signWidth\)/);
+  assert.match(header, /HomeStatusPaperBanner\(theme:\s*theme,\s*environment:\s*environment\)/);
+  assert.match(header, /\.frame\(height:\s*presentation\.isLeroys \? 126 : 76\)/);
+  assert.match(background, /\.frame\(width:\s*geometry\.size\.width,\s*height:\s*geometry\.size\.height\)/);
+  assert.match(background, /\.clipped\(\)/);
+});
+
+test('iOS restaurant switcher preserves both restaurant identities', () => {
+  const source = read('ios/ElRoysManagerApp/Features/Home/HomeViews.swift');
+  const switcher = sourceBetween(
+    source,
+    'private struct HomeRestaurantSwitcher',
+    'private struct HomeRecentUpdatesCard'
+  );
+
+  assert.match(switcher, /HomeRestaurantIdentitySwitcherSegment/);
+  assert.match(switcher, /RestaurantSwitcherIdentity\.resolve\(slug:\s*option\.slug\)/);
+  assert.match(switcher, /case leroys/);
+  assert.match(switcher, /case elRoys/);
+  assert.match(switcher, /LeroysPalette\.boardLift/);
+  assert.match(switcher, /AppPalette\.parchment/);
+  assert.match(switcher, /CantinaEdgePattern/);
+  assert.match(switcher, /matchedGeometryEffect\(id:\s*"restaurant-switcher-selected"/);
 });
 
 test('iOS home menu review reminders use EventKit with permission fallbacks', () => {

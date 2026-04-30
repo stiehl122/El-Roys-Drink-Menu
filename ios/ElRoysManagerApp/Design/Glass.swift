@@ -167,24 +167,29 @@ struct AppBackground: View {
 
 struct LeroysWallBackground: View {
   var body: some View {
-    ZStack {
-      Image("LeroysWallBackground")
-        .resizable()
-        .scaledToFill()
-        .overlay(LeroysPalette.deepWalnut.opacity(0.36))
+    GeometryReader { geometry in
+      ZStack {
+        Image("LeroysWallBackground")
+          .resizable()
+          .scaledToFill()
+          .frame(width: geometry.size.width, height: geometry.size.height)
+          .clipped()
+          .overlay(LeroysPalette.deepWalnut.opacity(0.36))
 
-      LinearGradient(
-        colors: [
-          .black.opacity(0.42),
-          LeroysPalette.walnut.opacity(0.12),
-          .black.opacity(0.58)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-      )
+        LinearGradient(
+          colors: [
+            .black.opacity(0.42),
+            LeroysPalette.walnut.opacity(0.12),
+            .black.opacity(0.58)
+          ],
+          startPoint: .top,
+          endPoint: .bottom
+        )
 
-      FilmGrain(intensity: 0.065, seed: 241)
-        .opacity(0.22)
+        FilmGrain(intensity: 0.065, seed: 241)
+          .opacity(0.22)
+      }
+      .frame(width: geometry.size.width, height: geometry.size.height)
     }
     .ignoresSafeArea()
   }

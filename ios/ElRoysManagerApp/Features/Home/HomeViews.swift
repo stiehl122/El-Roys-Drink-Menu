@@ -2,6 +2,7 @@ import UIKit
 import SwiftUI
 
 private let homeBottomNavigationClearance: CGFloat = 132
+private let homeRecentUpdatesLimit = 2
 
 // MARK: - Public entry points
 
@@ -58,70 +59,73 @@ struct RestaurantChooserView: View {
         HomeBackground(theme: theme)
       }
 
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 20) {
-          HomeHeader(
-            theme: theme,
-            presentation: presentation,
-            environment: model.environment,
-            onRequestAccountDeletion: { Task { await model.requestAccountDeletion() } },
-            onSignOut: { model.signOut() }
-          )
+      GeometryReader { geometry in
+        ScrollView(showsIndicators: false) {
+          VStack(alignment: .leading, spacing: 20) {
+            HomeHeader(
+              theme: theme,
+              presentation: presentation,
+              environment: model.environment,
+              onRequestAccountDeletion: { Task { await model.requestAccountDeletion() } },
+              onSignOut: { model.signOut() }
+            )
 
-          HomeRestaurantSwitcher(
-            options: restaurantSwitcherOptions,
-            selectedSlug: selectedRestaurantSlug,
-            theme: theme,
-            presentation: presentation,
-            namespace: switcherNamespace,
-            onSelect: { slug in
-              withAnimation(AppMotion.settle) {
-                selectedRestaurantSlug = slug
-                expandedUpdateID = nil
+            HomeRestaurantSwitcher(
+              options: restaurantSwitcherOptions,
+              selectedSlug: selectedRestaurantSlug,
+              theme: theme,
+              presentation: presentation,
+              namespace: switcherNamespace,
+              onSelect: { slug in
+                withAnimation(AppMotion.settle) {
+                  selectedRestaurantSlug = slug
+                  expandedUpdateID = nil
+                }
               }
-            }
-          )
+            )
 
-          HomeRecentUpdatesCard(
-            updates: currentHomeData.updates,
-            expandedUpdateID: $expandedUpdateID,
-            hasLoadedData: currentHomeData.hasLoadedRestaurantData,
-            theme: theme
-          )
+            HomeRecentUpdatesCard(
+              updates: currentHomeData.updates,
+              expandedUpdateID: $expandedUpdateID,
+              hasLoadedData: currentHomeData.hasLoadedRestaurantData,
+              theme: theme
+            )
 
-          HomeEditGrid(
-            theme: theme,
-            presentation: presentation,
-            drinksCount: currentHomeData.drinksCount,
-            foodCount: currentHomeData.foodCount,
-            drinksDestination: currentHomeData.drinksEditorDestination,
-            foodDestination: currentHomeData.foodEditorDestination
-          )
+            HomeEditGrid(
+              theme: theme,
+              presentation: presentation,
+              drinksCount: currentHomeData.drinksCount,
+              foodCount: currentHomeData.foodCount,
+              drinksDestination: currentHomeData.drinksEditorDestination,
+              foodDestination: currentHomeData.foodEditorDestination
+            )
 
-          HomeViewRows(
-            restaurant: restaurant,
-            theme: theme,
-            presentation: presentation
-          )
+            HomeViewRows(
+              restaurant: restaurant,
+              theme: theme,
+              presentation: presentation
+            )
 
-          HomeRestaurantToolsCard(
-            restaurant: restaurant,
-            featuredSpecials: currentHomeData.featuredSpecials,
-            theme: theme
-          )
+            HomeRestaurantToolsCard(
+              restaurant: restaurant,
+              featuredSpecials: currentHomeData.featuredSpecials,
+              theme: theme
+            )
 
-          HomeCalendarReminderCard(
-            restaurant: restaurant,
-            theme: theme,
-            isScheduling: isSchedulingCalendarReminder,
-            onSchedule: scheduleCalendarReminder
-          )
+            HomeCalendarReminderCard(
+              restaurant: restaurant,
+              theme: theme,
+              isScheduling: isSchedulingCalendarReminder,
+              onSchedule: scheduleCalendarReminder
+            )
 
-          Color.clear.frame(height: homeBottomNavigationClearance)
+            Color.clear.frame(height: homeBottomNavigationClearance)
+          }
+          .padding(.horizontal, 20)
+          .padding(.top, 14)
+          .padding(.bottom, 16)
+          .frame(width: geometry.size.width, alignment: .leading)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 16)
       }
     }
     .onAppear {
@@ -209,7 +213,7 @@ struct RestaurantChooserView: View {
       }
       .map { makeHomeUpdate(entry: $0.0, fallbackMenu: $0.1) }
       .sorted { $0.sortDate > $1.sortDate }
-    return updates.isEmpty ? nil : Array(updates.prefix(2))
+    return updates.isEmpty ? nil : Array(updates.prefix(homeRecentUpdatesLimit))
   }
 
   private func restaurantMenus(for restaurant: RestaurantRecord) -> [MenuRecord] {
@@ -340,69 +344,88 @@ private struct HomeHeader: View {
   let onSignOut: () -> Void
 
   var body: some View {
-    HStack(alignment: .center, spacing: 14) {
-      if presentation.isLeroys {
-        VStack(alignment: .leading, spacing: 8) {
-          Image("LeroysHeroSign")
-            .resizable()
-            .scaledToFit()
-            .frame(maxWidth: 255)
-            .accessibilityLabel("Leroy's Lounge")
-          HomeLiveStrip(theme: theme, environment: environment)
+    GeometryReader { geometry in
+      let horizontalPadding: CGFloat = 32
+      let accountWidth: CGFloat = 36
+      let headerGap: CGFloat = 14
+      let availableSignWidth = geometry.size.width - horizontalPadding - accountWidth - headerGap
+      let signWidth = min(275, max(190, availableSignWidth))
+
+      HStack(alignment: .center, spacing: headerGap) {
+        if presentation.isLeroys {
+          VStack(alignment: .leading, spacing: 10) {
+            Image("LeroysHeroSign")
+              .resizable()
+              .scaledToFit()
+              .frame(width: signWidth)
+              .accessibilityLabel("Leroy's Lounge")
+
+            HomeStatusPaperBanner(theme: theme, environment: environment)
+              .frame(maxWidth: min(290, availableSignWidth + 54), alignment: .leading)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+          HomeEmblem(theme: theme)
+            .accessibilityHidden(true)
+
+          VStack(alignment: .leading, spacing: 4) {
+            Text("201 SOUTH LEROY")
+              .font(theme.display(19, weight: .bold))
+              .tracking(theme.motif == .chevron ? 1.4 : 0.8)
+              .foregroundStyle(theme.headerText)
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
+
+            HomeLiveStrip(
+              theme: theme,
+              environment: environment
+            )
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-      } else {
-        HomeEmblem(theme: theme)
-          .accessibilityHidden(true)
 
-        VStack(alignment: .leading, spacing: 4) {
-          Text("201 SOUTH LEROY")
-            .font(theme.display(19, weight: .bold))
-            .tracking(theme.motif == .chevron ? 1.4 : 0.8)
-            .foregroundStyle(theme.headerText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+        Menu {
+          Button("Request Account Deletion") {
+            onRequestAccountDeletion()
+          }
+          .accessibilityHint("Submits an account deletion request for your staff account.")
 
-          HomeLiveStrip(
-            theme: theme,
-            environment: environment
-          )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-      }
+          Button("Account Deletion Details") {
+            UIApplication.shared.open(accountDeletionURL)
+          }
+          .accessibilityHint("Opens account deletion instructions for your staff account.")
 
-      Menu {
-        Button("Request Account Deletion") {
-          onRequestAccountDeletion()
-        }
-        .accessibilityHint("Submits an account deletion request for your staff account.")
-
-        Button("Account Deletion Details") {
-          UIApplication.shared.open(accountDeletionURL)
-        }
-        .accessibilityHint("Opens account deletion instructions for your staff account.")
-
-        Button(role: .destructive) {
-          onSignOut()
+          Button(role: .destructive) {
+            onSignOut()
+          } label: {
+            Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+          }
         } label: {
-          Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+          ZStack {
+            Circle()
+              .stroke(theme.accent.opacity(0.5), lineWidth: 1)
+              .frame(width: accountWidth, height: accountWidth)
+            Image(systemName: "person.crop.circle")
+              .font(.system(size: 20, weight: .light))
+              .foregroundStyle(theme.headerText)
+          }
         }
-      } label: {
-        ZStack {
-          Circle()
-            .stroke(theme.accent.opacity(0.5), lineWidth: 1)
-            .frame(width: 36, height: 36)
-          Image(systemName: "person.crop.circle")
-            .font(.system(size: 20, weight: .light))
-            .foregroundStyle(theme.headerText)
-        }
+        .contentShape(Circle())
+        .accessibilityLabel("Account")
       }
-      .contentShape(Circle())
-      .accessibilityLabel("Account")
+      .padding(.horizontal, 16)
+      .padding(.vertical, 14)
+      .homeGlassChrome(
+        tint: presentation.isLeroys ? LeroysPalette.brass : theme.chromeTint,
+        cornerRadius: 20,
+        fillOpacity: presentation.isLeroys ? 0.025 : 0.08,
+        innerWhiteOpacity: presentation.isLeroys ? 0.18 : 0.82,
+        innerTintOpacity: presentation.isLeroys ? 0.045 : 0.14,
+        borderOpacity: presentation.isLeroys ? 0.74 : 0.20,
+        highlightOpacity: presentation.isLeroys ? 0.24 : 0.66
+      )
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 14)
-    .homeGlassChrome(tint: theme.chromeTint, cornerRadius: 20)
+    .frame(height: presentation.isLeroys ? 126 : 76)
   }
 
   private var accountDeletionURL: URL {
@@ -412,6 +435,124 @@ private struct HomeHeader: View {
     )
     components?.fragment = "account-deletion"
     return components?.url ?? environment.publicOrigin
+  }
+}
+
+private struct HomeStatusPaperBanner: View {
+  let theme: HomeTheme
+  let environment: AppEnvironment
+
+  var body: some View {
+    TimelineView(.periodic(from: .now, by: 30)) { context in
+      HStack(spacing: 8) {
+        HStack(spacing: 5) {
+          PulsingDot(color: theme.liveDot)
+            .frame(width: 9, height: 9)
+          Text(environment.isProduction ? "LIVE" : environment.displayName.uppercased())
+            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+            .tracking(1.8)
+            .foregroundStyle(theme.liveDot)
+        }
+
+        Rectangle()
+          .fill(LeroysPalette.paperInk.opacity(0.52))
+          .frame(width: 13, height: 0.7)
+
+        Text(DateFormatter.headerStamp.string(from: context.date).uppercased())
+          .font(.system(size: 10, weight: .bold, design: .monospaced))
+          .tracking(1.55)
+          .foregroundStyle(LeroysPalette.paperInk.opacity(0.80))
+          .lineLimit(1)
+          .minimumScaleFactor(0.78)
+      }
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background {
+        ZStack {
+          PaperSlipShape()
+            .fill(
+              LinearGradient(
+                colors: [
+                  LeroysPalette.paper.opacity(0.98),
+                  LeroysPalette.nicotineCream.opacity(0.94),
+                  Color(red: 0.780, green: 0.665, blue: 0.465).opacity(0.95)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+
+          PaperSlipShape()
+            .stroke(LeroysPalette.paperInk.opacity(0.10), lineWidth: 0.7)
+
+          FilmGrain(intensity: 0.055, seed: 715)
+            .opacity(0.16)
+            .clipShape(PaperSlipShape())
+        }
+        .shadow(color: .black.opacity(0.26), radius: 8, y: 4)
+      }
+      .overlay(alignment: .topLeading) {
+        LeroyTape()
+          .rotationEffect(.degrees(-18))
+          .offset(x: -8, y: -8)
+      }
+      .overlay(alignment: .topTrailing) {
+        LeroyTape()
+          .rotationEffect(.degrees(20))
+          .offset(x: 6, y: -8)
+      }
+      .overlay(alignment: .bottomTrailing) {
+        LeroyTape(width: 26, height: 9)
+          .rotationEffect(.degrees(-22))
+          .offset(x: 9, y: 6)
+      }
+    }
+  }
+}
+
+private struct PaperSlipShape: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    let tear: CGFloat = min(9, rect.height * 0.28)
+    path.move(to: CGPoint(x: tear * 0.6, y: 0))
+    path.addLine(to: CGPoint(x: rect.maxX - tear, y: 0))
+    path.addLine(to: CGPoint(x: rect.maxX - tear * 0.35, y: rect.height * 0.23))
+    path.addLine(to: CGPoint(x: rect.maxX - tear * 0.9, y: rect.height * 0.50))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.height * 0.78))
+    path.addLine(to: CGPoint(x: rect.maxX - tear * 0.7, y: rect.maxY))
+    path.addLine(to: CGPoint(x: tear, y: rect.maxY))
+    path.addLine(to: CGPoint(x: tear * 0.25, y: rect.height * 0.76))
+    path.addLine(to: CGPoint(x: tear * 0.75, y: rect.height * 0.52))
+    path.addLine(to: CGPoint(x: 0, y: rect.height * 0.27))
+    path.closeSubpath()
+    return path
+  }
+}
+
+private struct LeroyTape: View {
+  var width: CGFloat = 30
+  var height: CGFloat = 10
+
+  var body: some View {
+    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+      .fill(
+        LinearGradient(
+          colors: [
+            LeroysPalette.nicotineCream.opacity(0.52),
+            Color.white.opacity(0.28),
+            LeroysPalette.paper.opacity(0.46)
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+          .stroke(.white.opacity(0.18), lineWidth: 0.5)
+      }
+      .frame(width: width, height: height)
+      .shadow(color: .black.opacity(0.18), radius: 2, y: 1)
   }
 }
 
@@ -514,64 +655,310 @@ private struct HomeRestaurantSwitcher: View {
   let onSelect: (String) -> Void
 
   var body: some View {
-    HStack(spacing: 0) {
-      ForEach(options) { option in
-        let isSelected = option.slug == selectedSlug
-        let optionPresentation = RestaurantPresentation.resolve(
-          restaurant: RestaurantRecord(id: option.slug, slug: option.slug, name: option.label, canAccess: nil, design: nil, useCustomDesign: nil)
-        )
-        Button {
-          onSelect(option.slug)
-        } label: {
-          VStack(spacing: 6) {
-            Text(option.label.uppercased())
-              .font(theme.display(16, weight: .bold))
-              .tracking(theme.motif == .chevron ? 2.0 : 1.2)
-              .foregroundStyle(isSelected ? theme.switcherSelectedText : theme.switcherText)
+    ZStack {
+      switcherShell
 
-            ZStack {
-              Rectangle()
-                .fill(theme.subtleText.opacity(0.18))
-                .frame(height: 1)
-              if isSelected {
+      HStack(spacing: 0) {
+        ForEach(options) { option in
+          let identity = RestaurantSwitcherIdentity.resolve(slug: option.slug)
+          HomeRestaurantIdentitySwitcherSegment(
+            option: option,
+            identity: identity,
+            isSelected: option.slug == selectedSlug,
+            namespace: namespace,
+            onSelect: onSelect
+          )
+
+          if option.id != options.last?.id {
+            Rectangle()
+              .fill(
                 LinearGradient(
-                  colors: [theme.accent.opacity(0), theme.accent, theme.accentHot, theme.accent.opacity(0)],
-                  startPoint: .leading,
-                  endPoint: .trailing
+                  colors: [
+                    LeroysPalette.brass.opacity(0.18),
+                    AppPalette.cobalt.opacity(0.40),
+                    AppPalette.terracotta.opacity(0.28)
+                  ],
+                  startPoint: .top,
+                  endPoint: .bottom
                 )
-                .frame(height: 2)
-                .matchedGeometryEffect(id: "switcher-underline", in: namespace)
-              }
-            }
-            .frame(height: 2)
-            .padding(.horizontal, 18)
+              )
+              .frame(width: 1, height: 44)
+              .padding(.vertical, 5)
           }
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
-          .contentShape(Rectangle())
-          .background {
-            if presentation.isLeroys && optionPresentation.isLeroys {
-              RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(LeroysPalette.board.opacity(isSelected ? 0.72 : 0.34))
-                .overlay {
-                  RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(LeroysPalette.brass.opacity(isSelected ? 0.58 : 0.22), lineWidth: 1)
-                }
-            }
-          }
-        }
-        .buttonStyle(.plain)
-
-        if option.id != options.last?.id {
-          Rectangle()
-            .fill(theme.accent.opacity(0.35))
-            .frame(width: 0.6, height: 36)
         }
       }
+      .padding(5)
     }
-    .padding(.horizontal, 4)
-    .padding(.vertical, 4)
-    .homeGlassChrome(tint: theme.chromeTint, cornerRadius: 18)
+    .frame(height: 64)
+    .accessibilityElement(children: .contain)
+  }
+
+  private var switcherShell: some View {
+    RoundedRectangle(cornerRadius: 23, style: .continuous)
+      .fill(.white.opacity(presentation.isLeroys ? 0.060 : 0.22))
+      .overlay {
+        RoundedRectangle(cornerRadius: 23, style: .continuous)
+          .stroke(
+            LinearGradient(
+              colors: [
+                LeroysPalette.brass.opacity(0.90),
+                AppPalette.marigold.opacity(0.72),
+                AppPalette.cobalt.opacity(0.58),
+                AppPalette.terracotta.opacity(0.72)
+              ],
+              startPoint: .leading,
+              endPoint: .trailing
+            ),
+            lineWidth: 1.15
+          )
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 19, style: .continuous)
+          .stroke(.white.opacity(presentation.isLeroys ? 0.24 : 0.48), lineWidth: 0.75)
+          .padding(4)
+      }
+      .shadow(color: .black.opacity(presentation.isLeroys ? 0.32 : 0.14), radius: 16, y: 8)
+  }
+}
+
+private struct HomeRestaurantIdentitySwitcherSegment: View {
+  let option: HomeRestaurantOption
+  let identity: RestaurantSwitcherIdentity
+  let isSelected: Bool
+  let namespace: Namespace.ID
+  let onSelect: (String) -> Void
+
+  var body: some View {
+    Button {
+      onSelect(option.slug)
+    } label: {
+      ZStack {
+        identityBase
+
+        if isSelected {
+          selectedChrome
+            .matchedGeometryEffect(id: "restaurant-switcher-selected", in: namespace)
+        }
+
+        VStack(spacing: 6) {
+          Text(option.label.uppercased())
+            .font(identity.titleFont)
+            .tracking(identity.tracking)
+            .foregroundStyle(isSelected ? identity.selectedText : identity.inactiveText)
+            .shadow(color: identity.textShadow.opacity(isSelected ? 0.70 : 0.22), radius: isSelected ? 5 : 2, y: 1)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+
+          identityRule
+        }
+        .padding(.horizontal, 13)
+      }
+      .frame(maxWidth: .infinity)
+      .frame(height: 54)
+      .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(option.label)
+    .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+  }
+
+  @ViewBuilder
+  private var identityBase: some View {
+    switch identity.kind {
+    case .leroys:
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(
+          LinearGradient(
+            colors: [
+              LeroysPalette.boardLift.opacity(isSelected ? 0.94 : 0.62),
+              LeroysPalette.board.opacity(isSelected ? 0.96 : 0.54),
+              Color.black.opacity(isSelected ? 0.72 : 0.42)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+        .overlay {
+          ArtDecoChevronPattern(color: LeroysPalette.brass.opacity(isSelected ? 0.10 : 0.055), spacing: 26, lineWidth: 0.55)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    case .elRoys:
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .fill(
+          LinearGradient(
+            colors: [
+              AppPalette.parchment.opacity(isSelected ? 0.98 : 0.84),
+              AppPalette.linen.opacity(isSelected ? 0.96 : 0.72),
+              Color(red: 0.835, green: 0.640, blue: 0.430).opacity(isSelected ? 0.62 : 0.42)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+        .overlay {
+          PunchedTinDiamondPattern(color: AppPalette.terracotta.opacity(isSelected ? 0.20 : 0.15), spacing: 19, lineWidth: 0.55)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .overlay(alignment: .top) {
+          CantinaEdgePattern(color: AppPalette.terracotta.opacity(isSelected ? 0.60 : 0.44))
+            .frame(height: 8)
+            .padding(.horizontal, 18)
+            .padding(.top, 5)
+        }
+        .overlay(alignment: .bottom) {
+          CantinaEdgePattern(color: AppPalette.terracotta.opacity(isSelected ? 0.52 : 0.36))
+            .frame(height: 8)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 5)
+        }
+    }
+  }
+
+  private var selectedChrome: some View {
+    RoundedRectangle(cornerRadius: 19, style: .continuous)
+      .stroke(
+        LinearGradient(
+          colors: identity.selectedBorder,
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        ),
+        lineWidth: 1.35
+      )
+      .background {
+        RoundedRectangle(cornerRadius: 19, style: .continuous)
+          .fill(identity.selectedGlow.opacity(0.12))
+      }
+      .shadow(color: identity.selectedGlow.opacity(0.38), radius: 12, y: 5)
+      .padding(0.5)
+  }
+
+  @ViewBuilder
+  private var identityRule: some View {
+    switch identity.kind {
+    case .leroys:
+      HStack(spacing: 6) {
+        Rectangle().fill(identity.ruleGradient).frame(height: 1)
+        Diamond()
+          .fill(LeroysPalette.brass.opacity(isSelected ? 0.98 : 0.58))
+          .frame(width: 6, height: 6)
+        Rectangle().fill(identity.ruleGradient).frame(height: 1)
+      }
+      .frame(maxWidth: 122)
+    case .elRoys:
+      HStack(spacing: 6) {
+        Rectangle().fill(identity.ruleGradient).frame(height: 1)
+        Image(systemName: "sun.max.fill")
+          .font(.system(size: 7, weight: .bold))
+          .foregroundStyle(AppPalette.cobalt.opacity(isSelected ? 0.92 : 0.66))
+        Rectangle().fill(identity.ruleGradient).frame(height: 1)
+      }
+      .frame(maxWidth: 120)
+    }
+  }
+}
+
+private struct RestaurantSwitcherIdentity {
+  enum Kind {
+    case leroys
+    case elRoys
+  }
+
+  let kind: Kind
+  let titleFont: Font
+  let tracking: CGFloat
+  let selectedText: Color
+  let inactiveText: Color
+  let textShadow: Color
+  let selectedGlow: Color
+  let selectedBorder: [Color]
+  let ruleGradient: LinearGradient
+
+  static func resolve(slug: String) -> RestaurantSwitcherIdentity {
+    slug == "el-roys-cantina" ? .elRoys : .leroys
+  }
+
+  static let leroys = RestaurantSwitcherIdentity(
+    kind: .leroys,
+    titleFont: .custom("Didot-Bold", size: 18),
+    tracking: 2.1,
+    selectedText: Color(red: 0.980, green: 0.945, blue: 0.890),
+    inactiveText: Color(red: 0.820, green: 0.705, blue: 0.545),
+    textShadow: .black,
+    selectedGlow: LeroysPalette.brass,
+    selectedBorder: [
+      LeroysPalette.brass.opacity(0.96),
+      AppPalette.marigold.opacity(0.85),
+      LeroysPalette.fadedBeerRed.opacity(0.58)
+    ],
+    ruleGradient: LinearGradient(
+      colors: [
+        LeroysPalette.brass.opacity(0),
+        LeroysPalette.brass.opacity(0.92),
+        AppPalette.marigold.opacity(0.75),
+        LeroysPalette.brass.opacity(0)
+      ],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
+  )
+
+  static let elRoys = RestaurantSwitcherIdentity(
+    kind: .elRoys,
+    titleFont: .custom("Copperplate-Bold", size: 18),
+    tracking: 1.35,
+    selectedText: Color(red: 0.360, green: 0.120, blue: 0.075),
+    inactiveText: Color(red: 0.560, green: 0.205, blue: 0.125),
+    textShadow: .white,
+    selectedGlow: AppPalette.terracotta,
+    selectedBorder: [
+      AppPalette.terracotta.opacity(0.92),
+      AppPalette.marigold.opacity(0.64),
+      AppPalette.cobalt.opacity(0.86)
+    ],
+    ruleGradient: LinearGradient(
+      colors: [
+        AppPalette.cobalt.opacity(0),
+        AppPalette.cobalt.opacity(0.92),
+        AppPalette.cobalt.opacity(0.92),
+        AppPalette.cobalt.opacity(0)
+      ],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
+  )
+}
+
+private struct CantinaEdgePattern: View {
+  let color: Color
+
+  var body: some View {
+    GeometryReader { geometry in
+      Path { path in
+        let step: CGFloat = 10
+        var x: CGFloat = 0
+        while x < geometry.size.width {
+          path.move(to: CGPoint(x: x, y: geometry.size.height * 0.20))
+          path.addLine(to: CGPoint(x: x + step * 0.35, y: geometry.size.height * 0.72))
+          path.addLine(to: CGPoint(x: x + step * 0.70, y: geometry.size.height * 0.20))
+          path.move(to: CGPoint(x: x + step * 0.78, y: geometry.size.height * 0.50))
+          path.addLine(to: CGPoint(x: x + step, y: geometry.size.height * 0.50))
+          x += step * 1.26
+        }
+      }
+      .stroke(color, lineWidth: 1)
+    }
+  }
+}
+
+private struct Diamond: Shape {
+  func path(in rect: CGRect) -> Path {
+    var path = Path()
+    path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+    path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+    path.closeSubpath()
+    return path
   }
 }
 
@@ -603,7 +990,7 @@ private struct HomeRecentUpdatesCard: View {
           Image(systemName: hasLoadedData ? "tray" : "hourglass")
             .font(.system(size: 13, weight: .semibold))
             .foregroundStyle(theme.subtleText)
-          Text(hasLoadedData ? "No sent updates yet." : "Loading recent updates…")
+          Text(hasLoadedData ? "No updates in the last \(homeRecentUpdatesLimit) entries." : "Loading recent updates…")
             .font(theme.body(14, weight: .medium, italic: true))
             .foregroundStyle(theme.subtleText)
         }
@@ -611,7 +998,7 @@ private struct HomeRecentUpdatesCard: View {
         .padding(.vertical, 10)
       } else {
         VStack(alignment: .leading, spacing: 10) {
-          ForEach(Array(updates.prefix(2).enumerated()), id: \.element.id) { index, update in
+          ForEach(Array(updates.prefix(homeRecentUpdatesLimit).enumerated()), id: \.element.id) { index, update in
             if index > 0 {
               motifDivider
             }
@@ -770,24 +1157,28 @@ private struct HomeEditGrid: View {
         "drinks",
         drinksDestination,
         HomeEditTile(
-          chapter: "VOL. 01",
+          chapter: presentation.isLeroys ? "VOL. 02" : "VOL. 01",
           kind: presentation.isLeroys ? "DRINKS" : (theme.motif == .chevron ? "LIQUID" : "BEBIDAS"),
           title: "Edit Drinks",
           countLabel: countLabel(for: drinksCount),
           icon: "wineglass.fill",
-          theme: theme
+          menuType: "drinks",
+          theme: theme,
+          presentation: presentation
         )
       ),
       (
         "food",
         foodDestination,
         HomeEditTile(
-          chapter: "VOL. 02",
+          chapter: presentation.isLeroys ? "VOL. 01" : "VOL. 02",
           kind: presentation.isLeroys ? "FOOD" : (theme.motif == .chevron ? "PLATES" : "COCINA"),
           title: "Edit Food",
           countLabel: countLabel(for: foodCount),
           icon: "fork.knife",
-          theme: theme
+          menuType: "food",
+          theme: theme,
+          presentation: presentation
         )
       )
     ].sorted { lhs, rhs in
@@ -795,11 +1186,18 @@ private struct HomeEditGrid: View {
         presentation.orderedMenuTypes.firstIndex(of: rhs.type) ?? 99
     }
 
-    HStack(spacing: 12) {
-      ForEach(tiles, id: \.type) { entry in
-        editTile(action: entry.destination, tile: entry.tile)
+    GeometryReader { geometry in
+      let tileWidth = Swift.max(0, (geometry.size.width - 12) / 2)
+
+      HStack(spacing: 12) {
+        ForEach(tiles, id: \.type) { entry in
+          editTile(action: entry.destination, tile: entry.tile)
+            .frame(width: tileWidth)
+        }
       }
+      .frame(width: geometry.size.width, alignment: .leading)
     }
+    .frame(height: 190)
   }
 
   @ViewBuilder
@@ -826,68 +1224,179 @@ private struct HomeEditTile: View {
   let title: String
   let countLabel: String
   let icon: String
+  let menuType: String
   let theme: HomeTheme
+  let presentation: RestaurantPresentation
 
   var body: some View {
+    if presentation.isLeroys {
+      leroysBody
+    } else {
+      standardBody
+    }
+  }
+
+  private var standardBody: some View {
+    tileContent(titleFontSize: 24, titleTracking: theme.motif == .chevron ? 0.5 : 0.0)
+      .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
+      .padding(16)
+      .background(
+        LinearGradient(
+          colors: [theme.tileSurfaceTop, theme.tileSurfaceBottom],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        ),
+        in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+      )
+      .overlay(alignment: .bottomTrailing) {
+        tileMotifWash
+          .frame(width: 120, height: 90)
+          .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+          .allowsHitTesting(false)
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+          .stroke(theme.tileBorder, lineWidth: 1)
+      }
+      .shadow(color: theme.shadowTint.opacity(0.25), radius: 18, y: 10)
+  }
+
+  private var leroysBody: some View {
+    tileContent(titleFontSize: 25, titleTracking: 0.15)
+      .frame(maxWidth: .infinity, minHeight: 166, alignment: .topLeading)
+      .padding(16)
+      .background(leroysPanelBackground, in: RoundedRectangle(cornerRadius: 21, style: .continuous))
+      .overlay {
+        leroysMenuArtwork
+          .clipShape(RoundedRectangle(cornerRadius: 21, style: .continuous))
+          .allowsHitTesting(false)
+      }
+      .overlay(alignment: .top) {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .stroke(.white.opacity(0.08), lineWidth: 0.7)
+          .padding(5)
+      }
+      .overlay {
+        RoundedRectangle(cornerRadius: 21, style: .continuous)
+          .stroke(leroysPanelBorder, lineWidth: 1.25)
+      }
+      .overlay(alignment: .bottom) {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .stroke(LeroysPalette.fadedBeerRed.opacity(menuType == "food" ? 0.38 : 0.20), lineWidth: 0.8)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 7)
+      }
+      .shadow(color: .black.opacity(0.34), radius: 18, y: 10)
+  }
+
+  private func tileContent(titleFontSize: CGFloat, titleTracking: CGFloat) -> some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(alignment: .top) {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: presentation.isLeroys ? 5 : 2) {
           Text(chapter)
-            .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-            .tracking(1.6)
-            .foregroundStyle(theme.tileKickerTint)
+            .font(.system(size: presentation.isLeroys ? 10.5 : 9.5, weight: .bold, design: .monospaced))
+            .tracking(presentation.isLeroys ? 2.0 : 1.6)
+            .foregroundStyle(presentation.isLeroys ? LeroysPalette.chalkCream.opacity(0.92) : theme.tileKickerTint)
           Text(kind)
-            .font(theme.display(11, weight: .bold))
-            .tracking(2.2)
-            .foregroundStyle(theme.tileKickerTint.opacity(0.85))
+            .font(theme.display(presentation.isLeroys ? 13 : 11, weight: .bold))
+            .tracking(presentation.isLeroys ? 3.1 : 2.2)
+            .foregroundStyle(presentation.isLeroys ? LeroysPalette.fadedBeerRed.opacity(0.96) : theme.tileKickerTint.opacity(0.85))
         }
         Spacer()
-        Image(systemName: icon)
-          .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(theme.tileIconTint)
-          .frame(width: 30, height: 30)
-          .background(theme.tileIconTint.opacity(0.16), in: Circle())
-          .overlay(Circle().stroke(theme.tileIconTint.opacity(0.40), lineWidth: 0.6))
+        if !presentation.isLeroys {
+          Image(systemName: icon)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(theme.tileIconTint)
+            .frame(width: 30, height: 30)
+            .background(theme.tileIconTint.opacity(0.16), in: Circle())
+            .overlay(Circle().stroke(theme.tileIconTint.opacity(0.40), lineWidth: 0.6))
+        }
       }
 
       Spacer(minLength: 4)
 
       Text(title)
-        .font(theme.display(24, weight: .bold))
-        .tracking(theme.motif == .chevron ? 0.5 : 0.0)
-        .foregroundStyle(theme.tileTitleText)
+        .font(theme.display(titleFontSize, weight: .bold))
+        .tracking(titleTracking)
+        .foregroundStyle(presentation.isLeroys ? LeroysPalette.nicotineCream : theme.tileTitleText)
+        .shadow(color: .black.opacity(presentation.isLeroys ? 0.52 : 0), radius: 4, y: 2)
         .lineLimit(1)
         .minimumScaleFactor(0.7)
 
-      BrassRule(color: theme.tileIconTint.opacity(0.6))
-        .frame(maxWidth: 52)
+      leroysOrStandardRule
+        .frame(maxWidth: presentation.isLeroys ? 126 : 52)
 
       Text(countLabel)
-        .font(.system(size: 9.5, weight: .bold, design: .monospaced))
-        .tracking(1.6)
-        .foregroundStyle(theme.tileSubtleText)
+        .font(.system(size: presentation.isLeroys ? 10.5 : 9.5, weight: .bold, design: .monospaced))
+        .tracking(presentation.isLeroys ? 1.9 : 1.6)
+        .foregroundStyle(presentation.isLeroys ? LeroysPalette.chalkCream.opacity(0.86) : theme.tileSubtleText)
     }
-    .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
-    .padding(16)
-    .background(
-      LinearGradient(
-        colors: [theme.tileSurfaceTop, theme.tileSurfaceBottom],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      ),
-      in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+  }
+
+  private var leroysPanelBackground: LinearGradient {
+    LinearGradient(
+      colors: menuType == "food"
+        ? [
+          Color(red: 0.135, green: 0.105, blue: 0.074),
+          Color(red: 0.078, green: 0.061, blue: 0.046),
+          Color(red: 0.045, green: 0.034, blue: 0.027)
+        ]
+        : [
+          Color(red: 0.118, green: 0.096, blue: 0.070),
+          Color(red: 0.067, green: 0.056, blue: 0.045),
+          Color(red: 0.036, green: 0.030, blue: 0.026)
+        ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
     )
-    .overlay(alignment: .bottomTrailing) {
-      tileMotifWash
-        .frame(width: 120, height: 90)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .allowsHitTesting(false)
+  }
+
+  private var leroysPanelBorder: LinearGradient {
+    LinearGradient(
+      colors: [
+        LeroysPalette.brass.opacity(0.88),
+        LeroysPalette.chalkCream.opacity(0.38),
+        LeroysPalette.fadedBeerRed.opacity(menuType == "food" ? 0.54 : 0.26),
+        LeroysPalette.brass.opacity(0.70)
+      ],
+      startPoint: .topLeading,
+      endPoint: .bottomTrailing
+    )
+  }
+
+  private var leroysOrStandardRule: some View {
+    HStack(spacing: 8) {
+      Rectangle()
+        .fill(ruleGradient)
+        .frame(height: 1)
+      Image(systemName: "star.fill")
+        .font(.system(size: 8, weight: .bold))
+        .foregroundStyle(presentation.isLeroys ? LeroysPalette.tvBlue.opacity(0.95) : theme.tileIconTint.opacity(0.60))
+      Rectangle()
+        .fill(ruleGradient)
+        .frame(height: 1)
     }
-    .overlay {
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .stroke(theme.tileBorder, lineWidth: 1)
-    }
-    .shadow(color: theme.shadowTint.opacity(0.25), radius: 18, y: 10)
+  }
+
+  private var ruleGradient: LinearGradient {
+    LinearGradient(
+      colors: presentation.isLeroys
+        ? [LeroysPalette.brass.opacity(0.95), LeroysPalette.brass.opacity(0.08)]
+        : [theme.tileIconTint.opacity(0.6), theme.tileIconTint.opacity(0.6)],
+      startPoint: .leading,
+      endPoint: .trailing
+    )
+  }
+
+  @ViewBuilder
+  private var leroysMenuArtwork: some View {
+    Image(menuType == "food" ? "LeroysFoodGhostArt" : "LeroysDrinksGhostArt")
+      .resizable()
+      .scaledToFit()
+      .frame(width: menuType == "food" ? 154 : 162, height: menuType == "food" ? 154 : 162)
+      .blendMode(.screen)
+      .opacity(menuType == "food" ? 0.36 : 0.34)
+      .offset(x: menuType == "food" ? 25 : 30, y: menuType == "food" ? 21 : 18)
   }
 
   @ViewBuilder
@@ -1427,6 +1936,11 @@ private enum HomeTypography {
 private struct HomeGlassChromeModifier: ViewModifier {
   let tint: Color
   let cornerRadius: CGFloat
+  var fillOpacity: Double = 0.08
+  var innerWhiteOpacity: Double = 0.82
+  var innerTintOpacity: Double = 0.14
+  var borderOpacity: Double = 0.20
+  var highlightOpacity: Double = 0.66
 
   func body(content: Content) -> some View {
     let innerRadius = max(18, cornerRadius - 7)
@@ -1435,17 +1949,17 @@ private struct HomeGlassChromeModifier: ViewModifier {
       .background {
         ZStack {
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(tint.opacity(0.08))
+            .fill(tint.opacity(fillOpacity))
 
           RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .stroke(tint.opacity(0.20), lineWidth: 0.9)
+            .stroke(tint.opacity(borderOpacity), lineWidth: 1.15)
 
           RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
             .fill(
               LinearGradient(
                 colors: [
-                  .white.opacity(0.82),
-                  tint.opacity(0.14),
+                  .white.opacity(innerWhiteOpacity),
+                  tint.opacity(innerTintOpacity),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -1454,10 +1968,10 @@ private struct HomeGlassChromeModifier: ViewModifier {
             .padding(6)
 
           RoundedRectangle(cornerRadius: innerRadius, style: .continuous)
-            .stroke(.white.opacity(0.66), lineWidth: 0.7)
+            .stroke(.white.opacity(highlightOpacity), lineWidth: 0.7)
             .padding(6)
         }
-        .shadow(color: tint.opacity(0.10), radius: 22, y: 12)
+        .shadow(color: tint.opacity(fillOpacity + 0.02), radius: 22, y: 12)
         .shadow(color: themeShadow(tint: tint), radius: 20, y: 12)
       }
   }
@@ -1468,8 +1982,24 @@ private struct HomeGlassChromeModifier: ViewModifier {
 }
 
 private extension View {
-  func homeGlassChrome(tint: Color, cornerRadius: CGFloat) -> some View {
-    modifier(HomeGlassChromeModifier(tint: tint, cornerRadius: cornerRadius))
+  func homeGlassChrome(
+    tint: Color,
+    cornerRadius: CGFloat,
+    fillOpacity: Double = 0.08,
+    innerWhiteOpacity: Double = 0.82,
+    innerTintOpacity: Double = 0.14,
+    borderOpacity: Double = 0.20,
+    highlightOpacity: Double = 0.66
+  ) -> some View {
+    modifier(HomeGlassChromeModifier(
+      tint: tint,
+      cornerRadius: cornerRadius,
+      fillOpacity: fillOpacity,
+      innerWhiteOpacity: innerWhiteOpacity,
+      innerTintOpacity: innerTintOpacity,
+      borderOpacity: borderOpacity,
+      highlightOpacity: highlightOpacity
+    ))
   }
 }
 
