@@ -70,12 +70,22 @@ let _menuLinkResolver = null;
 let _featuredViewPolicy = null;
 const _sessionModuleDelegationStack = new Set();
 const _authModuleDelegationStack = new Set();
+const MANAGER_REVISION_DOCK_SCROLL_IDLE_MS = 180;
 let _authOverlayController = null;
 let _authTriggerDelegated = false;
 const _uiModuleDelegationStack = new Set();
 let _managerWorkspaceService = null;
+let _managerCockpitService = null;
+let _managerItemsTableService = null;
+let _managerItemEditorModalService = null;
 let _managerSectionService = null;
 let _managerEditorsService = null;
+let _managerNotesService = null;
+let _managerActivityService = null;
+let _managerRevisionDockService = null;
+let _managerRevisionDockScrollBound = false;
+let _managerRevisionDockScrollCollapsed = false;
+let _managerRevisionDockScrollTimer = null;
 let _adminWorkspaceService = null;
 let _adminSwitcherService = null;
 let _publicFooterActionsService = null;
@@ -98,6 +108,8 @@ let _featuredGroups = []; // [{id, name, displayOrder, slots: [{id, itemId, sell
 let _lastSentFeaturedIds = new Set(); // item IDs that were featured at the last live publish
 let _restaurantSpecialsSiblingCatalog = [];
 let _workspaceRestaurantToolsReadable = false;
+let _managerNote = { note: '', updated_at: '', updated_by: '' };
+let _managerActivityEntries = [];
 
 // ─── CATEGORY DEFINITIONS ────────────────────────────────────────────────────
 const FALLBACK_ICON_COLOR_PALETTE = [
@@ -596,6 +608,8 @@ let _previewModalState = null;
 let _previewSelectionState = {};
 let _previewNotifyEnabled = true;
 let _lastAddItemCategoryId = '';
+let _managerCockpitSearchQuery = '';
+let _managerCockpitCategoryFilter = 'all';
 const ADD_ITEM_MODAL_MANUAL_MODE = 'manual';
 const ADD_ITEM_MODAL_SCAN_MODE = 'scan';
 function createAddItemModalUntappdState(overrides = {}) {
@@ -1281,7 +1295,7 @@ function renderManagerAddItemLauncher() {
 
 function updateDrawerAddItemButton() {
   const addItemBtn = document.getElementById('drawer-add-item-btn');
-  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn') || document.getElementById('switch-menu-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
   const returnBtn = document.getElementById('drawer-return-btn');
   if (!addItemBtn) return;
@@ -2010,6 +2024,7 @@ function confirmAddItemModal(options = {}) {
   markSectionsStale('manager-description-section');
   updateDraftIndicator();
   renderManagerOverviewStats();
+  refreshManagerCockpitSurface();
 
   if (options && options.addMore) {
     const reopenMode = _addItemModalState.entryMode === ADD_ITEM_MODAL_SCAN_MODE
@@ -2581,8 +2596,8 @@ function getMenuSessionPorts() {
       const canonicalPreview = result.preview && typeof result.preview === 'object' ? result.preview : providedPreview;
       const ts = Number(result.ts || Date.now());
       if (mode === 'save') {
-        menuState._meta = { ...(menuState._meta || {}), lastUpdatedTs: String(ts) };
-        lsSet(LS_KEYS.lastUpdated, String(ts));
+        _lastSentFeaturedIds = new Set(getCurrentFeaturedIds());
+        applySentState(Array.isArray(canonicalPreview?.diff) ? canonicalPreview.diff : [], ts);
         clearDraftSaveOnlyChanges();
         clearSharedDraftState();
         clearCurrentLocalDraft();
@@ -3294,6 +3309,110 @@ function buildManagerWorkspaceModuleDeps() {
   };
 }
 
+function getManagerCockpitLastUpdatedLabel() {
+  const ts = getLastUpdatedTs();
+  return ts ? formatUpdatedAt(ts, 'Last Updated: ') : 'Last Updated: —';
+}
+
+function getManagerCockpitStats() {
+  const activeItems = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false).length
+  ), 0);
+  const eightySixed = CATEGORY_DEFS.reduce((total, cat) => (
+    total + (menuState[cat.id]?.items || []).filter(item => item.onMenu !== false && item.eightySixed).length
+  ), 0);
+  const draftCount = getDraftChangeCount();
+  const hasLocalDraft = syncLocalDraftDirtyState();
+  const notifyCount = !hasLocalDraft ? countDiffLines() : 0;
+
+  if (hasLocalDraft) {
+    return {
+      status: 'Drafting',
+      statusMeta: `${draftCount} pending change${draftCount === 1 ? '' : 's'} on this device.`,
+      activeItems,
+      eightySixed,
+    };
+  }
+  if (notifyCount > 0) {
+    return {
+      status: 'Review',
+      statusMeta: `${notifyCount} update line${notifyCount === 1 ? '' : 's'} ready for review.`,
+      activeItems,
+      eightySixed,
+    };
+  }
+  return {
+    status: 'Live',
+    statusMeta: 'Live menu is current',
+    activeItems,
+    eightySixed,
+  };
+}
+
+function buildManagerCockpitModuleDeps() {
+  return {
+    document,
+    window,
+    notesService: getManagerNotesService(),
+    activityService: getManagerActivityService(),
+    getActiveMenuName: () => formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID) || _activeMenuName || 'Current Menu',
+    getLastUpdatedLabel: () => getManagerCockpitLastUpdatedLabel(),
+    getStats: () => getManagerCockpitStats(),
+    getManagerNote: () => _managerNote || { note: '', updated_at: '', updated_by: '' },
+    getActivityEntries: () => Array.isArray(_managerActivityEntries) ? _managerActivityEntries : [],
+    getFilterCategories: () => getManagerCockpitItemCategories(),
+  };
+}
+
+function buildManagerNotesModuleDeps() {
+  return {
+    saveNote: note => saveManagerQuickNoteThroughApi(note),
+  };
+}
+
+function buildManagerActivityModuleDeps() {
+  return {};
+}
+
+function buildManagerItemsTableModuleDeps() {
+  return {
+    document,
+    onEditItem: (catId, itemId) => openManagerCockpitItemEditor(catId, itemId),
+    onToggle86: (catId, itemId) => {
+      toggle86(catId, itemId);
+      renderManagerCockpitShell();
+      renderManagerCockpitItemsTable();
+    },
+    onToggleFeatured: (catId, itemId, checked) => {
+      toggleFeaturedSpecialEnabled(catId, itemId, checked);
+      renderManagerCockpitShell();
+      renderManagerCockpitItemsTable();
+      renderFeaturedTab();
+    },
+    onDragStart: (event, catId, itemId) => startManagerItemDrag(event, catId, itemId),
+    onDragOver: (event, catId, itemId) => allowManagerItemDrop(event, catId, itemId),
+    onDrop: (event, catId, itemId) => {
+      handleManagerItemDrop(event, catId, itemId);
+      endManagerItemDrag(event);
+      renderManagerCockpitShell();
+      renderManagerCockpitItemsTable();
+    },
+    onDragEnd: event => endManagerItemDrag(event),
+  };
+}
+
+function buildManagerItemEditorModuleDeps() {
+  return {
+    document,
+    window,
+    getItem: (catId, itemId) => findItem(catId, itemId),
+    getCategories: () => getManagerCockpitItemCategories(),
+    menuType: () => MENU_TYPE,
+    applyItemPatch: payload => applyManagerItemPatch(payload),
+    removeFromMenu: payload => removeManagerItemFromMenu(payload),
+  };
+}
+
 function buildManagerSectionModuleDeps() {
   return {
     document,
@@ -3362,6 +3481,122 @@ function getManagerWorkspaceService() {
   if (typeof boundary?.createManagerWorkspaceService !== 'function') return null;
   _managerWorkspaceService = boundary.createManagerWorkspaceService(buildManagerWorkspaceModuleDeps());
   return _managerWorkspaceService;
+}
+
+function getManagerCockpitService() {
+  if (_managerCockpitService) return _managerCockpitService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerCockpitService !== 'function') return null;
+  _managerCockpitService = boundary.createManagerCockpitService(buildManagerCockpitModuleDeps());
+  return _managerCockpitService;
+}
+
+function getManagerNotesService() {
+  if (_managerNotesService) return _managerNotesService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerNotesService !== 'function') return null;
+  _managerNotesService = boundary.createManagerNotesService(buildManagerNotesModuleDeps());
+  if (typeof _managerNotesService?.setInitialNote === 'function') {
+    _managerNotesService.setInitialNote(_managerNote || { note: '', updated_at: '', updated_by: '' });
+  }
+  return _managerNotesService;
+}
+
+function getManagerActivityService() {
+  if (_managerActivityService) return _managerActivityService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerActivityService !== 'function') return null;
+  _managerActivityService = boundary.createManagerActivityService(buildManagerActivityModuleDeps());
+  return _managerActivityService;
+}
+
+function getManagerRevisionDockService() {
+  if (_managerRevisionDockService) return _managerRevisionDockService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerRevisionDockService !== 'function') return null;
+  _managerRevisionDockService = boundary.createManagerRevisionDockService();
+  return _managerRevisionDockService;
+}
+
+function hasManagerRevisionDockWork(ledgerState = {}) {
+  return !!(
+    ledgerState.hasDraftChanges ||
+    ledgerState.hasDraftWork ||
+    ledgerState.hasPendingUpdate ||
+    ledgerState.hasChanges ||
+    ledgerState.hasSaveOnlyChanges ||
+    ledgerState.hasNotificationChanges
+  );
+}
+
+function bindManagerRevisionDockScrollCollapse() {
+  if (_managerRevisionDockScrollBound) return;
+  _managerRevisionDockScrollBound = true;
+
+  window.addEventListener('scroll', () => {
+    if (!document.getElementById('manager-cockpit-revision-dock')) return;
+    _managerRevisionDockScrollCollapsed = true;
+    updateManagerActionBar();
+
+    if (_managerRevisionDockScrollTimer) clearTimeout(_managerRevisionDockScrollTimer);
+    _managerRevisionDockScrollTimer = setTimeout(() => {
+      _managerRevisionDockScrollTimer = null;
+      _managerRevisionDockScrollCollapsed = false;
+      updateManagerActionBar();
+    }, MANAGER_REVISION_DOCK_SCROLL_IDLE_MS);
+  }, { passive: true });
+}
+
+function renderManagerRevisionDock(ledgerState = {}, syncEl = document.getElementById('sync-status')) {
+  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
+  if (!cockpitDock) return false;
+  const bar = document.getElementById('manager-action-bar');
+  if (!bar) return false;
+  const dockService = getManagerRevisionDockService();
+  if (!dockService || typeof dockService.renderDockHtml !== 'function') return false;
+
+  bindManagerRevisionDockScrollCollapse();
+
+  const syncMessage = (syncEl?.textContent || '').trim();
+  const syncClass = typeof syncEl?.className === 'string' ? syncEl.className : '';
+  bar.hidden = true;
+  bar.innerHTML = '';
+  cockpitDock.innerHTML = dockService.renderDockHtml({
+    hasWork: hasManagerRevisionDockWork(ledgerState),
+    isSaving: false,
+    isScrollCollapsed: _managerRevisionDockScrollCollapsed,
+    syncMessage,
+    syncClass,
+    summary: ledgerState.summaryText,
+    saveLabel: ledgerState.saveLabel || 'Save',
+    saveDisabled: !!ledgerState.saveDisabled,
+    showDiscard: !!ledgerState.showDiscard,
+  });
+  return true;
+}
+
+function refreshManagerRevisionDockFromCurrentState(syncEl = document.getElementById('sync-status')) {
+  const cockpitDock = document.getElementById('manager-cockpit-revision-dock');
+  if (!cockpitDock) return false;
+  const isCompactViewport = window.innerWidth <= 480;
+  const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+  return renderManagerRevisionDock(ledgerState, syncEl);
+}
+
+function getManagerItemsTableService() {
+  if (_managerItemsTableService) return _managerItemsTableService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerItemsTableService !== 'function') return null;
+  _managerItemsTableService = boundary.createManagerItemsTableService(buildManagerItemsTableModuleDeps());
+  return _managerItemsTableService;
+}
+
+function getManagerItemEditorModalService() {
+  if (_managerItemEditorModalService) return _managerItemEditorModalService;
+  const boundary = getUiModuleBoundary();
+  if (typeof boundary?.createManagerItemEditorModalService !== 'function') return null;
+  _managerItemEditorModalService = boundary.createManagerItemEditorModalService(buildManagerItemEditorModuleDeps());
+  return _managerItemEditorModalService;
 }
 
 function getManagerSectionService() {
@@ -4662,6 +4897,42 @@ async function readMenuWorkspaceThroughApi({ menuId = MENU_ID } = {}) {
   });
 }
 
+function normalizeManagerNotePayload(notePayload = {}) {
+  const payload = notePayload?.note && typeof notePayload.note === 'object'
+    ? notePayload.note
+    : notePayload;
+  return {
+    note: String(payload?.note ?? payload?.text ?? ''),
+    updated_at: String(payload?.updated_at ?? payload?.updatedAt ?? ''),
+    updated_by: String(payload?.updated_by ?? payload?.updatedBy ?? ''),
+  };
+}
+
+function setManagerNotePayload(notePayload = {}) {
+  _managerNote = normalizeManagerNotePayload(notePayload);
+  if (typeof _managerNotesService?.setInitialNote === 'function') {
+    _managerNotesService.setInitialNote(_managerNote);
+  }
+  return _managerNote;
+}
+
+async function saveManagerQuickNoteThroughApi(note = '') {
+  if (!MENU_ID) throw new Error('Select a menu before saving notes.');
+  const authorizedHeaders = getAuthorizedApiHeaders();
+  if (!authorizedHeaders.Authorization) throw new Error('Sign in again before saving notes.');
+  const result = await postApiJson('/api/manager', {
+    action: 'notes_write',
+    menu_id: MENU_ID,
+    note: String(note ?? ''),
+  }, {
+    headers: authorizedHeaders,
+  });
+  if (!result.ok) {
+    throw new Error(result.payload?.error || result.payload?.message || 'Quick note could not be saved.');
+  }
+  return setManagerNotePayload(result.payload?.note || result.payload?.managerNote || result.payload);
+}
+
 function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const workspace = workspacePayload?.workspace && typeof workspacePayload.workspace === 'object'
     ? workspacePayload.workspace
@@ -4669,6 +4940,9 @@ function applyWorkspaceRestaurantTools(workspacePayload = {}) {
   const featuredItems = Array.isArray(workspacePayload?.featuredItems)
     ? workspacePayload.featuredItems
     : null;
+  if (workspacePayload?.managerNote && typeof workspacePayload.managerNote === 'object') {
+    setManagerNotePayload(workspacePayload.managerNote);
+  }
 
   _workspaceRestaurantToolsReadable = canReadRestaurantToolsFromWorkspace(workspace);
   if (!featuredItems) return false;
@@ -6456,7 +6730,11 @@ function updateManagerActionBar() {
     if (typeof service?.updateManagerActionBar === 'function') {
       _uiModuleDelegationStack.add('updateManagerActionBar');
       try {
-        return service.updateManagerActionBar();
+        const result = service.updateManagerActionBar();
+        const isCompactViewport = window.innerWidth <= 480;
+        const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+        renderManagerRevisionDock(ledgerState, document.getElementById('sync-status'));
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('updateManagerActionBar');
       }
@@ -6470,6 +6748,8 @@ function updateManagerActionBar() {
   const syncEl = document.getElementById('sync-status');
   const isCompactViewport = window.innerWidth <= 480;
   const ledgerState = createDraftLedgerService().getActionBarState({ isCompactViewport });
+  if (renderManagerRevisionDock(ledgerState, syncEl)) return;
+
   const saveBtn = document.getElementById('save-btn');
   const publishBtn = document.getElementById('send-btn');
   const discardBtn = document.getElementById('discard-draft-btn');
@@ -6503,7 +6783,9 @@ function syncManagerActionBarStatus(syncEl = document.getElementById('sync-statu
     if (typeof service?.syncManagerActionBarStatus === 'function') {
       _uiModuleDelegationStack.add('syncManagerActionBarStatus');
       try {
-        return service.syncManagerActionBarStatus(syncEl);
+        const result = service.syncManagerActionBarStatus(syncEl);
+        refreshManagerRevisionDockFromCurrentState(syncEl);
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('syncManagerActionBarStatus');
       }
@@ -6511,33 +6793,330 @@ function syncManagerActionBarStatus(syncEl = document.getElementById('sync-statu
   }
 
   const statusWrap = syncEl?.closest('.manager-shell-actionbar-status');
-  if (!statusWrap) return;
-  statusWrap.hidden = !((syncEl.textContent || '').trim());
+  if (statusWrap) {
+    statusWrap.hidden = !((syncEl.textContent || '').trim());
+  }
+  refreshManagerRevisionDockFromCurrentState(syncEl);
+}
+
+function hasManagerCockpitShellContainers() {
+  return !!(
+    document.getElementById('manager-cockpit-header') &&
+    document.getElementById('manager-cockpit-workbar') &&
+    document.getElementById('manager-cockpit-side')
+  );
+}
+
+function bindManagerQuickNotesControls() {
+  const service = getManagerNotesService();
+  const textarea = document.getElementById('manager-quick-note');
+  const saveButton = document.getElementById('manager-quick-note-save');
+  if (!service || !textarea || !saveButton || textarea.__managerQuickNotesBound) return false;
+
+  textarea.__managerQuickNotesBound = true;
+  saveButton.__managerQuickNotesBound = true;
+
+  textarea.addEventListener('input', event => {
+    service.setText(event?.target?.value ?? textarea.value ?? '');
+    const status = document.getElementById('manager-quick-note-status');
+    const error = document.getElementById('manager-quick-note-error');
+    if (status) status.textContent = 'Unsaved note changes';
+    if (error) error.remove();
+  });
+
+  saveButton.addEventListener('click', async () => {
+    const status = document.getElementById('manager-quick-note-status');
+    saveButton.disabled = true;
+    if (status) status.textContent = 'Saving note...';
+    let result = null;
+    try {
+      result = await service.save();
+    } catch (error) {
+      result = { ok: false, error: error?.message || 'Quick note could not be saved.' };
+    }
+    if (result?.ok === false) {
+      const message = result.error || 'Quick note could not be saved.';
+      saveButton.disabled = false;
+      if (status) status.textContent = message;
+      if (typeof showToast === 'function') {
+        showToast(message, 'error');
+      }
+      return;
+    }
+
+    renderManagerCockpitShell();
+  });
+
+  return true;
+}
+
+function renderManagerCockpitShell(service = getManagerCockpitService()) {
+  const rendered = service?.renderCockpit();
+  if (rendered) {
+    bindManagerQuickNotesControls();
+    bindManagerCockpitWorkbarControls();
+  }
+  return !!rendered;
+}
+
+function refreshManagerCockpitSurface({ includeFeatured = true } = {}) {
+  if (!hasManagerCockpitShellContainers()) return false;
+  const cockpitRendered = renderManagerCockpitShell();
+  if (!cockpitRendered) return false;
+  renderManagerCockpitItemsTable();
+  if (includeFeatured) renderFeaturedTab();
+  return true;
+}
+
+function getManagerCockpitItemCategories() {
+  return [
+    ...getManagedCategoryDefs(),
+    getUncategorizedCategoryDef(),
+  ].map(category => ({
+    ...category,
+    isFeaturedSpecials: category.id === FEATURED_SPECIALS_CATEGORY_ID,
+  }));
+}
+
+function getManagerCockpitFilteredCategories(categories = []) {
+  const selectedCategoryId = String(_managerCockpitCategoryFilter || 'all').trim();
+  if (!selectedCategoryId || selectedCategoryId === 'all') return categories;
+  return categories.filter(category => category.id === selectedCategoryId);
+}
+
+function filterManagerCockpitItems(items = []) {
+  const query = String(_managerCockpitSearchQuery || '').trim().toLowerCase();
+  if (!query) return items;
+  return (Array.isArray(items) ? items : []).filter(item => {
+    const searchable = [
+      item?.name,
+      item?.desc,
+      item?.price,
+    ].map(value => String(value || '').toLowerCase()).join(' ');
+    return searchable.includes(query);
+  });
+}
+
+function buildManagerCockpitItemMenuState(categories) {
+  return categories.reduce((state, category) => {
+    state[category.id] = {
+      items: filterManagerCockpitItems(getRenderableCategoryItems(category.id)),
+    };
+    return state;
+  }, {});
+}
+
+function bindManagerCockpitWorkbarControls() {
+  const searchInput = document.getElementById('manager-item-search');
+  const categorySelect = document.getElementById('manager-category-filter');
+  if (searchInput && searchInput.dataset.managerCockpitSearchBound !== 'true') {
+    searchInput.dataset.managerCockpitSearchBound = 'true';
+    searchInput.value = _managerCockpitSearchQuery;
+    searchInput.addEventListener('input', () => {
+      _managerCockpitSearchQuery = searchInput.value || '';
+      renderManagerCockpitItemsTable();
+    });
+  }
+  if (categorySelect && categorySelect.dataset.managerCockpitFilterBound !== 'true') {
+    categorySelect.dataset.managerCockpitFilterBound = 'true';
+    categorySelect.value = _managerCockpitCategoryFilter || 'all';
+    categorySelect.addEventListener('change', () => {
+      _managerCockpitCategoryFilter = categorySelect.value || 'all';
+      renderManagerCockpitItemsTable();
+    });
+  }
+}
+
+function renderManagerCockpitItemsTable() {
+  const container = document.getElementById('manager-cockpit-items');
+  const service = getManagerItemsTableService();
+  if (!container || !service) return false;
+  const categories = getManagerCockpitFilteredCategories(getManagerCockpitItemCategories());
+  const tableState = service.buildTableState({
+    categories,
+    menuState: buildManagerCockpitItemMenuState(categories),
+  });
+  const visibleTableState = String(_managerCockpitSearchQuery || '').trim()
+    ? tableState.filter(category => (category.items || []).length > 0)
+    : tableState;
+  container.innerHTML = visibleTableState.length
+    ? service.renderTableHtml(visibleTableState)
+    : '<p class="db-empty">No items match that search.</p>';
+  service.bindTable(container);
+  return true;
+}
+
+function refreshManagerItemEditorDraftViews(categoryIds = []) {
+  Array.from(new Set(categoryIds.filter(Boolean))).forEach(catId => renderManagerItems(catId));
+  renderPricingSection();
+  renderDescriptionSection();
+  markSectionsStale('manager-items-section');
+  markSectionsStale('manager-pricing-section');
+  markSectionsStale('manager-description-section');
+  updateDraftIndicator();
+  renderManagerOverviewStats();
+  renderManagerCockpitItemsTable();
+  renderManagerCockpitShell();
+  renderFeaturedTab();
+  renderFeaturedPublicSection();
+}
+
+function markManagerItemEditorSaveOnlyDraftChanges(catId, item, patch = {}) {
+  if (!catId || !item?.id || !patch || typeof patch !== 'object') return;
+  const itemName = String(item.name || 'this item').trim() || 'this item';
+  const saveOnlyChangeDefs = {
+    price: {
+      key: `price:${catId}:${item.id}`,
+      label: `Updated price for ${itemName}`,
+      kind: 'price',
+    },
+    desc: {
+      key: `desc:${catId}:${item.id}`,
+      label: `Updated description for ${itemName}`,
+      kind: 'description',
+    },
+    recipe: {
+      key: `recipe:${catId}:${item.id}`,
+      label: `Updated recipe for ${itemName}`,
+      kind: 'recipe',
+    },
+    upcharges: {
+      key: `upcharges:${catId}:${item.id}`,
+      label: `Updated upcharges for ${itemName}`,
+      kind: 'upcharges',
+    },
+    showDescription: {
+      key: `visibility:showDescription:${catId}:${item.id}`,
+      label: `Updated description visibility for ${itemName}`,
+      kind: 'showDescription',
+    },
+    showRecipe: {
+      key: `visibility:showRecipe:${catId}:${item.id}`,
+      label: `Updated recipe visibility for ${itemName}`,
+      kind: 'showRecipe',
+    },
+  };
+
+  Object.keys(saveOnlyChangeDefs).forEach(field => {
+    if (!Object.prototype.hasOwnProperty.call(patch, field)) return;
+    const change = saveOnlyChangeDefs[field];
+    markSaveOnlyDraftChange({
+      key: change.key,
+      label: change.label,
+      message: change.label,
+      sectionId: catId,
+      itemId: item.id,
+      kind: change.kind,
+    });
+  });
+}
+
+function applyManagerItemPatch({ categoryId = '', itemId = '', patch = {} } = {}) {
+  if (!categoryId || !itemId || !patch || typeof patch !== 'object') {
+    return { ok: false, error: 'Item update is missing required details.' };
+  }
+  const sourceState = menuState[categoryId];
+  const sourceItems = sourceState?.items || [];
+  const itemIndex = sourceItems.findIndex(item => item.id === itemId);
+  if (itemIndex < 0) return { ok: false, error: 'Item was not found.' };
+
+  const nextCategoryId = String(patch.categoryId || categoryId).trim() || categoryId;
+  const nextPatch = { ...patch };
+  delete nextPatch.categoryId;
+  let activeCategoryId = categoryId;
+  let item = sourceItems[itemIndex];
+
+  if (nextCategoryId !== categoryId) {
+    if (!menuState[nextCategoryId]) menuState[nextCategoryId] = { items: [], lastSent: [] };
+    const [movedItem] = sourceItems.splice(itemIndex, 1);
+    item = movedItem;
+    if (nextCategoryId === UNCATEGORIZED_ID) {
+      item.onMenu = false;
+      item.visibility = 'off_menu';
+    } else if (categoryId === UNCATEGORIZED_ID || item.onMenu === false) {
+      item.onMenu = true;
+      item.visibility = item.visibility === 'off_menu' ? 'public' : (item.visibility || 'public');
+    }
+    menuState[nextCategoryId].items.push(item);
+    activeCategoryId = nextCategoryId;
+  }
+
+  Object.entries(nextPatch).forEach(([field, value]) => {
+    if (field === 'recipe') {
+      item.recipe = MENU_TYPE === 'food' ? [] : recipeArray(value);
+    } else if (field === 'upcharges') {
+      item.upcharges = itemUpchargeArray(value);
+    } else if (field === 'name' || field === 'desc' || field === 'price') {
+      item[field] = String(value || '').trim();
+    } else if (field === 'eightySixed' || field === 'showDescription' || field === 'showRecipe') {
+      item[field] = !!value;
+    }
+  });
+
+  markManagerItemEditorSaveOnlyDraftChanges(activeCategoryId, item, nextPatch);
+  invalidateDiff();
+  refreshManagerItemEditorDraftViews([categoryId, activeCategoryId]);
+  return { ok: true };
+}
+
+function removeManagerItemFromMenu({ categoryId = '', itemId = '' } = {}) {
+  const item = findItem(categoryId, itemId);
+  if (!item) return { ok: false, error: 'Item was not found.' };
+  item.onMenu = false;
+  item.visibility = 'off_menu';
+  invalidateDiff();
+  refreshManagerItemEditorDraftViews([categoryId]);
+  return { ok: true };
+}
+
+function openManagerCockpitItemEditor(catId, itemId) {
+  const item = findItem(catId, itemId);
+  if (!item) return false;
+  const category = catId === UNCATEGORIZED_ID
+    ? getUncategorizedCategoryDef()
+    : CATEGORY_DEFS.find(cat => cat.id === catId);
+  const service = getManagerItemEditorModalService();
+  if (typeof service?.open === 'function') {
+    const opened = service.open({ categoryId: catId, itemId, item, category });
+    if (opened) return true;
+  }
+  showToast(`Edit controls for ${item.name || 'this item'} are coming in the item editor.`, 'info');
+  return false;
 }
 
 function renderManagerWorkspace(options = {}) {
   if (!_uiModuleDelegationStack.has('renderManagerWorkspace')) {
     const service = getManagerWorkspaceService();
     if (typeof service?.renderManagerWorkspace === 'function') {
+      const cockpitService = getManagerCockpitService();
+      const shouldRenderRecentAfterCockpit = options.includeRecentChanges !== false &&
+        !!cockpitService &&
+        hasManagerCockpitShellContainers();
+      const workspaceOptions = shouldRenderRecentAfterCockpit
+        ? { ...options, includeRecentChanges: false }
+        : options;
       _uiModuleDelegationStack.add('renderManagerWorkspace');
       try {
-        return service.renderManagerWorkspace(options);
+        const result = service.renderManagerWorkspace(workspaceOptions);
+        const cockpitRendered = refreshManagerCockpitSurface();
+        if (cockpitRendered) {
+          if (shouldRenderRecentAfterCockpit) renderRecentChanges();
+        }
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('renderManagerWorkspace');
       }
     }
   }
 
-  renderManagerCategories();
-  renderPricingSection();
-  renderDescriptionSection();
-  renderFeaturedTab();
-  renderCategoriesTab();
+  if (options.includeLegacyManagerCategories === true) renderManagerCategories();
   updateManagerToolsContext();
-  renderDatabaseTab();
-  renderPruneSection();
   updateActiveMenuBar();
   renderManagerOverviewStats();
+  const cockpitRendered = refreshManagerCockpitSurface();
+  if (!cockpitRendered) {
+    renderFeaturedTab();
+  }
   if (options.includeRecentChanges !== false) renderRecentChanges();
   updateManagerActionBar();
   renderFooter();
@@ -6570,7 +7149,9 @@ function refreshManagerViews() {
     if (typeof service?.refreshManagerViews === 'function') {
       _uiModuleDelegationStack.add('refreshManagerViews');
       try {
-        return service.refreshManagerViews();
+        const result = service.refreshManagerViews();
+        refreshManagerCockpitSurface();
+        return result;
       } finally {
         _uiModuleDelegationStack.delete('refreshManagerViews');
       }
@@ -8533,7 +9114,9 @@ function renderUserHeader(options = {}) {
 
   if (actionBtn) {
     actionBtn.style.display = (signedIn && canManageCurrentMenu) ? '' : 'none';
-    actionBtn.textContent   = (isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager';
+    actionBtn.textContent   = isSettingsRoute && _appPageMode === 'manager'
+      ? 'Return to Menu'
+      : ((isManagerMode && !isSettingsRoute) ? '✕ Exit' : '⚙ Manager');
     actionBtn.classList.toggle('active', isManagerMode);
   }
   if (adminBtn) {
@@ -8632,6 +9215,17 @@ function getSettingsDrawerDom() {
   };
 }
 
+function setDrawerInertState(drawer, shouldBeInert) {
+  if (!drawer) return;
+  if (shouldBeInert) {
+    if ('inert' in drawer) drawer.inert = true;
+    drawer.setAttribute('inert', '');
+    return;
+  }
+  if ('inert' in drawer) drawer.inert = false;
+  drawer.removeAttribute('inert');
+}
+
 function setSettingsDrawerOpen(isOpen, options = {}) {
   const drawerDom = getSettingsDrawerDom();
   const { drawer, backdrop, toggle, mobileTrigger, mobileWidth, bodyOpenClass } = drawerDom;
@@ -8640,6 +9234,7 @@ function setSettingsDrawerOpen(isOpen, options = {}) {
   if (!drawer || !backdrop) return;
   drawer.classList.toggle('is-open', !!isOpen && isMobileDrawer);
   drawer.setAttribute('aria-hidden', isMobileDrawer && !isOpen ? 'true' : 'false');
+  setDrawerInertState(drawer, isMobileDrawer && !isOpen);
   backdrop.hidden = !(isOpen && isMobileDrawer);
   document.body.classList.remove('settings-drawer-open', 'admin-settings-drawer-open');
   document.body.classList.toggle(bodyOpenClass, !!isOpen && isMobileDrawer);
@@ -8713,6 +9308,11 @@ function focusSettingsSection(sectionId, trigger, options = {}) {
 
 // ─── AUTH OVERLAY ─────────────────────────────────────────────────────────────
 function onActionBtnClick() {
+  if (_appPageMode === 'manager') {
+    const publicHref = getPublicHrefForMenuId(MENU_ID);
+    if (publicHref) navigateToPage(publicHref);
+    return;
+  }
   const targetPath = getManagerHrefForMenuId(MENU_ID);
   if (!MENU_ID || targetPath === SHARED_PAGE_PATHS.manager) {
     showToast('Select a menu from the public view first.', 'info');
@@ -9053,17 +9653,16 @@ function updateActiveMenuBar() {
   const bar       = document.getElementById('active-menu-bar');
   const nameEl    = document.getElementById('active-menu-name');
   const switchBtn = document.getElementById('switch-menu-btn');
-  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn') || switchBtn;
   const headerBadge = document.getElementById('manager-header-menu-badge');
   const drawerBadge = document.getElementById('manager-drawer-menu-badge');
   const footerMenu = document.getElementById('manager-footer-menu-name');
-  if (!bar) return;
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
-  if (displayName) nameEl.textContent = displayName;
+  if (displayName && nameEl) nameEl.textContent = displayName;
   if (headerBadge) headerBadge.textContent = displayName || 'No menu selected';
   if (drawerBadge) drawerBadge.textContent = displayName || 'No menu selected';
   if (footerMenu) footerMenu.textContent = displayName || 'No menu selected';
-  bar.style.display = displayName ? '' : 'none';
+  if (bar) bar.style.display = displayName ? '' : 'none';
   // Show "Switch" only when the user has access to more than one menu
   const role          = currentUser?.role;
   const accessibleIds = currentUser?.accessibleMenuIds || [];
@@ -10631,6 +11230,7 @@ function toggleFeaturedSpecialEnabled(catId, itemId, checked) {
   markSectionsStale(_activeManagerSection);
   updateDraftIndicator();
   renderManagerOverviewStats();
+  renderFeaturedTab();
   renderFeaturedPublicSection();
 }
 
@@ -10768,11 +11368,30 @@ function syncManagerMobileDrawerTrigger() {
   if (!body) return;
   const trigger = document.getElementById('manager-mobile-drawer-trigger');
   const header = document.querySelector('#app-shell > header.manager-shell-topbar');
-  if (!trigger || !header) {
-    body.classList.remove('manager-mobile-drawer-trigger-visible');
+  const { drawer, backdrop, mobileWidth = 920 } = getSettingsDrawerDom();
+  const isMobileDrawer = window.innerWidth <= mobileWidth;
+  if (!isMobileDrawer) {
+    body.classList.remove('manager-mobile-drawer-trigger-visible', 'settings-drawer-open');
+    if (trigger) trigger.hidden = true;
+    if (backdrop) backdrop.hidden = true;
+    if (drawer) {
+      drawer.classList?.remove?.('is-open');
+      drawer.setAttribute('aria-hidden', 'false');
+      setDrawerInertState(drawer, false);
+    }
     return;
   }
-  if (window.innerWidth > 920 || body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
+  if (!trigger || !header) {
+    if (trigger && trigger.style.display !== 'none' && !body.classList.contains('settings-drawer-open')) {
+      body.classList.add('manager-mobile-drawer-trigger-visible');
+      trigger.hidden = false;
+    } else {
+      body.classList.remove('manager-mobile-drawer-trigger-visible');
+      if (trigger) trigger.hidden = true;
+    }
+    return;
+  }
+  if (body.classList.contains('settings-drawer-open') || trigger.style.display === 'none') {
     body.classList.remove('manager-mobile-drawer-trigger-visible');
     trigger.hidden = true;
     return;
@@ -11664,10 +12283,12 @@ async function renderRecentChanges() {
   const wrap = document.getElementById('recent-changes-wrap');
   if (!wrap) return;
   if (!currentUser?.accessToken) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty">Recent changes are unavailable until you are signed in.</p>';
     return;
   }
   if (!MENU_ID) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty">Select a menu to view recent changes.</p>';
     return;
   }
@@ -11679,13 +12300,22 @@ async function renderRecentChanges() {
     const scope = String(history?.history?.scope || 'menu');
     const logs = Array.isArray(history?.logs) ? history.logs : [];
     if (!logs.length) {
+      _managerActivityEntries = [];
       wrap.innerHTML = scope === 'restaurant'
         ? '<p class="db-empty">No sent updates for this restaurant in the last 7 days.</p>'
         : '<p class="db-empty">No sent updates for this menu in the last 7 days.</p>';
       return;
     }
     wrap.innerHTML = buildChangeFeedHtml(logs);
+    _managerActivityEntries = logs;
+    if (hasManagerCockpitShellContainers()) {
+      const activityService = getManagerActivityService();
+      if (typeof activityService?.renderActivityHtml === 'function') {
+        wrap.innerHTML = activityService.renderActivityHtml(logs);
+      }
+    }
   } catch(e) {
+    _managerActivityEntries = [];
     wrap.innerHTML = '<p class="db-empty db-error">Failed to load recent changes.</p>';
   }
 }
@@ -11937,23 +12567,17 @@ function renderFeaturedTab() {
       }).join('')
     : `<div class="empty-state"><span class="empty-state-icon">⭐</span><span>No items are currently set to show in the featured strip for ${escHtml(menuLabel || 'this menu')}.</span></div>`;
   const capNote = totalCount > previewItems.length
-    ? `<p class="featured-specials-access-detail">The public featured strip shows the first five featured items. ${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} stay in the category.</p>`
+    ? `<p class="featured-specials-access-detail">${escHtml(String(totalCount - previewItems.length))} more item${totalCount - previewItems.length === 1 ? '' : 's'} in Featured Specials.</p>`
     : '';
   wrap.innerHTML = `<div class="featured-specials-editor featured-specials-editor--readonly">
-    <div class="featured-specials-access-note" role="note" aria-live="polite">
-      <p class="featured-specials-access-kicker">Category-owned flow</p>
-      <h4>Manage featured items from Edit Menu</h4>
-      <p class="featured-specials-access-copy">Use the <strong>Featured Specials</strong> category and its <strong>Show in featured strip</strong> toggles to control this menu’s featured items.</p>
-      <p class="featured-specials-access-detail">This overview is read-only now that featured specials are owned by the menu itself instead of a separate restaurant-wide transport.</p>
-      ${capNote}
-    </div>
     <div class="featured-specials-head">
       <div>
-        <h4>Featured Strip Preview</h4>
+        <h4>Featured Preview</h4>
         <p class="featured-specials-access-detail">${escHtml(menuLabel || 'Current Menu')}</p>
       </div>
       <span class="featured-count">${previewItems.length} / 5 previewed</span>
     </div>
+    ${capNote}
     <div class="featured-specials-list">${itemsHtml}</div>
   </div>`;
 }

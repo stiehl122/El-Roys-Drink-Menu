@@ -96,6 +96,7 @@ Use it to answer three questions:
 | Remote change detection and conflict refresh | Full | Full | Staff editor clients | Both clients detect remote changes and force review/reload when needed. |
 | Lightweight remote revision polling | Full | Partial | Staff editor clients | Web public routes can query `/api/public?action=revision&menu_id=<id>` before fetching full menu payloads. iOS supports the same public revision contract only for non-draft-sensitive editor workspaces; normal draft-capable manager/admin polling fetches the manager workspace directly so shared draft and conflict state stays visible. |
 | Recent change history | Full | Full | Staff editor clients | Web has manager recent changes/history views; iOS surfaces recent updates in home and restaurant tools. |
+| Per-menu manager quick notes | Full | None | Staff editor clients | Web manager has menu-scoped internal Quick Notes for staff handoff; iOS does not expose this note surface yet. |
 | Add items manually | Full | Full | Staff editor clients | Both can create new items from the editor. |
 | Barcode scan and product lookup | Full | Full | Staff editor clients | Both support barcode-driven item entry plus product lookup; iOS additionally supports drinks-only captured-image label selection with Apple-native swipe text selection before prefilling local add-item drafts. |
 | Edit item name | Full | Full | Staff editor clients | Present in both clients. |
@@ -166,8 +167,8 @@ These are the biggest current capability differences between the two clients:
 
 1. Admin workflows are web-only.
 2. The shared landing page and landing CMS are web-only.
-3. iOS lacks item reordering, category reordering, upcharge editing, and the
-   broader database/prune tools present on web.
+3. iOS lacks item reordering, category reordering, upcharge editing, manager
+   Quick Notes, and the broader database/prune tools present on web.
 4. iOS does not expose the unauthenticated public web chrome
    (root landing page, public footer metadata, footer staff actions) outside of
    exact route preview.

@@ -8,6 +8,12 @@ test('ui module scripts register manager/admin/public boundary factories', () =>
     'core/ui/manager/workspace.js',
     'core/ui/manager/sections.js',
     'core/ui/manager/editors.js',
+    'core/ui/manager/cockpit.js',
+    'core/ui/manager/items-table.js',
+    'core/ui/manager/item-editor-modal.js',
+    'core/ui/manager/notes.js',
+    'core/ui/manager/activity.js',
+    'core/ui/manager/revision-dock.js',
     'core/ui/manager/open-food-facts.js',
     'core/ui/manager/barcode-scanner.js',
     'core/ui/admin/workspace.js',
@@ -20,6 +26,12 @@ test('ui module scripts register manager/admin/public boundary factories', () =>
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerWorkspaceService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerSectionService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerEditorsService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerCockpitService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerItemsTableService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerItemEditorModalService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerNotesService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerActivityService, 'function');
+  assert.equal(typeof sandbox.__HF_UI_MODULES__.createManagerRevisionDockService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.lookupOpenFoodFactsProduct, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createBarcodeScannerService, 'function');
   assert.equal(typeof sandbox.__HF_UI_MODULES__.createAdminWorkspaceService, 'function');

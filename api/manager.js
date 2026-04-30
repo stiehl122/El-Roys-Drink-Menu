@@ -21,6 +21,11 @@ import { lookupProductByBarcode } from '../server/_product-lookup.js';
 import { previewUntappdBeerImport, searchUntappdBeers } from '../server/_untappd.js';
 import { parseRequestBody, readAction } from '../server/_request.js';
 import { checkManagerExternalActionLimit } from '../server/_manager-action-limits.js';
+import {
+  readManagerNoteCommand,
+  readManagerNoteForWorkspace,
+  writeManagerNoteCommand,
+} from '../server/_manager-notes.js';
 
 async function parsePublishBody(req) {
   const body = await parseRequestBody(req);
@@ -56,6 +61,9 @@ export default async function handler(req, res) {
       if (action === 'history') {
         return res.json(await readMenuHistoryForRequest(req));
       }
+      if (action === 'notes_read') {
+        return res.json(await readManagerNoteCommand(req, parseMenuId(req)));
+      }
 
       const menuId = parseMenuId(req);
       if (!isSupportedMenuId(menuId)) {
@@ -74,14 +82,16 @@ export default async function handler(req, res) {
         ? (await readMenuAccessForUser(uid, { select: 'menu_id' })).map(row => row.menu_id)
         : [];
       const bundle = await readMenuStateBundle(menuId);
-      return res.json(createMenuWorkspacePayload(bundle, {
+      const payload = createMenuWorkspacePayload(bundle, {
         actor: {
           id: uid,
           name: profile?.name || '',
           role,
           accessibleMenuIds,
         },
-      }));
+      });
+      payload.managerNote = await readManagerNoteForWorkspace(menuId);
+      return res.json(payload);
     }
 
     switch (action) {
@@ -141,6 +151,8 @@ export default async function handler(req, res) {
           preview: await previewUntappdBeerImport(bid, { includeBrewery }),
         });
       }
+      case 'notes_write':
+        return res.status(200).json(await writeManagerNoteCommand(req, body));
       default:
         return res.status(400).json({ error: 'Unsupported manager action' });
     }

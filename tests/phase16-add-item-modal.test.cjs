@@ -329,6 +329,54 @@ test('manager mobile drawer trigger appears after the header scrolls out and hid
   assert.equal(mobileTrigger.hidden, false);
 });
 
+test('manager mobile drawer trigger stays available when cockpit has no legacy topbar', () => {
+  const sandbox = loadAppSandbox();
+  const { mobileTrigger, drawer } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+  sandbox.document._registerSelector('#app-shell > header.manager-shell-topbar', null);
+  drawer.inert = false;
+  sandbox.innerWidth = 390;
+  sandbox.window.innerWidth = 390;
+
+  sandbox.syncManagerMobileDrawerTrigger();
+
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), true);
+  assert.equal(mobileTrigger.hidden, false);
+
+  sandbox.setSettingsDrawerOpen(false, { restoreFocus: false });
+  assert.equal(drawer.getAttribute('aria-hidden'), 'true');
+  assert.equal(drawer.inert, true);
+  assert.equal(drawer.getAttribute('inert'), '');
+
+  sandbox.setSettingsDrawerOpen(true);
+  assert.equal(drawer.getAttribute('aria-hidden'), 'false');
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute('inert'), null);
+});
+
+test('manager rail is re-enabled when resizing out of mobile drawer mode', () => {
+  const sandbox = loadAppSandbox();
+  const { drawer, backdrop, mobileTrigger } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox);
+  drawer.inert = true;
+  drawer.setAttribute('inert', '');
+  drawer.setAttribute('aria-hidden', 'true');
+  backdrop.hidden = false;
+  sandbox.document.body.classList.add('settings-drawer-open');
+  sandbox.innerWidth = 1120;
+  sandbox.window.innerWidth = 1120;
+
+  sandbox.syncManagerMobileDrawerTrigger();
+
+  assert.equal(sandbox.document.body.classList.contains('settings-drawer-open'), false);
+  assert.equal(sandbox.document.body.classList.contains('manager-mobile-drawer-trigger-visible'), false);
+  assert.equal(mobileTrigger.hidden, true);
+  assert.equal(backdrop.hidden, true);
+  assert.equal(drawer.getAttribute('aria-hidden'), 'false');
+  assert.equal(drawer.inert, false);
+  assert.equal(drawer.getAttribute('inert'), null);
+});
+
 test('duplicate blocking clears once the manager changes the conflicting draft', () => {
   const sandbox = loadAppSandbox();
   const { modalHost } = setupManagerAddItemDom(sandbox);
@@ -635,12 +683,22 @@ test('escape closes the add-item modal', () => {
 test('drawer add-item button is role-gated and ordered below switch or admin tools', () => {
   const sandbox = loadAppSandbox();
   const { drawerAddButton, drawerSwitchButton, drawerAdminButton, drawerReturnButton } = setupManagerAddItemDom(sandbox);
-  seedManagerMenuState(sandbox);
+  seedManagerMenuState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: [
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+      ],
+    },
+  });
 
   sandbox.renderUserHeader();
   sandbox.updateActiveMenuBar();
 
   assert.equal(drawerAddButton.style.display, '');
+  assert.equal(drawerSwitchButton.style.display, '');
   assert.equal(drawerAddButton.style.order, '3');
   assert.equal(drawerSwitchButton.style.order, '2');
   assert.equal(drawerAdminButton.style.order, '3');
@@ -673,6 +731,27 @@ test('drawer add-item button is role-gated and ordered below switch or admin too
   sandbox.updateActiveMenuBar();
 
   assert.equal(drawerAddButton.style.display, 'none');
+});
+
+test('cockpit drawer switch menu button works without the legacy active menu bar', () => {
+  const sandbox = loadAppSandbox();
+  const { drawerSwitchButton } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: [
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+      ],
+    },
+  });
+  const originalGetElementById = sandbox.document.getElementById;
+  sandbox.document.getElementById = id => (id === 'active-menu-bar' ? null : originalGetElementById.call(sandbox.document, id));
+
+  sandbox.updateActiveMenuBar();
+
+  assert.equal(drawerSwitchButton.style.display, '');
 });
 
 test('drawer add-item action closes the drawer and opens the shared add-item modal', () => {

@@ -6999,6 +6999,137 @@ body.manager-dossier-shell .manager-shell-actionbar {
   border: 1px solid var(--manager-dossier-border-strong);
 }
 
+body.manager-dossier-shell .manager-cockpit-revision-dock {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  z-index: 56;
+  pointer-events: none;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 78px;
+  padding: 10px 12px;
+  border: 1px solid var(--manager-dossier-border-strong);
+  background: color-mix(in srgb, var(--manager-dossier-panel) 94%, transparent);
+  box-shadow: 8px 8px 0 var(--manager-dossier-shadow);
+  backdrop-filter: blur(16px);
+  pointer-events: auto;
+  transform: translateY(0);
+  opacity: 1;
+  transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed {
+  transform: translateY(calc(100% - 22px));
+  opacity: 0.78;
+  box-shadow: 4px 4px 0 var(--manager-dossier-shadow);
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed:hover,
+body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed:focus-within {
+  transform: translateY(0);
+  opacity: 1;
+  box-shadow: 8px 8px 0 var(--manager-dossier-shadow);
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 54px;
+  height: 4px;
+  background: var(--manager-dossier-olive);
+  transform: translateX(-50%);
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-copy,
+body.manager-dossier-shell .manager-cockpit-dock-sync,
+body.manager-dossier-shell .manager-cockpit-dock-actions {
+  min-width: 0;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-copy .workspace-actions-title,
+body.manager-dossier-shell .manager-cockpit-dock-copy .workspace-actions-sub {
+  margin: 0;
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-copy .workspace-actions-title {
+  font-family: var(--font-accent);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-sync {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--manager-dossier-olive);
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-local-status {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-actions .save-btn,
+body.manager-dossier-shell .manager-cockpit-dock-actions .btn-small {
+  width: auto;
+  min-width: 0;
+  min-height: 42px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--manager-dossier-olive);
+  border-radius: 0;
+  background: var(--manager-dossier-olive-soft);
+  color: var(--manager-dossier-olive);
+  box-shadow: none;
+  font-family: var(--font-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-actions .save-btn:hover,
+body.manager-dossier-shell .manager-cockpit-dock-actions .btn-small:hover {
+  background: var(--manager-dossier-olive);
+  color: var(--manager-dossier-panel);
+  opacity: 1;
+}
+
+body.manager-dossier-shell .manager-cockpit-dock-actions .save-btn:disabled,
+body.manager-dossier-shell .manager-cockpit-dock-actions .btn-small:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 body.manager-dossier-shell .manager-shell-actionbar-groups,
 body.manager-dossier-shell .manager-shell-actionbar-primary,
 body.manager-dossier-shell .manager-shell-actionbar-featured {
@@ -7102,37 +7233,53 @@ body.manager-dossier-shell .manager-shell-overview-chip {
 }
 
 body.manager-dossier-shell .manager-shell-stats-grid {
-  gap: 1px;
-  padding: 1px;
-  background: var(--manager-dossier-border-strong);
+  gap: 8px;
+  padding: 0;
+  background: transparent;
 }
 
 body.manager-dossier-shell .manager-shell-stat-card {
-  min-height: 142px;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 10px;
-  padding: 24px 24px 22px;
-  border: 0;
-  background: var(--manager-dossier-panel);
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--manager-dossier-border);
+  border-left: 3px solid var(--manager-dossier-olive);
+  background: var(--manager-dossier-panel-strong);
   box-shadow: none;
+}
+
+body.manager-dossier-shell .manager-shell-stat-label,
+body.manager-dossier-shell .manager-shell-stat-meta {
+  overflow-wrap: anywhere;
+}
+
+body.manager-dossier-shell .manager-shell-stat-label {
+  margin: 0;
+  font-size: 9px;
 }
 
 body.manager-dossier-shell .manager-shell-stat-value {
   margin: 0;
   color: var(--manager-dossier-ink);
-  font-family: var(--font-heading);
-  font-size: clamp(1.85rem, 4vw, 2.5rem);
-  line-height: 0.9;
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1;
 }
 
 body.manager-dossier-shell .manager-shell-stat-card--warn {
-  background: var(--manager-dossier-red-soft);
+  border-left-color: var(--manager-dossier-red);
+  background: var(--manager-dossier-panel);
 }
 
 body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
   color: var(--manager-dossier-red);
+}
+
+body.manager-dossier-shell .manager-dossier-panel-head .manager-shell-stats-grid {
+  width: 100%;
 }
 
 body.manager-dossier-shell .manager-shell-overview-grid {
@@ -7802,8 +7949,7 @@ body.manager-dossier-shell .manager-shell-topbar-actions .manager-shell-switch-b
 
 body.manager-dossier-shell .manager-shell-topbar-actions .send-btn,
 body.manager-dossier-shell .manager-shell-actionbar .send-btn,
-body.manager-dossier-shell .btn-danger,
-body.manager-dossier-shell .manager-shell-stat-card--warn .manager-shell-stat-value {
+body.manager-dossier-shell .btn-danger {
   background: var(--manager-dossier-red);
   border-color: var(--manager-dossier-red);
   color: var(--manager-dossier-panel);
@@ -7854,6 +8000,7 @@ body.manager-dossier-shell.add-item-modal-open {
 
 body.manager-dossier-shell.add-item-modal-open #app-shell > header.manager-shell-topbar,
 body.manager-dossier-shell.add-item-modal-open .manager-shell-actionbar,
+body.manager-dossier-shell.add-item-modal-open .manager-cockpit-revision-dock,
 body.manager-dossier-shell.add-item-modal-open .manager-shell-rail,
 body.manager-dossier-shell.add-item-modal-open .manager-shell-backdrop,
 body.manager-dossier-shell.add-item-modal-open .manager-shell-mobile-drawer-trigger {
@@ -7867,10 +8014,42 @@ body.manager-dossier-shell .manager-shell-mobile-drawer-trigger {
   left: 10px;
   z-index: 66;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid var(--manager-dossier-border-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--manager-dossier-panel) 94%, transparent);
+  color: var(--manager-dossier-ink);
+  box-shadow: 4px 4px 0 var(--manager-dossier-shadow);
   opacity: 0;
   transform: translateY(-10px);
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+body.manager-dossier-shell .manager-shell-stack-icon {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+body.manager-dossier-shell .manager-shell-stack-icon span {
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+body.manager-dossier-shell .manager-cockpit-rail[aria-hidden="false"] {
+  pointer-events: auto;
 }
 
 body.manager-dossier-shell.manager-mobile-drawer-trigger-visible .manager-shell-mobile-drawer-trigger {
@@ -7882,6 +8061,11 @@ body.manager-dossier-shell.manager-mobile-drawer-trigger-visible .manager-shell-
 body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-trigger {
   opacity: 0;
   transform: translateY(-10px);
+  pointer-events: none;
+}
+
+body.manager-dossier-shell.settings-drawer-open .manager-cockpit-revision-dock {
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -7965,6 +8149,13 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
   body.manager-dossier-shell .manager-shell-section-header {
     flex-direction: row;
     justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+  }
+
+  body.manager-dossier-shell .manager-dossier-panel-head .manager-shell-stats-grid {
+    width: min(640px, 62%);
+    margin-left: auto;
   }
 
   body.manager-dossier-shell .manager-shell-card-head {
@@ -7992,6 +8183,32 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
     align-items: center;
     gap: 6px 14px;
     padding: 10px 14px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-revision-dock {
+    left: clamp(302px, 24vw, 364px);
+    right: 18px;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-inner {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px 14px;
+    min-height: 70px;
+    padding: 10px 14px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-copy {
+    padding-top: 8px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-sync {
+    justify-content: flex-end;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-actions {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
   }
 
   body.manager-dossier-shell .manager-shell-actionbar-copy {
@@ -8028,7 +8245,7 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
 
 @media (max-width: 600px) {
   body.manager-dossier-shell {
-    padding-bottom: calc(156px + env(safe-area-inset-bottom));
+    padding-bottom: calc(42px + env(safe-area-inset-bottom));
   }
 
   body.manager-dossier-shell .manager-shell-topbar-inner {
@@ -8044,6 +8261,34 @@ body.manager-dossier-shell.settings-drawer-open .manager-shell-mobile-drawer-tri
     right: 8px;
     bottom: calc(8px + env(safe-area-inset-bottom));
     padding: 10px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-revision-dock {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-inner {
+    min-height: 134px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed {
+    min-height: 42px;
+    transform: translateY(calc(100% - 12px));
+    opacity: 0.72;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed .manager-cockpit-dock-copy,
+  body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed .manager-cockpit-dock-sync,
+  body.manager-dossier-shell .manager-cockpit-dock-inner.is-collapsed .manager-cockpit-dock-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-dock-actions {
+    align-items: center;
+    justify-content: flex-start;
   }
 
   body.manager-dossier-shell .manager-shell-actionbar-primary,
@@ -8134,4 +8379,308 @@ body.admin-console-page .admin-userchip-trigger:focus-visible,
 body.admin-console-page .settings-rail-btn:focus-visible {
   outline: 2px solid var(--admin-accent);
   outline-offset: 2px;
+}
+
+body.manager-dossier-shell .manager-cockpit-layout { width: min(1800px, calc(100% - 24px)); margin: 14px auto 96px; display: grid; grid-template-columns: 244px minmax(0, 1fr); gap: 22px; }
+body.manager-dossier-shell .manager-cockpit-rail { position: sticky; top: 14px; height: calc(100vh - 28px); display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 14px; }
+body.manager-dossier-shell .manager-cockpit-stage { min-width: 0; }
+body.manager-dossier-shell .manager-cockpit-panel { min-height: calc(100vh - 28px); padding: 28px; border: 1px solid rgba(31, 25, 16, 0.25); border-radius: 6px; background: #fbf6eb; box-shadow: 8px 8px 0 rgba(54, 42, 22, 0.14); }
+body.manager-dossier-shell .manager-cockpit-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.86fr); gap: 14px; align-items: start; }
+body.manager-dossier-shell #manager-cockpit-header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 16px; }
+body.manager-dossier-shell .manager-cockpit-header-copy h1 { margin: 4px 0 6px; font-size: clamp(30px, 4vw, 54px); line-height: 0.95; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell .manager-cockpit-header-copy p,
+body.manager-dossier-shell .manager-cockpit-rail-card small,
+body.manager-dossier-shell .manager-cockpit-stat small { color: rgba(45, 36, 24, 0.68); }
+body.manager-dossier-shell .manager-cockpit-kicker { display: block; font-size: 11px; line-height: 1.2; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 800; color: #8d321f; }
+body.manager-dossier-shell .manager-cockpit-header-stats { display: grid; grid-template-columns: repeat(3, minmax(92px, 1fr)); gap: 8px; min-width: min(430px, 100%); }
+body.manager-dossier-shell .manager-cockpit-stat,
+body.manager-dossier-shell .manager-cockpit-rail-card { border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: rgba(255,255,255,0.52); padding: 12px; }
+body.manager-dossier-shell .manager-cockpit-stat span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: rgba(45, 36, 24, 0.6); font-weight: 800; }
+body.manager-dossier-shell .manager-cockpit-stat strong { display: block; margin-top: 4px; font-size: 28px; line-height: 1; color: #2d2418; }
+body.manager-dossier-shell .manager-cockpit-status-strip { border: 1px solid rgba(141, 50, 31, 0.22); border-left: 4px solid #8d321f; border-radius: 6px; background: rgba(245, 210, 66, 0.18); padding: 10px 12px; color: #392918; }
+body.manager-dossier-shell .manager-cockpit-status-strip span { display: grid; gap: 2px; font-size: 12px; line-height: 1.35; }
+body.manager-dossier-shell .manager-cockpit-status-strip strong { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; }
+body.manager-dossier-shell #manager-cockpit-nav { display: grid; gap: 8px; align-content: start; }
+body.manager-dossier-shell .manager-cockpit-nav-link { display: block; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; padding: 11px 12px; color: #2d2418; text-decoration: none; font-weight: 800; background: rgba(255,255,255,0.38); }
+body.manager-dossier-shell .manager-cockpit-nav-link.is-active { background: #2d2418; color: #fff8ea; }
+body.manager-dossier-shell #manager-cockpit-rail-actions { display: grid; gap: 8px; }
+body.manager-dossier-shell #manager-cockpit-rail-actions .btn-small,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-btn,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-shell-switch-btn,
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-userchip-trigger {
+  width: 100%;
+  justify-content: center;
+}
+body.manager-dossier-shell #manager-cockpit-rail-actions .manager-shell-drawer-return {
+  background: #2d2418;
+  border-color: #2d2418;
+  color: #fff8ea;
+}
+body.manager-dossier-shell #manager-cockpit-workbar { display: grid; grid-template-columns: minmax(170px, auto) minmax(160px, auto) minmax(180px, 1fr) minmax(160px, 0.7fr); gap: 10px; align-items: stretch; margin-bottom: 14px; }
+body.manager-dossier-shell .manager-cockpit-tool { min-height: 58px; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: rgba(255,255,255,0.62); color: #2d2418; display: inline-flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 10px 12px; font: inherit; text-align: left; cursor: pointer; }
+body.manager-dossier-shell .manager-cockpit-tool--primary { justify-content: center; background: #1f6f68; color: #fff; border-color: #185750; box-shadow: 0 3px 0 rgba(24, 87, 80, 0.32); }
+body.manager-dossier-shell .manager-cockpit-tool-icon { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 999px; display: inline-grid; place-items: center; background: rgba(45, 36, 24, 0.1); font-size: 20px; line-height: 1; }
+body.manager-dossier-shell .manager-cockpit-tool--primary .manager-cockpit-tool-icon { background: rgba(255,255,255,0.18); }
+body.manager-dossier-shell .manager-cockpit-tool strong,
+body.manager-dossier-shell .manager-cockpit-tool small { display: block; line-height: 1.15; }
+body.manager-dossier-shell .manager-cockpit-tool strong { font-size: 14px; }
+body.manager-dossier-shell .manager-cockpit-tool small { margin-top: 3px; font-size: 11px; opacity: 0.74; }
+body.manager-dossier-shell .manager-cockpit-tool--field { cursor: text; }
+body.manager-dossier-shell .manager-cockpit-tool--field input,
+body.manager-dossier-shell .manager-cockpit-tool--field select { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
+body.manager-dossier-shell .manager-cockpit-side-panel { border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: rgba(255,255,255,0.5); padding: 14px; margin-bottom: 12px; }
+body.manager-dossier-shell .manager-cockpit-side-panel-head { display: grid; gap: 4px; margin-bottom: 10px; }
+body.manager-dossier-shell .manager-cockpit-side-panel h2 { margin: 0; font-size: 18px; line-height: 1.15; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell .manager-cockpit-side-panel textarea { width: 100%; resize: vertical; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; padding: 10px; background: #fffaf0; color: #2d2418; font: inherit; }
+body.manager-dossier-shell .manager-quick-note-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+body.manager-dossier-shell .manager-quick-note-save { min-height: 36px; border: 1px solid #185750; border-radius: 6px; background: #1f6f68; color: #fff; padding: 7px 12px; font: inherit; font-size: 13px; font-weight: 850; cursor: pointer; }
+body.manager-dossier-shell .manager-quick-note-save:disabled { opacity: 0.64; cursor: progress; }
+body.manager-dossier-shell .manager-quick-note-status { color: rgba(45, 36, 24, 0.68); font-size: 12px; line-height: 1.35; }
+body.manager-dossier-shell .manager-quick-note-error { margin: 8px 0 0; color: #8d321f; font-size: 12px; font-weight: 800; }
+body.manager-dossier-shell .manager-cockpit-activity-row { display: grid; gap: 3px; padding: 10px 0; border-top: 1px solid rgba(31, 25, 16, 0.12); }
+body.manager-dossier-shell .manager-cockpit-activity-row:first-child { border-top: 0; padding-top: 0; }
+body.manager-dossier-shell .manager-cockpit-activity-more { border-top: 1px solid rgba(31, 25, 16, 0.12); }
+body.manager-dossier-shell .manager-cockpit-activity-more summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 0; color: #185750; cursor: pointer; font-size: 13px; font-weight: 850; list-style: none; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary::-webkit-details-marker { display: none; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary::after { content: '+'; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid rgba(24, 87, 80, 0.26); border-radius: 999px; color: #185750; font-size: 16px; line-height: 1; }
+body.manager-dossier-shell .manager-cockpit-activity-more[open] summary::after { content: '-'; }
+body.manager-dossier-shell .manager-cockpit-activity-more summary small { margin-left: auto; color: rgba(45, 36, 24, 0.62); font-size: 11px; font-weight: 800; }
+body.manager-dossier-shell .manager-cockpit-activity-more-body { padding-top: 10px; }
+body.manager-dossier-shell .manager-cockpit-activity-more-body .manager-cockpit-activity-row:first-child { border-top: 0; padding-top: 0; }
+body.manager-dossier-shell #manager-cockpit-database { margin-top: 18px; padding-top: 18px; border-top: 1px solid rgba(31, 25, 16, 0.16); }
+body.manager-dossier-shell #manager-cockpit-database h2 { margin: 4px 0 6px; font-size: 24px; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell #manager-cockpit-items { min-width: 0; overflow-x: auto; }
+body.manager-dossier-shell .manager-cockpit-item-group { margin-bottom: 14px; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: rgba(255,255,255,0.54); }
+body.manager-dossier-shell .manager-cockpit-item-group-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 13px 14px 11px; border-bottom: 1px solid rgba(31, 25, 16, 0.12); }
+body.manager-dossier-shell .manager-cockpit-item-group-head h2 { margin: 0; font-size: 18px; line-height: 1.15; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell .manager-cockpit-item-table { min-width: 560px; display: grid; }
+body.manager-dossier-shell .manager-cockpit-item-head,
+body.manager-dossier-shell .manager-cockpit-item-row { display: grid; grid-template-columns: minmax(88px, 0.45fr) minmax(180px, 1.8fr) minmax(98px, 0.7fr) minmax(76px, 0.45fr) minmax(70px, 0.4fr); align-items: center; gap: 0; }
+body.manager-dossier-shell .manager-cockpit-item-head { min-height: 38px; border-bottom: 1px solid rgba(31, 25, 16, 0.12); background: rgba(45, 36, 24, 0.06); color: rgba(45, 36, 24, 0.68); font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+body.manager-dossier-shell .manager-cockpit-item-head span,
+body.manager-dossier-shell .manager-cockpit-item-cell { min-width: 0; padding: 10px 12px; }
+body.manager-dossier-shell .manager-cockpit-item-row { min-height: 58px; border-bottom: 1px solid rgba(31, 25, 16, 0.1); color: #2d2418; }
+body.manager-dossier-shell .manager-cockpit-item-row:last-child { border-bottom: 0; }
+body.manager-dossier-shell .manager-cockpit-item-row.is-eighty-sixed { background: rgba(141, 50, 31, 0.08); }
+body.manager-dossier-shell .manager-cockpit-item-row.is-off-menu { background: rgba(31, 111, 104, 0.07); }
+body.manager-dossier-shell .manager-cockpit-item-cell--order { display: flex; align-items: center; gap: 8px; }
+body.manager-dossier-shell .manager-cockpit-order-index { color: rgba(45, 36, 24, 0.58); font-size: 12px; font-weight: 800; }
+body.manager-dossier-shell .manager-cockpit-item-name { width: 100%; border: 0; background: transparent; color: #2d2418; font: inherit; font-weight: 850; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+body.manager-dossier-shell .manager-cockpit-item-name:hover,
+body.manager-dossier-shell .manager-cockpit-item-name:focus-visible { color: #1f6f68; text-decoration: underline; outline: 0; }
+body.manager-dossier-shell .manager-cockpit-row-btn { min-width: 44px; min-height: 36px; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: #fffaf0; color: #2d2418; font: inherit; font-size: 13px; font-weight: 850; cursor: pointer; }
+body.manager-dossier-shell .manager-cockpit-row-btn:hover,
+body.manager-dossier-shell .manager-cockpit-row-btn:focus-visible { border-color: #1f6f68; color: #185750; outline: 2px solid rgba(31, 111, 104, 0.22); outline-offset: 1px; }
+body.manager-dossier-shell .manager-cockpit-drag-btn { width: 38px; min-width: 38px; color: rgba(45, 36, 24, 0.62); cursor: grab; }
+body.manager-dossier-shell .manager-cockpit-row-btn--86 { border-color: rgba(141, 50, 31, 0.28); color: #8d321f; }
+body.manager-dossier-shell .manager-cockpit-featured-toggle {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 6px;
+  color: #185750;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+body.manager-dossier-shell .manager-cockpit-featured-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #1f6f68;
+}
+body.manager-dossier-shell .manager-cockpit-status-pill { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; max-width: 100%; border-radius: 999px; padding: 5px 9px; font-size: 11px; line-height: 1.1; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+body.manager-dossier-shell .manager-cockpit-status-pill--on { background: rgba(31, 111, 104, 0.13); color: #185750; }
+body.manager-dossier-shell .manager-cockpit-status-pill--86 { background: rgba(141, 50, 31, 0.14); color: #8d321f; }
+body.manager-dossier-shell .manager-cockpit-status-pill--off { background: rgba(45, 36, 24, 0.1); color: rgba(45, 36, 24, 0.72); }
+body.manager-dossier-shell .manager-cockpit-item-empty { padding: 18px 14px; color: rgba(45, 36, 24, 0.68); }
+body.manager-dossier-shell .manager-item-editor-modal { max-width: 620px; border-radius: 6px; background: #fbf6eb; color: #2d2418; }
+body.manager-dossier-shell .manager-item-editor-close { float: right; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: #fffaf0; color: #2d2418; padding: 8px 10px; font: inherit; font-weight: 850; cursor: pointer; }
+body.manager-dossier-shell .manager-item-editor-head { display: grid; gap: 5px; margin-bottom: 16px; }
+body.manager-dossier-shell .manager-item-editor-head h2 { margin: 0; font-size: 28px; line-height: 1.05; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell .manager-item-editor-head p { margin: 0; color: rgba(45, 36, 24, 0.66); }
+body.manager-dossier-shell .manager-item-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+body.manager-dossier-shell .manager-item-editor-grid article { border: 1px solid rgba(31, 25, 16, 0.14); border-radius: 6px; background: rgba(255,255,255,0.54); padding: 12px; min-width: 0; }
+body.manager-dossier-shell .manager-item-editor-grid span { display: block; margin-bottom: 5px; color: rgba(45, 36, 24, 0.58); font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+body.manager-dossier-shell .manager-item-editor-grid strong { display: block; overflow-wrap: anywhere; }
+body.manager-dossier-shell .manager-item-editor-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+body.manager-dossier-shell .manager-item-editor-field { display: grid; gap: 6px; min-width: 0; }
+body.manager-dossier-shell .manager-item-editor-field--full { grid-column: 1 / -1; }
+body.manager-dossier-shell .manager-item-editor-field span,
+body.manager-dossier-shell .manager-item-editor-check span { color: rgba(45, 36, 24, 0.66); font-size: 11px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }
+body.manager-dossier-shell .manager-item-editor-field input,
+body.manager-dossier-shell .manager-item-editor-field select,
+body.manager-dossier-shell .manager-item-editor-field textarea { width: 100%; border: 1px solid rgba(31, 25, 16, 0.18); border-radius: 6px; background: #fffdf7; color: #2d2418; padding: 10px 11px; font: inherit; min-width: 0; box-sizing: border-box; }
+body.manager-dossier-shell .manager-item-editor-field textarea { resize: vertical; line-height: 1.4; }
+body.manager-dossier-shell .manager-item-editor-check { display: flex; align-items: center; gap: 9px; min-height: 42px; }
+body.manager-dossier-shell .manager-item-editor-check input { width: 17px; height: 17px; accent-color: #2d2418; flex: 0 0 auto; }
+body.manager-dossier-shell .manager-item-editor-error { border: 1px solid rgba(146, 35, 35, 0.28); border-radius: 6px; background: rgba(146, 35, 35, 0.08); color: #7b1f1f; padding: 10px 12px; font-weight: 800; }
+body.manager-dossier-shell .manager-item-editor-section { border-top: 1px solid rgba(31, 25, 16, 0.14); padding-top: 14px; margin-top: 14px; }
+body.manager-dossier-shell .manager-item-editor-section h3 { margin: 0 0 8px; font-size: 16px; letter-spacing: 0; color: #2d2418; }
+body.manager-dossier-shell .manager-item-editor-section p { margin: 0; color: rgba(45, 36, 24, 0.72); }
+body.manager-dossier-shell .manager-item-editor-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+body.manager-dossier-shell .manager-item-editor-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid rgba(31, 25, 16, 0.12); border-radius: 6px; padding: 9px 10px; background: rgba(255,255,255,0.5); }
+body.manager-dossier-shell .manager-item-editor-empty { color: rgba(45, 36, 24, 0.66); }
+body.manager-dossier-shell .manager-item-editor-danger { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid rgba(146, 35, 35, 0.22); margin-top: 16px; padding-top: 14px; }
+body.manager-dossier-shell .manager-item-editor-danger h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: 0; color: #7b1f1f; }
+body.manager-dossier-shell .manager-item-editor-danger p { margin: 0; color: rgba(45, 36, 24, 0.68); }
+body.manager-dossier-shell .manager-item-editor-remove { border-color: rgba(146, 35, 35, 0.32); color: #7b1f1f; white-space: nowrap; }
+body.manager-dossier-shell .manager-item-editor-actions { justify-content: flex-end; }
+body.manager-dossier-shell .manager-item-editor-actions .btn-confirm { flex: 0 0 auto; min-width: 120px; }
+@media (max-width: 920px) {
+  body.manager-dossier-shell .manager-cockpit-layout { width: min(100% - 18px, 640px); grid-template-columns: 1fr; }
+  body.manager-dossier-shell .manager-cockpit-rail { position: fixed; top: 0; left: 0; z-index: 80; width: min(340px, calc(100vw - 42px)); height: 100vh; overflow-y: auto; padding: 14px; background: #e7dfd0; transform: translateX(calc(-100% - 24px)); transition: transform 0.2s ease; }
+  body.settings-drawer-open .manager-cockpit-rail { transform: translateX(0); }
+  body.manager-dossier-shell .manager-cockpit-grid { grid-template-columns: 1fr; }
+  body.manager-dossier-shell #manager-cockpit-header,
+  body.manager-dossier-shell #manager-cockpit-workbar { grid-template-columns: 1fr; display: grid; }
+  body.manager-dossier-shell .manager-cockpit-header-stats { grid-template-columns: 1fr; min-width: 0; }
+  body.manager-dossier-shell .manager-cockpit-item-table { min-width: 520px; }
+  body.manager-dossier-shell .manager-cockpit-item-head,
+  body.manager-dossier-shell .manager-cockpit-item-row { grid-template-columns: minmax(78px, 0.42fr) minmax(160px, 1.55fr) minmax(92px, 0.68fr) minmax(70px, 0.42fr) minmax(66px, 0.38fr); }
+  body.manager-dossier-shell .manager-item-editor-grid { grid-template-columns: 1fr; }
+  body.manager-dossier-shell .manager-item-editor-form { grid-template-columns: 1fr; }
+  body.manager-dossier-shell .manager-item-editor-danger { align-items: stretch; flex-direction: column; }
+  body.manager-dossier-shell .manager-item-editor-remove { width: 100%; }
+}
+
+@media (max-width: 600px) {
+  body.manager-dossier-shell .manager-cockpit-panel {
+    padding: 18px;
+  }
+
+  body.manager-dossier-shell #manager-cockpit-header {
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-header-copy h1 {
+    font-size: clamp(28px, 9vw, 36px);
+  }
+
+  body.manager-dossier-shell .manager-cockpit-header-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-stat {
+    min-width: 0;
+    padding: 9px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-stat strong {
+    font-size: 21px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-stat small {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  body.manager-dossier-shell #manager-cockpit-workbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  body.manager-dossier-shell #manager-add-item-btn,
+  body.manager-dossier-shell label[for="manager-item-search"] {
+    grid-column: 1 / -1;
+  }
+
+  body.manager-dossier-shell label[for="manager-item-search"] {
+    order: 2;
+  }
+
+  body.manager-dossier-shell label[for="manager-category-filter"] {
+    order: 3;
+  }
+
+  body.manager-dossier-shell #manager-bulk-actions-btn {
+    order: 4;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-tool {
+    min-height: 52px;
+    padding: 9px 11px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-tool-icon {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  body.manager-dossier-shell #manager-cockpit-items {
+    overflow-x: visible;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-group-head {
+    align-items: center;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-group-meta {
+    font-size: 11px;
+    font-weight: 850;
+    color: #185750;
+    white-space: nowrap;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-table {
+    min-width: 0;
+    display: grid;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-head {
+    display: none;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-row {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) 66px 58px;
+    grid-template-areas:
+      "order name edit eighty"
+      "status status status status";
+    min-height: 0;
+    padding: 9px 10px;
+    gap: 8px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-cell {
+    padding: 0;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-item-cell--order { grid-area: order; }
+  body.manager-dossier-shell .manager-cockpit-item-cell--name { grid-area: name; align-self: center; }
+  body.manager-dossier-shell .manager-cockpit-item-cell--status {
+    grid-area: status;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  body.manager-dossier-shell .manager-cockpit-item-cell--edit { grid-area: edit; }
+  body.manager-dossier-shell .manager-cockpit-item-cell--86 { grid-area: eighty; }
+
+  body.manager-dossier-shell .manager-cockpit-drag-btn {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-row-btn {
+    min-width: 0;
+    width: 100%;
+    min-height: 36px;
+    padding: 0 8px;
+  }
+
+  body.manager-dossier-shell .manager-cockpit-featured-toggle {
+    grid-template-columns: 16px auto;
+    margin: 0;
+    white-space: nowrap;
+  }
 }
