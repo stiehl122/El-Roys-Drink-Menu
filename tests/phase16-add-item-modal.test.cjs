@@ -683,12 +683,22 @@ test('escape closes the add-item modal', () => {
 test('drawer add-item button is role-gated and ordered below switch or admin tools', () => {
   const sandbox = loadAppSandbox();
   const { drawerAddButton, drawerSwitchButton, drawerAdminButton, drawerReturnButton } = setupManagerAddItemDom(sandbox);
-  seedManagerMenuState(sandbox);
+  seedManagerMenuState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: [
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+      ],
+    },
+  });
 
   sandbox.renderUserHeader();
   sandbox.updateActiveMenuBar();
 
   assert.equal(drawerAddButton.style.display, '');
+  assert.equal(drawerSwitchButton.style.display, '');
   assert.equal(drawerAddButton.style.order, '3');
   assert.equal(drawerSwitchButton.style.order, '2');
   assert.equal(drawerAdminButton.style.order, '3');
@@ -721,6 +731,27 @@ test('drawer add-item button is role-gated and ordered below switch or admin too
   sandbox.updateActiveMenuBar();
 
   assert.equal(drawerAddButton.style.display, 'none');
+});
+
+test('cockpit drawer switch menu button works without the legacy active menu bar', () => {
+  const sandbox = loadAppSandbox();
+  const { drawerSwitchButton } = setupManagerAddItemDom(sandbox);
+  seedManagerMenuState(sandbox, {
+    currentUser: {
+      role: 'manager',
+      name: 'Taylor',
+      accessibleMenuIds: [
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+      ],
+    },
+  });
+  const originalGetElementById = sandbox.document.getElementById;
+  sandbox.document.getElementById = id => (id === 'active-menu-bar' ? null : originalGetElementById.call(sandbox.document, id));
+
+  sandbox.updateActiveMenuBar();
+
+  assert.equal(drawerSwitchButton.style.display, '');
 });
 
 test('drawer add-item action closes the drawer and opens the shared add-item modal', () => {

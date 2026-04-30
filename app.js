@@ -1295,7 +1295,7 @@ function renderManagerAddItemLauncher() {
 
 function updateDrawerAddItemButton() {
   const addItemBtn = document.getElementById('drawer-add-item-btn');
-  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn') || document.getElementById('switch-menu-btn');
   const adminDrawerBtn = document.getElementById('admin-btn-drawer');
   const returnBtn = document.getElementById('drawer-return-btn');
   if (!addItemBtn) return;
@@ -9653,17 +9653,16 @@ function updateActiveMenuBar() {
   const bar       = document.getElementById('active-menu-bar');
   const nameEl    = document.getElementById('active-menu-name');
   const switchBtn = document.getElementById('switch-menu-btn');
-  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn');
+  const drawerSwitchBtn = document.getElementById('drawer-switch-menu-btn') || switchBtn;
   const headerBadge = document.getElementById('manager-header-menu-badge');
   const drawerBadge = document.getElementById('manager-drawer-menu-badge');
   const footerMenu = document.getElementById('manager-footer-menu-name');
-  if (!bar) return;
   const displayName = formatMenuDisplayName(_activeMenuName, MENU_TYPE, RESTAURANT_ID);
-  if (displayName) nameEl.textContent = displayName;
+  if (displayName && nameEl) nameEl.textContent = displayName;
   if (headerBadge) headerBadge.textContent = displayName || 'No menu selected';
   if (drawerBadge) drawerBadge.textContent = displayName || 'No menu selected';
   if (footerMenu) footerMenu.textContent = displayName || 'No menu selected';
-  bar.style.display = displayName ? '' : 'none';
+  if (bar) bar.style.display = displayName ? '' : 'none';
   // Show "Switch" only when the user has access to more than one menu
   const role          = currentUser?.role;
   const accessibleIds = currentUser?.accessibleMenuIds || [];
