@@ -60,7 +60,7 @@ Use it to answer three questions:
 
 | Capability | Web | iOS | Future-Client Target | Notes |
 | --- | --- | --- | --- | --- |
-| Staff sign-in | Full | Full | Staff editor clients | Same Supabase-backed staff account model on both clients. |
+| Staff sign-in | Full | Full | Staff editor clients | Same Supabase-backed staff account model on both clients, including Sign in with Apple where the Supabase Apple provider is configured. |
 | Account creation | Full | Full | Staff editor clients | New accounts start without menu access until approved. |
 | Password reset request | Full | Full | Staff editor clients | Both clients can request a reset email. |
 | In-client password reset completion | Full | None | Staff editor clients | iOS currently sends staff back through the web manager to finish recovery. |

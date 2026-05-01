@@ -309,6 +309,10 @@ final class RouteStateStubAuthClient: AuthClienting {
     throw RouteStateTestError.message("Unused in this test")
   }
 
+  func signInWithApple(identityToken: String, nonce: String, fullName: String?) async throws -> AuthSession {
+    throw RouteStateTestError.message("Unused in this test")
+  }
+
   func signUp(email: String, password: String, name: String) async throws -> AuthSession {
     throw RouteStateTestError.message("Unused in this test")
   }

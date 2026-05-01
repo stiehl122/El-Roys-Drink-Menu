@@ -7714,11 +7714,42 @@ async function init() {
 }
 
 async function _tryHandleRecoveryCallback() {
+  const oauthResult = await _tryHandleOAuthSessionCallback();
+  if (oauthResult?.handled) return true;
   const result = await getAccessSessionService().handleRecoveryCallback();
   if (result?.handled) {
     requestSignIn({ screen: result.screen || 'reset', origin: 'recovery-callback', reason: 'password-recovery' });
   }
   return !!result?.handled;
+}
+
+async function _tryHandleOAuthSessionCallback() {
+  const hash = String(location.hash || '').replace(/^#/, '');
+  if (!hash) return { handled: false };
+  const params = new URLSearchParams(hash);
+  if (params.get('type') === 'recovery') return { handled: false };
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (!accessToken || !refreshToken) return { handled: false };
+  history.replaceState(null, document.title, location.pathname + location.search);
+  try {
+    const session = await adoptWebSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_in: Number(params.get('expires_in') || 3600),
+    });
+    const { role, profileUnavailable } = await getAccessSessionService().applyAuthenticatedSession(session, { closeOverlay: true });
+    await _syncRequestedPageMode();
+    if (profileUnavailable) {
+      showToast('Signed in with Apple, but your access could not be verified yet.', 'info');
+    } else if (role === 'none') {
+      showToast('Signed in with Apple. Contact admin to get manager access.', 'info');
+    }
+    return { handled: true };
+  } catch (error) {
+    showToast(error?.message || 'Apple sign-in could not be completed.', 'error');
+    return { handled: true, error };
+  }
 }
 
 async function _tryRestoreSession() {
@@ -8721,6 +8752,11 @@ function getAuthApiBoundary() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'web_sign_in', email, password }),
     }).then(readSessionPayload),
+    getAppleOAuthUrl: () => fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'web_apple_oauth_url' }),
+    }).then(response => readAuthApiPayload(response, 'Apple sign-in is unavailable.')),
     adoptWebSession: (session = {}) => fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -8785,6 +8821,10 @@ async function sbSignIn(email, password) {
     email,
     password,
   });
+}
+
+async function sbGetAppleOAuthUrl() {
+  return getAuthApiBoundary().getAppleOAuthUrl();
 }
 
 async function adoptWebSession(session = {}) {
@@ -10067,6 +10107,28 @@ async function handleSignIn() {
   } finally {
     btn.disabled = false;
     btn.textContent = 'Sign In';
+  }
+}
+
+async function handleAppleSignIn() {
+  const errEl = document.getElementById('signin-error');
+  const btn = document.getElementById('signin-apple-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.querySelector('span:last-child').textContent = 'Opening Apple...';
+  }
+  if (errEl) errEl.textContent = '';
+  try {
+    const payload = await sbGetAppleOAuthUrl();
+    if (!payload?.url) throw new Error('Apple sign-in is unavailable.');
+    window.location.assign(payload.url);
+  } catch (err) {
+    const msg = err?.msg || err?.error_description || err?.message || 'Apple sign-in is unavailable.';
+    if (errEl) errEl.textContent = msg;
+    if (btn) {
+      btn.disabled = false;
+      btn.querySelector('span:last-child').textContent = 'Continue with Apple';
+    }
   }
 }
 

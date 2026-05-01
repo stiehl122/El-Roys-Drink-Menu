@@ -211,6 +211,7 @@ def apply_app_build_settings(config, bundle_id)
   settings['IPHONEOS_DEPLOYMENT_TARGET'] = '18.0'
   settings['GENERATE_INFOPLIST_FILE'] = 'NO'
   settings['INFOPLIST_FILE'] = 'ElRoysManagerApp/Info.plist'
+  settings['CODE_SIGN_ENTITLEMENTS'] = 'ElRoysManagerApp/ElRoysManagerApp.entitlements'
   settings['CODE_SIGN_STYLE'] = 'Automatic'
   settings['APPLE_DEVELOPMENT_TEAM'] = 'FCM3AK447F'
   settings['ELROYS_IOS_APP_BASE_URL'] = 'https://el-roys-drink-menu.vercel.app'

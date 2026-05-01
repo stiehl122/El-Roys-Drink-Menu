@@ -78,7 +78,7 @@ async function withMockedSupabaseAuth(handler) {
     const parsedBody = options.body ? JSON.parse(options.body) : null;
     calls.push({ url: String(url), options, body: parsedBody });
     if (String(url).endsWith('/auth/v1/logout')) return jsonResponse({});
-    if (String(url).includes('grant_type=password')) {
+    if (String(url).includes('grant_type=password') || String(url).includes('grant_type=id_token')) {
       return jsonResponse({
         access_token: 'access.from.signin',
         refresh_token: 'refresh.from.signin',
@@ -216,6 +216,47 @@ test('web sign-in action sets cookies and keeps refresh token out of response bo
     assert.equal(result.body.session.access_token, 'access.from.signin');
     assert.equal(result.body.session.user.email, 'manager@example.com');
     assert.equal(Object.hasOwn(result.body.session, 'refresh_token'), false);
+  });
+});
+
+test('web apple OAuth action returns a Supabase authorize URL for the current manager origin', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    const { executeAuthAction } = await import('../server/_auth-proxy.js');
+    const result = await executeAuthAction(createJsonRequest(
+      { action: 'web_apple_oauth_url' },
+      {
+        host: 'menus.example.test',
+        'x-forwarded-proto': 'https',
+      },
+    ));
+
+    assert.equal(calls.length, 0);
+    assert.equal(result.authResponse, true);
+    assert.equal(result.body.ok, true);
+    const url = new URL(result.body.url);
+    assert.equal(url.href.startsWith('https://example.supabase.co/auth/v1/authorize?'), true);
+    assert.equal(url.searchParams.get('provider'), 'apple');
+    assert.equal(url.searchParams.get('redirect_to'), 'https://menus.example.test/manager');
+  });
+});
+
+test('native apple sign-in exchanges id token with Supabase and returns refresh token to iOS', async () => {
+  await withMockedSupabaseAuth(async calls => {
+    const { executeAuthAction } = await import('../server/_auth-proxy.js');
+    const result = await executeAuthAction(createJsonRequest({
+      action: 'sign_in_with_apple',
+      identity_token: 'apple.identity.jwt',
+      nonce: 'raw-nonce-value',
+    }));
+
+    assert.equal(result.access_token, 'access.from.signin');
+    assert.equal(result.refresh_token, 'refresh.from.signin');
+    assert.equal(calls[0].url, 'https://example.supabase.co/auth/v1/token?grant_type=id_token');
+    assert.deepEqual(calls[0].body, {
+      provider: 'apple',
+      id_token: 'apple.identity.jwt',
+      nonce: 'raw-nonce-value',
+    });
   });
 });
 

@@ -11,8 +11,17 @@
     <div id="auth-no-config" style="display:none" class="auth-hint-msg">Supabase is not configured. Check server environment variables.</div>
     <div id="auth-form-wrap">
       <div id="auth-screen-signin" class="auth-screen">
-        <h2 class="auth-screen-title">Sign In</h2>
-        <p class="auth-screen-subtitle">Sign in to your account</p>
+        <div class="auth-brand-lockup">
+          <span class="auth-brand-mark" aria-hidden="true">ER</span>
+          <span class="auth-brand-kicker">Leroy's Lounge / El Roy's Cantina</span>
+        </div>
+        <h2 class="auth-screen-title">Staff Sign In</h2>
+        <p class="auth-screen-subtitle">Open the manager workspace with your approved staff account.</p>
+        <button class="auth-apple-btn" id="signin-apple-btn" type="button" onclick="handleAppleSignIn()" aria-describedby="signin-error">
+          <span class="auth-apple-glyph" aria-hidden="true"></span>
+          <span>Continue with Apple</span>
+        </button>
+        <div class="auth-divider"><span>or use staff password</span></div>
         <div class="auth-field">
           <input type="email" id="signin-email" name="signin-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="signin-error"/>
         </div>
@@ -31,8 +40,12 @@
       </div>
 
       <div id="auth-screen-signup" class="auth-screen" style="display:none">
+        <div class="auth-brand-lockup">
+          <span class="auth-brand-mark" aria-hidden="true">ER</span>
+          <span class="auth-brand-kicker">Staff access request</span>
+        </div>
         <h2 class="auth-screen-title">Create Account</h2>
-        <p class="auth-screen-subtitle">Sign up with your work email</p>
+        <p class="auth-screen-subtitle">Request a staff login for menu editing and route previews.</p>
         <div class="auth-field">
           <input type="text" id="signup-firstname" name="signup-firstname" placeholder="First name" autocomplete="given-name" aria-label="First name" aria-describedby="signup-error"/>
         </div>
@@ -52,8 +65,12 @@
       </div>
 
       <div id="auth-screen-forgot" class="auth-screen" style="display:none">
+        <div class="auth-brand-lockup">
+          <span class="auth-brand-mark" aria-hidden="true">ER</span>
+          <span class="auth-brand-kicker">Account recovery</span>
+        </div>
         <h2 class="auth-screen-title">Reset Password</h2>
-        <p class="auth-screen-subtitle">Enter your email and we'll send a reset link</p>
+        <p class="auth-screen-subtitle">Enter your staff email and we'll send a reset link.</p>
         <div class="auth-field">
           <input type="email" id="forgot-email" name="forgot-email" placeholder="Email address" autocomplete="email" aria-label="Email address" aria-describedby="forgot-error"/>
         </div>
@@ -63,6 +80,10 @@
       </div>
 
       <div id="auth-screen-reset" class="auth-screen" style="display:none">
+        <div class="auth-brand-lockup">
+          <span class="auth-brand-mark" aria-hidden="true">ER</span>
+          <span class="auth-brand-kicker">Secure reset</span>
+        </div>
         <h2 class="auth-screen-title">Set New Password</h2>
         <p class="auth-screen-subtitle">Choose a new password for your account</p>
         <div class="auth-field">

@@ -4112,6 +4112,10 @@ private final class StubAuthClient: AuthClienting {
     throw TestError.message("Unused in this test")
   }
 
+  func signInWithApple(identityToken: String, nonce: String, fullName: String?) async throws -> AuthSession {
+    throw TestError.message("Unused in this test")
+  }
+
   func signUp(email: String, password: String, name: String) async throws -> AuthSession {
     throw TestError.message("Unused in this test")
   }

@@ -77,6 +77,15 @@
       return readAuthApiSessionPayload(response, 'Authentication failed.');
     },
 
+    async getAppleOAuthUrl() {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'web_apple_oauth_url' }),
+      });
+      return readAuthApiPayload(response, 'Apple sign-in is unavailable.');
+    },
+
     async adoptWebSession(session = {}) {
       const response = await fetch('/api/auth', {
         method: 'POST',

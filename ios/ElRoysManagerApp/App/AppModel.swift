@@ -244,6 +244,20 @@ final class AppModel {
     }
   }
 
+  func signInWithApple(identityToken: String, nonce: String, fullName: String?) async {
+    guard !identityToken.isEmpty, !nonce.isEmpty else {
+      notice = AppNotice(tone: .warning, title: "Apple Sign-In Failed", message: "Apple did not return the credentials needed to start a staff session.")
+      return
+    }
+    await run("Signing In With Apple") { model in
+      let session = try await model.services.auth.signInWithApple(identityToken: identityToken, nonce: nonce, fullName: fullName)
+      try model.persistSession(session)
+      try await model.refreshAuthenticatedBootstrap(accessToken: session.accessToken, adoptedSession: session)
+      model.password = ""
+      model.notice = AppNotice(tone: .success, title: "Welcome Back", message: "Your Apple staff session is ready.")
+    }
+  }
+
   func signUp() async {
     guard !email.isEmpty, !password.isEmpty, !displayName.isEmpty else {
       notice = AppNotice(tone: .warning, title: "Missing Fields", message: "Name, email, and password are required.")

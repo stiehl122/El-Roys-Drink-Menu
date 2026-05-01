@@ -38,6 +38,7 @@ protocol BootstrapClienting {
 
 protocol AuthClienting {
   func signIn(email: String, password: String) async throws -> AuthSession
+  func signInWithApple(identityToken: String, nonce: String, fullName: String?) async throws -> AuthSession
   func signUp(email: String, password: String, name: String) async throws -> AuthSession
   func refresh(session: AuthSession) async throws -> AuthSession
   func sendReset(email: String, redirectTo: URL) async throws
@@ -116,6 +117,8 @@ private struct AuthActionRequest: Encodable {
   var refreshToken: String?
   var redirectTo: String?
   var newPassword: String?
+  var identityToken: String?
+  var nonce: String?
 }
 
 private struct AuthResetResponse: Decodable {
@@ -377,7 +380,17 @@ final class AuthClient: AuthClienting {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
-      body: AuthActionRequest(action: "sign_in", email: email, password: password, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil)
+      body: AuthActionRequest(action: "sign_in", email: email, password: password, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil, identityToken: nil, nonce: nil)
+    )
+    let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
+    return makeAuthSession(from: auth, bootstrap: bootstrap)
+  }
+
+  func signInWithApple(identityToken: String, nonce: String, fullName: String?) async throws -> AuthSession {
+    let auth: SupabaseAuthResponse = try await http.request(
+      path: "api/auth",
+      method: .post,
+      body: AuthActionRequest(action: "sign_in_with_apple", email: nil, password: nil, name: fullName, refreshToken: nil, redirectTo: nil, newPassword: nil, identityToken: identityToken, nonce: nonce)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
@@ -387,7 +400,7 @@ final class AuthClient: AuthClienting {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
-      body: AuthActionRequest(action: "sign_up", email: email, password: password, name: name, refreshToken: nil, redirectTo: nil, newPassword: nil)
+      body: AuthActionRequest(action: "sign_up", email: email, password: password, name: name, refreshToken: nil, redirectTo: nil, newPassword: nil, identityToken: nil, nonce: nil)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
@@ -397,7 +410,7 @@ final class AuthClient: AuthClienting {
     let auth: SupabaseAuthResponse = try await http.request(
       path: "api/auth",
       method: .post,
-      body: AuthActionRequest(action: "refresh", email: nil, password: nil, name: nil, refreshToken: authSession.refreshToken, redirectTo: nil, newPassword: nil)
+      body: AuthActionRequest(action: "refresh", email: nil, password: nil, name: nil, refreshToken: authSession.refreshToken, redirectTo: nil, newPassword: nil, identityToken: nil, nonce: nil)
     )
     let bootstrap = try await BootstrapClient(environment: environment, session: session).fetch(accessToken: auth.accessToken)
     return makeAuthSession(from: auth, bootstrap: bootstrap)
@@ -407,7 +420,7 @@ final class AuthClient: AuthClienting {
     let _: AuthResetResponse = try await http.request(
       path: "api/auth",
       method: .post,
-      body: AuthActionRequest(action: "reset_password", email: email, password: nil, name: nil, refreshToken: nil, redirectTo: redirectTo.absoluteString, newPassword: nil)
+      body: AuthActionRequest(action: "reset_password", email: email, password: nil, name: nil, refreshToken: nil, redirectTo: redirectTo.absoluteString, newPassword: nil, identityToken: nil, nonce: nil)
     )
   }
 
@@ -416,7 +429,7 @@ final class AuthClient: AuthClienting {
       path: "api/auth",
       method: .post,
       accessToken: accessToken,
-      body: AuthActionRequest(action: "request_account_deletion", email: nil, password: nil, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil)
+      body: AuthActionRequest(action: "request_account_deletion", email: nil, password: nil, name: nil, refreshToken: nil, redirectTo: nil, newPassword: nil, identityToken: nil, nonce: nil)
     )
   }
 }

@@ -5,8 +5,12 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(0, 0, 0, 0.6);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(190, 92, 43, 0.20), transparent 30%),
+    radial-gradient(circle at 82% 28%, rgba(31, 116, 91, 0.20), transparent 32%),
+    rgba(13, 10, 8, 0.72);
   z-index: 140;
+  backdrop-filter: blur(14px);
 }
 
 #auth-overlay.open {
@@ -26,36 +30,47 @@ body.admin-console-page #auth-overlay {
 }
 
 .auth-box {
-  width: min(100%, 340px);
-  max-width: 340px;
-  padding: 36px 28px;
-  border: 1px solid rgba(45, 55, 72, 0.18);
-  border-radius: 16px;
-  background: #f7fafc;
-  color: #1a202c;
-  text-align: center;
+  width: min(100%, 410px);
+  max-width: 410px;
+  padding: 28px 26px 22px;
+  border: 1px solid rgba(236, 209, 150, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 232, 0.98), rgba(238, 220, 190, 0.98) 58%, rgba(233, 215, 184, 0.98)),
+    #f2dfc0;
+  color: #20140f;
+  text-align: left;
   position: relative;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  overflow: hidden;
 }
 
 body.manager-stitch-shell .auth-box,
 body.manager-dossier-shell .auth-box,
 body.admin-console-page .auth-box {
-  width: min(100%, 340px);
-  max-width: 340px;
-  padding: 36px 28px;
-  border: 1px solid rgba(45, 55, 72, 0.18);
-  border-radius: 16px;
-  background: #f7fafc;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  width: min(100%, 410px);
+  max-width: 410px;
+  padding: 28px 26px 22px;
+  border: 1px solid rgba(236, 209, 150, 0.34);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 248, 232, 0.98), rgba(238, 220, 190, 0.98) 58%, rgba(233, 215, 184, 0.98)),
+    #f2dfc0;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.62);
 }
 
 .auth-box::before,
 body.manager-stitch-shell .auth-box::before,
 body.manager-dossier-shell .auth-box::before,
 body.admin-console-page .auth-box::before {
-  content: none;
-  display: none;
+  content: "";
+  display: block;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(90, 52, 31, 0.08), transparent 42%, rgba(186, 57, 38, 0.08)),
+    repeating-linear-gradient(0deg, rgba(32, 20, 15, 0.035), rgba(32, 20, 15, 0.035) 1px, transparent 1px, transparent 5px);
+  pointer-events: none;
 }
 
 body.manager-stitch-shell #auth-overlay,
@@ -81,21 +96,22 @@ body.manager-dossier-shell .auth-box {
 
 .auth-box h2 {
   font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  margin-bottom: 5px;
-  color: #1a202c;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0 0 8px;
+  color: #21130d;
 }
 
 body.manager-stitch-shell .auth-box h2,
 body.manager-dossier-shell .auth-box h2,
 body.admin-console-page .auth-box h2 {
   font-family: 'Epilogue', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #1a202c;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: #21130d;
 }
 
 body.manager-stitch-shell .auth-box h2,
@@ -113,7 +129,7 @@ body.manager-dossier-shell .auth-box h2 {
 .auth-approval-notice,
 .auth-back-btn,
 .pin-cancel {
-  color: #718096;
+  color: rgba(45, 32, 24, 0.72);
   font-size: 12px;
 }
 
@@ -151,7 +167,46 @@ body.manager-dossier-shell .pin-cancel {
 }
 
 .auth-box p {
-  margin: 0 0 20px;
+  margin: 0 0 18px;
+}
+
+.auth-screen-form {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.auth-brand-mark {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(99, 60, 34, 0.34);
+  border-radius: 50%;
+  background:
+    linear-gradient(135deg, #2a1a12, #6d2b1e 52%, #1f513f);
+  color: #f8ead1;
+  font-family: 'Epilogue', 'Work Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  box-shadow: 0 10px 24px rgba(32, 20, 15, 0.24);
+}
+
+.auth-brand-kicker {
+  color: rgba(45, 32, 24, 0.74);
+  font-family: 'Space Grotesk', 'Work Sans', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
 }
 
 body.manager-stitch-shell .auth-box p,
@@ -214,12 +269,12 @@ body.manager-dossier-shell .auth-hint-msg {
   width: 100%;
   min-height: 44px;
   padding: 11px 13px;
-  border: 1px solid rgba(45, 55, 72, 0.2);
-  border-radius: 9px;
+  border: 1px solid rgba(82, 54, 35, 0.24);
+  border-radius: 8px;
   font-family: 'Space Grotesk', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
   font-size: 14px;
-  background: #fff;
-  color: #1a202c;
+  background: rgba(255, 251, 241, 0.88);
+  color: #20140f;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -251,7 +306,8 @@ body.manager-stitch-shell .auth-field input {
 }
 
 .auth-field input:focus {
-  border-color: #2d3748;
+  border-color: #9f4a2c;
+  box-shadow: 0 0 0 3px rgba(159, 74, 44, 0.14);
 }
 
 body.manager-stitch-shell .auth-field input:focus,
@@ -277,10 +333,10 @@ body.manager-stitch-shell .auth-field input:focus {
   width: 100%;
   min-height: 46px;
   padding: 13px;
-  background: #2d3748;
-  color: #f7fafc;
+  background: #241711;
+  color: #f7ead4;
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   font-family: 'Space Grotesk', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
   font-size: 14px;
   font-weight: 600;
@@ -288,6 +344,66 @@ body.manager-stitch-shell .auth-field input:focus {
   cursor: pointer;
   transition: background 0.15s;
   margin-bottom: 12px;
+}
+
+.auth-apple-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 46px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #111;
+  border-radius: 8px;
+  background: #0b0b0b;
+  color: #fff;
+  font-family: 'Space Grotesk', 'Work Sans', 'Plus Jakarta Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s, opacity 0.15s;
+}
+
+.auth-apple-btn:hover,
+.auth-apple-btn:focus-visible {
+  background: #1b1b1b;
+  transform: translateY(-1px);
+}
+
+.auth-apple-btn:disabled {
+  opacity: 0.68;
+  cursor: default;
+  transform: none;
+}
+
+.auth-apple-glyph {
+  width: 16px;
+  height: 19px;
+  background: currentColor;
+  display: inline-block;
+  clip-path: path("M12.5 10.2c0-2.2 1.8-3.3 1.9-3.4-1.1-1.5-2.7-1.7-3.2-1.7-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.2-1.6 2.8-.4 6.9 1.1 9.1.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6 0-.1-2.6-1-2.6-3.7zM10.3 3.6c.6-.7 1-1.8.9-2.8-.9 0-2 .6-2.6 1.3-.6.7-1.1 1.7-.9 2.7.9.1 2-.5 2.6-1.2z");
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: rgba(45, 32, 24, 0.58);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: rgba(82, 54, 35, 0.20);
 }
 
 .auth-preview-btn {
@@ -358,7 +474,7 @@ body.admin-console-page .auth-preview-btn {
 }
 
 .auth-submit-btn:hover {
-  background: #1a202c;
+  background: #6d2b1e;
 }
 
 .auth-preview-btn:hover,
@@ -431,7 +547,7 @@ body.manager-stitch-shell .auth-preview-note {
 
 .auth-toggle-btn,
 .auth-link-btn {
-  color: #2d3748;
+  color: #6d2b1e;
   text-decoration: underline;
 }
 

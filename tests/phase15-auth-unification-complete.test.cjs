@@ -28,6 +28,16 @@ test('auth module scripts register unified auth boundaries', () => {
   assert.equal(typeof sandbox.__HF_AUTH_MODULES__.mountAuthOverlayTemplate, 'function');
 });
 
+test('shared auth overlay exposes first-class Apple sign-in action', () => {
+  const template = read('core/auth/auth-overlay-template.js');
+  const api = read('core/auth/auth-api.js');
+  const app = read('app.js');
+
+  assert.equal(template.includes('id="signin-apple-btn"'), true, 'shared sign-in template must render the Apple sign-in button');
+  assert.equal(api.includes('getAppleOAuthUrl'), true, 'auth API boundary must expose the Apple OAuth URL action');
+  assert.equal(app.includes('handleAppleSignIn'), true, 'app runtime must wire the Apple button to auth handling');
+});
+
 test('app createAccessSessionService delegates through shared auth module boundary', async () => {
   const calls = [];
   const sandbox = loadSandboxWithScripts(['app.js'], {

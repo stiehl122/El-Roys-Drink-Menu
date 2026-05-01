@@ -30,9 +30,11 @@ const TRUSTED_PUBLIC_ORIGIN_ENV_NAMES = [
 const AUTH_ABUSE_ACTION_POLICIES = {
   web_sign_in: { limiter: authAttemptLimiter, includeEmail: true },
   web_adopt_session: { limiter: authTokenLimiter },
+  web_apple_oauth_url: { limiter: authAttemptLimiter },
   web_refresh: { limiter: authTokenLimiter },
   preview_audit_sign_in: { limiter: authAttemptLimiter, includeMode: true },
   sign_in: { limiter: authAttemptLimiter, includeEmail: true },
+  sign_in_with_apple: { limiter: authAttemptLimiter },
   sign_up: { limiter: authAttemptLimiter, includeEmail: true },
   refresh: { limiter: authTokenLimiter },
   reset_password: { limiter: passwordResetLimiter, includeEmail: true },
@@ -147,6 +149,13 @@ function readRequestOrigin(req) {
 }
 
 function normalizePasswordResetRedirect(req) {
+  const trustedOrigin = readTrustedPublicManagerRedirect();
+  if (trustedOrigin.configured) return trustedOrigin.redirect;
+  const origin = readRequestOrigin(req);
+  return origin ? `${origin}/manager` : '';
+}
+
+function normalizeManagerRedirect(req) {
   const trustedOrigin = readTrustedPublicManagerRedirect();
   if (trustedOrigin.configured) return trustedOrigin.redirect;
   const origin = readRequestOrigin(req);
@@ -433,6 +442,35 @@ async function signInWebSession(body = {}) {
   });
 }
 
+function createAppleOAuthUrl(req) {
+  const { sbUrl } = getSupabaseServerConfig();
+  const redirectTo = normalizeManagerRedirect(req);
+  if (!redirectTo) throw { status: 400, message: 'Apple sign-in redirect unavailable' };
+  const url = new URL(`${sbUrl}/auth/v1/authorize`);
+  url.searchParams.set('provider', 'apple');
+  url.searchParams.set('redirect_to', redirectTo);
+  return authResponse({
+    body: {
+      ok: true,
+      url: url.href,
+    },
+  });
+}
+
+async function signInWithApple(body = {}) {
+  const idToken = String(body?.identity_token || body?.identityToken || body?.id_token || body?.idToken || '').trim();
+  if (!idToken) throw { status: 400, message: 'Apple identity token is required.' };
+  const nonce = String(body?.nonce || '').trim();
+  const tokenBody = {
+    provider: 'apple',
+    id_token: idToken,
+  };
+  if (nonce) tokenBody.nonce = nonce;
+  return supabaseAuthRequest('auth/v1/token?grant_type=id_token', {
+    body: tokenBody,
+  }, 'Apple sign-in failed.');
+}
+
 async function adoptWebSession(body = {}) {
   const accessToken = String(body?.access_token || body?.accessToken || '').trim();
   const refreshToken = String(body?.refresh_token || body?.refreshToken || '').trim();
@@ -519,6 +557,8 @@ export async function executeAuthAction(req) {
   switch (action) {
     case 'web_sign_in':
       return signInWebSession(body);
+    case 'web_apple_oauth_url':
+      return createAppleOAuthUrl(req);
     case 'web_adopt_session':
       return adoptWebSession(body);
     case 'web_refresh':
@@ -538,6 +578,8 @@ export async function executeAuthAction(req) {
           password: String(body?.password || ''),
         },
       }, 'Authentication failed.');
+    case 'sign_in_with_apple':
+      return signInWithApple(body);
     case 'sign_up':
       return supabaseAuthRequest('auth/v1/signup', {
         body: {
