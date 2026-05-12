@@ -181,6 +181,17 @@ test('iOS backend client exposes string public menu revision fetch', () => {
   assert.match(source, /URLQueryItem\(name: "menu_id", value: menuId\)/);
 });
 
+test('iOS publish requests preserve the server preview mode at manager API boundary', () => {
+  const backendClients = read('ios/ElRoysManagerApp/Clients/BackendClients.swift');
+  const appModel = read('ios/ElRoysManagerApp/App/AppModel.swift');
+
+  assert.match(backendClients, /private struct PublishRequest: Encodable\s*\{[\s\S]*var mode: String/);
+  assert.match(backendClients, /func publish\(menuId: String, snapshot: MenuSnapshotPayload, mode: String, selectedChangeIds: \[String\]/);
+  assert.match(backendClients, /PublishRequest\([\s\S]*mode: mode/);
+  assert.match(appModel, /let publishMode = model\.publishMode\(for: preview, shouldNotify: shouldNotify\)/);
+  assert.match(appModel, /services\.publish\.publish\([\s\S]*mode: publishMode/);
+});
+
 test('iOS editor monitor gates public revision before fetching full workspace', () => {
   const source = read('ios/ElRoysManagerApp/App/AppModel.swift');
   const body = sourceBetween(

@@ -33,6 +33,40 @@
       .filter(Boolean));
   }
 
+  function normalizeRevisionValue(value) {
+    if (value == null || value === '') return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+
+  function buildPostCommitRevisions(revisions = {}, {
+    livePersisted = false,
+    baselineAdvanced = false,
+    ts = null,
+  } = {}) {
+    const commitTs = normalizeRevisionValue(ts);
+    const liveRevision = livePersisted
+      ? (commitTs ?? normalizeRevisionValue(revisions.liveRevision))
+      : normalizeRevisionValue(revisions.liveRevision);
+    const draftRevision = livePersisted
+      ? null
+      : normalizeRevisionValue(revisions.draftRevision);
+    const previousBaseline = normalizeRevisionValue(
+      revisions.lastSentRevision ?? revisions.notificationBaselineRevision ?? revisions.notificationRevision
+    );
+    const lastSentRevision = baselineAdvanced
+      ? (commitTs ?? previousBaseline)
+      : previousBaseline;
+
+    return {
+      liveRevision,
+      draftRevision,
+      lastSentRevision,
+      notificationRevision: lastSentRevision,
+      notificationBaselineRevision: lastSentRevision,
+    };
+  }
+
   function createMenuPublishWorkflow({ ports }) {
     if (!ports) throw new Error('ports are required');
     const SUPPORTED_INTENTS = new Set(['save', 'send', 'save-and-send']);
@@ -241,7 +275,11 @@
           ts,
           operationId,
           preview,
-          revisions,
+          revisions: buildPostCommitRevisions(revisions, {
+            livePersisted,
+            baselineAdvanced,
+            ts,
+          }),
           livePersistence: {
             attempted: command.intent !== 'send',
             persisted: livePersisted,

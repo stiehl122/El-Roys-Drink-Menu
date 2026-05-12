@@ -444,7 +444,7 @@ final class RouteStateStubPublishClient: PublishClienting {
     throw RouteStateTestError.message("Unused in this test")
   }
 
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, mode: String, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     throw RouteStateTestError.message("Unused in this test")
   }
 }

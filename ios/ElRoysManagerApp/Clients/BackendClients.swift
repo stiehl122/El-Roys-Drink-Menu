@@ -67,7 +67,7 @@ protocol LiveSaveClienting {
 
 protocol PublishClienting {
   func preview(menuId: String, snapshot: MenuSnapshotPayload, expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, mode: String, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse
 }
 
 protocol HistoryClienting {
@@ -177,6 +177,7 @@ private struct PublishRequest: Encodable {
   var menuId: String
   var snapshot: MenuSnapshotPayload
   var source: String
+  var mode: String
   var selectedChangeIds: [String]?
   var expectedLiveRevision: Int?
   var expectedDraftRevision: Int?
@@ -559,6 +560,7 @@ final class PublishClient: PublishClienting {
         menuId: menuId,
         snapshot: snapshot,
         source: source,
+        mode: "preview",
         selectedChangeIds: nil,
         expectedLiveRevision: expectedLiveRevision,
         expectedDraftRevision: expectedDraftRevision,
@@ -567,7 +569,7 @@ final class PublishClient: PublishClienting {
     )
   }
 
-  func publish(menuId: String, snapshot: MenuSnapshotPayload, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
+  func publish(menuId: String, snapshot: MenuSnapshotPayload, mode: String, selectedChangeIds: [String], expectedLiveRevision: Int?, expectedDraftRevision: Int?, expectedNotificationRevision: Int?, accessToken: String, source: String) async throws -> PublishResponse {
     try await http.request(
       path: "api/manager",
       method: .post,
@@ -577,6 +579,7 @@ final class PublishClient: PublishClienting {
         menuId: menuId,
         snapshot: snapshot,
         source: source,
+        mode: mode,
         selectedChangeIds: selectedChangeIds,
         expectedLiveRevision: expectedLiveRevision,
         expectedDraftRevision: expectedDraftRevision,
