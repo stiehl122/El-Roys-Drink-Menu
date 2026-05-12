@@ -55,6 +55,9 @@ test('iOS launch gate only waits for Xcode Cloud when ios files change', () => {
   assert.match(workflow, /base="\$\{\{ github\.event\.pull_request\.base\.sha \}\}"/);
   assert.match(workflow, /head="\$\{\{ github\.event\.pull_request\.head\.sha \}\}"/);
   assert.match(workflow, /files="\$\(git diff --name-only "\$base\.\.\.\$head"\)"/);
+  assert.match(workflow, /default_branch="\$\{\{ github\.event\.repository\.default_branch \}\}"/);
+  assert.match(workflow, /git cat-file -e "\$before\^\{commit\}"/);
+  assert.match(workflow, /fallback_base="\$\(git merge-base "\$default_ref" "\$after" \|\| true\)"/);
   assert.match(workflow, /grep -q '\^ios\/'/);
   assert.match(workflow, /if:\s*steps\.changes\.outputs\.ios_changed == 'false'/);
   assert.match(workflow, /No ios\/ changes; Xcode Cloud is not required\./);
