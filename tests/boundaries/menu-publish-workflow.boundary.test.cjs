@@ -194,6 +194,13 @@ test('workflow execute advances queue baseline after successful send', async () 
   assert.equal(saveCalls.length, 1);
   assert.ok(patchCalls.some(call => call.patch.last_sent_ts === 1000));
   assert.deepEqual(patchCalls[0].patch.last_sent_state, DEFAULT_LAST_SENT_STATE);
+  assert.deepEqual(result.revisions, {
+    liveRevision: 1000,
+    draftRevision: null,
+    lastSentRevision: 1000,
+    notificationRevision: 1000,
+    notificationBaselineRevision: 1000,
+  });
   assert.equal(Object.prototype.hasOwnProperty.call(patchCalls[0].patch, 'last_sent_featured'), false);
   assert.deepEqual(result.queue.featuredSiblingMenusSynced, []);
   assert.ok(auditCalls.some(call => call.eventType === 'send_notification'));

@@ -603,9 +603,11 @@ final class AppModel {
       }
 
       let selection = shouldNotify ? Array(model.selectedPreviewChangeIDs) : []
+      let publishMode = model.publishMode(for: preview, shouldNotify: shouldNotify)
       let response = try await model.services.publish.publish(
         menuId: menuId,
         snapshot: snapshot,
+        mode: publishMode,
         selectedChangeIds: selection,
         expectedLiveRevision: workspace.workspace.revisions.liveRevision,
         expectedDraftRevision: expectedDraftRevision,
@@ -644,6 +646,7 @@ final class AppModel {
       model.applyPublishResponseLocally(
         response,
         preview: preview,
+        committedMode: publishMode,
         previousWorkspace: workspace,
         currentDocument: currentDocument
       )
@@ -1196,13 +1199,16 @@ final class AppModel {
   private func applyPublishResponseLocally(
     _ response: PublishResponse,
     preview: MenuPreviewPayload?,
+    committedMode: String,
     previousWorkspace: MenuWorkspacePayload,
     currentDocument: EditableMenuDocument
   ) {
     guard var workspace = currentEditorWorkspace else { return }
 
-    let publishMode = preview?.mode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-    let didPersistLive = publishMode.isEmpty ? hasLiveMenuChanges : publishMode != "send"
+    let publishMode = committedMode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let didPersistLive = publishMode.isEmpty
+      ? hasLiveMenuChanges
+      : publishMode != "send"
 
     var nextDocument = currentDocument
     nextDocument.normalizePersistentItemIdentifiersForRuntime()
@@ -1212,10 +1218,15 @@ final class AppModel {
     )
 
     if didPersistLive,
-       let liveRevision = nextRevisions.liveRevision ?? response.ts {
+       let liveRevision = response.ts ?? nextRevisions.liveRevision {
       nextRevisions.liveRevision = liveRevision
       workspace.meta.lastUpdatedTs = liveRevision
       nextDocument.meta.lastUpdatedTs = liveRevision
+    }
+
+    if let baselineRevision = response.ts ?? nextRevisions.notificationBaselineRevision ?? nextRevisions.lastSentRevision {
+      nextRevisions.lastSentRevision = baselineRevision
+      nextRevisions.notificationBaselineRevision = baselineRevision
     }
 
     if let lastSentRevision = nextRevisions.lastSentRevision {
@@ -1522,6 +1533,19 @@ final class AppModel {
       return Set(sectionChangeIDs)
     }
     return Set(preview.selectionDefaults)
+  }
+
+  private func publishMode(for preview: MenuPreviewPayload?, shouldNotify: Bool) -> String {
+    if !shouldNotify {
+      return "save"
+    }
+    let mode = preview?.mode
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased() ?? ""
+    if mode == "save" || mode == "send" || mode == "save-and-send" {
+      return mode
+    }
+    return hasLiveMenuChanges ? "save-and-send" : "send"
   }
 
   private func serverHasUnsentChanges(in workspace: MenuWorkspacePayload?) -> Bool {
