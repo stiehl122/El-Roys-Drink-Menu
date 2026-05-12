@@ -36,13 +36,30 @@ jobs:
           else
             before="${{ github.event.before }}"
             after="${{ github.sha }}"
+            default_branch="${{ github.event.repository.default_branch }}"
+            default_ref="origin/$default_branch"
 
             if [ "$before" = "0000000000000000000000000000000000000000" ]; then
               files="$(git diff-tree --no-commit-id --name-only -r "$after")"
               ios_sha="$(git log -n 1 --format=%H "$after" -- ios/ || true)"
-            else
+            elif git cat-file -e "$before^{commit}" 2>/dev/null; then
               files="$(git diff --name-only "$before" "$after")"
               ios_sha="$(git log -n 1 --format=%H "$before..$after" -- ios/ || true)"
+            else
+              echo "Push before SHA $before is unavailable; falling back to $default_ref."
+              fallback_base=""
+              if git rev-parse --verify --quiet "$default_ref" >/dev/null; then
+                fallback_base="$(git merge-base "$default_ref" "$after" || true)"
+              fi
+
+              if [ -n "$fallback_base" ]; then
+                files="$(git diff --name-only "$fallback_base" "$after")"
+                ios_sha="$(git log -n 1 --format=%H "$fallback_base..$after" -- ios/ || true)"
+              else
+                echo "No default branch merge base found; inspecting the pushed commit only."
+                files="$(git diff-tree --no-commit-id --name-only -r "$after")"
+                ios_sha="$(git log -n 1 --format=%H "$after" -- ios/ || true)"
+              fi
             fi
           fi
 

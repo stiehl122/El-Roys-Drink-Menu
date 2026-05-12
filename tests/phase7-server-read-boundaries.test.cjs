@@ -526,7 +526,7 @@ test('legacy last_sent_featured does not create false featured_specials queue li
   assert.deepEqual(queueState.unsentItemIds, []);
 });
 
-test('legacy last_sent_featured still surfaces a first-cutover featured_specials removal from lookup state', async () => {
+test('legacy last_sent_featured does not resurrect removed specials once featured_specials is canonical', async () => {
   const queueHelper = await importApiModule('server/_menu-queue.js');
   const snapshot = {
     cats: [
@@ -556,6 +556,34 @@ test('legacy last_sent_featured still surfaces a first-cutover featured_specials
     lastSentState,
   });
 
+  assert.deepEqual(lastSentState.featured_specials, []);
+  assert.equal(queueState.hasNotificationChanges, false);
+  assert.deepEqual(queueState.diff, []);
+  assert.deepEqual(queueState.unsentItemIds, []);
+});
+
+test('legacy snapshots without featured_specials still surface a first-cutover removal from lookup state', async () => {
+  const queueHelper = await importApiModule('server/_menu-queue.js');
+  const snapshot = {
+    cats: [{
+      key: 'cocktails',
+      label: 'Cocktails',
+      icon: '🍹',
+      items: [{ id: 'legacy-1', name: 'House Marg', featured_enabled: false, on_menu: true, visibility: 'public' }],
+    }],
+  };
+  const lastSentState = queueHelper.normalizeLegacyFeaturedBaseline({
+    snapshot,
+    lastSentState: {
+      cocktails: [{ id: 'legacy-1', name: 'House Marg', onMenu: true, visibility: 'public', eightySixed: false }],
+    },
+    lastSentFeatured: ['legacy-1'],
+  });
+  const queueState = queueHelper.buildCategoryQueueState({
+    snapshot,
+    lastSentState,
+  });
+
   assert.equal(lastSentState.featured_specials.length, 1);
   assert.equal(lastSentState.featured_specials[0].id, 'legacy-1');
   assert.equal(lastSentState.featured_specials[0].name, 'House Marg');
@@ -566,9 +594,9 @@ test('legacy last_sent_featured still surfaces a first-cutover featured_specials
   assert.equal(queueState.hasNotificationChanges, true);
   assert.deepEqual(queueState.diff, [{
     id: 'featured_specials',
-    icon: '⭐',
-    label: 'Featured Specials',
-    displayOrder: 0,
+    icon: '',
+    label: 'featured_specials',
+    displayOrder: Number.MAX_SAFE_INTEGER - 1000 + 1,
     added: [],
     removed: ['House Marg'],
     eightySixed: [],

@@ -252,13 +252,14 @@
             last_sent_ts: ts,
             last_sent_state: lastSentState,
             last_sent_categories: (preview.diff || []).map(section => section.id),
+            last_sent_featured: [],
             draft_state: livePersisted ? {} : (context.meta?.draft_state || {}),
             draft_saved_ts: livePersisted ? null : (context.meta?.draft_saved_ts || null),
             draft_saved_by_user_id: livePersisted ? null : (context.meta?.draft_saved_by_user_id ?? undefined),
             draft_saved_by_name: livePersisted ? '' : (context.meta?.draft_saved_by_name ?? undefined),
             draft_saved_source: livePersisted ? '' : (context.meta?.draft_saved_source ?? undefined),
           },
-          optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source'],
+          optionalFields: ['draft_saved_by_user_id', 'draft_saved_by_name', 'draft_saved_source', 'last_sent_featured'],
         }));
 
         let successMessage = `✅ ${menuName} saved live.`;
