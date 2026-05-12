@@ -139,6 +139,7 @@ export function normalizeLegacyFeaturedBaseline({
 
   const snapshotCategories = readSnapshotCategories(snapshot);
   const currentFeaturedCategory = snapshotCategories.find(category => isFeaturedSpecialsCategory(category));
+  const hasCanonicalFeaturedCategory = String(currentFeaturedCategory?.key || '').trim() === 'featured_specials';
   const baselineLookupCategories = Object.entries(normalizedState).map(([key, items]) => ({
     key,
     items: asArray(items),
@@ -181,6 +182,7 @@ export function normalizeLegacyFeaturedBaseline({
   legacyFeaturedEntries.forEach(entry => {
     const itemId = String(entry?.id || '').trim();
     if (!itemId || itemIds.has(itemId)) return;
+    if (hasCanonicalFeaturedCategory) return;
 
     // Reconstruct a one-time featured baseline from the last-sent document first,
     // then fall back to the current snapshot or richer legacy metadata when needed.
